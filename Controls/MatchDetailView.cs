@@ -64,7 +64,18 @@ public partial class MatchDetailView : UserControl
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _toolTip.Dispose(); DisposeImagesInControls(Controls); }
+        if (disposing)
+        {
+            _rankRequests.Cancel();
+            _rankRequests.Dispose();
+            foreach (var popup in _banPopups.ToArray())
+            {
+                foreach (var host in popup.Items.OfType<ToolStripControlHost>()) DisposeImagesInControls(host.Control.Controls);
+                popup.Dispose();
+            }
+            _banPopups.Clear();
+            _toolTip.Dispose(); DisposeImagesInControls(Controls);
+        }
         base.Dispose(disposing);
     }
 }

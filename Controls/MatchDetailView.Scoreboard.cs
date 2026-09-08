@@ -68,7 +68,9 @@ public partial class MatchDetailView
                         var row=await layoutManager.CreateDetailedPlayerPanel(participant,matchInfo,0,64+rows.Count*44,teamId);
                         if(panel.IsDisposed) { DisposeImagesInControls(row.Controls); row.Dispose(); return; }
                         section.Controls.Add(row); rows.Add((participant,row));
+                        AddPlayerRank(row,participant);
                     }
+                    AddTeamBans(section,teamId);
                     y+=section.Height+10;
                 }
                 if (panel.IsDisposed) return;
