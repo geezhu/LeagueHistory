@@ -324,7 +324,7 @@ namespace League.Controls
 
             await Task.Delay(200); // 可选延迟，确保控件加载完
 
-            SafeInvoke(() => _careerView.LoadPlayer(puuid));
+            SafeInvoke(() => _masteryView.LoadPlayer(puuid));
 
             await LoadDataAsync();
         }
@@ -346,6 +346,7 @@ namespace League.Controls
                 linkGameName.Tag = fullName;
                 League.UIHelpers.PlayerNamePresentation.Apply(linkGameName, fullName, privacy == "隐藏" ? false : privacy == "公开" ? true : null);
                 lblLevel.Text = $"等级：【{summonerLevel}】";
+                picChampionId.Level = summonerLevel;
                 lblPrivacy.Text = $"隐私：【{privacy}】";
 
                 // 只在头像ID不同时才更新图片

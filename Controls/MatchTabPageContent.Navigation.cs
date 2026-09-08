@@ -1,4 +1,4 @@
-using League.Models;
+﻿using League.Models;
 
 namespace League.Controls;
 
@@ -9,24 +9,33 @@ public partial class MatchTabPageContent
     private MatchListPanel? _selectedCard;
     private Button _backToProfile = null!;
     private Point _profileHistoryScroll;
-    private CareerStatisticsView _careerView = null!;
-    public Func<string,CancellationToken,Task<Newtonsoft.Json.Linq.JArray?>>? StatisticsHistoryRequested { get; set; }
+    private ProfileMasteryView _masteryView = null!;
+    private readonly Dictionary<string, RankedStats> _profileRanks = new();
+    private Label _highestRank = null!;
 
     private void SetRankHistory(string name, RankedStats stats)
     {
+        _profileRanks[name] = stats;
+        if (Controls.Find(name.Replace("History", "Emblem"), true).FirstOrDefault() is RankEmblem emblem)
+            emblem.SetTier(stats.Tier);
+        var highest = _profileRanks.Values.OrderByDescending(rank => rank.HighestTierOrder).First();
+        _highestRank.Text = highest.HighestTierOrder > 0 ? highest.HighestTierDisplay : "—";
         if (Controls.Find(name,true).FirstOrDefault() is Label label)
-            label.Text = $"赛季最高  {stats.HighestTierDisplay}\n上赛季结算  {stats.PreviousSeasonDisplay}";
+        {
+            label.Text = string.Join("\n",new[] {
+                stats.HighestTierDisplay == "—" ? "" : $"赛季最高  {stats.HighestTierDisplay}",
+                stats.PreviousSeasonDisplay == "—" ? "" : $"上赛季结算  {stats.PreviousSeasonDisplay}"
+            }.Where(text => text.Length > 0));
+            label.Visible = false;
+        }
     }
 
     private void ConfigureProfileNavigation(Control profile, Control toolbar)
     {
         _profileSurface = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
-        _careerView = new CareerStatisticsView(historyLoader: async (id, token) =>
-        {
-            var loader = StatisticsHistoryRequested;
-            return loader == null ? null : await loader(id,token);
-        }) { Dock = DockStyle.Top };
-        _profileSurface.Controls.Add(_careerView);
+        _masteryView = new ProfileMasteryView { Dock = DockStyle.Top };
+        _masteryView.ProfileLoaded += picChampionId.SetExperience;
+        _profileSurface.Controls.Add(_masteryView);
         _profileSurface.Controls.Add(profile);
         _contentSurface = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0,0,12,0) };
         _contentSurface.Controls.Add(_profileSurface);

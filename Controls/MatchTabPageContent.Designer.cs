@@ -34,7 +34,7 @@
             comboFilter = new ComboBox();
             flowLayoutPanelRight = new FlowLayoutPanel();
             linkGameName = new LinkLabel();
-            picChampionId = new PictureBox();
+            picChampionId = new ProfileLevelAvatar();
             lblLevel = new Label();
             groupBox1 = new GroupBox();
             lblSoloTier = new Label();
@@ -454,7 +454,7 @@
         public ComboBox comboFilter;
         public FlowLayoutPanel flowLayoutPanelRight;
         private LinkLabel linkGameName;
-        private PictureBox picChampionId;
+        private ProfileLevelAvatar picChampionId;
         private Label lblLevel;
         private GroupBox groupBox1;
         private Label label6;
