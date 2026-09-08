@@ -120,12 +120,14 @@ namespace League.Clients
             return null;
         }
        
-        public async Task<JArray> SgpFetchLatestMatches(string puuid, int startIndex = 0, int count = 19, string tag = null)
+        public async Task<JArray> SgpFetchLatestMatches(string puuid, int startIndex = 0, int count = 19, string tag = null, CancellationToken cancellationToken = default)
         {
             for (int attempt = 1; attempt <= 3; attempt++)
             {
-                using (CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
+                using (CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    cts.CancelAfter(TimeSpan.FromSeconds(30));
                     try
                     {
                         using var handler = new HttpClientHandler
@@ -177,6 +179,7 @@ namespace League.Clients
                     }
                     catch (TaskCanceledException tce)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         Debug.WriteLine($"SGP 查询超时（尝试 {attempt}/3）: {tce.Message}");
                     }
                     catch (HttpRequestException hre)
@@ -194,7 +197,7 @@ namespace League.Clients
                     Debug.WriteLine("刷新 Token 失败");
                     return null;
                 }
-                await Task.Delay(1500);
+                await Task.Delay(1500,cancellationToken);
             }
 
             Debug.WriteLine("SGP 多次重试后仍失败");

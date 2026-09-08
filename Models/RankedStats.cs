@@ -16,9 +16,13 @@ namespace League.Models
         public int LeaguePoints { get; private set; }   // 胜点
 
         /// <summary>
-        /// 如果 losses 为 0，视为未知
+        /// 只有接口确实返回胜负字段时才计算总场次和胜率。
         /// </summary>
-        public bool IsUnknown => Losses == 0;
+        public bool HasRecord { get; private set; }
+        public bool HasWins { get; private set; }
+        public bool IsUnknown => !HasRecord;
+        public string HighestTierDisplay { get; private set; } = "—";
+        public string PreviousSeasonDisplay { get; private set; } = "—";
 
         /// <summary>
         /// 总场次
@@ -40,7 +44,7 @@ namespace League.Models
         /// <summary>
         /// 胜率显示文本
         /// </summary>
-        public string WinRateDisplay => !IsUnknown ? $"{WinRate}%" : "未知";
+        public string WinRateDisplay => !IsUnknown && TotalGames > 0 ? $"{WinRate}%" : "—";
 
         /// <summary>
         /// 总场次显示文本
@@ -55,7 +59,7 @@ namespace League.Models
         /// <summary>
         /// 胜场显示文本（始终显示）
         /// </summary>
-        public string WinsDisplay => $"{Wins} 场";
+        public string WinsDisplay => HasWins ? $"{Wins} 场" : "未知";
 
         /// <summary>
         /// 从 JSON 创建单双排和灵活排位数据
@@ -86,6 +90,10 @@ namespace League.Models
             return new RankedStats
             {
                 QueueType = queueData["queueType"]?.ToString() ?? string.Empty,
+                HasRecord = queueData["wins"]?.Type == JTokenType.Integer && queueData["losses"]?.Type == JTokenType.Integer,
+                HasWins = queueData["wins"]?.Type == JTokenType.Integer,
+                HighestTierDisplay = FormatHistoricalTier(queueData["highestTier"]?.ToString(), queueData["highestDivision"]?.ToString()),
+                PreviousSeasonDisplay = FormatHistoricalTier(queueData["previousSeasonEndTier"]?.ToString(), queueData["previousSeasonEndDivision"]?.ToString()),
                 Tier = NormalizeTier(queueData["tier"]?.ToString()),
                 Division = NormalizeDivision(queueData["division"]?.ToString()),
                 Wins = queueData["wins"]?.ToObject<int>() ?? 0,
@@ -99,7 +107,7 @@ namespace League.Models
         /// </summary>
         private string FormatTierDisplay()
         {
-            if (string.IsNullOrEmpty(Tier) || Tier == "NONE")
+            if (string.IsNullOrEmpty(Tier) || Tier == "NONE" || Tier == "未定级")
                 return "未定级";
 
             var tierMap = new Dictionary<string, string>
@@ -128,6 +136,12 @@ namespace League.Models
         /// <summary>
         /// 小段位转换
         /// </summary>
+        private static string FormatHistoricalTier(string? tier, string? division)
+        {
+            if (string.IsNullOrWhiteSpace(tier) || tier == "NONE") return "—";
+            return new RankedStats { Tier = tier, Division = division ?? "" }.FormattedTier;
+        }
+
         private static string ToChineseDivision(string division)
         {
             return division switch
