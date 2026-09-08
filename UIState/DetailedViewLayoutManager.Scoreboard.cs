@@ -5,6 +5,38 @@ namespace League.UIState
 {
     public partial class DetailedViewLayoutManager
     {
+        private sealed class HighlightKdaLabel : Label
+        {
+            public Color HighlightColor { get; init; }
+            public int KillsLength { get; init; }
+            public int AssistsStart { get; init; } = -1;
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                const TextFormatFlags flags = TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter
+                    | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis;
+                // Draw one continuous string. Repaint only selected glyphs in another color;
+                // separators, font weight, alignment and spacing remain identical.
+                TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, ForeColor, flags);
+                int Measure(string text) => text.Length == 0 ? 0 : TextRenderer.MeasureText(e.Graphics, text, Font,
+                    new Size(int.MaxValue,int.MaxValue), TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix).Width;
+                int padding = (TextRenderer.MeasureText(e.Graphics, Text, Font, new Size(int.MaxValue,int.MaxValue), flags).Width - Measure(Text)) / 2;
+                void Highlight(int start, int length)
+                {
+                    if (length <= 0) return;
+                    var state = e.Graphics.Save();
+                    try
+                    {
+                        e.Graphics.SetClip(new Rectangle(padding + Measure(Text[..start]), 0, Measure(Text.Substring(start,length)), Height));
+                        TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, HighlightColor, flags | TextFormatFlags.PreserveGraphicsClipping);
+                    }
+                    finally { e.Graphics.Restore(state); }
+                }
+                Highlight(0,KillsLength);
+                if (AssistsStart >= 0) Highlight(AssistsStart,Text.Length-AssistsStart);
+            }
+        }
+
         private void CreateScoreboardRow(Panel row, JObject player, string name, bool isSelf,
             (int damage, int damageRank, int gold, int goldRank, double kp, int kpRank, int damageTaken, int damageTakenRank) stats,
             MatchInfo match)
@@ -72,12 +104,35 @@ namespace League.UIState
                     _runeCache.TryGetValue(r.RuneId,out var data) ? data.Item2 + ": " + StripHtmlTags(data.Item3) : "属性碎片 " + r.RuneId));
                 if (shards.Length>0) _toolTip.SetToolTip(row,shards);
             }
-            Text($"{player["kills"]} / {player["deaths"]} / {player["assists"]}",592,90,ink,true);
+            bool IsMaximum(string key)
+            {
+                if (match.AllParticipants.Count == 0 || match.AllParticipants.Any(p => p[key]?.Type != JTokenType.Integer)) return false;
+                int value = player[key]?.Value<int>() ?? 0;
+                return value > 0 && value == match.AllParticipants.Max(p => p[key]!.Value<int>());
+            }
+            Color highlight = player["win"]?.Value<bool>() == true
+                ? Color.FromArgb(38,139,113) : player["win"]?.Value<bool>() == false
+                    ? Color.FromArgb(191,81,91) : Color.FromArgb(46,103,190);
+            string kills = player["kills"]?.ToString() ?? "—", deaths = player["deaths"]?.ToString() ?? "—", assists = player["assists"]?.ToString() ?? "—";
+            var kda = new HighlightKdaLabel
+            {
+                Name = "KdaValues", Text = $"{kills} / {deaths} / {assists}",
+                Location = new Point(592,4), Size = new Size(90,30), ForeColor = ink,
+                BackColor = Color.Transparent, Font = new Font("Microsoft YaHei UI",9f,FontStyle.Bold),
+                TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true,
+                HighlightColor = highlight,
+                KillsLength = IsMaximum("kills") ? kills.Length : 0,
+                AssistsStart = IsMaximum("assists") ? kills.Length + deaths.Length + 6 : -1
+            };
+            row.Controls.Add(kda);
+            _toolTip.SetToolTip(kda, "击杀 / 死亡 / 助攻；彩色数字表示全场最高（并列均高亮）");
             void Metric(string key,int value,int rank,int x,Color color)
             {
                 int maximum=match.AllParticipants.Max(p=>p[key]?.Value<int>() ?? 0);
-                var label=Text($"{value/1000d:0.0}k",x,86,ink);
-                _toolTip.SetToolTip(label,$"{value:N0} · 全场第 {rank} 名");
+                bool leading = IsMaximum(key);
+                var label=Text($"{value/1000d:0.0}k",x,86,leading ? highlight : ink,leading);
+                label.Name = key;
+                _toolTip.SetToolTip(label,$"{value:N0} · 全场第 {rank} 名" + (leading ? " · 全场最高（并列均高亮）" : ""));
                 var bar=new Panel { Location=new Point(x,36),Size=new Size(76,3),BackColor=Color.FromArgb(231,237,245) };
                 int filled=maximum>0 && value>0 ? Math.Max(1,(int)(76d*value/maximum)) : 0;
                 bar.Paint += (_,e) => { using var brush=new SolidBrush(color); e.Graphics.FillRectangle(brush,0,0,filled,3); };

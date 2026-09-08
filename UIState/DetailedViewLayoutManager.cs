@@ -48,6 +48,7 @@ namespace League.UIState
                 BackColor = isSelf ? Color.FromArgb(232, 241, 253) : Color.White
             };
             await PreloadAllAsync(participant, matchInfo); // 修改：传入matchInfo
+            await RetryMissingAugmentsAsync(participant, matchInfo);
             (int damage, int damageRank, int gold, int goldRank, double kp, int kpRank, int damageTaken, int damageTakenRank) ranks = CalculateRanks(participant, matchInfo);
             panel.SuspendLayout();
             CreateScoreboardRow(panel, participant, playerName, isSelf, ranks, matchInfo);
@@ -296,20 +297,43 @@ namespace League.UIState
         // 修改：获取当前玩家的海克斯符文
         private RuneInfo[] GetSelfAugments(JObject participant, MatchInfo matchInfo)
         {
+            int[] ids = ExtractAugments(participant);
             string participantPuuid = participant["puuid"]?.ToString();
             if (!string.IsNullOrEmpty(participantPuuid) && matchInfo.AllPlayersAugments != null)
             {
                 if (matchInfo.AllPlayersAugments.TryGetValue(participantPuuid, out var augments))
                 {
-                    return augments ?? Array.Empty<RuneInfo>();
+                    if (ids.Length == 0) return augments ?? Array.Empty<RuneInfo>();
+                    return ids.Select(id => augments?.FirstOrDefault(a => a.id == id)
+                        ?? new RuneInfo { id = id, name = $"海克斯 {id}", longDesc = "图片暂未加载" }).ToArray();
                 }
             }
 
             // 备用方案：如果AllPlayersAugments中没有，尝试从participant数据中提取
-            int[] augmentIds = ExtractAugments(participant);
-            return augmentIds.Select(id => matchInfo.Augments?.FirstOrDefault(a => a.id == id))
-                            .Where(a => a != null)
-                            .ToArray();
+            return ids.Select(id => new RuneInfo { id = id, name = $"海克斯 {id}", longDesc = "图片暂未加载" }).ToArray();
+        }
+
+        private async Task RetryMissingAugmentsAsync(JObject participant, MatchInfo matchInfo)
+        {
+            if (!IsHextechArenaMode(participant)) return;
+            var augments = GetSelfAugments(participant, matchInfo);
+            foreach (var augment in augments.Where(a => a.Icon == null))
+            {
+                try
+                {
+                    var (image, name, description) = await FormMain.Globals.resLoading.GetAugmentInfoAsync(augment.id);
+                    augment.Icon = image;
+                    augment.name = name;
+                    augment.longDesc = image == null ? description + "\n图片未加载，请重新打开详情重试" : description;
+                }
+                catch (Exception ex) { Debug.WriteLine($"海克斯 {augment.id} 重试失败: {ex.Message}"); }
+            }
+            string? puuid = participant["puuid"]?.ToString();
+            if (!string.IsNullOrEmpty(puuid))
+            {
+                lock (matchInfo.AllPlayersAugments) matchInfo.AllPlayersAugments[puuid] = augments;
+                if (puuid == matchInfo.CurrPuuid) matchInfo.Augments = augments;
+            }
         }
 
         // 修改后的普通符文显示（重命名原有方法）
