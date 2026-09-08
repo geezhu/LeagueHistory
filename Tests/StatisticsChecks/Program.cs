@@ -12,6 +12,14 @@ internal static class Program
     {
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
+        var metricSelection = new MatchMetricSelection();
+        Check(metricSelection.Set(new[] { "a", "b", "c", "d", "e", "f" }, true), "Six chart metrics allowed");
+        Check(!metricSelection.Set(new[] { "g", "h" }, true) && metricSelection.Count == 6 && !metricSelection.Contains("g"), "Over-limit group is atomic");
+        Check(metricSelection.Set(new[] { "a", "b" }, false) && metricSelection.Set(new[] { "g", "h" }, true), "Chart slots reusable after deselection");
+        Check(metricSelection.Set(new[] { "g", "g" }, true) && metricSelection.Count == 6, "Duplicate selection does not consume slots");
+        Check(metricSelection.SetGroup(new[] { "x", "y" }, true) && metricSelection.Count == 2 && !metricSelection.Contains("g"), "Full selection replaced by another group");
+        Check(metricSelection.SetGroup(new[] { "x", "y" }, false) && metricSelection.Count == 0, "Selected group can be deselected");
+        Check(MatchMetricCatalog.Number(new JObject(), "goldEarned") == null && MatchMetricCatalog.Number(new JObject { ["goldEarned"] = 0 }, "goldEarned") == 0, "Chart distinguishes zero and missing");
         Check(MatchStatisticsView.Value(new JObject { ["goldEarned"] = 0 }, "goldEarned") == "0", "Statistics preserves zero");
         Check(MatchStatisticsView.Value(new JObject(), "goldEarned") == "—", "Statistics preserves missing values");
         Check(MatchStatisticsView.Value(JObject.Parse("{\"stats\":{\"kills\":1,\"deaths\":0,\"assists\":2}}"), "kda") == "1/0/2", "Statistics supports nested stats");
