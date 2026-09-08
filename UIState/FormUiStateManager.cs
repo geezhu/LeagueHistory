@@ -398,7 +398,7 @@ namespace League.UIState
                 _waitingPanel = null;
             }
 
-            _form.tableLayoutPanel1.Visible = false;
+            League.Controls.PlayerTeamsLayout.Hide(_form.tableLayoutPanel1);
 
             _waitingPanel = CreateStatusPanel("正在等待加入游戏，请稍后...", false);
             _waitingPanel.Left = (parentControl.Width - _waitingPanel.Width) / 2;

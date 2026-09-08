@@ -29,7 +29,8 @@ namespace League.Services
 
         public async Task EnterChampSelectAsync()
         {
-            FormUiStateManager.SafeInvoke(_form, () =>
+            // 清理等待面板 + 准备对战面板
+            FormUiStateManager.SafeInvokeSync(_form, () =>
             {
                 var toRemove = _form.penalGameMatchData.Controls
                     .OfType<Panel>()
@@ -49,16 +50,8 @@ namespace League.Services
                     _form._waitingPanel = null;
                 }
 
-                _form.tableLayoutPanel1.Controls.Clear();
-                _form.tableLayoutPanel1.Visible = true;
-                _form.tableLayoutPanel1.Dock = DockStyle.Fill;
-
-                if (!_form.penalGameMatchData.Controls.Contains(_form.tableLayoutPanel1))
-                    _form.penalGameMatchData.Controls.Add(_form.tableLayoutPanel1);
-
-                _form.tableLayoutPanel1.BringToFront();
-                _form.penalGameMatchData.Invalidate();
-                _form.penalGameMatchData.Update();
+                foreach (Control card in _form.tableLayoutPanel1.Controls.Cast<Control>().ToArray()) card.Dispose();
+                League.Controls.PlayerTeamsLayout.Show(_form.tableLayoutPanel1, _form.penalGameMatchData);
             });
 
             _lastTeamStructureSnapshot = "";

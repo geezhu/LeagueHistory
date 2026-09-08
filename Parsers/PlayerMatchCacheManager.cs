@@ -6,17 +6,17 @@ namespace League.Parsers
 {
     public class PlayerMatchCacheManager
     {
-        private readonly Dictionary<long, PlayerMatchInfo> _playerMatchCache = new();
+        private readonly ConcurrentDictionary<(long SummonerId, string Filter), PlayerMatchInfo> _playerMatchCache = new();
 
-        public bool TryGetPlayerMatch(long summonerId, out PlayerMatchInfo info)
+        public bool TryGetPlayerMatch(long summonerId, string filter, out PlayerMatchInfo info)
         {
-            return _playerMatchCache.TryGetValue(summonerId, out info);
+            return _playerMatchCache.TryGetValue((summonerId, filter), out info);
         }
 
-        public void CachePlayerMatch(long summonerId, PlayerMatchInfo info)
+        public void CachePlayerMatch(long summonerId, string filter, PlayerMatchInfo info)
         {
             if (summonerId != 0)
-                _playerMatchCache[summonerId] = info;
+                _playerMatchCache[(summonerId, filter)] = info;
         }
 
         public void ClearCache()

@@ -10,7 +10,7 @@ namespace League.Parsers
     /// </summary>
     public class MatchDataParser
     {
-        public PlayerMatchInfo ParsePlayerMatchInfo(string puuid, JArray matches)
+        public async Task<PlayerMatchInfo> ParsePlayerMatchInfo(string puuid, JArray matches)
         {
             var result = new PlayerMatchInfo();
             if (matches == null || matches.Count == 0)
@@ -30,7 +30,7 @@ namespace League.Parsers
                     var participant = FindParticipant(gameJson, puuid);
                     if (participant == null) continue;
 
-                    ProcessMatchData(result, gameJson, participant);
+                    await ProcessMatchData(result, gameJson, participant);
                 }
             }
             catch (Exception ex)
@@ -41,7 +41,7 @@ namespace League.Parsers
             return result;
         }
 
-        private void ProcessMatchData(PlayerMatchInfo result, JObject gameJson, JObject participant)
+        private async Task ProcessMatchData(PlayerMatchInfo result, JObject gameJson, JObject participant)
         {
             long gameId = gameJson["gameId"]?.Value<long>() ?? 0;
             int championId = participant["championId"]?.Value<int>() ?? 0;
@@ -103,15 +103,16 @@ namespace League.Parsers
             var item = new ListViewItem
             {
                 ImageKey = championName.Replace(" ", "").Replace("'", ""),
-                ForeColor = isWin ? Color.Green : Color.Red,
-                Tag = new MatchMetadata { GameId = gameId, TeamId = participant["teamId"]?.Value<int>() ?? -1 }
+                ForeColor = MatchResult.IsRemake(gameJson) ? MatchResult.RemakeColor : isWin ? Color.Green : Color.Red,
+                Tag = new MatchMetadata { GameId = gameId, TeamId = participant["teamId"]?.Value<int>() ?? -1,
+                    GameData = (JObject)gameJson.DeepClone() }
             };
 
             item.SubItems.AddRange(new[] { gameMode, $"{kills}/{deaths}/{assists}", gameDate });
             result.MatchItems.Add(item);
             result.MatchKeys.Add($"{gameId}_{participant["teamId"]?.Value<int>() ?? -1}");
 
-            CacheChampionIcon(championName, championId, result.HeroIcons);
+            await CacheChampionIcon(championName, championId, result.HeroIcons);
         }
 
         private JObject FindParticipant(JObject gameJson, string puuid)
@@ -289,13 +290,13 @@ namespace League.Parsers
             return $"未知({string.Join(",", tagList)})";
         }
 
-        private void CacheChampionIcon(string championName, int championId, ImageList heroIcons)
+        private async Task CacheChampionIcon(string championName, int championId, ImageList heroIcons)
         {
             string cleanName = championName.Replace(" ", "").Replace("'", "");
             if (!MatchQueryProcessor._imageCache.TryGetValue(cleanName, out var image))
             {
-                image = Globals.resLoading.GetChampionIconAsync(championId).GetAwaiter().GetResult();
-                MatchQueryProcessor._imageCache.TryAdd(cleanName, image);
+                image = await Globals.resLoading.GetChampionIconAsync(championId);
+                if (image != null) MatchQueryProcessor._imageCache.TryAdd(cleanName, image);
             }
 
             if (image != null && !heroIcons.Images.ContainsKey(cleanName))
