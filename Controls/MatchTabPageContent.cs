@@ -405,7 +405,8 @@ namespace League.Controls
 
             try
             {
-                linkGameName.Text = fullName;
+                linkGameName.Tag = fullName;
+                League.UIHelpers.PlayerNamePresentation.Apply(linkGameName, fullName, privacy == "隐藏" ? false : privacy == "公开" ? true : null);
                 lblLevel.Text = $"等级：【{summonerLevel}】";
                 lblPrivacy.Text = $"隐私：【{privacy}】";
 
@@ -786,7 +787,7 @@ namespace League.Controls
         private void linkGameName_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             // 获取LinkLabel的文本
-            string textToCopy = linkGameName.Text;
+            string textToCopy = linkGameName.Tag as string ?? linkGameName.Text;
 
             // 复制文本到剪贴板
             Clipboard.SetText(textToCopy);

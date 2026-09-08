@@ -24,6 +24,9 @@ namespace League.UIState
 
         private ToolTip _toolTip;
 
+        public event Action<string>? PlayerProfileRequested;
+        public Func<string, Task<JObject?>>? ResolvePlayerProfile { get; set; }
+
         public DetailedViewLayoutManager(ToolTip toolTip)
         {
             _toolTip = toolTip;
