@@ -67,8 +67,10 @@ public partial class MatchDetailView
                         cell.Text = text;
                         cell.Visible = true;
                         if (!compact) continue;
-                        if (cell is LinkLabel) cell.Width = Math.Min(bounds.Width,84);
-                        else if (cell.Name == "PlayerRankEmblem") cell.SetBounds(146,bounds.Y,28,bounds.Height);
+                        if (cell is LinkLabel) cell.Width = Math.Min(bounds.Width,row.Controls.ContainsKey("PlayerRankEmblem") ? 84 : 118);
+                        else if (cell.Name == "PlayerRankEmblem") cell.SetBounds(146,1,28,22);
+                        else if (cell.Name.StartsWith("Honor_",StringComparison.Ordinal))
+                            cell.Left = 58+(bounds.X-58)/16*14;
                         else if (bounds.X >= 242 && bounds.X < 592)
                             cell.Left = bounds.X-64;
                         else if (bounds.X >= 592)
