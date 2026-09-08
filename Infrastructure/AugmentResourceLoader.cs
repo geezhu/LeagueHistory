@@ -95,10 +95,11 @@ namespace League.Infrastructure
             if (string.IsNullOrEmpty(augment.IconPath))
                 return (null, augment.Name, fullDesc);
 
-            var image = await _imageCache.GetOrDownloadImageAsync(
+            using var image = await _imageCache.GetOrDownloadImageAsync(
                 augment.IconPath, "augments", $"{id}.png", id);
 
-            return (image, augment.Name, fullDesc);
+            var displayImage = image == null ? null : League.UIHelpers.AugmentIconRenderer.Render(image, augment.Rarity);
+            return (displayImage, augment.Name, fullDesc);
         }
 
         private static string CleanDescription(string desc) =>
