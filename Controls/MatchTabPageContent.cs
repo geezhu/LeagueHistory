@@ -54,13 +54,14 @@ namespace League.Controls
             this.Dock = DockStyle.Fill;
 
             // 对 flowLayoutPanelRight 的设置
-            flowLayoutPanelRight.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+            flowLayoutPanelRight.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             flowLayoutPanelRight.AutoScroll = true;
             flowLayoutPanelRight.AutoSize = false; // 重要：关闭自动大小
 
             //初始化数据绑定
             InitComboBoxes();
             WireEvents();
+            ConfigureHistoryLayout();
         }
 
         public void SetNeedsRefresh(bool needsRefresh)
@@ -431,7 +432,7 @@ namespace League.Controls
                     lblSoloGames.Text = $"{soloStats.TotalGames} 场";
                     lblSoloWins.Text = $"{soloStats.Wins}场";
                     lblSoloLosses.Text = $"{soloStats.Losses}场";
-                    lblSoloWinRate.Text = $"{soloStats.WinRateDisplay}%";
+                    lblSoloWinRate.Text = soloStats.WinRateDisplay;
                     lblSoloLeaguePoints.Text = $"{soloStats.LeaguePoints}点";
                 }
 
@@ -442,7 +443,7 @@ namespace League.Controls
                     lblFlexGames.Text = $"{flexStats.TotalGames} 场";
                     lblFlexWins.Text = $"{flexStats.Wins}场";
                     lblFlexLosses.Text = $"{flexStats.Losses}场";
-                    lblFlexWinRate.Text = $"{flexStats.WinRateDisplay}%";
+                    lblFlexWinRate.Text = flexStats.WinRateDisplay;
                     lblFlexLeaguePoints.Text = $"{flexStats.LeaguePoints}点";
                 }
             }
