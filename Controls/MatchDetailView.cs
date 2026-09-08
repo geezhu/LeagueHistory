@@ -10,6 +10,7 @@ public partial class MatchDetailView : UserControl
     private readonly MatchInfo _match;
     private bool _started;
     private TimelineView? _timeline;
+    private MatchStatisticsView? _statistics;
     public event Action<string>? PlayerProfileRequested;
     public event Action? ReplayRequested;
 
@@ -23,25 +24,34 @@ public partial class MatchDetailView : UserControl
         _scoreboard = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true };
         var basic = new Button { Text = "基础数据", Width = 76, Height = 32, FlatStyle = FlatStyle.Flat };
         var timeline = new Button { Text = "时间线", Width = 68, Height = 32, FlatStyle = FlatStyle.Flat };
-        void SelectTab(bool showTimeline)
+        var statistics = new Button { Text = "统计", Width = 58, Height = 32, FlatStyle = FlatStyle.Flat };
+        void SelectTab(Button selected)
         {
-            foreach (var button in new[] { basic,timeline })
+            foreach (var button in new[] { basic,statistics,timeline })
             {
-                bool active = button == (showTimeline ? timeline : basic);
+                bool active = button == selected;
                 button.BackColor = active ? Color.FromArgb(225,237,253) : BackColor;
                 button.ForeColor = active ? Color.FromArgb(46,103,190) : Color.FromArgb(111,123,139);
                 button.FlatAppearance.BorderColor = active ? Color.FromArgb(46,103,190) : BackColor;
             }
+            _scoreboard.Visible = selected == basic;
+            if (_timeline != null) _timeline.Visible = selected == timeline;
+            if (_statistics != null) _statistics.Visible = selected == statistics;
         }
-        basic.Click += (_, _) => { if (_timeline != null) _timeline.Visible = false; _scoreboard.Visible = true; SelectTab(false); };
+        basic.Click += (_, _) => SelectTab(basic);
+        statistics.Click += (_, _) =>
+        {
+            if (_statistics == null) { _statistics = new MatchStatisticsView(_match); Controls.Add(_statistics); _statistics.BringToFront(); }
+            SelectTab(statistics);
+        };
         timeline.Click += (_, _) =>
         {
             if (_timeline == null) { _timeline = new TimelineView(_match) { Dock = DockStyle.Fill }; Controls.Add(_timeline); _timeline.BringToFront(); }
             _scoreboard.Visible = false; _timeline.Visible = true;
-            SelectTab(true);
+            SelectTab(timeline);
         };
-        SelectTab(false);
-        Controls.Add(_scoreboard); Controls.Add(CreateMatchHeader(match,replay,basic,timeline));
+        SelectTab(basic);
+        Controls.Add(_scoreboard); Controls.Add(CreateMatchHeader(match,replay,basic,statistics,timeline));
         _scoreboard.SizeChanged += (_, _) => ReflowScoreboard();
     }
 

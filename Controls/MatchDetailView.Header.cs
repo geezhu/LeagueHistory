@@ -31,7 +31,7 @@ public partial class MatchDetailView
             _toolTip.SetToolTip(value,i == 0 ? $"{match.GameTime}\n比赛 ID：{match.GameId}" : i == 3 ? "蓝队击杀 / 红队击杀" : values[i].Item2);
             info.Controls.Add(cell,i,0);
         }
-        var buttons = new FlowLayoutPanel { Width = 244, Height = 38, WrapContents = false, Margin = Padding.Empty };
+        var buttons = new FlowLayoutPanel { Width = actions.Sum(action => action.Width+6), Height = 38, WrapContents = false, Margin = Padding.Empty };
         foreach (var action in actions)
         {
             action.Margin = new Padding(0,0,6,0);
@@ -44,9 +44,9 @@ public partial class MatchDetailView
         header.Controls.Add(info); header.Controls.Add(buttons);
         void Arrange()
         {
-            bool narrow = header.Width < 780;
+            bool narrow = header.Width < buttons.Width + 510;
             header.Height = narrow ? 112 : 76;
-            info.SetBounds(12,10,Math.Max(1,header.Width-(narrow ? 24 : 274)),52);
+            info.SetBounds(12,10,Math.Max(1,header.Width-(narrow ? 24 : buttons.Width+30)),52);
             buttons.Location = new Point(Math.Max(12,header.Width-buttons.Width-12),narrow ? 70 : 24);
         }
         header.SizeChanged += (_, _) => Arrange();
