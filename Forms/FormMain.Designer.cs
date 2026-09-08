@@ -117,7 +117,6 @@ namespace League
             imageTabControl1.Size = new Size(1233, 808);
             imageTabControl1.SizeMode = TabSizeMode.Fixed;
             imageTabControl1.TabIndex = 0;
-            imageTabControl1.Tag = "D:\\Develop\\csharp\\League\\bin\\Debug\\net8.0-windows\\Assets\\Defaults\\01.png";
             imageTabControl1.SelectedIndexChanged += imageTabControl1_SelectedIndexChanged;
             // 
             // tabPage1

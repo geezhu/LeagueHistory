@@ -15,7 +15,7 @@ namespace League.PrimaryElection
         private bool _isInitialized = false;
 
         private readonly string _cacheFilePath = "primary_champion_cache.json";
-        private readonly string _versionFilePath = Path.Combine("Assets", "ddragon_version.txt");
+        private readonly string _versionFilePath = Path.Combine(AppContext.BaseDirectory, "Assets", "ddragon_version.txt");
 
         public event EventHandler ChampionsLoaded;
         public event EventHandler<string> LoadError;
