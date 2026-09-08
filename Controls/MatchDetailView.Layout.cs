@@ -5,11 +5,13 @@ public partial class MatchDetailView
     private readonly Dictionary<Control, Rectangle> _originalBounds = new();
     private readonly Dictionary<Control, string> _originalTexts = new();
     private bool _reflowing;
+    private bool _buildingScoreboard;
 
     private void ReflowScoreboard()
     {
-        if (_reflowing || IsDisposed) return;
+        if (_reflowing || _buildingScoreboard || IsDisposed) return;
         _reflowing = true;
+        _scoreboard.SuspendLayout();
         try
         {
             int width = Math.Max(680, _scoreboard.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 28);
@@ -60,6 +62,6 @@ public partial class MatchDetailView
             if (_scoreboard.Controls["MatchHighlights"] is Control highlights)
                 highlights.SetBounds(12,sectionY + _scoreboard.AutoScrollPosition.Y,width,86);
         }
-        finally { _reflowing = false; }
+        finally { _scoreboard.ResumeLayout(true); _reflowing = false; }
     }
 }

@@ -10,6 +10,8 @@ public partial class MatchDetailView
             if (matchInfo.AllParticipants == null) return;
             var loading = new Label { Text = "正在加载比赛数据…", ForeColor = Color.FromArgb(111, 123, 139), AutoSize = true, Location = new Point(20, 10) };
             panel.Controls.Add(loading);
+            _buildingScoreboard = true;
+            var sections = new List<Panel>();
             try
             {
                 int y = 8;
@@ -19,9 +21,10 @@ public partial class MatchDetailView
                     if (team.Count == 0) continue;
                     var rows = new List<(JObject Player, Panel Row)>();
                     // Build the whole team before displaying it so headers never detach from rows.
-                    var section = new Panel { Location = new Point(12, y), Size = new Size(1120, 64 + team.Count * 44),
-                        BackColor = Color.White };
+                    var section = new BufferedPanel { Location = new Point(12, y), Size = new Size(1120, 64 + team.Count * 44),
+                        BackColor = Color.White, Visible = false };
                     panel.Controls.Add(section);
+                    sections.Add(section);
                     var win = team.Select(p => p["win"]?.Value<bool>()).FirstOrDefault(v => v.HasValue);
                     Color teamColor = win == true ? Color.FromArgb(38, 139, 113) : win == false ? Color.FromArgb(191, 81, 91) : Color.FromArgb(111, 123, 139);
                     int Sum(string key) => team.Sum(p => p[key]?.Value<int>() ?? 0);
@@ -68,15 +71,30 @@ public partial class MatchDetailView
                     }
                     y+=section.Height+10;
                 }
-                loading.Dispose();
+                if (panel.IsDisposed) return;
+                panel.SuspendLayout();
+                try
+                {
+                    _buildingScoreboard = false;
+                    AddMatchHighlights(matchInfo);
+                    foreach (var section in sections) section.Visible = true;
+                    loading.Dispose();
+                }
+                finally { panel.ResumeLayout(true); }
                 ReflowScoreboard();
-                AddMatchHighlights(matchInfo);
             }
             catch(Exception ex)
             {
                 Debug.WriteLine($"详情加载失败: {ex}");
+                foreach (var section in sections)
+                {
+                    if (section.IsDisposed) continue;
+                    DisposeImagesInControls(section.Controls);
+                    section.Dispose();
+                }
                 if(!panel.IsDisposed) { loading.Text="部分数据加载失败，请关闭详情后重试。"; loading.BringToFront(); }
             }
+            finally { _buildingScoreboard = false; }
         }
         private void DisposeImagesInControls(Control.ControlCollection controls)
         {
