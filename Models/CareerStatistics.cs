@@ -38,7 +38,7 @@ public sealed class CareerStatistics
             var stats = player?["stats"] as JObject ?? player;
             if (stats == null || stats["win"]?.Type != JTokenType.Boolean) { result.Unrecognized++; continue; }
             seen.Add(id);
-            if (stats["gameEndedInEarlySurrender"]?.Value<bool>() == true) { result.ExcludedRemakes++; continue; }
+            if (MatchResult.IsRemake(game)) { result.ExcludedRemakes++; continue; }
             int? Number(string key) => stats[key]?.Type == JTokenType.Integer ? stats[key]!.Value<int>() : null;
             long? Long(string key) => stats[key]?.Type == JTokenType.Integer ? stats[key]!.Value<long>() : null;
             result.Games.Add(new(id,game["gameCreation"]?.Value<long>() ?? 0,game["queueId"]?.Value<int>() ?? 0,

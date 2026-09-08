@@ -14,16 +14,18 @@ namespace League.Models
         {
             get
             {
-                return _resultText;
+                return IsRemake ? "重开" : _resultText;
             }
             set
             {
                 _resultText = value;
-                ResultColor = value == "胜利" ? Color.Green : Color.Red;
+                ResultColor = value == "胜利" ? Color.FromArgb(38,139,113) : value == "重开" ? MatchResult.RemakeColor : Color.FromArgb(191,81,91);
             }
         }
 
-        public Color ResultColor { get; set; } = Color.Red;
+        public bool IsRemake => _resultText == "重开" || MatchResult.IsRemake(RawGameData,AllParticipants);
+        private Color _resultColor = Color.FromArgb(191,81,91);
+        public Color ResultColor { get => IsRemake ? MatchResult.RemakeColor : _resultColor; set => _resultColor = value; }
 
         public int Index { get; set; } = 0;
 
