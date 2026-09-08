@@ -21,6 +21,31 @@ internal static class Program
         {"gameId":1,"queueId":420,"participants":[{"participantId":1,"puuid":"self","championId":1,"stats":{"win":true,"kills":10,"deaths":0,"assists":5,"totalDamageDealtToChampions":20000,"goldEarned":12000,"pentaKills":0}}]}
         """);
         var remake = (JObject)game.DeepClone(); remake["gameId"] = 2; remake["participants"]![0]!["stats"]!["gameEndedInEarlySurrender"] = true;
+        Check(MatchOutcomeFilter.GetWin(game,"self") == true && MatchOutcomeFilter.GetWin(game,"other") == null,
+            "Outcome filtering must select the viewed player");
+        var lost = (JObject)game.DeepClone(); lost["participants"]![0]!["stats"]!["win"] = false;
+        Check(MatchOutcomeFilter.GetWin(new JObject { ["json"] = new JObject { ["info"] = lost } },"self") == false,
+            "SGP nested defeat filtering");
+        var noResult = (JObject)game.DeepClone(); ((JObject)noResult["participants"]![0]!["stats"]!).Remove("win");
+        Check(MatchOutcomeFilter.GetWin(noResult,"self") == null,"Missing result must not count as defeat");
+        var source = new JArray(game,lost,game,lost,game);
+        var pager = new OutcomeHistoryPager();
+        var offsets = new List<int>();
+        Task<JArray> FetchOutcomes(int offset,int count)
+        {
+            offsets.Add(offset);
+            return Task.FromResult(new JArray(source.Skip(offset).Take(count)));
+        }
+        Check(pager.LoadPage("self",true,1,2,FetchOutcomes).GetAwaiter().GetResult().Count == 2
+            && pager.Scanned == 3 && !pager.Exhausted,"Stop scanning as soon as first result page is full");
+        int requests = offsets.Count;
+        pager.LoadPage("self",true,1,2,FetchOutcomes).GetAwaiter().GetResult();
+        Check(offsets.Count == requests,"Previously loaded pages must not fetch again");
+        Check(pager.LoadPage("self",true,2,2,FetchOutcomes).GetAwaiter().GetResult().Count == 1
+            && offsets[requests] == 3 && pager.Exhausted,"Continue from cursor and preserve final partial page");
+        requests = offsets.Count;
+        Check(pager.LoadPage("self",false,1,2,FetchOutcomes).GetAwaiter().GetResult().Count == 2
+            && offsets.Count == requests,"Changing outcome reuses scanned records");
         var wrong = (JObject)game.DeepClone(); wrong["gameId"] = 3; wrong["participants"]![0]!["puuid"] = "other";
         var records = new JArray(game,game.DeepClone(),remake,wrong);
         var stats = CareerStatistics.Parse(records,"self");
