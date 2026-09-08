@@ -15,6 +15,8 @@ internal static class Program
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
         Task.Run(OpggChecks.RunAsync).GetAwaiter().GetResult();
         OpggChecks.Render();
+        Task.Run(AramMetaChecks.RunAsync).GetAwaiter().GetResult();
+        AramMetaChecks.Render();
         string historyFile = Path.Combine(Path.GetTempPath(),"league-search-"+Guid.NewGuid().ToString("N")+".json");
         try
         {
