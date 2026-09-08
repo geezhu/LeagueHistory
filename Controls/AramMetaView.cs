@@ -102,7 +102,7 @@ internal sealed partial class AramMetaView : UserControl
             var page=await _client.GetAsync(id,refresh,request.Token,preview=>
             {
                 if(IsDisposed || request.IsCancellationRequested || _request!=request)return;
-                _page=preview;_search.Enabled=false;_role.Enabled=false;
+                _page=preview;_search.Visible=false;_role.Visible=false;
                 _grid.Visible=false;_detail.Visible=true;
                 RenderDetail(preview,id,request.Token);_detail.BringToFront();
                 _detail.AutoScrollPosition=new Point(0,_history[_historyIndex].Scroll);
@@ -112,7 +112,7 @@ internal sealed partial class AramMetaView : UserControl
             });request.Token.ThrowIfCancellationRequested();
             if(IsDisposed)return;_page=page;
             int detailScroll=previewShown?Math.Max(0,-_detail.AutoScrollPosition.Y):_history[_historyIndex].Scroll;
-            _search.Enabled=id==0;_role.Enabled=id==0;
+            _search.Visible=id==0;_role.Visible=id==0;
             _grid.Visible=id==0;_detail.Visible=id!=0;
             if(id==0){FillGrid();_grid.BringToFront();}
             else {RenderDetail(page,id,request.Token,previewShown && previewVersion==page.Index.Version);_detail.BringToFront();}

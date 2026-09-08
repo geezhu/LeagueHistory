@@ -6,6 +6,12 @@ internal sealed partial class AramMetaView
 {
     private Font? _rankingBold;
     private double _maximumWinRate;
+    private static Color TierColor(string tier)=>tier switch
+    {
+        "OP"=>Color.FromArgb(139,83,187),"T1"=>Color.FromArgb(0,145,153),
+        "T2"=>Color.FromArgb(58,119,185),"T4"=>Color.FromArgb(185,112,24),
+        "T5"=>Color.FromArgb(193,70,82),_=>Color.FromArgb(113,130,146)
+    };
 
     private void ConfigureRankings()
     {
@@ -58,11 +64,7 @@ internal sealed partial class AramMetaView
         }
         else if(e.ColumnIndex==2)
         {
-            Color ink=champion.Tier switch
-            {
-                "OP"=>Color.FromArgb(139,83,187),"T1"=>Color.FromArgb(0,145,153),
-                "T2"=>Color.FromArgb(58,119,185),_=>Color.FromArgb(113,130,146)
-            };
+            Color ink=TierColor(champion.Tier);
             var badge=new Rectangle(bounds.X+10,bounds.Y+(bounds.Height-26)/2,42,26);
             using var brush=new SolidBrush(Color.FromArgb(24,ink));
             e.Graphics.FillRectangle(brush,badge);
