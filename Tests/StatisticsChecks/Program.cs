@@ -197,6 +197,31 @@ internal static class Program
         Check(ProfileMasteryView.SelectAll(extendedMastery).Length == 4 && ProfileMasteryView.SelectTop(extendedMastery).Length == 3, "Gallery includes zero-point records beyond homepage preview");
         var galleryType = typeof(ProfileMasteryView).Assembly.GetType("League.Controls.MasteryGalleryView")!;
         var activityType = typeof(ProfileMasteryView).Assembly.GetType("League.Controls.RecentActivityView")!;
+        League.Models.CareerGame OverviewGame(int id,int queue,int kills,int deaths,int assists) => new(id,id,queue,1,id%2==0,kills,deaths,assists,null,null,null);
+        var overviewGames = new[] { OverviewGame(1,430,4,2,4), OverviewGame(2,420,2,0,4), OverviewGame(3,2400,90,1,90) };
+        var overviewStats = League.Models.RecentOverview.Build(overviewGames);
+        Check(overviewStats.Kda == 21 && overviewStats.KdaGames == 2, "Overview aggregates rift KDA with multiplier three and excludes ARAM");
+        Check(League.Models.RecentOverview.Build(new[]{OverviewGame(1,440,2,0,4)}).Kda == 18, "Overview zero total deaths uses denominator one");
+        var aramKda = League.Models.RecentOverview.Build(new[]{OverviewGame(1,450,2,1,4),OverviewGame(2,2400,4,2,2)});
+        Check(aramKda.Kda == 12 && aramKda.UsesAramKda && aramKda.KdaGames == 2, "Overview falls back to both ARAM modes when rift sample is absent");
+        Check(!overviewStats.UsesAramKda, "Rift sample takes priority over ARAM");
+        Check(League.Models.RecentOverview.Build(new[]{OverviewGame(1,1700,2,1,4)}).Kda == null, "Other modes do not enter KDA fallback");
+        Check(League.Models.RecentOverview.Build(new[]{OverviewGame(1,430,2,1,4) with { Kills = null }}).Kda == null, "Overview missing KDA fields are not treated as zero");
+        Check(overviewStats.Modes.Length == 4 && overviewStats.Modes.Any(m=>m.Queue==2400 && m.Games==1), "Hextech ARAM replaces an empty mode without changing slot count");
+        var hexOnly = League.Models.RecentOverview.Build(new[]{OverviewGame(1,2400,1,1,1)});
+        Check(hexOnly.Modes[1].Queue == 2400 && hexOnly.Modes[0].Queue == 430, "Hextech ARAM prefers replacing empty standard ARAM over other empty modes");
+        var allModes = League.Models.RecentOverview.Build(new[]{430,450,420,440,2400}.Select((queue,i)=>OverviewGame(i+1,queue,1,1,1)));
+        Check(allModes.Modes.Length == 4 && allModes.Modes.Any(m=>m.Queue==2400), "Hextech ARAM is visible even with all default modes played");
+        Check(League.Models.RecentOverview.Build(Enumerable.Range(1,60).Select(i=>OverviewGame(i,430,1,1,1))).Sample == 50, "Overview bounds sample to fifty games");
+        var overviewType = typeof(ProfileMasteryView).Assembly.GetType("League.Controls.RecentOverviewView")!;
+        using(var overviewControl = (Control)Activator.CreateInstance(overviewType)!)
+        {
+            overviewControl.Width = 800;
+            overviewType.GetMethod("SetGames")!.Invoke(overviewControl,new object[]{overviewGames,"最近 3 场"});
+            using var bitmap = new Bitmap(800,170);
+            overviewControl.DrawToBitmap(bitmap,new Rectangle(0,0,800,170));
+            bitmap.Save(Path.Combine(AppContext.BaseDirectory,"recent-overview.png"));
+        }
         var roleGames = new[] {
             new League.Models.CareerGame(1,1,450,1,true,null,null,null,null,null,null),
             new League.Models.CareerGame(2,2,450,2,true,null,null,null,null,null,null),

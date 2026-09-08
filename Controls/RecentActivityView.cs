@@ -13,6 +13,7 @@ internal sealed class RecentActivityView : Control
     private int _sample, _classified;
     private string _status = "正在加载近期对局…";
     private CancellationTokenSource? _request;
+    public event Action<CareerGame[],string>? OverviewLoaded;
     private readonly ToolTip _tip = new();
     private readonly Image[] _roleIcons = Roles.Select(role =>
     {
@@ -53,29 +54,33 @@ internal sealed class RecentActivityView : Control
     {
         _request?.Cancel(); _request?.Dispose(); var request = _request = new CancellationTokenSource();
         ClearImages(); _sample = _classified = 0; _weights = new double[6]; _status = "正在加载近期对局…"; Invalidate();
+        OverviewLoaded?.Invoke(Array.Empty<CareerGame>(), "正在加载最近 50 场…");
         try
         {
             var service = new PlayerStatisticsService(() => FormMain.Globals.lcuClient.Client);
             var records = new JArray();
             CareerGame[] games = Array.Empty<CareerGame>();
             bool partial = false;
-            // Bounded independently of history pagination: stop once twenty valid matches are available.
-            for (int start = 0; start < 100 && games.Length < 20; start += 20)
+            // Share a bounded fifty-match sample with the overview; the hero strip uses its first twenty.
+            for (int start = 0; start < 50; start += 20)
             {
-                var response = await service.GetAsync($"/lol-match-history/v1/products/lol/{Uri.EscapeDataString(puuid)}/matches?begIndex={start}&endIndex={start + 19}", request.Token);
+                int count = Math.Min(20,50-start);
+                var response = await service.GetAsync($"/lol-match-history/v1/products/lol/{Uri.EscapeDataString(puuid)}/matches?begIndex={start}&endIndex={start + count - 1}", request.Token);
                 var batch = CareerStatistics.Records(response.Data);
                 if (batch == null && response.Status is not (0 or 401 or 403))
-                    batch = await FormMain.Globals.sgpClient.SgpFetchLatestMatches(puuid, start, 20, cancellationToken: request.Token);
+                    batch = await FormMain.Globals.sgpClient.SgpFetchLatestMatches(puuid, start, count, cancellationToken: request.Token);
                 if (IsDisposed || request.IsCancellationRequested) return;
                 if (batch == null)
                 {
-                    if (records.Count == 0) { _status = "近期对局暂不可用，请稍后重新打开主页。"; Invalidate(); return; }
+                    if (records.Count == 0) { _status = "近期对局暂不可用，请稍后重新打开主页。"; OverviewLoaded?.Invoke(Array.Empty<CareerGame>(),"近期对局暂不可用"); Invalidate(); return; }
                     partial = true; break;
                 }
                 foreach (var record in batch) records.Add(record.DeepClone());
-                games = CareerStatistics.Parse(records, puuid, includeRemakes: true).Games.Where(g => g.Champion > 0).OrderByDescending(g => g.Created).ThenByDescending(g => g.Id).Take(20).ToArray();
-                if (batch.Count < 20) break;
+                games = CareerStatistics.Parse(records, puuid, includeRemakes: true).Games.Where(g => g.Champion > 0).OrderByDescending(g => g.Created).ThenByDescending(g => g.Id).Take(50).ToArray();
+                if (batch.Count < count) break;
             }
+            OverviewLoaded?.Invoke(games,$"最近 {games.Length} 场" + (partial ? " · 部分记录暂不可用" : ""));
+            games = games.Take(20).ToArray();
             _sample = games.Length;
             if (_sample == 0) { _status = "暂无可统计的近期对局。"; Invalidate(); return; }
             _status = $"最近 {_sample} 场对局" + (partial ? " · 部分记录暂不可用" : ""); Invalidate();
@@ -98,7 +103,7 @@ internal sealed class RecentActivityView : Control
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Recent activity: {ex.GetType().Name}");
-            if (!IsDisposed && !request.IsCancellationRequested) { _status = "近期统计加载失败，请稍后重新打开主页。"; Invalidate(); }
+            if (!IsDisposed && !request.IsCancellationRequested) { _status = "近期统计加载失败，请稍后重新打开主页。"; OverviewLoaded?.Invoke(Array.Empty<CareerGame>(),"统计加载失败"); Invalidate(); }
         }
     }
 
