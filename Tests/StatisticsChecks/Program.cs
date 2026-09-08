@@ -163,12 +163,40 @@ internal static class Program
         [{"championId":1,"championLevel":10,"championPoints":12000},{"championId":2,"championLevel":20,"championPoints":80000},{"championId":3,"championLevel":8,"championPoints":9000},{"championId":1,"championPoints":1000},{"championId":4}]
         """);
         Check(ProfileMasteryView.SelectTop(masteryData).Select(p=>(int)p["championId"]!).SequenceEqual(new[]{2,1,3}),"Mastery ordering/deduplication/missing scores");
-        using var masteryClient=new HttpClient(new Handler(path=>new(HttpStatusCode.OK,path.Contains("summoners-by-puuid") ? "{\"summonerId\":42}" : masteryData.ToString()))) { BaseAddress=client.BaseAddress };
+        var sixMasteries = new JArray(Enumerable.Range(1,6).Select(id => new JObject { ["championId"] = id, ["championPoints"] = id * 100 }));
+        Check(ProfileMasteryView.SelectTop(sixMasteries).Length == 5, "Homepage previews five champions");
+        Check(ProfileMasteryView.StandardChampions(JArray.Parse("[{\"id\":-1},{\"id\":1},{\"id\":1},{\"id\":2},{\"id\":60001}]")).Length == 2, "Ownership roster excludes placeholder, duplicates and classic variants");
+        var masteryPaths = new List<string>();
+        using var masteryClient=new HttpClient(new Handler(path=>
+        {
+            masteryPaths.Add(path);
+            return path == "/lol-champion-mastery/v1/self/champion-mastery"
+                ? new(HttpStatusCode.OK, masteryData.ToString())
+                : new(HttpStatusCode.NotFound, "");
+        })) { BaseAddress=client.BaseAddress };
         using var icon=new Bitmap(32,32);
         var masteryView=new ProfileMasteryView(new PlayerStatisticsService(()=>masteryClient),id=>Task.FromResult<(Image?,string,string)>((icon,"英雄 "+id,""))) { Dock=DockStyle.Fill };
         form.Controls.Add(masteryView);masteryView.LoadPlayer("self");Application.DoEvents();
         Check(Children(masteryView).OfType<PictureBox>().Count()==3,"Three mastery champions rendered");
         Check(Children(masteryView).OfType<Label>().Any(l=>l.Text.Contains("80,000")),"Mastery points displayed");
+        JObject[]? allMastery = null;
+        masteryView.AllRequested += records => allMastery = records;
+        Children(masteryView).OfType<Button>().Single(b => b.Text == "全部 ›").PerformClick();
+        Check(allMastery?.Length == 3, "All mastery navigation reuses loaded records");
+        var extendedMastery = (JArray)masteryData.DeepClone();
+        extendedMastery.Add(JObject.Parse("{\"championId\":5,\"championPoints\":0,\"championLevel\":0}"));
+        Check(ProfileMasteryView.SelectAll(extendedMastery).Length == 4 && ProfileMasteryView.SelectTop(extendedMastery).Length == 3, "Gallery includes zero-point records beyond homepage preview");
+        var galleryType = typeof(ProfileMasteryView).Assembly.GetType("League.Controls.MasteryGalleryView")!;
+        using var gallery = (Control)Activator.CreateInstance(galleryType, new object[] { ProfileMasteryView.SelectAll(extendedMastery), "— / —" })!;
+        gallery.Dock = DockStyle.Fill;
+        form.Controls.Add(gallery); gallery.BringToFront(); Application.DoEvents();
+        Check(Children(gallery).OfType<PictureBox>().Count() == 4, "Gallery renders every deduplicated mastery record");
+        using (var screenshot = new Bitmap(form.ClientSize.Width, form.ClientSize.Height))
+        {
+            gallery.DrawToBitmap(screenshot, new Rectangle(Point.Empty, gallery.Size));
+            screenshot.Save(Path.Combine(AppContext.BaseDirectory, "mastery-gallery.png"));
+        }
+        Check(masteryPaths.Contains("/lol-champion-mastery/v1/self/champion-mastery") && !masteryPaths.Any(p=>p.Contains("lol-collections")), "Mastery uses PUUID endpoint despite unavailable profile");
         form.Close();
         Console.WriteLine("PASS: identity, remakes, duplicates, missing values, SGP wrapper, team mapping, frame gaps, events, cancellation, privacy, fallback scope, WinForms controls.");
     }

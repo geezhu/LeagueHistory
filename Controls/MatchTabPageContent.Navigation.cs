@@ -36,6 +36,13 @@ public partial class MatchTabPageContent
         _profileSurface = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true };
         _masteryView = new ProfileMasteryView { Dock = DockStyle.Top };
         _masteryView.ProfileLoaded += picChampionId.SetExperience;
+        _masteryView.AllRequested += records =>
+        {
+            var gallery = new MasteryGalleryView(records, _masteryView.OwnershipText) { Dock = DockStyle.Fill };
+            gallery.CloseRequested += () => gallery.Dispose();
+            Controls.Add(gallery);
+            gallery.BringToFront();
+        };
         _profileSurface.Controls.Add(_masteryView);
         _profileSurface.Controls.Add(profile);
         _contentSurface = new BufferedPanel { Dock = DockStyle.Fill, Padding = new Padding(0,0,12,0) };
