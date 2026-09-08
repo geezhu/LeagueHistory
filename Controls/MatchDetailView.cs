@@ -16,13 +16,14 @@ public partial class MatchDetailView : UserControl
     public MatchDetailView(MatchInfo match)
     {
         _match = match;
+        DoubleBuffered = true;
         BackColor = Color.FromArgb(244,247,251);
         var summary = new Label { Dock = DockStyle.Top, Height = 68, Padding = new Padding(12,8,0,0),
             ForeColor = Color.FromArgb(36,63,98), Font = new Font("Microsoft YaHei UI",10f),
             Text = $"{match.Mode} · {match.DurationText} · {match.GameTime}\n比赛 {match.GameId} · 点击列标题排序" };
         var replay = new Button { Text = "查看回放", Dock = DockStyle.Top, Height = 28, FlatStyle = FlatStyle.Flat };
         replay.Click += (_, _) => ReplayRequested?.Invoke();
-        _scoreboard = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        _scoreboard = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true };
         var tabs = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 34 };
         var basic = new Button { Text = "基础数据", AutoSize = true, FlatStyle = FlatStyle.Flat };
         var timeline = new Button { Text = "时间线", AutoSize = true, FlatStyle = FlatStyle.Flat };

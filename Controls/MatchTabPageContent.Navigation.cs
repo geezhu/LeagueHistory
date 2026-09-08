@@ -32,14 +32,14 @@ public partial class MatchTabPageContent
 
     private void ConfigureProfileNavigation(Control profile, Control toolbar)
     {
-        _profileSurface = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        _profileSurface = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true };
         _masteryView = new ProfileMasteryView { Dock = DockStyle.Top };
         _masteryView.ProfileLoaded += picChampionId.SetExperience;
         _profileSurface.Controls.Add(_masteryView);
         _profileSurface.Controls.Add(profile);
-        _contentSurface = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0,0,12,0) };
+        _contentSurface = new BufferedPanel { Dock = DockStyle.Fill, Padding = new Padding(0,0,12,0) };
         _contentSurface.Controls.Add(_profileSurface);
-        _historySurface = new Panel { Dock = DockStyle.Right, Width = 300 };
+        _historySurface = new BufferedPanel { Dock = DockStyle.Right, Width = 300 };
         _backToProfile = new Button { Text = "← 返回玩家主页", Dock = DockStyle.Top, Height = 32, FlatStyle = FlatStyle.Flat, Visible = false };
         _backToProfile.Click += (_, _) => ReturnToProfile();
         _historySurface.Controls.Add(flowLayoutPanelRight);
@@ -66,6 +66,9 @@ public partial class MatchTabPageContent
         {
             MessageBox.Show("这场比赛暂不支持计分板详情。"); return;
         }
+        SuspendLayout(); _contentSurface.SuspendLayout(); _historySurface.SuspendLayout();
+        try
+        {
         if (_detailView == null) _profileHistoryScroll = new Point(0,-flowLayoutPanelRight.AutoScrollPosition.Y);
         _detailView?.Dispose();
         if (_selectedCard != null) { _selectedCard.SelectedMatch = false; _selectedCard.Invalidate(); }
@@ -81,10 +84,21 @@ public partial class MatchTabPageContent
         _detailView.ReplayRequested += () => card.RequestReplay();
         _contentSurface.Controls.Add(_detailView); _detailView.BringToFront();
         ResizeMatchCards();
+        }
+        finally
+        {
+            _historySurface.ResumeLayout(true);
+            _contentSurface.ResumeLayout(true);
+            ResumeLayout(true);
+        }
     }
 
     private void ReturnToProfile()
     {
+        SuspendLayout();
+        _contentSurface?.SuspendLayout(); _historySurface?.SuspendLayout();
+        try
+        {
         _detailView?.Dispose(); _detailView = null;
         if (_selectedCard != null && !_selectedCard.IsDisposed) { _selectedCard.SelectedMatch = false; _selectedCard.Invalidate(); }
         _selectedCard = null;
@@ -94,5 +108,12 @@ public partial class MatchTabPageContent
         _profileSurface.Visible = true; _backToProfile.Visible = false;
         ResizeMatchCards();
         flowLayoutPanelRight.AutoScrollPosition = _profileHistoryScroll;
+        }
+        finally
+        {
+            _historySurface?.ResumeLayout(true);
+            _contentSurface?.ResumeLayout(true);
+            ResumeLayout(true);
+        }
     }
 }

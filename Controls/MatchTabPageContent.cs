@@ -334,8 +334,8 @@ namespace League.Controls
         // 修改 UpdateMatchListInternal 方法，跟踪解析的面板
         private async Task UpdateMatchListInternal(JArray matches, CancellationToken token)
         {
-            // 先清理旧的
-            CleanupAllParsedPanels();
+            // Keep the current detail alive while the next page is being parsed.
+            var oldPanels = _allParsedPanels.ToArray();
 
             var panels = await Task.Run(async () =>
             {
@@ -372,11 +372,18 @@ namespace League.Controls
 
             SafeInvoke(flowLayoutPanelRight, () =>
             {
+                bool reopenDetail = _detailView != null;
+                if (reopenDetail)
+                {
+                    _detailView?.Dispose();
+                    _detailView = null;
+                    _selectedCard = null;
+                }
                 flowLayoutPanelRight.SuspendLayout();
                 try
                 {
                     // 先清理旧的
-                    foreach (Control control in flowLayoutPanelRight.Controls)
+                    foreach (Control control in flowLayoutPanelRight.Controls.Cast<Control>().ToArray())
                     {
                         if (control is IDisposable disposable) disposable.Dispose();
                     }
@@ -384,6 +391,17 @@ namespace League.Controls
 
                     // 添加新的
                     flowLayoutPanelRight.Controls.AddRange(panels.ToArray());
+                    foreach (var reference in oldPanels)
+                    {
+                        if (reference.Target is Control old && !old.IsDisposed) old.Dispose();
+                        _allParsedPanels.Remove(reference);
+                    }
+                    if (reopenDetail)
+                    {
+                        var first = panels.OfType<MatchListPanel>().FirstOrDefault();
+                        if (first?.MatchInfo != null) OpenInlineMatch(first.MatchInfo);
+                        else ReturnToProfile();
+                    }
                 }
                 finally
                 {
