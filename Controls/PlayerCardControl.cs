@@ -19,19 +19,7 @@ namespace League.Controls
         public PlayerCardControl()
         {
             InitializeComponent();
-
-            // 设置等级显示成黑色半透明
-            SetLabelBackColor();
-
-            // 绑定点击事件
-            lblPlayerName.LinkClicked += LblPlayerName_LinkClicked;
-            lblPlayerName.Cursor = Cursors.Hand;   // 鼠标变成手型，提示可点击
-
-            // 初始化 Tooltip 属性（可选优化）
-            _nameToolTip.AutoPopDelay = 4000;
-            _nameToolTip.InitialDelay = 300;      // 悬停多久开始显示（毫秒），越小越灵敏
-            _nameToolTip.ReshowDelay = 200;
-            _nameToolTip.ShowAlways = true;
+            ConfigureCardLayout();
         }
 
         private void SetLabelBackColor()
@@ -101,7 +89,7 @@ namespace League.Controls
                 FontStyle.Bold
             );
 
-            lblPlayerName.BorderStyle = BorderStyle.FixedSingle;
+            lblPlayerName.BorderStyle = BorderStyle.None;
 
             lblSoloRank.Text = $"{soloRank}";
             lblFlexRank.Text = $"{flexRank}";

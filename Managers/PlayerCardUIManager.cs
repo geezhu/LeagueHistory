@@ -1,4 +1,4 @@
-﻿using League.Controls;
+using League.Controls;
 using League.Models;
 using League.UIState;
 using Newtonsoft.Json.Linq;
@@ -15,6 +15,7 @@ namespace League.Managers
         public PlayerCardUIManager(FormMain form)
         {
             _form = form;
+            PlayerTeamsLayout.Attach(form.tableLayoutPanel1);
         }
 
         public async Task CreateBasicCardsOnly(JArray team, bool isMyTeam, int row,PlayerCardFactory factory, PlayerCardCache cache)
@@ -87,11 +88,17 @@ namespace League.Managers
 
         public void CreateLoadingPlayerMatch(PlayerMatchInfo matchInfo, bool isMyTeam, int row, int column,string puuid = "")
         {
+            if (_form.InvokeRequired)
+            {
+                FormUiStateManager.SafeInvokeSync(_form, () => CreateLoadingPlayerMatch(matchInfo,isMyTeam,row,column,puuid));
+                return;
+            }
             var player = matchInfo.Player;
-            Color borderColor = row == 0 ? Color.Red : row == 1 ? Color.Blue : Color.Gray;
+            Color borderColor = Color.FromArgb(221,230,240);
 
             var panel = new BorderPanel
             {
+                Tag = isMyTeam,
                 BorderColor = borderColor,
                 BorderWidth = 1,
                 Padding = new Padding(2),
@@ -106,6 +113,19 @@ namespace League.Managers
             string fullName = !string.IsNullOrEmpty(player.FullName) ? player.FullName : name;
             string soloRank = string.IsNullOrEmpty(player.SoloRank) ? "未知" : player.SoloRank;
             string flexRank = string.IsNullOrEmpty(player.FlexRank) ? "未知" : player.FlexRank;
+
+            // 关键调用
+            card.SetPlayerInfo(name, soloRank, flexRank, player.Avatar, player.IsPublic,
+                matchInfo.MatchItems, player.NameColor, player.SummonerId, player.ChampionId, puuid ?? player.Puuid ?? "");
+            card.SetRecentStatistics(matchInfo);
+
+            //// 【修复点】必须设置 SmallImageList
+            //if (matchInfo.HeroIcons != null)
+            //{
+            //    card.ListViewControl.SmallImageList = matchInfo.HeroIcons;
+            //}
+
+            //card.ListViewControl.View = View.Details;
 
             // 先 ImageList 再 SetPlayerInfo
             if (matchInfo.HeroIcons != null)
@@ -139,6 +159,19 @@ namespace League.Managers
                 }
                 _form.tableLayoutPanel1.Controls.Add(panel, column, row);
             });
+            if (card.IsLoading || player.SummonerId == 0) LoadCardAvatar(card,player.ChampionId);
+            _ = card.LoadSummonerProfileAsync();
+        }
+
+        private static async void LoadCardAvatar(PlayerCardControl card,int championId)
+        {
+            try
+            {
+                var image = await Globals.resLoading.GetChampionIconAsync(championId);
+                if (card.IsDisposed || card.CurrentChampionId != championId) { image?.Dispose(); return; }
+                if (image != null) { card.SetAvatarOnly(image); image.Dispose(); }
+            }
+            catch (Exception ex) { Debug.WriteLine($"Card avatar: {ex.GetType().Name}"); }
         }
 
         public void UpdateCardUI(PlayerCardControl card, PlayerMatchInfo matchInfo)
@@ -150,6 +183,7 @@ namespace League.Managers
                 if (card.IsDisposed) return;
 
                 var p = matchInfo.Player;
+                card.SetRecentStatistics(matchInfo);
                 card.lblPlayerName.Text = p.GameName ?? "未知玩家";
 
                 string full = !string.IsNullOrEmpty(p.FullName) ? p.FullName : (p.GameName ?? "");

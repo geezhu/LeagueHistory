@@ -14,8 +14,7 @@ namespace League.Managers
             string championName = Globals.resLoading.GetChampionById(championId)?.Name ?? "Unknown";
 
             // 【关键修复】提前加载头像（隐藏玩家也需要）
-            Image avatar = Task.Run(async () =>
-                await Globals.resLoading.GetChampionIconAsync(championId)).Result;
+            Image avatar = LoadErrorImage();
 
             var playerInfo = new PlayerInfo
             {
@@ -42,8 +41,7 @@ namespace League.Managers
         public PlayerMatchInfo CreateHiddenPlayerInfo(long summonerId, int championId)
         {
             string championName = Globals.resLoading.GetChampionById(championId)?.Name ?? "未知英雄";
-            Image championIcon = Task.Run(() => Globals.resLoading.GetChampionIconAsync(championId)).Result
-                                 ?? LoadErrorImage();
+            Image championIcon = LoadErrorImage();
 
             return new PlayerMatchInfo
             {
@@ -68,8 +66,7 @@ namespace League.Managers
         public PlayerMatchInfo CreateFailedPlayerInfo(long summonerId, int championId, string puuid = "")
         {
             string championName = Globals.resLoading.GetChampionById(championId)?.Name ?? "Unknown";
-            Image championIcon = Task.Run(() => Globals.resLoading.GetChampionIconAsync(championId)).Result
-                                 ?? LoadErrorImage();
+            Image championIcon = LoadErrorImage();
 
             if (summonerId == 0)
                 return CreateHiddenPlayerInfo(0, championId);

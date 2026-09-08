@@ -16,8 +16,7 @@ namespace League.Parsers
         public PlayerMatchInfo CreateHiddenPlayerInfo(long summonerId, int championId)
         {
             string championName = Globals.resLoading.GetChampionById(championId)?.Name ?? "Unknown";
-            Image championIcon = Task.Run(() => Globals.resLoading.GetChampionIconAsync(championId)).Result
-                               ?? LoadDefaultImage();
+            Image championIcon = LoadDefaultImage();
 
             return new PlayerMatchInfo
             {

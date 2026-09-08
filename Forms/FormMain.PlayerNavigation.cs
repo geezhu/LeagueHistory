@@ -32,6 +32,7 @@ public partial class FormMain
                     rankedStats
                 );
                 txtGameName.Text = "";
+                imageTabControl1.SelectedIndex = 0;
                 Activate();
             }
             else MessageBox.Show("无法获取该玩家的资料，请确认客户端已连接后重试。");
