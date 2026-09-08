@@ -18,23 +18,30 @@ public partial class MatchDetailView : UserControl
         _match = match;
         DoubleBuffered = true;
         BackColor = Color.FromArgb(244,247,251);
-        var summary = new Label { Dock = DockStyle.Top, Height = 68, Padding = new Padding(12,8,0,0),
-            ForeColor = Color.FromArgb(36,63,98), Font = new Font("Microsoft YaHei UI",10f),
-            Text = $"{match.Mode} · {match.DurationText} · {match.GameTime}\n比赛 {match.GameId} · 点击列标题排序" };
-        var replay = new Button { Text = "查看回放", Dock = DockStyle.Top, Height = 28, FlatStyle = FlatStyle.Flat };
+        var replay = new Button { Text = "查看回放", Width = 76, Height = 32, FlatStyle = FlatStyle.Flat };
         replay.Click += (_, _) => ReplayRequested?.Invoke();
         _scoreboard = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true };
-        var tabs = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 34 };
-        var basic = new Button { Text = "基础数据", AutoSize = true, FlatStyle = FlatStyle.Flat };
-        var timeline = new Button { Text = "时间线", AutoSize = true, FlatStyle = FlatStyle.Flat };
-        basic.Click += (_, _) => { if (_timeline != null) _timeline.Visible = false; _scoreboard.Visible = true; };
+        var basic = new Button { Text = "基础数据", Width = 76, Height = 32, FlatStyle = FlatStyle.Flat };
+        var timeline = new Button { Text = "时间线", Width = 68, Height = 32, FlatStyle = FlatStyle.Flat };
+        void SelectTab(bool showTimeline)
+        {
+            foreach (var button in new[] { basic,timeline })
+            {
+                bool active = button == (showTimeline ? timeline : basic);
+                button.BackColor = active ? Color.FromArgb(225,237,253) : BackColor;
+                button.ForeColor = active ? Color.FromArgb(46,103,190) : Color.FromArgb(111,123,139);
+                button.FlatAppearance.BorderColor = active ? Color.FromArgb(46,103,190) : BackColor;
+            }
+        }
+        basic.Click += (_, _) => { if (_timeline != null) _timeline.Visible = false; _scoreboard.Visible = true; SelectTab(false); };
         timeline.Click += (_, _) =>
         {
             if (_timeline == null) { _timeline = new TimelineView(_match) { Dock = DockStyle.Fill }; Controls.Add(_timeline); _timeline.BringToFront(); }
             _scoreboard.Visible = false; _timeline.Visible = true;
+            SelectTab(true);
         };
-        tabs.Controls.AddRange(new Control[] { basic,timeline });
-        Controls.Add(_scoreboard); Controls.Add(tabs); Controls.Add(replay); Controls.Add(summary);
+        SelectTab(false);
+        Controls.Add(_scoreboard); Controls.Add(CreateMatchHeader(match,replay,basic,timeline));
         _scoreboard.SizeChanged += (_, _) => ReflowScoreboard();
     }
 
