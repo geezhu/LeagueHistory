@@ -10,7 +10,7 @@ namespace League.Models
         private static readonly ConcurrentDictionary<string, Image> _imageCache = new();
 
         private static readonly Image _defaultProfile;
-        private static string VersionCachePath => Path.Combine("Assets", "ddragon_version.txt");
+        private static string VersionCachePath => Path.Combine(AppContext.BaseDirectory, "Assets", "ddragon_version.txt");
 
         private static HttpClient CreateHttpClient()
         {
@@ -25,7 +25,7 @@ namespace League.Models
         {
             try
             {
-                using var temp = Image.FromFile("Assets/Defaults/Profile.png");
+                using var temp = Image.FromFile(Path.Combine(AppContext.BaseDirectory, "Assets", "Defaults", "Profile.png"));
                 _defaultProfile = new Bitmap(temp); // 创建独立副本
             }
             catch (Exception ex)
@@ -56,7 +56,7 @@ namespace League.Models
                 return new Bitmap(cachedImage);
             }
 
-            var localPath = Path.Combine("Assets", type, $"{profileIconId}.png");
+            var localPath = Path.Combine(AppContext.BaseDirectory, "Assets", type, $"{profileIconId}.png");
 
             // 本地已有文件
             if (File.Exists(localPath))

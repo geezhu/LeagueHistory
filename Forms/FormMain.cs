@@ -121,9 +121,9 @@ namespace League
                 _ = _configUpdateManager.CheckForUpdates();
 
                 // 加载图片
-                var img1 = Image.FromFile(AppDomain.CurrentDomain.BaseDirectory + @"\Assets\Defaults\01.png");
-                var img2 = Image.FromFile(AppDomain.CurrentDomain.BaseDirectory + @"\Assets\Defaults\02.png");
-                var img3 = Image.FromFile(AppDomain.CurrentDomain.BaseDirectory + @"\Assets\Defaults\03.png");
+                var img1 = Image.FromFile(Path.Combine(AppContext.BaseDirectory, "Assets", "Defaults", "01.png"));
+                var img2 = Image.FromFile(Path.Combine(AppContext.BaseDirectory, "Assets", "Defaults", "02.png"));
+                var img3 = Image.FromFile(Path.Combine(AppContext.BaseDirectory, "Assets", "Defaults", "03.png"));
 
                 imageTabControl1.TabPages[0].Tag = img1;
                 imageTabControl1.TabPages[1].Tag = img2;
