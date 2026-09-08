@@ -109,6 +109,7 @@ namespace League.Parsers
 
             MatchInfo matchInfo = CreateMatchInfo(index, gameId, currPuuid, currSummonerId, isWin, teamId, duration, createTime, kills, deaths, assists, $"{damageToChampions / 1000f:0.#}K |{damageRank}", $"{goldEarned / 1000f:0.#}K |{goldRank}", $"{killParticipation:P0} |{kpRank}", damageTakenText, mode, queueId, resources.champIcon, resources.champName, resources.spellImg1, resources.spellImg2, resources.primaryRunes, resources.secondaryRunes, resources.statRunes, resources.items, gameName.Contains("#") ? gameName.Substring(0, gameName.IndexOf('#')) : gameName, game, allParticipants, selfAugments, allPlayersAugments);
             matchInfo.SpellNames[0] = resources.spellName1;
+            matchInfo.RawGameData = (JObject)(gameJson?["info"] as JObject ?? gameJson ?? game).DeepClone();
             matchInfo.SpellDescriptions[0] = resources.spellDesc1;
             matchInfo.SpellNames[1] = resources.spellName2;
             matchInfo.SpellDescriptions[1] = resources.spellDesc2;
