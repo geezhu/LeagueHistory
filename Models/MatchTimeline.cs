@@ -3,13 +3,17 @@ using Newtonsoft.Json.Linq;
 namespace League.Models;
 
 public sealed record GoldFrame(long Timestamp, long? Blue, long? Red);
-public sealed record TimelineEvent(long Timestamp, string Kind, string Actor, string Description, int? X, int? Y);
+public sealed record TimelineEvent(long Timestamp, string Kind, string Actor, string Description, int? X, int? Y, int? Team = null);
 
 public sealed class MatchTimeline
 {
     public List<GoldFrame> Frames { get; } = new();
     public List<TimelineEvent> Events { get; } = new();
     public long? FrameInterval { get; private set; }
+    public int BluePlayers { get; private set; }
+    public int RedPlayers { get; private set; }
+    public double? GoldDifference(GoldFrame frame) => frame.Blue.HasValue && frame.Red.HasValue && BluePlayers > 0 && RedPlayers > 0
+        ? frame.Blue.Value/(double)BluePlayers - frame.Red.Value/(double)RedPlayers : null;
 
     public static MatchTimeline Parse(JToken data, IReadOnlyList<JObject> participants)
     {
@@ -24,6 +28,8 @@ public sealed class MatchTimeline
             .GroupBy(p => p["participantId"]!.Value<int>()).ToDictionary(g => g.Key,g => g.First());
         bool completeMapping = participants.Count > 0 && players.Count == participants.Count
             && participants.All(p => p["teamId"]?.Type == JTokenType.Integer);
+        result.BluePlayers = players.Values.Count(p => (int?)p["teamId"] == 100);
+        result.RedPlayers = players.Values.Count(p => (int?)p["teamId"] == 200);
         string Player(int id) => id == 0 ? "环境" : players.TryGetValue(id,out var player) ? player["riotIdGameName"]?.ToString() ?? player["summonerName"]?.ToString() ?? $"玩家 {id}" : $"玩家 {id}";
         foreach (var frame in frames.OfType<JObject>().Where(f => f["timestamp"]?.Type == JTokenType.Integer).OrderBy(f => (long)f["timestamp"]!))
         {
@@ -49,7 +55,8 @@ public sealed class MatchTimeline
                     "ELITE_MONSTER_KILL" => "击杀 " + Monster(ev["monsterType"]?.ToString()),
                     _ => ev["buildingType"]?.ToString() == "INHIBITOR_BUILDING" ? "摧毁水晶" : "摧毁防御塔"
                 };
-                result.Events.Add(new(stamp,kind,Player(killer),description,ev["position"]?["x"]?.Value<int>(),ev["position"]?["y"]?.Value<int>()));
+                result.Events.Add(new(stamp,kind,Player(killer),description,ev["position"]?["x"]?.Value<int>(),ev["position"]?["y"]?.Value<int>(),
+                    players.TryGetValue(killer,out var killerPlayer) ? (int?)killerPlayer["teamId"] : null));
             }
         }
         result.Events.Sort((a,b) => a.Timestamp.CompareTo(b.Timestamp));

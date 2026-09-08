@@ -13,10 +13,7 @@ public partial class MatchDetailView
             if (match.AllParticipants.Any(p => p[field]?.Type != JTokenType.Integer)) continue;
             int maximum = match.AllParticipants.Max(p => (int)p[field]!);
             var leaders = match.AllParticipants.Where(p => (int)p[field]! == maximum).ToArray();
-            string name = leaders[0]["riotIdGameName"]?.ToString() ?? "玩家";
-            var label = new Label { Text = $"{title}\n{maximum:N0}\n{name}{(leaders.Length > 1 ? " 等（并列）" : "")}",
-                Width = 210, Height = 78, Padding = new Padding(12,6,0,0), ForeColor = Color.FromArgb(36,63,98) };
-            strip.Controls.Add(label);
+            strip.Controls.Add(new MatchHighlightCard(title,maximum,(int?)leaders[0]["championId"] ?? 0,leaders.Length > 1));
         }
         _scoreboard.Controls.Add(strip);
         ReflowScoreboard();
