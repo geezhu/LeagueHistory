@@ -23,20 +23,45 @@
             header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             var identity = _profileBackground = new ProfileBackgroundPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, BackColor = Color.FromArgb(232, 241, 253) };
             identity.Controls.Add(new Panel { Dock = DockStyle.Left, Width = 3, BackColor = Color.FromArgb(46,103,190) });
-            identity.Controls.Add(new Label { Text = "玩家主页 / 点击姓名复制 Riot ID", AutoSize = true, Location = new Point(18,14), ForeColor = Color.FromArgb(89,115,151) });
             picChampionId.SetBounds(18, 36, 100, 100);
             picChampionId.SizeMode = PictureBoxSizeMode.Zoom;
             linkGameName.AutoSize = false;
             linkGameName.SetBounds(136, 52, 230, 36);
+            linkGameName.TextAlign = ContentAlignment.MiddleLeft;
             linkGameName.Font = new Font(Font.FontFamily, 15f, FontStyle.Bold);
             linkGameName.LinkColor = Color.FromArgb(46, 103, 190);
             linkGameName.LinkBehavior = LinkBehavior.HoverUnderline;
             linkGameName.AutoEllipsis = true;
             lblLevel.Visible = false;
             lblPrivacy.Location = new Point(136, 94);
+            lblPrivacy.Visible = false;
             lblLevel.ForeColor = lblPrivacy.ForeColor = Color.FromArgb(111, 123, 139);
             identity.Controls.AddRange(new Control[] { picChampionId, linkGameName, lblLevel, lblPrivacy });
-            identity.Resize += (_, _) => linkGameName.Width = Math.Max(60, identity.ClientSize.Width - 148);
+            var copy = new IdentityIcon { IsCopy = true, Size = new Size(28,36),
+                Font = linkGameName.Font, ForeColor = Color.FromArgb(46,103,190), Cursor = Cursors.Hand,
+                AccessibleName = "复制 Riot ID", AccessibleRole = AccessibleRole.PushButton, TabStop = true };
+            components ??= new System.ComponentModel.Container();
+            var copyTip = new ToolTip(components);
+            copyTip.SetToolTip(copy, "复制 Riot ID");
+            copy.Click += (_, _) =>
+            {
+                string value = linkGameName.Tag as string ?? linkGameName.Text;
+                if (string.IsNullOrWhiteSpace(value)) return;
+                Clipboard.SetText(value);
+                copyTip.Show("已复制 Riot ID", copy, 0, copy.Height, 1500);
+            };
+            identity.Controls.Add(copy);
+            void PositionIdentity()
+            {
+                int available = Math.Max(30, identity.ClientSize.Width - linkGameName.Left - copy.Width - 16);
+                int desired = TextRenderer.MeasureText(linkGameName.Text, linkGameName.Font).Width + linkGameName.Padding.Right + 4;
+                linkGameName.Width = Math.Min(available, desired);
+                copy.Location = new Point(linkGameName.Right + 3, linkGameName.Top);
+            }
+            identity.Resize += (_, _) => PositionIdentity();
+            linkGameName.TextChanged += (_, _) => PositionIdentity();
+            linkGameName.PaddingChanged += (_, _) => PositionIdentity();
+            PositionIdentity();
             header.Controls.Add(identity, 0, 0);
             header.SetColumnSpan(identity, 2);
 

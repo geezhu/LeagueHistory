@@ -18,7 +18,7 @@ internal sealed class MasteryGalleryView : UserControl
         var back = new Button { Text = "‹ 返回主页", Dock = DockStyle.Right, Width = 110, FlatStyle = FlatStyle.Flat };
         back.FlatAppearance.BorderSize = 0;
         back.Click += (_, _) => CloseRequested?.Invoke();
-        header.Controls.Add(new Label { Text = $"全部英雄成就  ·  拥有 {ownership}", Dock = DockStyle.Fill,
+        header.Controls.Add(new Label { Text = $"全部英雄成就  ·  {ownership}", Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft, Font = new Font("Microsoft YaHei UI", 12f, FontStyle.Bold), ForeColor = Color.FromArgb(36,63,98) });
         header.Controls.Add(back);
         Controls.Add(_grid); Controls.Add(header);

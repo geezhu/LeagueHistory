@@ -11,6 +11,14 @@ public sealed class ProfileMasteryView : UserControl
     private readonly TableLayoutPanel _cards = new() { Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 1 };
     private readonly Label _heading = new() { Text = "英雄成就", Dock = DockStyle.Fill, Font = new Font("Microsoft YaHei UI",11f,FontStyle.Bold), AutoEllipsis = true };
     public string OwnershipText { get; private set; } = "— / —";
+    private string _owned = "—", _total = "—";
+    private bool _masteryAvailable;
+    private void UpdateCountHeading()
+    {
+        OwnershipText = _owned != "—" ? $"拥有 {_owned} / {_total}" : _masteryAvailable
+            ? $"成就英雄 {_records.Length} / {_total}" : $"英雄总数 {_total}";
+        _heading.Text = "英雄成就  ·  " + OwnershipText;
+    }
     private readonly Label _status = new() { Dock = DockStyle.Top, Height = 26, ForeColor = Color.FromArgb(111,123,139) };
     private readonly Button _refresh = new() { Text = "刷新", Dock = DockStyle.Right, Width = 64, FlatStyle = FlatStyle.Flat };
     private readonly Button _all = new() { Text = "全部 ›", Dock = DockStyle.Right, Width = 72, FlatStyle = FlatStyle.Flat, Enabled = false };
@@ -55,13 +63,14 @@ public sealed class ProfileMasteryView : UserControl
         _puuid = puuid; _request?.Cancel(); _request?.Dispose(); var request = _request = new CancellationTokenSource();
         ClearCards(); Height = 100; _refresh.Enabled = false; _status.Visible = true; _status.Text = "正在加载英雄成就…";
         _records = Array.Empty<JObject>(); _all.Enabled = false;
-        OwnershipText = "— / —"; _heading.Text = "英雄成就  ·  拥有 " + OwnershipText;
+        _owned = _total = "—"; _masteryAvailable = false; UpdateCountHeading();
         _ = LoadProfileAsync(puuid, request.Token);
         try
         {
             var response = await _service.GetAsync($"/lol-champion-mastery/v1/{Uri.EscapeDataString(puuid)}/champion-mastery",request.Token);
             if (IsDisposed || request.IsCancellationRequested) return;
             _records = SelectAll(response.Data); _all.Enabled = _records.Length > 0;
+            _masteryAvailable = response.Data is JArray; UpdateCountHeading();
             var top = SelectTop(response.Data);
             if (top.Length == 0) { _status.Text = response.Data is JArray ? "暂无英雄成就记录。" : string.IsNullOrEmpty(response.Message) ? "暂时无法获取英雄成就。" : response.Message; return; }
             _status.Text = ""; _status.Visible = false; Height = 360;
@@ -110,8 +119,7 @@ public sealed class ProfileMasteryView : UserControl
             string owned = inventoryTask.Result.Data is JArray && catalog.Length > 0
                 && catalog.All(c => inventory.Any(i => (int)i["id"]! == (int)c["id"]! && i["ownership"]?["owned"]?.Type == JTokenType.Boolean))
                 ? inventory.Count(i => (bool?)i["ownership"]?["owned"] == true && catalog.Any(c => (int)c["id"]! == (int)i["id"]!)).ToString() : "—";
-            OwnershipText = owned + " / " + total;
-            _heading.Text = "英雄成就  ·  拥有 " + OwnershipText;
+            _owned = owned; _total = total; UpdateCountHeading();
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
