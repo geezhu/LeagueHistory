@@ -104,7 +104,7 @@
             var filter = new Button { Text = "\u7b5b\u9009", Dock = DockStyle.Right, Width = 60, FlatStyle = FlatStyle.Flat };
             filter.FlatAppearance.BorderSize = 0;
             toolbar.Controls.Add(heading); toolbar.Controls.Add(filter);
-            var options = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 152, Visible = false,
+            var options = new TableLayoutPanel { Size = new Size(300,152),
                 ColumnCount = 2, RowCount = 4, Padding = new Padding(8), BackColor = Color.White };
             options.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,64));
             options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
@@ -131,8 +131,16 @@
             _filterScope.Text = "按需查找，满页即停；下一页继续加载";
             _filterScope.ForeColor = Color.FromArgb(111,123,139);
             options.Controls.Add(_filterScope,0,3); options.SetColumnSpan(_filterScope,2);
-            toolbar.Controls.Add(options);
-            filter.Click += (_, _) => { options.Visible = !options.Visible; toolbar.Height = options.Visible ? 192 : 40; };
+            var filterHost = new ToolStripControlHost(options) { AutoSize = false, Size = options.Size, Margin = Padding.Empty, Padding = Padding.Empty };
+            var filterPopup = new ToolStripDropDown { AutoSize = true, Padding = new Padding(1), BackColor = Color.FromArgb(213,223,237), AutoClose = true };
+            filterPopup.Items.Add(filterHost);
+            components ??= new System.ComponentModel.Container();
+            components.Add(filterPopup);
+            filter.Click += (_, _) =>
+            {
+                if (filterPopup.Visible) { filterPopup.Close(); return; }
+                filterPopup.Show(filter, new Point(filter.Width-filterPopup.PreferredSize.Width,filter.Height));
+            };
             var paging = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 48, ColumnCount = 3, RowCount = 1,
                 Padding = new Padding(0,8,0,0) };
             paging.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,32));
@@ -145,7 +153,18 @@
                 button.FlatAppearance.BorderSize = 0;
                 button.FlatAppearance.MouseOverBackColor = Color.FromArgb(225,237,253);
                 button.BackColor = Color.FromArgb(232,239,248); button.ForeColor = ForeColor;
-                button.Text = column == 0 ? "‹" : "›";
+                button.Text = "";
+                bool previous = column == 0;
+                button.Paint += (_, e) =>
+                {
+                    e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    float x = button.ClientSize.Width / 2f, y = button.ClientSize.Height / 2f;
+                    float size = Math.Min(button.ClientSize.Width,button.ClientSize.Height) * .17f;
+                    float direction = previous ? -1 : 1;
+                    using var pen = new Pen(button.Enabled ? button.ForeColor : SystemColors.GrayText, Math.Max(1.5f,button.DeviceDpi/64f))
+                        { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round };
+                    e.Graphics.DrawLines(pen,new[] { new PointF(x-direction*size/2,y-size), new PointF(x+direction*size/2,y), new PointF(x-direction*size/2,y+size) });
+                };
                 button.AccessibleName = column == 0 ? "上一页" : "下一页";
                 button.Font = new Font("Segoe UI",18f);
                 button.Margin = Padding.Empty;
