@@ -18,6 +18,7 @@
 	  <EmbeddedResource Include="Assets\WeGame\honor16.png" LogicalName="League.WeGame.honor16.png" />
 	  <EmbeddedResource Include="Assets\Ranked\*.png" />
 	  <EmbeddedResource Include="Assets\Maps\*.png" />
+	  <EmbeddedResource Include="Assets\ChampionClasses\*.png" />
 	  <None Update="Assets\Defaults\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>
 
