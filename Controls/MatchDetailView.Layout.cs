@@ -24,11 +24,12 @@ public partial class MatchDetailView
                 section.Top = sectionY + _scoreboard.AutoScrollPosition.Y;
                 foreach (var header in section.Controls.OfType<Button>())
                 {
+                    if (header.Name == "TeamBans") { header.Left = width - 76; continue; }
                     if (!_originalBounds.TryGetValue(header, out var bounds)) _originalBounds[header] = bounds = header.Bounds;
                     header.Visible = !compact || (bounds.X != 242 && bounds.X != 436 && (bounds.X != 1026 || width >= 780));
                     header.Left = compact ? MapX(bounds.X) : bounds.X;
                 }
-                foreach (var title in section.Controls.OfType<Label>()) title.Width = width - 24;
+                foreach (var title in section.Controls.OfType<Label>()) title.Width = width - (section.Controls.ContainsKey("TeamBans") ? 100 : 24);
                 int rowY = 64;
                 foreach (var row in section.Controls.OfType<Panel>().OrderBy(r => r.Top))
                 {
