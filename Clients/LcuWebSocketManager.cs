@@ -1,8 +1,6 @@
 ﻿// LcuWebSocketManager.cs
 using System.Diagnostics;
-using System.Management;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace League.Clients
 {
@@ -124,20 +122,8 @@ namespace League.Clients
         {
             try
             {
-                var process = Process.GetProcessesByName("LeagueClientUx").FirstOrDefault();
-                if (process == null) return null;
-
-                string cmdLine = GetCommandLine(process);
-                string port = ExtractArgument(cmdLine, "--app-port=");
-                string token = ExtractArgument(cmdLine, "--remoting-auth-token=");
-
-                if (!string.IsNullOrEmpty(port) && !string.IsNullOrEmpty(token))
-                {
-                    port = port.Trim('"');
-                    token = token.Trim('"');
-                    Debug.WriteLine($"[WebSocket管理器] 从进程获取连接信息: 端口={port}");
+                if (LcuProcessDiscovery.TryFind(out var port,out var token))
                     return new ConnectionInfo { Port = port, Token = token };
-                }
             }
             catch (Exception ex)
             {
@@ -216,33 +202,6 @@ namespace League.Clients
                 Debug.WriteLine($"[ExtractAuthToken] 失败: {ex.Message}");
             }
             return string.Empty;
-        }
-
-        private string GetCommandLine(Process process)
-        {
-            try
-            {
-                using var searcher = new ManagementObjectSearcher(
-                    $"SELECT CommandLine FROM Win32_Process WHERE ProcessId = {process.Id}"
-                );
-                using var collection = searcher.Get();
-
-                foreach (ManagementObject obj in collection)
-                {
-                    return obj["CommandLine"]?.ToString() ?? "";
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[GetCommandLine] 失败: {ex.Message}");
-            }
-            return "";
-        }
-
-        private string ExtractArgument(string cmdLine, string key)
-        {
-            var match = Regex.Match(cmdLine, key + "([^ ]+)");
-            return match.Success ? match.Groups[1].Value : null;
         }
 
         #endregion

@@ -12,6 +12,11 @@ internal static class Program
     {
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
+        Check(LcuProcessDiscovery.TryParse("\"C:\\Program Files\\LeagueClientUx.exe\" \"--app-port=12345\" --remoting-auth-token=\"test-value\"",out var connectionPort,out var connectionToken)
+            && connectionPort == "12345" && connectionToken == "test-value", "Quoted LCU arguments");
+        Check(!LcuProcessDiscovery.TryParse("client.exe --app-port=70000 --remoting-auth-token=test",out _,out _), "Reject invalid port");
+        Check(!LcuProcessDiscovery.TryParse("client.exe --app-port=12345",out _,out _), "Reject missing authentication");
+        Check(LcuProcessDiscovery.TryReadCommandLine(Environment.ProcessId,out var ownCommandLine,out _) && ownCommandLine.Length > 0, "Native command line query");
         Check(MatchMap.GetName(null) == "未知地图", "Missing map must not be inferred from queue");
         Check(MatchMap.GetName(JObject.Parse("{\"json\":{\"info\":{\"mapId\":12}}}")) == "随机地图", "ARAM ID must not imply a specific bridge");
         Check(MatchMap.GetName(new JObject { ["mapId"] = 11 }) == "召唤师峡谷", "Rift map name");
