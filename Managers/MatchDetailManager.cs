@@ -69,7 +69,8 @@ namespace League.Managers
             return new Form
             {
                 Text = $"比赛详情 - {championName} - {gameTime}",
-                Size = new Size(1300, 800),
+                Size = new Size(1180, 760),
+                MinimumSize = new Size(1000, 650),
                 StartPosition = FormStartPosition.CenterScreen,
                 BackColor = Color.White,
                 MinimizeBox = false,
@@ -95,31 +96,17 @@ namespace League.Managers
             };
 
             var layoutManager = new DetailedViewLayoutManager(_toolTip);
-            var tabControl = CreateTabControl();
-
-            // 修正：先创建TabPage再添加到TabControl
-            TabPage detailedViewTab = new TabPage("详细视图")
+            detailForm.BackColor = Color.FromArgb(244, 247, 251);
+            var summary = new Label
             {
-                BackColor = Color.White,
-                Padding = new Padding(5)
+                Dock = DockStyle.Top, Height = 72, Padding = new Padding(22, 12, 0, 0),
+                Font = new Font("Microsoft YaHei UI", 11f), ForeColor = Color.FromArgb(36, 48, 65),
+                Text = $"{matchInfo.Mode}     ·     {matchInfo.DurationText}     ·     {matchInfo.GameTime}\n比赛 {matchInfo.GameId}    |    基础数据 · 点击列标题排序，悬停查看完整数据"
             };
-
-            tabControl.TabPages.Add(detailedViewTab);
-
-            // 创建内容面板
-            Panel panel = new Panel
-            {
-                Dock = DockStyle.Fill,
-                AutoScroll = true,
-                BackColor = Color.White,
-                Padding = new Padding(10)
-            };
-
+            Panel panel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = detailForm.BackColor };
+            detailForm.Controls.Add(panel);
+            detailForm.Controls.Add(summary);
             CreateDetailedPlayerViews(panel, matchInfo, layoutManager);
-            detailedViewTab.Controls.Add(panel);
-
-            detailForm.Controls.Add(tabControl);
-
             detailForm.FormClosed += (s, e) => CleanupDetailForm(detailForm);
         }
 
@@ -162,54 +149,74 @@ namespace League.Managers
         private async void CreateDetailedPlayerViews(Panel panel, MatchInfo matchInfo, DetailedViewLayoutManager layoutManager)
         {
             if (matchInfo.AllParticipants == null) return;
-
-            var blueTeam = matchInfo.AllParticipants
-                .Where(p => p?["teamId"]?.Value<int>() == 100)
-                .ToList();
-
-            var redTeam = matchInfo.AllParticipants
-                .Where(p => p?["teamId"]?.Value<int>() == 200)
-                .ToList();
-
-            int y = 10;
-
-            // 蓝队标题
-            AddTeamLabel(panel, "\ud83d\udd35 蓝队 (100)", Color.DodgerBlue, ref y);
-            y += 30;
-
-            // 蓝队玩家
-            foreach (var participant in blueTeam)
+            var loading = new Label { Text = "正在加载比赛数据…", ForeColor = Color.FromArgb(111, 123, 139), AutoSize = true, Location = new Point(20, 10) };
+            panel.Controls.Add(loading);
+            try
             {
-                if (participant == null) continue;
-
-                var playerPanel = await layoutManager.CreateDetailedPlayerPanel(participant, matchInfo, 20, y, 100);
-                if (playerPanel != null)
+                int y = 8;
+                foreach (int teamId in new[] { 100, 200 })
                 {
-                    panel.Controls.Add(playerPanel);
-                    y += playerPanel.Height + 10;
+                    var team = matchInfo.AllParticipants.Where(p => p["teamId"]?.Value<int>() == teamId).ToList();
+                    if (team.Count == 0) continue;
+                    var rows = new List<(JObject Player, Panel Row)>();
+                    // Build the whole team before displaying it so headers never detach from rows.
+                    var section = new Panel { Location = new Point(12, y), Size = new Size(1120, 64 + team.Count * 44),
+                        BackColor = Color.White };
+                    panel.Controls.Add(section);
+                    var win = team.Select(p => p["win"]?.Value<bool>()).FirstOrDefault(v => v.HasValue);
+                    Color teamColor = win == true ? Color.FromArgb(38, 139, 113) : win == false ? Color.FromArgb(191, 81, 91) : Color.FromArgb(111, 123, 139);
+                    int Sum(string key) => team.Sum(p => p[key]?.Value<int>() ?? 0);
+                    section.Controls.Add(new Label { Text = $"{(win == true ? "胜方" : win == false ? "败方" : "队伍")}  ·  {(teamId == 100 ? "蓝队" : "红队")}     {Sum("kills")} / {Sum("deaths")} / {Sum("assists")}     总经济 {Sum("goldEarned") / 1000d:0.0}k",
+                        Location = new Point(12, 0), Size = new Size(1096, 32), ForeColor = teamColor,
+                        Font = new Font("Microsoft YaHei UI", 10f, FontStyle.Bold), TextAlign = ContentAlignment.MiddleLeft } );
+                    string? activeSort = null;
+                    bool descending = true;
+                    void Header(string title, int x, int width, string? key = null)
+                    {
+                        var button = new Button { Text = title, Location = new Point(x,32), Size = new Size(width,30),
+                            FlatStyle = FlatStyle.Flat, ForeColor = Color.FromArgb(111,123,139), BackColor = section.BackColor,
+                            TextAlign = ContentAlignment.MiddleLeft, Font = new Font("Microsoft YaHei UI", 9f), TabStop = key != null };
+                        button.FlatAppearance.BorderSize=0;
+                        section.Controls.Add(button);
+                        if (key == null) return;
+                        button.Cursor=Cursors.Hand;
+                        button.Click += (_,_) =>
+                        {
+                            if(rows.Count != team.Count) return;
+                            descending = activeSort == key ? !descending : true;
+                            activeSort=key;
+                            double Value(JObject p) => key == "cs" ? (p["totalMinionsKilled"]?.Value<int>() ?? 0)+(p["neutralMinionsKilled"]?.Value<int>() ?? 0)
+                                : key == "kda" ? ((p["kills"]?.Value<double>() ?? 0)+(p["assists"]?.Value<double>() ?? 0))/Math.Max(1,p["deaths"]?.Value<double>() ?? 0)
+                                : key == "kp" ? p["challenges"]?["killParticipation"]?.Value<double>() ?? 0 : p[key]?.Value<double>() ?? 0;
+                            var ordered=descending ? rows.OrderByDescending(r=>Value(r.Player)) : rows.OrderBy(r=>Value(r.Player));
+                            int rowY=64;
+                            section.SuspendLayout();
+                            foreach(var item in ordered) { item.Row.Top=rowY; rowY+=44; }
+                            foreach(var header in section.Controls.OfType<Button>())header.Text=header.Text.TrimEnd(' ','↑','↓');
+                            button.Text=title+(descending ? " ↓" : " ↑");
+                            section.ResumeLayout();
+                        };
+                    }
+                    Header("玩家",58,180); Header("技能 / 装备",242,182); Header("符文 / 海克斯",436,148);
+                    Header("KDA",592,90,"kda"); Header("经济",686,90,"goldEarned"); Header("英雄伤害",780,96,"totalDamageDealtToChampions");
+                    Header("参团率",880,76,"kp"); Header("补刀",958,64,"cs"); Header("承受伤害",1026,94,"totalDamageTaken");
+                    foreach (var participant in team)
+                    {
+                        if(panel.IsDisposed)return;
+                        var row=await layoutManager.CreateDetailedPlayerPanel(participant,matchInfo,0,64+rows.Count*44,teamId);
+                        if(panel.IsDisposed) { DisposeImagesInControls(row.Controls); row.Dispose(); return; }
+                        section.Controls.Add(row); rows.Add((participant,row));
+                    }
+                    y+=section.Height+10;
                 }
+                loading.Dispose();
             }
-
-            y += 20;
-
-            // 红队标题
-            AddTeamLabel(panel, "\ud83d\udd34 红队 (200)", Color.Red, ref y);
-            y += 30;
-
-            // 红队玩家
-            foreach (var participant in redTeam)
+            catch(Exception ex)
             {
-                if (participant == null) continue;
-
-                var playerPanel = await layoutManager.CreateDetailedPlayerPanel(participant, matchInfo, 20, y, 200);
-                if (playerPanel != null)
-                {
-                    panel.Controls.Add(playerPanel);
-                    y += playerPanel.Height + 10;
-                }
+                Debug.WriteLine($"详情加载失败: {ex}");
+                if(!panel.IsDisposed) { loading.Text="部分数据加载失败，请关闭详情后重试。"; loading.BringToFront(); }
             }
         }
-
         /// <summary>
         /// 添加队伍标签
         /// </summary>
