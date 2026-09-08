@@ -13,6 +13,8 @@ internal static class Program
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+        Task.Run(OpggChecks.RunAsync).GetAwaiter().GetResult();
+        OpggChecks.Render();
         string historyFile = Path.Combine(Path.GetTempPath(),"league-search-"+Guid.NewGuid().ToString("N")+".json");
         try
         {

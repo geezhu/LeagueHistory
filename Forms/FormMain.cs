@@ -63,6 +63,7 @@ namespace League
             ConfigureLauncherSettings();
             InitializeSearchHistory();
             InitializeManagers();
+            ConfigureOpgg();
         }
 
         private void InitializeManagers()

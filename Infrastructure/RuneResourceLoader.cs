@@ -1,5 +1,6 @@
 ﻿using League.Models;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace League.Infrastructure
 {
@@ -9,6 +10,13 @@ namespace League.Infrastructure
         private readonly ImageCacheService _imageCache;
 
         public List<RuneInfo> Runes { get; private set; } = new();   // ← 改为 private set
+        public Dictionary<int, RuneStyle> Styles { get; private set; } = new();
+        public sealed record RuneStyle(int Id, string Name, string IconPath, int[][] Slots);
+        public static Dictionary<int,RuneStyle> ParseStyles(JObject data) =>
+            (data["styles"] as JArray ?? new()).OfType<JObject>().Where(s=>(int?)s["id"]>0)
+            .Select(s=>new RuneStyle((int)s["id"]!, (string?)s["name"]??"", (string?)s["iconPath"]??"",
+                (s["slots"] as JArray??new()).OfType<JObject>().Select(slot=>(slot["perks"] as JArray??new()).Values<int>().ToArray()).ToArray()))
+            .ToDictionary(s=>s.Id);
 
         public RuneResourceLoader(HttpClient client, ImageCacheService imageCache)
         {
@@ -23,6 +31,12 @@ namespace League.Infrastructure
 
             string json = await response.Content.ReadAsStringAsync();
             Runes = JsonConvert.DeserializeObject<List<RuneInfo>>(json) ?? new List<RuneInfo>();
+            try
+            {
+                using var styles = await _client.GetAsync("/lol-game-data/assets/v1/perkstyles.json");
+                if(styles.IsSuccessStatusCode) Styles=ParseStyles(JObject.Parse(await styles.Content.ReadAsStringAsync()));
+            }
+            catch { Styles=new(); } // Individual rune resources remain usable without the tree.
         }
 
         public RuneInfo? GetById(int runeId) => Runes.FirstOrDefault(r => r.id == runeId);
