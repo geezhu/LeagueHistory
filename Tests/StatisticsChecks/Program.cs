@@ -12,6 +12,11 @@ internal static class Program
     {
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
+        var rankNames = RankedStats.FromJson(JObject.Parse("""
+        {"queueMap":{"RANKED_SOLO_5x5":{"tier":"PLATINUM","division":"II","highestTier":"MASTER","previousSeasonEndTier":"DIAMOND","previousSeasonEndDivision":"II"}}}
+        """))["单双排"];
+        Check(rankNames.FormattedTier == "华贵铂金 II" && rankNames.HighestTierDisplay == "超凡大师"
+            && rankNames.PreviousSeasonDisplay == "璀璨钻石 II", "Full Chinese rank names in all profile fields");
         var game = JObject.Parse("""
         {"gameId":1,"queueId":420,"participants":[{"participantId":1,"puuid":"self","championId":1,"stats":{"win":true,"kills":10,"deaths":0,"assists":5,"totalDamageDealtToChampions":20000,"goldEarned":12000,"pentaKills":0}}]}
         """);
@@ -74,6 +79,17 @@ internal static class Program
         var deniedView=new CareerStatisticsView(new PlayerStatisticsService(()=>deniedClient),(_,_)=>throw new Exception("403 must not fall back"));
         form.Controls.Add(deniedView); deniedView.LoadPlayer("self"); Application.DoEvents();
         Check(deniedCalls==1,"Denied career must not request history");
+        deniedView.Dispose();
+        var masteryData=JArray.Parse("""
+        [{"championId":1,"championLevel":10,"championPoints":12000},{"championId":2,"championLevel":20,"championPoints":80000},{"championId":3,"championLevel":8,"championPoints":9000},{"championId":1,"championPoints":1000},{"championId":4}]
+        """);
+        Check(ProfileMasteryView.SelectTop(masteryData).Select(p=>(int)p["championId"]!).SequenceEqual(new[]{2,1,3}),"Mastery ordering/deduplication/missing scores");
+        using var masteryClient=new HttpClient(new Handler(path=>new(HttpStatusCode.OK,path.Contains("summoners-by-puuid") ? "{\"summonerId\":42}" : masteryData.ToString()))) { BaseAddress=client.BaseAddress };
+        using var icon=new Bitmap(32,32);
+        var masteryView=new ProfileMasteryView(new PlayerStatisticsService(()=>masteryClient),id=>Task.FromResult<(Image?,string,string)>((icon,"英雄 "+id,""))) { Dock=DockStyle.Fill };
+        form.Controls.Add(masteryView);masteryView.LoadPlayer("self");Application.DoEvents();
+        Check(Children(masteryView).OfType<PictureBox>().Count()==3,"Three mastery champions rendered");
+        Check(Children(masteryView).OfType<Label>().Any(l=>l.Text.Contains("80,000")),"Mastery points displayed");
         form.Close();
         Console.WriteLine("PASS: identity, remakes, duplicates, missing values, SGP wrapper, team mapping, frame gaps, events, cancellation, privacy, fallback scope, WinForms controls.");
     }

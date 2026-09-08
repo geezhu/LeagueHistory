@@ -22,6 +22,7 @@ namespace League.Models
         public bool HasWins { get; private set; }
         public bool IsUnknown => !HasRecord;
         public string HighestTierDisplay { get; private set; } = "—";
+        public int HighestTierOrder { get; private set; }
         public string PreviousSeasonDisplay { get; private set; } = "—";
 
         /// <summary>
@@ -93,6 +94,7 @@ namespace League.Models
                 HasRecord = queueData["wins"]?.Type == JTokenType.Integer && queueData["losses"]?.Type == JTokenType.Integer,
                 HasWins = queueData["wins"]?.Type == JTokenType.Integer,
                 HighestTierDisplay = FormatHistoricalTier(queueData["highestTier"]?.ToString(), queueData["highestDivision"]?.ToString()),
+                HighestTierOrder = HistoricalOrder(queueData["highestTier"]?.ToString(), queueData["highestDivision"]?.ToString()),
                 PreviousSeasonDisplay = FormatHistoricalTier(queueData["previousSeasonEndTier"]?.ToString(), queueData["previousSeasonEndDivision"]?.ToString()),
                 Tier = NormalizeTier(queueData["tier"]?.ToString()),
                 Division = NormalizeDivision(queueData["division"]?.ToString()),
@@ -112,15 +114,15 @@ namespace League.Models
 
             var tierMap = new Dictionary<string, string>
             {
-                {"IRON", "黑铁"},
-                {"BRONZE", "青铜"},
-                {"SILVER", "白银"},
-                {"GOLD", "黄金"},
-                {"PLATINUM", "铂金"},
-                {"EMERALD", "翡翠"},
-                {"DIAMOND", "钻石"},
-                {"MASTER", "大师"},
-                {"GRANDMASTER", "宗师"},
+                {"IRON", "坚韧黑铁"},
+                {"BRONZE", "英勇黄铜"},
+                {"SILVER", "不屈白银"},
+                {"GOLD", "荣耀黄金"},
+                {"PLATINUM", "华贵铂金"},
+                {"EMERALD", "流光翡翠"},
+                {"DIAMOND", "璀璨钻石"},
+                {"MASTER", "超凡大师"},
+                {"GRANDMASTER", "傲世宗师"},
                 {"CHALLENGER", "最强王者"}
             };
 
@@ -140,6 +142,13 @@ namespace League.Models
         {
             if (string.IsNullOrWhiteSpace(tier) || tier == "NONE") return "—";
             return new RankedStats { Tier = tier, Division = division ?? "" }.FormattedTier;
+        }
+
+        private static int HistoricalOrder(string? tier, string? division)
+        {
+            var tiers = new[] { "IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD", "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER" };
+            int index = Array.IndexOf(tiers, tier);
+            return index < 0 ? 0 : (index + 1) * 10 + (division switch { "I" => 4, "II" => 3, "III" => 2, "IV" => 1, _ => 0 });
         }
 
         private static string ToChineseDivision(string division)

@@ -224,14 +224,21 @@ namespace League.Controls
                 var color = MatchInfo.ResultText == "胜利" ? Color.FromArgb(38,139,113) : Color.FromArgb(191,81,91);
                 e.Graphics.Clear(SelectedMatch ? Color.FromArgb(232,241,253) : Color.White);
                 using var stripe = new SolidBrush(color);
-                e.Graphics.FillRectangle(stripe, 0, 0, 3, Height);
-                if (MatchInfo.HeroIcon != null) e.Graphics.DrawImage(MatchInfo.HeroIcon, new Rectangle(12,14,40,40));
+                if (SelectedMatch) e.Graphics.FillRectangle(stripe, 0, 0, 3, Height);
+                if (MatchInfo.HeroIcon != null) e.Graphics.DrawImage(MatchInfo.HeroIcon, new Rectangle(6,11,40,40));
                 void Draw(string text, int x, int y, int width, Color ink) => TextRenderer.DrawText(e.Graphics, text, Font,
                     new Rectangle(x,y,Math.Max(1,width),20), ink, TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
-                Draw(MatchInfo.Mode,60,8,Width-66,Color.FromArgb(36,48,65));
-                Draw($"{MatchInfo.Kills} / {MatchInfo.Deaths} / {MatchInfo.Assists}",60,29,Width-66,Color.FromArgb(36,63,98));
-                Draw(MatchInfo.GameTime,12,56,Width-68,Color.FromArgb(111,123,139));
-                Draw(MatchInfo.ResultText,Width-48,56,44,color);
+                var resultArea = new Rectangle(Math.Max(0, Width-100),0,100,Height);
+                using var resultBackground = new System.Drawing.Drawing2D.LinearGradientBrush(resultArea,
+                    Color.FromArgb(0,color), Color.FromArgb(32,color), 0f);
+                e.Graphics.FillRectangle(resultBackground,resultArea);
+                Draw(MatchInfo.Mode,50,9,Width-112,Color.FromArgb(36,48,65));
+                string date = DateTime.TryParse(MatchInfo.GameTime,out var played) ? played.ToString("MM-dd") : MatchInfo.GameTime;
+                Draw(date,50,31,Width-112,Color.FromArgb(111,123,139));
+                using var resultFont = new Font(Font.FontFamily, 12f, FontStyle.Bold);
+                TextRenderer.DrawText(e.Graphics, MatchInfo.ResultText, resultFont,
+                    new Rectangle(Width-58,0,56,Height),color,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
                 _detailsRect = ClientRectangle;
                 return;
             }
