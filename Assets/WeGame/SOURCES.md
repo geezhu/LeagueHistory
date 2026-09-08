@@ -13,4 +13,4 @@ Used mappings: assists `(16,0)`, gold `(48,0)`, damage taken `(0,16)`, champion 
 
 The public JS maps server-provided battle tags to icons; it does not document how all those tags are awarded. This application explicitly labels non-kill badges as match-wide maxima calculated from complete participant fields, including ties. No MVP/SVP, AFK, or proprietary rating is inferred. No double-kill or most-kills badge is shown. Only the highest multi-kill badge is displayed, matching the public JS display behavior.
 
-No verified first-blood icon was found in this set. First blood remains plain text, not a fabricated or mislabelled icon.
+No verified first-blood icon was found in this set. First blood uses a locally drawn flat blood-drop symbol, explicitly separate from the WeGame sprite mappings. Other badges retain their original 16-pixel raster size.

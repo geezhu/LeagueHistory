@@ -13,6 +13,20 @@ namespace League.UIHelpers
 
         public static Bitmap Get(string key)
         {
+            if (key == "firstBlood")
+            {
+                // A local first-blood symbol; not a claimed WeGame sprite mapping.
+                var icon = new Bitmap(16,16);
+                using var graphics = Graphics.FromImage(icon);
+                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using var drop = new System.Drawing.Drawing2D.GraphicsPath();
+                drop.AddBezier(8,2,7,5,3,8,3,10);
+                drop.AddBezier(3,10,3,16,13,16,13,10);
+                drop.AddBezier(13,10,13,8,9,5,8,2);
+                using var brush = new SolidBrush(Color.FromArgb(191,81,91));
+                graphics.FillPath(brush,drop);
+                return icon;
+            }
             var position = key switch
             {
                 "triple" => new Point(32,16), "quadra" => new Point(0,0), "penta" => new Point(16,32),

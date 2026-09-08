@@ -81,21 +81,16 @@ namespace League.UIState
             _toolTip.SetToolTip(nameLabel, name + "\n点击查看玩家主页；🔒 表示生涯不公开");
             var badges = League.UIHelpers.WeGameHonorIcons.Select(player, match.AllParticipants);
             bool firstBlood = player["firstBloodKill"]?.Value<bool>() == true;
+            if (firstBlood) badges.Insert(0,("firstBlood","获得本场首杀"));
             if (firstBlood || badges.Count > 0)
             {
                 nameLabel.SetBounds(58, 1, 180, 22);
                 int badgeX = 58;
-                if (firstBlood)
-                {
-                    var first = new Label { Text = "首杀", Location = new Point(badgeX,25), Size = new Size(32,18),
-                        ForeColor = Color.FromArgb(191,81,91), BackColor = Color.Transparent, Font = new Font("Microsoft YaHei UI",8f) };
-                    row.Controls.Add(first); _toolTip.SetToolTip(first,"获得本场首杀"); badgeX += 36;
-                }
                 foreach (var badge in badges)
                 {
-                    var picture = new PictureBox { Name = "Honor_" + badge.Key, Location = new Point(badgeX,25), Size = new Size(16,16),
+                    var picture = new PictureBox { Name = "Honor_" + badge.Key, Location = new Point(badgeX,24), Size = new Size(16,16),
                         Image = League.UIHelpers.WeGameHonorIcons.Get(badge.Key), SizeMode = PictureBoxSizeMode.Normal, BackColor = Color.Transparent };
-                    row.Controls.Add(picture); _toolTip.SetToolTip(picture,badge.Hint); badgeX += 20;
+                    row.Controls.Add(picture); _toolTip.SetToolTip(picture,badge.Hint); badgeX += 16;
                 }
             }
             for (int i=1;i<=2;i++) Cached(_spellCache,player[$"spell{i}Id"]?.Value<int>() ?? 0,242,11+(i-1)*12,10);
