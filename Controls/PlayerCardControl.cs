@@ -12,6 +12,7 @@
         public PlayerCardControl()
         {
             InitializeComponent();
+            ConfigureCardLayout();
         }
 
         public ListView ListViewControl
@@ -53,7 +54,7 @@
                 FontStyle.Bold
             );
 
-            lblPlayerName.BorderStyle = BorderStyle.FixedSingle;
+            lblPlayerName.BorderStyle = BorderStyle.None;
 
             lblSoloRank.Text = $"{soloRank}";
             lblFlexRank.Text = $"{flexRank}";

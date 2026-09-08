@@ -12,6 +12,7 @@ internal static class Program
     {
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
         string historyFile = Path.Combine(Path.GetTempPath(),"league-search-"+Guid.NewGuid().ToString("N")+".json");
         try
         {
@@ -280,8 +281,89 @@ internal static class Program
             screenshot.Save(Path.Combine(AppContext.BaseDirectory, "mastery-gallery.png"));
         }
         Check(masteryPaths.Contains("/lol-champion-mastery/v1/self/champion-mastery") && !masteryPaths.Any(p=>p.Contains("lol-collections")), "Mastery uses PUUID endpoint despite unavailable profile");
+        using (var playerCard = new PlayerCardControl { Size = new Size(360,480) })
+        {
+            form.Controls.Add(playerCard); playerCard.BringToFront();
+            var rows = Enumerable.Range(0,5).Select(i => {
+                var row = new ListViewItem { ForeColor = i%2==0 ? Color.Green : Color.Red };
+                row.SubItems.AddRange(new[]{"海克斯大乱斗","22/10/24","2026-09-08 01:54"}); return row;
+            }).ToList();
+            playerCard.SetPlayerInfo("玩家#1234","华贵铂金 II","璀璨钻石 II",null!,"公开",rows,Color.SteelBlue);
+            playerCard.SetRecentStatistics(new PlayerMatchInfo {
+                RecentMatches = new() { new() { Kills = 2, Deaths = 1, Assists = 2 }, new() { Kills = 4, Deaths = 3, Assists = 4 } },
+                WinHistory = new() { true, false }
+            });
+            var avatar = playerCard.SummaryPanel.Controls.Cast<Control>().Single(c => c.AccessibleName == "召唤师头像");
+            avatar.GetType().GetMethod("SetProfile")!.Invoke(avatar, new object?[] { null, 108 });
+            Application.DoEvents();
+            Check(playerCard.ListViewControl.GetItemRect(0).Height >= 50,"Redesigned player card has room for two-line match rows");
+            using var bitmap = new Bitmap(360,480);
+            playerCard.DrawToBitmap(bitmap,new Rectangle(0,0,360,480));
+            bitmap.Save(Path.Combine(AppContext.BaseDirectory,"player-card.png"));
+        }
         form.Close();
-        Console.WriteLine("PASS: identity, remakes, duplicates, missing values, SGP wrapper, team mapping, frame gaps, events, cancellation, privacy, fallback scope, WinForms controls.");
+        using (var teamForm = new Form { ClientSize = new Size(900,600) })
+        using (var teamTable = new TableLayoutPanel { Size = new Size(900,600), ColumnCount = 5, RowCount = 2 })
+        {
+            for(int i=0;i<5;i++) teamTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,20));
+            teamTable.RowStyles.Add(new RowStyle(SizeType.Percent,50)); teamTable.RowStyles.Add(new RowStyle(SizeType.Percent,50));
+            teamForm.Controls.Add(teamTable);
+            typeof(PlayerCardControl).Assembly.GetType("League.Controls.PlayerTeamsLayout")!.GetMethod("Attach")!.Invoke(null,new object[]{teamTable});
+            var friendly = new PlayerCardControl { Dock = DockStyle.Fill };
+            var opposing = new PlayerCardControl { Dock = DockStyle.Fill };
+            friendly.lblSoloRank.Text = "未定级(0)"; friendly.lblFlexRank.Text = "未定级";
+            var friendlyHost = new Panel { Tag = true, Dock = DockStyle.Fill }; friendlyHost.Controls.Add(friendly);
+            var opposingHost = new Panel { Tag = false, Dock = DockStyle.Fill }; opposingHost.Controls.Add(opposing);
+            teamTable.Controls.Add(friendlyHost,0,0); teamTable.Controls.Add(opposingHost,0,1);
+            teamForm.Show(); Application.DoEvents();
+            Check(friendly.SummaryPanel.Parent is FlowLayoutPanel && !friendly.lblSoloRank.Visible && !friendly.lblFlexRank.Visible,"Team sidebar separates summaries and hides unranked labels");
+            Children(teamForm).OfType<Button>().Single(b=>b.Text=="敌方").PerformClick(); Application.DoEvents();
+            Check(opposingHost.Visible && !friendlyHost.Visible && opposing.SummaryPanel.Parent is FlowLayoutPanel,"Team switching preserves player cards and changes visible team");
+            int removedSummaries = 0;
+            opposing.SummaryPanel.Parent.ControlRemoved += (_,_) => removedSummaries++;
+            for(int i=0;i<12;i++) { teamTable.Width = 610+i*3; Application.DoEvents(); }
+            Check(removedSummaries == 0,"Resizing sparse teams does not detach existing summary cards");
+            teamTable.Controls.Remove(opposingHost); opposingHost.Dispose(); Application.DoEvents();
+            Children(teamForm).OfType<Button>().Single(b=>b.Text=="友方").PerformClick(); Application.DoEvents();
+            Check(friendlyHost.Visible,"Single-player team remains usable after enemy team is removed");
+            var teamsLayout = typeof(PlayerCardControl).Assembly.GetType("League.Controls.PlayerTeamsLayout")!;
+            var originalSurface = teamTable.Parent;
+            teamForm.Controls.Clear(); // Connection status replaces the page contents.
+            teamsLayout.GetMethod("Hide")!.Invoke(null,new object[]{teamTable});
+            teamsLayout.GetMethod("Show")!.Invoke(null,new object[]{teamTable,teamForm});
+            Application.DoEvents();
+            Check(originalSurface?.Parent == teamForm && originalSurface.Visible && teamTable.Visible,
+                "Entering room restores detached team surface after connection status clears the page");
+            Check(Children(teamForm).OfType<Button>().Any(b=>b.Text=="友方"),"Restored room retains sidebar controls");
+            teamForm.Close();
+        }
+        foreach (var queue in new[] { "400", "420", "430", "440", "450", "480", "490", "2400" })
+            Check(League.Parsers.PlayerMatchDataFetcher.GetQueueFilter(queue) == "q_" + queue,
+                "Room history filters supported queue " + queue);
+        foreach (var queue in new[] { "", "0", "900", "1700", "700", "99999" })
+            Check(League.Parsers.PlayerMatchDataFetcher.GetQueueFilter(queue) == "",
+                "Other room modes use global history " + queue);
+        var roomCache = new League.Parsers.PlayerMatchCacheManager();
+        var roomStatisticsFixture = new PlayerMatchInfo {
+            RecentMatches = new() { new() { Kills = 2, Deaths = 1, Assists = 2 }, new() { Kills = 4, Deaths = 3, Assists = 4 } },
+            WinHistory = new() { true, false }
+        };
+        var roomStatistics = RoomRecentStatistics.From(roomStatisticsFixture);
+        Check(roomStatistics.Games == 2 && roomStatistics.Kda == 9 && roomStatistics.WinRate == 50,
+            "Room statistics aggregate kills/deaths instead of averaging individual ratios");
+        Check(RoomRecentStatistics.From(new PlayerMatchInfo()).Kda == null && RoomRecentStatistics.From(new PlayerMatchInfo()).WinRate == null,
+            "Empty room history has no fabricated statistics");
+        roomStatisticsFixture.RecentMatches = new() { new() { Kills = 1, Assists = 2, Deaths = 0 } };
+        Check(RoomRecentStatistics.From(roomStatisticsFixture).Kda == 9, "Room KDA handles zero total deaths");
+        var aramHistory = new League.Models.PlayerMatchInfo();
+        roomCache.CachePlayerMatch(123, "q_450", aramHistory);
+        Check(roomCache.TryGetPlayerMatch(123, "q_450", out var cachedHistory) && ReferenceEquals(cachedHistory, aramHistory),
+            "Room cache reuses history only for the same mode");
+        Check(!roomCache.TryGetPlayerMatch(123, "q_2400", out _) && !roomCache.TryGetPlayerMatch(123, "", out _),
+            "Switching to Hextech or global history cannot reuse ARAM history");
+        roomCache.ClearCache();
+        Check(!roomCache.TryGetPlayerMatch(123, "q_450", out _), "Leaving room clears history cache");
+        Console.WriteLine("PASS: identity, remakes, duplicates, missing values, SGP wrapper, team mapping, frame gaps, events, cancellation, privacy, fallback scope, room history filters/cache, WinForms controls.");
     }
 
     private sealed record Reply(HttpStatusCode Status,string Body);

@@ -136,22 +136,7 @@ namespace League
                 // 读取配置
                 _appConfig = _configUpdateManager!.LoadConfig();
 
-                // 根据配置恢复复选框
-                checkBoxFilterMode.Checked = _appConfig.FilterByGameMode;   //是否在卡片中过滤模式
-
-                // 恢复卡片战绩要查询的场数
-                int count = _appConfig.CardMatchHistoryCount;
-                cboCardMatchCount.SelectedIndex = count switch
-                {
-                    10 => 0,    // 第 0 项 = 10
-                    30 => 2,    // 第 2 项 = 30（注释写成「第2项」容易误会）
-                    50 => 3,    
-                    _ => 1      // 实际是 index==1 → 20，不是「第4项」
-                };
-
-                _matchQueryProcessor?.SetFilterMode(_appConfig.FilterByGameMode);
-                _matchQueryProcessor?.SetMatchHistoryCount(_appConfig.CardMatchHistoryCount);
-
+                // 恢复复选框状态（新增）
                 chkNormal.Checked = _appConfig.EnablePreliminaryInNormal;   //匹配
                 chkRanked.Checked = _appConfig.EnablePreliminaryInRanked;   //排位
                 chkAram.Checked = _appConfig.EnablePreliminaryInAram;       //大乱斗
@@ -629,58 +614,6 @@ namespace League
             Debug.WriteLine("[自动预选] 预选配置已修改，缓存已清除");
         }
 
-        /// <summary>
-        /// 是否勾选卡片模式筛选
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        private void checkBoxFilterMode_CheckedChanged(object sender, EventArgs e)
-        {
-            // 更新内存中的配置
-            _appConfig!.FilterByGameMode = checkBoxFilterMode.Checked;
-
-            // 直接保存到文件
-            LeagueConfigManager.Save(_appConfig);
-
-            // 通知MatchQueryProcessor更新筛选模式
-            _matchQueryProcessor?.SetFilterMode(checkBoxFilterMode.Checked);
-
-            _matchQueryProcessor?.ClearPlayerMatchCache();
-
-            Debug.WriteLine($"[配置] 过滤模式改为: {checkBoxFilterMode.Checked}，配置已保存");
-        }
-
-        /// <summary>
-        /// 卡片模式查询数量配置
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        private void cboCardMatchCount_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (_appConfig == null) return;
-
-            _appConfig.CardMatchHistoryCount = cboCardMatchCount.SelectedIndex switch
-            {
-                0 => 10,    // 选中第1项 → 查10
-                2 => 30,    // 选中第2项 → 查30
-                3 => 50,    // 选中第3项 → 查50
-                _ => 20     // 选中第4项 → 查20
-            };
-
-            _matchQueryProcessor?.SetMatchHistoryCount(_appConfig.CardMatchHistoryCount);
-            SaveAppConfig();
-
-            // 场数变了，旧缓存场数不一致，建议清掉选人战绩缓存
-            _matchQueryProcessor?.ClearPlayerMatchCache();
-
-            Debug.WriteLine($"[配置] 卡片战绩场数 = {_appConfig.CardMatchHistoryCount}");
-        }
-
-        /// <summary>
-        /// 是否勾选模式中自动预选英雄
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
         private void ModeCheckBox_CheckedChanged(object sender, EventArgs e)
         {
             if (_appConfig == null) return;

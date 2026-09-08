@@ -10,6 +10,7 @@ namespace League.Managers
 {
     public class PlayerCardManager
     {
+        private readonly SemaphoreSlim _validationLock = new(1,1);
         private readonly FormMain _form;
         private readonly MatchQueryProcessor _matchQueryProcessor;
 
@@ -62,9 +63,7 @@ namespace League.Managers
 
             _lastFillTime = DateTime.Now;
 
-            await _uiManager._uiLock.WaitAsync();
-            try
-            {
+
                 // 并行查询（保持原逻辑）
                 var fetchedInfos = await RunWithLimitedConcurrency(
                     team,
@@ -77,6 +76,10 @@ namespace League.Managers
                     },
                     maxConcurrency: 3);
 
+
+            await _uiManager._uiLock.WaitAsync();
+            try
+            {
                 // 缓存正常玩家
                 foreach (var info in fetchedInfos)
                 {
@@ -139,33 +142,12 @@ namespace League.Managers
         /// </summary>
         public async Task ValidateAndCompleteAllCards(JArray? teamOne = null, JArray? teamTwo = null)
         {
-            const int MaxRetry = 2;
-            int retryCount = 0;
-
-            // ==================== 队伍数据检查与重试刷新 ====================
-            while ((teamOne == null || teamTwo == null || teamOne.Count != 5 || teamTwo.Count != 5) && retryCount <= MaxRetry)
-            {
-                if (retryCount > 0)
-                    Debug.WriteLine($"[Validate] 第 {retryCount} 次重试获取队伍数据...");
-
-                Debug.WriteLine("[Validate] 队伍数据不完整，尝试重新获取最新数据...");
+            if (teamOne == null && teamTwo == null)
                 (teamOne, teamTwo) = await TryGetLatestFullTeamsAsync();
-
-                if (teamOne != null && teamTwo != null && teamOne.Count == 5 && teamTwo.Count == 5)
-                    break;
-
-                retryCount++;
-                await Task.Delay(600); // 重试间隔
-            }
-
-            if (teamOne == null || teamTwo == null || teamOne.Count != 5 || teamTwo.Count != 5)
-            {
-                Debug.WriteLine("[Validate] 多次重试后仍无法得到有效队伍数据，补全中止");
-                return;
-            }
-
-            // ==================== 卡片补全逻辑 ====================
-            await _uiManager._uiLock.WaitAsync();
+            teamOne ??= new JArray();
+            teamTwo ??= new JArray();
+            if (teamOne.Count == 0 && teamTwo.Count == 0) return;
+            if (!await _validationLock.WaitAsync(0)) return;
             try
             {
                 var cardsNeedFix = _validator.ForceGetAllCardsForCompletion();
@@ -232,7 +214,7 @@ namespace League.Managers
             }
             finally
             {
-                _uiManager._uiLock.Release();
+                _validationLock.Release();
             }
         }
 
@@ -360,7 +342,11 @@ namespace League.Managers
         public Dictionary<long, PlayerMatchInfo> GetAllCachedPlayerInfos()
             => _cache.GetAllCachedPlayerInfos();
 
-        public void ClearAllCaches() => _cache.ClearAll();
+        public void ClearAllCaches()
+        {
+            _cache.ClearAll();
+            _matchQueryProcessor.ClearPlayerMatchCache();
+        }
         public void ClearGameState() => _cache.ClearGameState();
 
         /// <summary>

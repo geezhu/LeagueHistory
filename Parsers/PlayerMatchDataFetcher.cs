@@ -21,52 +21,30 @@ namespace League.Parsers
             return RankedStats.FromJson(rankedJson);
         }
 
-        /// <summary>
-        /// 选人窗口卡片战绩查询数量配置
-        /// </summary>
-        /// <param name="puuid"></param>
-        /// <param name="filterByGameMode"></param>
-        /// <param name="count"></param>
-        /// <param name="currentQueueId"></param>
-        /// <returns></returns>
-        public async Task<JArray> GetPlayerMatchesAsync(
-        string puuid,
-        bool filterByGameMode,
-        int count = 20,
-        string currentQueueId = null)
+        public async Task<JArray> GetPlayerMatchesAsync(string puuid, string currentQueueId)
         {
-            // 兜底，防止异常值
-            if (count != 10 && count != 20 && count != 30 && count != 50)
-                count = 20;
-
-            string queueId = currentQueueId ?? await GetCurrentQueueIdAsync();
-            if (!filterByGameMode)
-            {
-                return await Globals.sgpClient.SgpFetchLatestMatches(puuid, 0, count, "");
-            }
-
-            string queueFilter = GetQueueFilter(queueId);
-            return await Globals.sgpClient.SgpFetchLatestMatches(puuid, 0, count, queueFilter);
+            string queueFilter = GetQueueFilter(currentQueueId);
+            return await Globals.sgpClient.SgpFetchLatestMatches(puuid, 0, 20, queueFilter);
         }
 
-        private async Task<string> GetCurrentQueueIdAsync()
+        public async Task<string> GetCurrentQueueIdAsync()
         {
             try
             {
-                var session = await Globals.lcuClient.GetChampSelectSession();
-                if (session != null)
-                {
-                    return session["queueId"]?.ToString();
-                }
+                var session = await Globals.lcuClient.GetGameSession();
+                var queueId = session?["gameData"]?["queue"]?["id"]?.ToString();
+                if (!string.IsNullOrEmpty(queueId) && queueId != "0") return queueId;
+                var selection = await Globals.lcuClient.GetChampSelectSession();
+                return selection?["queueId"]?.ToString() ?? "";
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[模式过滤] 获取 session 失败: {ex.Message}");
             }
-            return Globals.CurrGameMod;
+            return "";
         }
 
-        private string GetQueueFilter(string queueId)
+        public static string GetQueueFilter(string queueId)
         {
             return queueId switch
             {
@@ -76,30 +54,8 @@ namespace League.Parsers
                 "430" => "q_430",
                 "450" => "q_450",
                 "480" => "q_480",
-                "890" => "q_890",
-                "900" => "q_900",
-                "1020" => "q_1020",
-                "1300" => "q_1300",
-                "1400" => "q_1400",
-                "1700" => "q_1700",
+                "490" => "q_490",
                 "2400" => "q_2400",
-                "3270" => "q_3270",
-                "950" => "q_950",
-                "960" => "q_960",
-                "1900" => "q_1900",
-                "2000" => "q_2000",
-                "2010" => "q_2010",
-                "2020" => "q_2020",
-                "700" => "q_700",
-                "720" => "q_720",
-                "740" => "q_740",
-                "750" => "q_750",
-                "1090" => "q_1090",
-                "1100" => "q_1100",
-                "4310" => "q_4310",
-                "2450" => "q_2450",
-                "4320" => "q_4320",
-                "3140" => "q_3140",
                 _ => ""
             };
         }

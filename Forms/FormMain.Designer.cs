@@ -45,11 +45,7 @@ namespace League
             tabPage4 = new TabPage();
             label10 = new Label();
             groupBox3 = new GroupBox();
-            label9 = new Label();
-            cboCardMatchCount = new ComboBox();
-            cboAutoAcceptDelay = new ComboBox();
-            lblAutoAcceptDelay = new Label();
-            checkBoxFilterMode = new CheckBox();
+            checkBoxFilterMode = new Label();
             chkAutoAccept = new CheckBox();
             chkSkipEndOfGameStats = new CheckBox();
             chkSkipHonor = new CheckBox();
@@ -305,9 +301,7 @@ namespace League
             checkBoxFilterMode.Name = "checkBoxFilterMode";
             checkBoxFilterMode.Size = new Size(267, 21);
             checkBoxFilterMode.TabIndex = 3;
-            checkBoxFilterMode.Text = "选人窗口卡片战绩显示是否根据游戏模式查询";
-            checkBoxFilterMode.UseVisualStyleBackColor = true;
-            checkBoxFilterMode.CheckedChanged += checkBoxFilterMode_CheckedChanged;
+            checkBoxFilterMode.Text = "房间战绩：排位/匹配/大乱斗/海克斯取对应模式最近20场，其他取全模式20场";
             // 
             // chkAutoAccept
             // 
@@ -620,7 +614,7 @@ namespace League
         private TabControl tabControl1;
         private TabPage tabPage4;
         private TabPage tabPage5;
-        private CheckBox checkBoxFilterMode;
+        private Label checkBoxFilterMode;
         private LinkLabel lkbPreliminary;
         public Panel panelMatchList;
         public Panel penalGameMatchData;

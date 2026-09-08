@@ -21,8 +21,6 @@ namespace League.Parsers
         private PlayerInfoFactory _factory;
 
         private PlayerCardManager _playerCardManager;
-        private bool _filterByGameMode = false;
-        private int _matchHistoryCount = 20;
 
         public MatchQueryProcessor()
         {
@@ -44,18 +42,6 @@ namespace League.Parsers
             _factory = new PlayerInfoFactory(_playerCardManager);
 
             Debug.WriteLine("[MatchQueryProcessor] PlayerCardManager 已注入，Factory 初始化完成");
-        }
-
-        public void SetFilterMode(bool filterByGameMode)
-        {
-            _filterByGameMode = filterByGameMode;
-            Debug.WriteLine($"[MatchQueryProcessor] 筛选模式设置为: {filterByGameMode}");
-        }
-
-        public void SetMatchHistoryCount(int count)
-        {
-            _matchHistoryCount = count is 10 or 20 or 30 or 50 ? count : 20;
-            Debug.WriteLine($"[MatchQueryProcessor] 战绩场数设置为: {_matchHistoryCount}");
         }
 
         public async Task<PlayerMatchInfo> SafeFetchPlayerMatchInfoAsync(JToken playerData, int retryTimes = 2)
@@ -134,7 +120,9 @@ namespace League.Parsers
                 return _factory.CreateHiddenPlayerInfo(summonerId, championId);
 
             // 缓存检查
-            if (summonerId != 0 && _cacheManager.TryGetPlayerMatch(summonerId, out var cached))
+            string queueId = await _fetcher.GetCurrentQueueIdAsync();
+            string historyFilter = PlayerMatchDataFetcher.GetQueueFilter(queueId);
+            if (summonerId != 0 && _cacheManager.TryGetPlayerMatch(summonerId, historyFilter, out var cached))
             {
                 cached.Player.ChampionId = championId;
                 cached.Player.ChampionName = Globals.resLoading.GetChampionById(championId)?.Name ?? "Unknown";
@@ -162,9 +150,8 @@ namespace League.Parsers
             string soloRank = GetFormattedRank(rankedStats, "单双排");
             string flexRank = GetFormattedRank(rankedStats, "灵活组排");
 
-            //var matchesJson = await _fetcher.GetPlayerMatchesAsync(puuid, _filterByGameMode);
-            var matchesJson = await _fetcher.GetPlayerMatchesAsync(puuid, _filterByGameMode, _matchHistoryCount);
-            var result = _parser.ParsePlayerMatchInfo(puuid, matchesJson);
+            var matchesJson = await _fetcher.GetPlayerMatchesAsync(puuid, queueId);
+            var result = await _parser.ParsePlayerMatchInfo(puuid, matchesJson);
 
             result.Player = new PlayerInfo
             {
@@ -182,7 +169,7 @@ namespace League.Parsers
             // 计算玩家是否压力怪
             CalculatePlayerBehavior(result);
 
-            _cacheManager.CachePlayerMatch(summonerId, result);
+            _cacheManager.CachePlayerMatch(summonerId, historyFilter, result);
             return result;
         }
 

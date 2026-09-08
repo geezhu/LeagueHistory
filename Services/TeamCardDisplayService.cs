@@ -27,7 +27,7 @@ namespace League.Services
         public async Task EnterChampSelectAsync()
         {
             // 清理等待面板 + 准备对战面板
-            FormUiStateManager.SafeInvoke(_form, () =>
+            FormUiStateManager.SafeInvokeSync(_form, () =>
             {
                 if (_form._waitingPanel != null)
                 {
@@ -43,12 +43,8 @@ namespace League.Services
                     }));
                 }
 
-                _form.tableLayoutPanel1.Controls.Clear();
-                _form.tableLayoutPanel1.Visible = true;
-                _form.tableLayoutPanel1.Dock = DockStyle.Fill;
-
-                if (!_form.penalGameMatchData.Controls.Contains(_form.tableLayoutPanel1))
-                    _form.penalGameMatchData.Controls.Add(_form.tableLayoutPanel1);
+                foreach (Control card in _form.tableLayoutPanel1.Controls.Cast<Control>().ToArray()) card.Dispose();
+                League.Controls.PlayerTeamsLayout.Show(_form.tableLayoutPanel1, _form.penalGameMatchData);
             });
 
             // 重置快照
