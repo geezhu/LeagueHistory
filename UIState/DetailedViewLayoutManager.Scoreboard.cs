@@ -147,10 +147,28 @@ namespace League.UIState
             }
             Metric("goldEarned",stats.gold,stats.goldRank,686,Color.FromArgb(190,166,113));
             Metric("totalDamageDealtToChampions",stats.damage,stats.damageRank,780,Color.FromArgb(77,184,171));
-            Text($"{stats.kp:P1}",880,70,muted);
-            Text($"{(player["totalMinionsKilled"]?.Value<int>() ?? 0)+(player["neutralMinionsKilled"]?.Value<int>() ?? 0)}",958,60,muted);
-            var taken=Text($"{stats.damageTaken/1000d:0.0}k",1026,90,muted);
-            _toolTip.SetToolTip(taken,$"承受伤害 {stats.damageTaken:N0} · 全场第 {stats.damageTakenRank} 名");
+            bool IsDerivedMaximum(Func<JObject,double?> selector)
+            {
+                var values = match.AllParticipants.Select(selector).ToArray();
+                var value = selector(player);
+                return value > 0 && values.Length > 0 && values.All(v => v.HasValue) && value == values.Max();
+            }
+            double? Participation(JObject p) => p["challenges"]?["killParticipation"] is JToken token
+                && token.Type is JTokenType.Float or JTokenType.Integer ? token.Value<double>() : null;
+            double? Minions(JObject p) => p["totalMinionsKilled"]?.Type == JTokenType.Integer && p["neutralMinionsKilled"]?.Type == JTokenType.Integer
+                ? p["totalMinionsKilled"]!.Value<double>()+p["neutralMinionsKilled"]!.Value<double>() : null;
+            bool topKp = IsDerivedMaximum(Participation), topCs = IsDerivedMaximum(Minions), topTaken = IsMaximum("totalDamageTaken");
+            string Highest(bool leading) => leading ? " · 全场最高（并列均高亮）" : "";
+            var kp = Text($"{stats.kp:P1}",880,70,topKp ? highlight : muted,topKp);
+            kp.Name = "killParticipation";
+            _toolTip.SetToolTip(kp,$"参团率 {stats.kp:P1} · 全场第 {stats.kpRank} 名"+Highest(topKp));
+            int cs = (player["totalMinionsKilled"]?.Value<int>() ?? 0)+(player["neutralMinionsKilled"]?.Value<int>() ?? 0);
+            var minions = Text($"{cs}",958,60,topCs ? highlight : muted,topCs);
+            minions.Name = "totalCs";
+            _toolTip.SetToolTip(minions,$"补刀 {cs:N0}（小兵 + 野怪）"+Highest(topCs));
+            var taken=Text($"{stats.damageTaken/1000d:0.0}k",1026,90,topTaken ? highlight : muted,topTaken);
+            taken.Name = "totalDamageTaken";
+            _toolTip.SetToolTip(taken,$"承受伤害 {stats.damageTaken:N0} · 全场第 {stats.damageTakenRank} 名"+Highest(topTaken));
         }
     }
 }
