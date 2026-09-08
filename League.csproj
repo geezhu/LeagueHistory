@@ -8,6 +8,10 @@
 		<ApplicationIcon>favicon.ico</ApplicationIcon>
 		<ApplicationManifest>app.manifest</ApplicationManifest>
 	</PropertyGroup>
+	<ItemGroup>
+	  <AdditionalFiles Remove="app.manifest" />
+	  <Compile Remove="Tests\**\*.cs" />
+	</ItemGroup>
 
 	<ItemGroup>
 	  <Content Include="favicon.ico" />

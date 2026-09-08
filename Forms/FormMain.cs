@@ -709,26 +709,6 @@ namespace League
 
             if (panel is MatchListPanel matchPanel)
             {
-                matchPanel.DetailsClicked += delegate (MatchInfo matchInfo)
-                {
-                    try
-                    {
-                        //Debug.WriteLine("详情按钮被点击，模式：" + matchInfo.QueueId + "，开始显示详情");
-                        if (_matchDetailManager!.IsSummonersRiftOrAram(matchInfo.QueueId))
-                        {
-                            _matchDetailManager!.ShowMatchDetails(matchInfo);
-                        }
-                        else
-                        {
-                            MessageBox.Show("该模式不支持查看详情！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Question);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine("详情按钮点击异常: " + ex.Message);
-                        MessageBox.Show("打开详情失败: " + ex.Message);
-                    }
-                };
                 matchPanel.ReplayClicked += async delegate (MatchInfo matchInfo)
                 {
                     await _matchDetailManager!.HandleReplayClick(matchInfo, matchPanel);

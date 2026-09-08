@@ -39,6 +39,9 @@ namespace League.Controls
         public event Action<MatchInfo> ReplayClicked;
 
         public event Action<string> PlayerIconClicked;
+        public bool Compact { get; set; }
+        public bool SelectedMatch { get; set; }
+        public void RequestReplay() => ReplayClicked?.Invoke(MatchInfo);
 
         public MatchListPanel(MatchInfo match)
         {
@@ -215,6 +218,23 @@ namespace League.Controls
             _playerRegions.Clear();
             _detailsRect = _replayRect = Rectangle.Empty;
             if (MatchInfo == null) return;
+
+            if (Compact)
+            {
+                var color = MatchInfo.ResultText == "胜利" ? Color.FromArgb(38,139,113) : Color.FromArgb(191,81,91);
+                e.Graphics.Clear(SelectedMatch ? Color.FromArgb(232,241,253) : Color.White);
+                using var stripe = new SolidBrush(color);
+                e.Graphics.FillRectangle(stripe, 0, 0, 3, Height);
+                if (MatchInfo.HeroIcon != null) e.Graphics.DrawImage(MatchInfo.HeroIcon, new Rectangle(12,14,40,40));
+                void Draw(string text, int x, int y, int width, Color ink) => TextRenderer.DrawText(e.Graphics, text, Font,
+                    new Rectangle(x,y,Math.Max(1,width),20), ink, TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+                Draw(MatchInfo.Mode,60,8,Width-66,Color.FromArgb(36,48,65));
+                Draw($"{MatchInfo.Kills} / {MatchInfo.Deaths} / {MatchInfo.Assists}",60,29,Width-66,Color.FromArgb(36,63,98));
+                Draw(MatchInfo.GameTime,12,56,Width-68,Color.FromArgb(111,123,139));
+                Draw(MatchInfo.ResultText,Width-48,56,44,color);
+                _detailsRect = ClientRectangle;
+                return;
+            }
 
             var g = e.Graphics;
             var state = g.Save();
