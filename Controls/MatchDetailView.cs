@@ -11,6 +11,7 @@ public partial class MatchDetailView : UserControl
     private bool _started;
     private TimelineView? _timeline;
     private MatchStatisticsView? _statistics;
+    private MatchChartsView? _charts;
     public event Action<string>? PlayerProfileRequested;
     public event Action? ReplayRequested;
 
@@ -25,9 +26,10 @@ public partial class MatchDetailView : UserControl
         var basic = new Button { Text = "基础数据", Width = 76, Height = 32, FlatStyle = FlatStyle.Flat };
         var timeline = new Button { Text = "时间线", Width = 68, Height = 32, FlatStyle = FlatStyle.Flat };
         var statistics = new Button { Text = "统计", Width = 58, Height = 32, FlatStyle = FlatStyle.Flat };
+        var charts = new Button { Text = "图表", Width = 58, Height = 32, FlatStyle = FlatStyle.Flat };
         void SelectTab(Button selected)
         {
-            foreach (var button in new[] { basic,statistics,timeline })
+            foreach (var button in new[] { basic,statistics,charts,timeline })
             {
                 bool active = button == selected;
                 button.BackColor = active ? Color.FromArgb(225,237,253) : BackColor;
@@ -37,8 +39,14 @@ public partial class MatchDetailView : UserControl
             _scoreboard.Visible = selected == basic;
             if (_timeline != null) _timeline.Visible = selected == timeline;
             if (_statistics != null) _statistics.Visible = selected == statistics;
+            if (_charts != null) _charts.Visible = selected == charts;
         }
         basic.Click += (_, _) => SelectTab(basic);
+        charts.Click += (_, _) =>
+        {
+            if (_charts == null) { _charts = new MatchChartsView(_match); Controls.Add(_charts); _charts.BringToFront(); }
+            SelectTab(charts);
+        };
         statistics.Click += (_, _) =>
         {
             if (_statistics == null) { _statistics = new MatchStatisticsView(_match); Controls.Add(_statistics); _statistics.BringToFront(); }
@@ -51,7 +59,7 @@ public partial class MatchDetailView : UserControl
             SelectTab(timeline);
         };
         SelectTab(basic);
-        Controls.Add(_scoreboard); Controls.Add(CreateMatchHeader(match,replay,basic,statistics,timeline));
+        Controls.Add(_scoreboard); Controls.Add(CreateMatchHeader(match,replay,basic,statistics,charts,timeline));
         _scoreboard.SizeChanged += (_, _) => ReflowScoreboard();
     }
 
