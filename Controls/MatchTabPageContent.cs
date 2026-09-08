@@ -206,11 +206,13 @@ namespace League.Controls
                 Debug.WriteLine($"收到 {matches?.Count ?? 0} 条数据，请求参数: startIndex={startIndex}, count={count}");
                 if (matches == null || matches.Count == 0)
                 {
+                    SafeInvoke(() => _pageNumber.Text = _currentPage.ToString());
                     ShowEmptyMessage();
                     return;
                 }
                 //Debug.WriteLine("开始解析数据...");
                 await UpdateMatchList(matches);
+                SafeInvoke(() => _pageNumber.Text = _currentPage.ToString());
                 SafeSetEnabled(btnPrev, _currentPage > 1);
                 SafeSetEnabled(btnNext, _currentPage < TotalPages);
             }

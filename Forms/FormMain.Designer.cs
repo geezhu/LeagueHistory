@@ -35,8 +35,7 @@ namespace League
             imageTabControl1 = new ImageTabControl();
             tabPage1 = new TabPage();
             panelMatchList = new Panel();
-            btn_search = new Button();
-            txtGameName = new ComboBox();
+            txtGameName = new SearchComboBox();
             label1 = new Label();
             tabPage2 = new TabPage();
             penalGameMatchData = new Panel();
@@ -123,7 +122,6 @@ namespace League
             // 
             tabPage1.BackColor = SystemColors.Control;
             tabPage1.Controls.Add(panelMatchList);
-            tabPage1.Controls.Add(btn_search);
             tabPage1.Controls.Add(txtGameName);
             tabPage1.Controls.Add(label1);
             tabPage1.Location = new Point(54, 4);
@@ -141,16 +139,6 @@ namespace League
             panelMatchList.Name = "panelMatchList";
             panelMatchList.Size = new Size(1166, 764);
             panelMatchList.TabIndex = 8;
-            // 
-            // btn_search
-            // 
-            btn_search.Location = new Point(581, 7);
-            btn_search.Name = "btn_search";
-            btn_search.Size = new Size(75, 23);
-            btn_search.TabIndex = 7;
-            btn_search.Text = "查询";
-            btn_search.UseVisualStyleBackColor = true;
-            btn_search.Click += btn_search_Click;
             // 
             // txtGameName
             // 
@@ -623,7 +611,6 @@ namespace League
         }
 
         #endregion
-        private Button btn_search;
         private ComboBox txtGameName;
         private Label label1;
         private Panel panel1;

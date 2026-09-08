@@ -43,6 +43,10 @@ public partial class MatchTabPageContent
         _historySurface = new BufferedPanel { Dock = DockStyle.Right, Width = 300 };
         _backToProfile = new Button { Text = "← 返回玩家主页", Dock = DockStyle.Top, Height = 32, FlatStyle = FlatStyle.Flat, Visible = false };
         _backToProfile.Click += (_, _) => ReturnToProfile();
+        _backToProfile.FlatAppearance.BorderSize = 0;
+        _backToProfile.TextAlign = ContentAlignment.MiddleLeft;
+        _backToProfile.ForeColor = Color.FromArgb(89,115,151);
+        _backToProfile.FlatAppearance.MouseOverBackColor = Color.FromArgb(225,237,253);
         _historySurface.Controls.Add(flowLayoutPanelRight);
         _historySurface.Controls.Add(toolbar);
         _historySurface.Controls.Add(_backToProfile);
