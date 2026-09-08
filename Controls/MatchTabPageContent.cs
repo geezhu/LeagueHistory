@@ -308,8 +308,6 @@ namespace League.Controls
                 bool reopenDetail = _detailView != null;
                 if (reopenDetail)
                 {
-                    _detailView?.Dispose();
-                    _detailView = null;
                     _selectedCard = null;
                 }
                 flowLayoutPanelRight.SuspendLayout();
