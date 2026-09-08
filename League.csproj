@@ -11,6 +11,7 @@
 
 	<ItemGroup>
 	  <Content Include="favicon.ico" />
+	  <None Update="Assets\Defaults\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>
 
 	<ItemGroup>
