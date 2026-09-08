@@ -209,8 +209,6 @@ namespace League.Controls
             var newTab = new TabPage($"{gameName}#{tagLine}") { Tag = puuid };
 
             var tabContent = new MatchTabPageContent();
-            tabContent.StatisticsHistoryRequested = async (id, token) =>
-                await Globals.sgpClient.SgpFetchLatestMatches(id,0,100,"",token);
 
             // 绑定事件...
             tabContent.LoadDataRequested += async (p, beg, end, q) =>
