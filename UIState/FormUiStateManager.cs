@@ -385,6 +385,7 @@ namespace League.UIState
                     StartTab1Polling(tab1Poller);
                     break;
                 case 2:
+                case 3:
                     tab1Poller.Stop();
                     break;
             }
