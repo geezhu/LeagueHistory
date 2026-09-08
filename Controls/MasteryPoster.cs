@@ -47,9 +47,17 @@ internal sealed class MasteryPoster : PictureBox
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.DrawImage(Image, (Width - Image.Width * scale) / 2, 0, Image.Width * scale, Image.Height * scale);
         }
-        var bottom = new Rectangle(0, Height / 3, Width, Height - Height / 3);
-        using var shade = new LinearGradientBrush(bottom, Color.Transparent, Color.FromArgb(245, 12, 20, 30), 90f);
-        g.FillRectangle(shade, bottom);
+        var clear = Color.FromArgb(0, 12, 20, 30);
+        using var shade = new LinearGradientBrush(ClientRectangle, clear, Color.FromArgb(245, 12, 20, 30), 90f)
+        {
+            WrapMode = WrapMode.TileFlipXY,
+            InterpolationColors = new ColorBlend
+            {
+                Colors = new[] { clear, clear, Color.FromArgb(245, 12, 20, 30) },
+                Positions = new[] { 0f, 1f / 3f, 1f }
+            }
+        };
+        g.FillRectangle(shade, ClientRectangle);
         if (_rank > 3) return;
         Color accent = _rank == 1 ? Color.FromArgb(207, 168, 78) : _rank == 2 ? Color.FromArgb(145, 166, 186) : Color.FromArgb(185, 125, 85);
         using var badge = new SolidBrush(accent);

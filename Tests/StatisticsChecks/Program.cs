@@ -196,6 +196,16 @@ internal static class Program
         extendedMastery.Add(JObject.Parse("{\"championId\":5,\"championPoints\":0,\"championLevel\":0}"));
         Check(ProfileMasteryView.SelectAll(extendedMastery).Length == 4 && ProfileMasteryView.SelectTop(extendedMastery).Length == 3, "Gallery includes zero-point records beyond homepage preview");
         var galleryType = typeof(ProfileMasteryView).Assembly.GetType("League.Controls.MasteryGalleryView")!;
+        var posterType = typeof(ProfileMasteryView).Assembly.GetType("League.Controls.MasteryPoster")!;
+        foreach (int height in new[] { 270,280,350 })
+        {
+            using var poster = (Control)Activator.CreateInstance(posterType,new object?[] { 4,null })!;
+            poster.Size = new Size(160,height); poster.BackColor = Color.FromArgb(180,180,180);
+            using var rendered = new Bitmap(160,height);
+            poster.DrawToBitmap(rendered,new Rectangle(0,0,160,height));
+            for (int y = height/3-2; y <= height/3+2; y++)
+                Check(Math.Abs(rendered.GetPixel(80,y).R-rendered.GetPixel(80,y-1).R) <= 3,"Poster gradient starts without a dark seam");
+        }
         var activityType = typeof(ProfileMasteryView).Assembly.GetType("League.Controls.RecentActivityView")!;
         League.Models.CareerGame OverviewGame(int id,int queue,int kills,int deaths,int assists) => new(id,id,queue,1,id%2==0,kills,deaths,assists,null,null,null);
         var overviewGames = new[] { OverviewGame(1,430,4,2,4), OverviewGame(2,420,2,0,4), OverviewGame(3,2400,90,1,90) };
