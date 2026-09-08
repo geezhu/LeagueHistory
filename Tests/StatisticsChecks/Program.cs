@@ -179,6 +179,13 @@ internal static class Program
         form.Controls.Add(masteryView);masteryView.LoadPlayer("self");Application.DoEvents();
         Check(Children(masteryView).OfType<PictureBox>().Count()==3,"Three mastery champions rendered");
         Check(Children(masteryView).OfType<Label>().Any(l=>l.Text.Contains("80,000")),"Mastery points displayed");
+        Check(masteryView.OwnershipText.StartsWith("成就英雄 3 /"), "Unavailable inventory uses clearly labelled mastery count");
+        using (var largeName = new LinkLabel { Size = new Size(320,36), Font = new Font("Segoe UI", 15f) })
+        {
+            League.UIHelpers.PlayerNamePresentation.Apply(largeName, "Player#123", false);
+            var privacyBadge = largeName.Controls.OfType<Label>().Single();
+            Check(privacyBadge.Font.SizeInPoints == largeName.Font.SizeInPoints && largeName.Padding.Right >= largeName.Font.Height, "Profile privacy badge scales with player name");
+        }
         JObject[]? allMastery = null;
         masteryView.AllRequested += records => allMastery = records;
         Children(masteryView).OfType<Button>().Single(b => b.Text == "全部 ›").PerformClick();
