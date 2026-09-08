@@ -12,6 +12,10 @@ internal static class Program
     {
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
+        Check(MatchStatisticsView.Value(new JObject { ["goldEarned"] = 0 }, "goldEarned") == "0", "Statistics preserves zero");
+        Check(MatchStatisticsView.Value(new JObject(), "goldEarned") == "—", "Statistics preserves missing values");
+        Check(MatchStatisticsView.Value(JObject.Parse("{\"stats\":{\"kills\":1,\"deaths\":0,\"assists\":2}}"), "kda") == "1/0/2", "Statistics supports nested stats");
+        Check(MatchStatisticsView.Value(new JObject { ["firstBloodKill"] = false }, "firstBloodKill") == "○", "Statistics preserves false");
         var rankNames = RankedStats.FromJson(JObject.Parse("""
         {"queueMap":{"RANKED_SOLO_5x5":{"tier":"PLATINUM","division":"II","highestTier":"MASTER","previousSeasonEndTier":"DIAMOND","previousSeasonEndDivision":"II"}}}
         """))["单双排"];
