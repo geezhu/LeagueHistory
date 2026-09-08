@@ -273,7 +273,8 @@ namespace League.Controls
                 {
                     var rune = augments ? MatchInfo.Augments?.ElementAtOrDefault(i)
                         : i < 4 ? MatchInfo.PrimaryRunes?.ElementAtOrDefault(i) : MatchInfo.SecondaryRunes?.ElementAtOrDefault(i - 4);
-                    Icon(rune?.Icon, 552 + i * 23, 18, 21, rune == null ? null : rune.name + "\n" + StripHtmlTags(rune.longDesc ?? rune.Description), dark: true);
+                    Icon(rune?.Icon, 552 + i * (augments ? 27 : 23), 18, augments ? 24 : 21,
+                        rune == null ? null : rune.name + "\n" + StripHtmlTags(rune.longDesc ?? rune.Description), dark: true);
                 }
                 Text(augments ? "海克斯强化" : "技能与符文", small, Muted, 488, 45, 190);
                 _detailsRect = ScreenRect(488, 72, 88, 26);
@@ -282,7 +283,7 @@ namespace League.Controls
                 Text(MatchInfo.IsReplayDownloaded ? "播放回放" : "下载回放", normal, Accent, 582, 73, 90);
 
                 bool showTeams = width >= 980;
-                int statsX = 704;
+                int statsX = augments ? 728 : 704;
                 int statsWidth = showTeams ? (int)width - 158 - statsX : (int)width - 16 - statsX;
                 Text("伤害  " + MatchInfo.DamageText, small, Ink, statsX, 18, statsWidth);
                 Text("经济  " + MatchInfo.GoldText, small, Muted, statsX, 44, statsWidth);
