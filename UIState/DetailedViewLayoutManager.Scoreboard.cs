@@ -1,4 +1,4 @@
-﻿using League.Models;
+using League.Models;
 using Newtonsoft.Json.Linq;
 
 namespace League.UIState
@@ -66,7 +66,19 @@ namespace League.UIState
             }
             if (isSelf) row.Controls.Add(new Panel { BackColor = Color.FromArgb(46,103,190), Size = new Size(3,44) });
             Cached(_championCache, player["championId"]?.Value<int>() ?? 0, 12,5,34);
-            var nameLabel = Text(name, 58,180,isSelf ? Color.FromArgb(46,103,190) : ink, isSelf);
+            var nameLabel = new League.Controls.PlayerNameLink
+            {
+                Name = "PlayerName", PlayerName = name, Text = name,
+                SummonerId = player["summonerId"]?.ToString() ?? "",
+                ResolveProfile = ResolvePlayerProfile,
+                Location = new Point(58, 4), Size = new Size(180, 30),
+                Font = new Font("Microsoft YaHei UI", 9f, isSelf ? FontStyle.Bold : FontStyle.Regular),
+                LinkColor = isSelf ? Color.FromArgb(46,103,190) : ink,
+                ActiveLinkColor = Color.FromArgb(46,103,190), ForeColor = ink
+            };
+            nameLabel.ProfileRequested += id => PlayerProfileRequested?.Invoke(id);
+            row.Controls.Add(nameLabel);
+            _toolTip.SetToolTip(nameLabel, name + "\n点击查看玩家主页；🔒 表示生涯不公开");
             var badges = League.UIHelpers.WeGameHonorIcons.Select(player, match.AllParticipants);
             bool firstBlood = player["firstBloodKill"]?.Value<bool>() == true;
             if (firstBlood || badges.Count > 0)
