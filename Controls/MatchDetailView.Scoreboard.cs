@@ -1,4 +1,4 @@
-﻿using League.Models;
+using League.Models;
 using League.UIState;
 using Newtonsoft.Json.Linq;
 using System.Diagnostics;
@@ -27,10 +27,9 @@ public partial class MatchDetailView
                     sections.Add(section);
                     var win = team.Select(p => p["win"]?.Value<bool>()).FirstOrDefault(v => v.HasValue);
                     Color teamColor = matchInfo.IsRemake ? MatchResult.RemakeColor : win == true ? Color.FromArgb(38, 139, 113) : win == false ? Color.FromArgb(191, 81, 91) : Color.FromArgb(111, 123, 139);
-                    int Sum(string key) => team.Sum(p => p[key]?.Value<int>() ?? 0);
-                    section.Controls.Add(new Label { Text = $"{(matchInfo.IsRemake ? "重开" : win == true ? "胜方" : win == false ? "败方" : "队伍")}  ·  {(teamId == 100 ? "蓝队" : "红队")}     {Sum("kills")} / {Sum("deaths")} / {Sum("assists")}     总经济 {Sum("goldEarned") / 1000d:0.0}k",
-                        Location = new Point(12, 0), Size = new Size(1096, 32), ForeColor = teamColor,
-                        Font = new Font("Microsoft YaHei UI", 10f, FontStyle.Bold), TextAlign = ContentAlignment.MiddleLeft } );
+                    var title = $"{(matchInfo.IsRemake ? "重开" : win == true ? "胜方" : win == false ? "败方" : "队伍")} · {(teamId == 100 ? "蓝队" : "红队")}";
+                    section.Controls.Add(new TeamSummaryHeader(title,teamColor,TeamSummary.From(matchInfo,teamId),_toolTip)
+                        { Location = new Point(12,0), Width = 1096 });
                     string? activeSort = null;
                     bool descending = true;
                     void Header(string title, int x, int width, string? key = null)
