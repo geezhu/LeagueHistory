@@ -420,6 +420,45 @@ internal static class Program
                 Directory.Delete(launcherFixtureRoot,true);
         }
         var roomCache = new League.Parsers.PlayerMatchCacheManager();
+        using (var headerMatch = new MatchInfo { AllParticipants = new(), RawGameData = new JObject() })
+        using (var detailLayout = new MatchDetailView(headerMatch))
+        {
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+            var scoreboard = (Panel)typeof(MatchDetailView).GetField("_scoreboard",flags)!.GetValue(detailLayout)!;
+            var section = new Panel();
+            var playerHeader = new Button { Text = "玩家", Bounds = new Rectangle(58,32,180,30) };
+            var itemsHeader = new Button { Text = "技能 / 装备", Bounds = new Rectangle(242,32,182,30) };
+            section.Controls.Add(playerHeader); section.Controls.Add(itemsHeader); scoreboard.Controls.Add(section);
+            var reflow = typeof(MatchDetailView).GetMethod("ReflowScoreboard",flags)!;
+            foreach (var width in new[] { 900, 1300, 900 })
+            {
+                detailLayout.Size = new Size(width,600);
+                reflow.Invoke(detailLayout,null);
+                Check(!playerHeader.Bounds.IntersectsWith(itemsHeader.Bounds),"Player and equipment headers do not overlap when resizing detail view");
+                Check(itemsHeader.Text == "技能 / 装备","Equipment heading retains its full text");
+            }
+        }
+        using (var summaryMatch = new MatchInfo {
+            QueueId = "420",
+            AllParticipants = new() { JObject.Parse("{\"teamId\":100,\"kills\":3,\"deaths\":2,\"assists\":8,\"goldEarned\":12345}") },
+            RawGameData = JObject.Parse("{\"teams\":[{\"teamId\":100,\"towerKills\":2,\"objectives\":{\"tower\":{\"kills\":3},\"dragon\":{\"kills\":0}}},{\"teamId\":200,\"towerKills\":9}]}")
+        })
+        {
+            var summary = TeamSummary.From(summaryMatch,100);
+            Check(summary.Kills == 3 && summary.Gold == 12345 && summary.Objectives.Single(o=>o.Key=="tower").Count == 3,"Team summary uses correct team and modern objective fields");
+            Check(summary.Objectives.Single(o=>o.Key=="dragon").Count == 0 && summary.Objectives.Single(o=>o.Key=="baron").Count == null,"Team objectives distinguish missing values from zero");
+            var headerType = typeof(PlayerCardControl).Assembly.GetType("League.Controls.TeamSummaryHeader")!;
+            using var tips = new ToolTip();
+            using var header = (Control)Activator.CreateInstance(headerType,new object[]{"胜方 · 蓝队",Color.SeaGreen,summary,tips})!;
+            header.Size = new Size(700,32);
+            using var screenshot = new Bitmap(700,32);
+            header.DrawToBitmap(screenshot,new Rectangle(0,0,700,32));
+            screenshot.Save(Path.Combine(AppContext.BaseDirectory,"team-summary.png"));
+            summaryMatch.QueueId = "2400";
+            Check(TeamSummary.From(summaryMatch,100).Objectives.Length == 2,"Hextech ARAM hides inapplicable neutral objectives");
+            summaryMatch.AllParticipants[0].Remove("goldEarned");
+            Check(TeamSummary.From(summaryMatch,100).Gold == null,"Incomplete team gold is not presented as a complete sum");
+        }
         var roomStatisticsFixture = new PlayerMatchInfo {
             RecentMatches = new() { new() { Kills = 2, Deaths = 1, Assists = 2 }, new() { Kills = 4, Deaths = 3, Assists = 4 } },
             WinHistory = new() { true, false }
