@@ -6,6 +6,7 @@ public partial class MatchTabPageContent
 {
     private Panel _profileSurface = null!, _contentSurface = null!, _historySurface = null!;
     private MatchDetailView? _detailView;
+    private MatchDetailView? _pendingDetail;
     private MatchListPanel? _selectedCard;
     private Button _backToProfile = null!;
     private Point _profileHistoryScroll;
@@ -58,31 +59,51 @@ public partial class MatchTabPageContent
         ResizeMatchCards();
     }
 
-    private void OpenInlineMatch(MatchInfo match)
+    private async void OpenInlineMatch(MatchInfo match)
     {
         var card = flowLayoutPanelRight.Controls.OfType<MatchListPanel>().FirstOrDefault(c => ReferenceEquals(c.MatchInfo, match));
-        if (card == null || card == _selectedCard) return;
+        if (card == null) return;
+        if (card == _selectedCard) { _pendingDetail?.Dispose(); _pendingDetail = null; return; }
         if (match.AllParticipants == null || !match.AllParticipants.Any(p => (int?)p["teamId"] is 100 or 200))
         {
             MessageBox.Show("这场比赛暂不支持计分板详情。"); return;
         }
+        _pendingDetail?.Dispose();
+        var next = new MatchDetailView(match) { Dock = DockStyle.Fill, Visible = false };
+        _pendingDetail = next;
+        _contentSurface.Controls.Add(next);
+        next.Bounds = _contentSurface.DisplayRectangle;
+        try { await next.PrepareAsync(); }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"详情准备失败：{ex.GetType().Name}");
+            if (ReferenceEquals(_pendingDetail,next)) _pendingDetail = null;
+            next.Dispose();
+            return;
+        }
+        if (IsDisposed || next.IsDisposed || !ReferenceEquals(_pendingDetail,next) || card.IsDisposed)
+        {
+            if (ReferenceEquals(_pendingDetail,next)) _pendingDetail = null;
+            next.Dispose(); return;
+        }
+        _pendingDetail = null;
+        var previous = _detailView;
         SuspendLayout(); _contentSurface.SuspendLayout(); _historySurface.SuspendLayout();
         try
         {
         if (_detailView == null) _profileHistoryScroll = new Point(0,-flowLayoutPanelRight.AutoScrollPosition.Y);
-        _detailView?.Dispose();
         if (_selectedCard != null) { _selectedCard.SelectedMatch = false; _selectedCard.Invalidate(); }
         _selectedCard = card; card.SelectedMatch = true; card.Invalidate();
         _historySurface.Dock = DockStyle.Left; _historySurface.Width = 230;
         _contentSurface.Padding = new Padding(12,0,0,0);
         _profileSurface.Visible = false; _backToProfile.Visible = true;
-        _detailView = new MatchDetailView(match) { Dock = DockStyle.Fill };
+        _detailView = next;
         _detailView.PlayerProfileRequested += async id =>
         {
             if (FindForm() is FormMain main) await main.OpenPlayerProfileAsync(id);
         };
         _detailView.ReplayRequested += () => card.RequestReplay();
-        _contentSurface.Controls.Add(_detailView); _detailView.BringToFront();
+        _detailView.BringToFront();
         ResizeMatchCards();
         }
         finally
@@ -91,10 +112,15 @@ public partial class MatchTabPageContent
             _contentSurface.ResumeLayout(true);
             ResumeLayout(true);
         }
+        next.Bounds = _contentSurface.DisplayRectangle;
+        next.PerformLayout();
+        next.Visible = true;
+        previous?.Dispose();
     }
 
     private void ReturnToProfile()
     {
+        _pendingDetail?.Dispose(); _pendingDetail = null;
         SuspendLayout();
         _contentSurface?.SuspendLayout(); _historySurface?.SuspendLayout();
         try
