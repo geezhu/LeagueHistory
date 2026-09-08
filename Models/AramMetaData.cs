@@ -23,4 +23,7 @@ public sealed record AramMetaIndex(string Patch,string Version,AramMetaChampion[
     }
     public static double? Rate(JToken? value) => (double?)value is double n && double.IsFinite(n) && n>=0 && n<=1?n:null;
 }
-public sealed record AramMetaPage(AramMetaIndex Index,JObject? Detail,bool Cached,DateTime FetchedAt);
+public sealed record AramMetaPage(AramMetaIndex Index,JObject? Detail,bool Cached,DateTime FetchedAt)
+{
+    public bool UpdateFailed { get; init; }
+}
