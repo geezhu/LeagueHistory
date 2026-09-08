@@ -36,6 +36,7 @@ namespace League
             tabPage1 = new TabPage();
             panelTab1 = new Panel();
             btn_search = new Button();
+            txtGameName = new ComboBox();
             label1 = new Label();
             panelMatchList = new Panel();
             txtGameName = new TextBox();
@@ -788,7 +789,7 @@ namespace League
 
         #endregion
         private Button btn_search;
-        private TextBox txtGameName;
+        private ComboBox txtGameName;
         private Label label1;
         private Panel panel1;
         private TabPage tabPage1;

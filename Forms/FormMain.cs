@@ -60,6 +60,7 @@ namespace League
         public FormMain()
         {
             InitializeComponent();
+            InitializeSearchHistory();
             InitializeManagers();
         }
 
@@ -542,7 +543,9 @@ namespace League
 
         private async void btn_search_Click(object sender, EventArgs e)
         {
+            if (!btn_search.Enabled) return;
             btn_search.Enabled = false;
+            txtGameName.Enabled = false;
             btn_search.Text = "查询中...";
             _uiManager!.ShowLoadingIndicator();
 
@@ -571,6 +574,7 @@ namespace League
             {
                 _uiManager!.HideLoadingIndicator();
                 btn_search.Enabled = true;
+                txtGameName.Enabled = true;
                 btn_search.Text = "查询";
             }
         }
@@ -585,6 +589,11 @@ namespace League
             }
 
             RefreshState.ForceMatchRefresh = true;
+            string historyName = summoner["gameName"]?.ToString() ?? "";
+            string historyTag = summoner["tagLine"]?.ToString() ?? "";
+            _searchHistory.Add(!string.IsNullOrWhiteSpace(historyName) && !string.IsNullOrWhiteSpace(historyTag)
+                ? $"{historyName}#{historyTag}" : playerName);
+            RefreshSearchHistory();
             var rankedStats = await GetRankedStatsAsync(summoner["puuid"]?.ToString() ?? "");
             string privacyStatus = GetPrivacyStatus(summoner);
 
