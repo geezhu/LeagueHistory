@@ -8,4 +8,5 @@
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../../League.csproj" /></ItemGroup>
   <ItemGroup><None Update="Fixtures/Opgg/*.json" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+  <ItemGroup><None Update="Fixtures/AramMeta/*.json" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>
