@@ -504,6 +504,7 @@ namespace League
                 _matchTabContent = new MatchTabContent();
                 _matchTabContent.Dock = DockStyle.Fill;
                 panelMatchList.Controls.Add(_matchTabContent);
+                AttachSearchToPlayerTabs();
             });
         }
 
@@ -589,12 +590,11 @@ namespace League
         //    Debug.WriteLine("[InitializeDefaultTab] 完成");
         //}
 
-        private async void btn_search_Click(object sender, EventArgs e)
+        private async Task SubmitPlayerSearchAsync()
         {
-            if (!btn_search.Enabled) return;
-            btn_search.Enabled = false;
+            if (_searchInProgress) return;
+            _searchInProgress = true;
             txtGameName.Enabled = false;
-            btn_search.Text = "查询中...";
             _uiManager!.ShowLoadingIndicator();
 
             try
@@ -621,9 +621,8 @@ namespace League
             finally
             {
                 _uiManager!.HideLoadingIndicator();
-                btn_search.Enabled = true;
+                _searchInProgress = false;
                 txtGameName.Enabled = true;
-                btn_search.Text = "查询";
             }
         }
 

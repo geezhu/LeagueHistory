@@ -240,11 +240,8 @@ namespace League.Controls
                 Debug.WriteLine($"收到 {matches?.Count ?? 0} 条数据，请求参数: startIndex={startIndex}, count={count}");
                 if (matches == null || matches.Count == 0)
                 {
-                    ShowErrorMessage(
-                        "战绩服务器异常\n" +
-                        "客户端头像处对局记录查不到，那么这里也查不到，表示正在维护中（一般3-5小时会恢复）...");
-                    SafeSetEnabled(btnPrev, _currentPage > 1);
-                    SafeSetEnabled(btnNext, false);
+                    SafeInvoke(() => _pageNumber.Text = _currentPage.ToString());
+                    ShowEmptyMessage();
                     return;
                 }
 
@@ -273,10 +270,7 @@ namespace League.Controls
                 }
 
                 await UpdateMatchList(matches);
-
-                // ★ 关键：本页数据 < 请求数量 → 已是最后一页
-                bool hasMore = matches.Count >= count && (startIndex + matches.Count) < 200;
-
+                SafeInvoke(() => _pageNumber.Text = _currentPage.ToString());
                 SafeSetEnabled(btnPrev, _currentPage > 1);
                 SafeSetEnabled(btnNext, hasMore);
             }
