@@ -30,6 +30,7 @@ internal sealed partial class AramMetaView : UserControl
     private static string Rate(double? n)=>n.HasValue?$"{n:P2}":"—";
     private static string Name(AramMetaChampion c)=>FormMain.Globals.resLoading?.GetChampionById(c.Id)?.Name??c.Name;
     public AramMetaView():this(new AramMetaClient(),new HttpClient {Timeout=TimeSpan.FromSeconds(12)}){}
+    public AramMetaView(Func<TimeSpan> cacheLifetime):this(new AramMetaClient(cacheLifetime:cacheLifetime),new HttpClient {Timeout=TimeSpan.FromSeconds(12)}){}
     internal AramMetaView(AramMetaClient client,HttpClient images)
     {
         _client=client;_imageHttp=images;
@@ -95,19 +96,32 @@ internal sealed partial class AramMetaView : UserControl
         _status.Text="正在加载 arammeta · 海克斯大乱斗…";
         try
         {
-            var page=await _client.GetAsync(id,refresh,request.Token);request.Token.ThrowIfCancellationRequested();
+            bool previewShown=false;
+            string? previewVersion=null;
+            var page=await _client.GetAsync(id,refresh,request.Token,preview=>
+            {
+                if(IsDisposed || request.IsCancellationRequested || _request!=request)return;
+                _page=preview;_search.Enabled=false;_role.Enabled=false;
+                _grid.Visible=false;_detail.Visible=true;
+                RenderDetail(preview,id,request.Token);_detail.BringToFront();
+                _detail.AutoScrollPosition=new Point(0,_history[_historyIndex].Scroll);
+                previewShown=true;
+                previewVersion=preview.Index.Version;
+                _status.Text=$"arammeta · 海克斯大乱斗 · 数据版本 {preview.Index.Patch} · 英雄概要与强化推荐已加载，正在获取装备详情…";
+            });request.Token.ThrowIfCancellationRequested();
             if(IsDisposed)return;_page=page;
+            int detailScroll=previewShown?Math.Max(0,-_detail.AutoScrollPosition.Y):_history[_historyIndex].Scroll;
             _search.Enabled=id==0;_role.Enabled=id==0;
             _grid.Visible=id==0;_detail.Visible=id!=0;
             if(id==0){FillGrid();_grid.BringToFront();}
-            else {RenderDetail(page,id,request.Token);_detail.BringToFront();}
+            else {RenderDetail(page,id,request.Token,previewShown && previewVersion==page.Index.Version);_detail.BringToFront();}
             var visit=_history[_historyIndex];
             if(id==0 && _grid.Rows.Count>0)_grid.FirstDisplayedScrollingRowIndex=Math.Min(visit.Scroll,_grid.Rows.Count-1);
-            if(id!=0)_detail.AutoScrollPosition=new Point(0,visit.Scroll);
-            _status.Text=$"arammeta · 海克斯大乱斗 · 数据版本 {page.Index.Patch} · {(page.Cached?"缓存":"已更新")} {page.FetchedAt.ToLocalTime():MM-dd HH:mm}\n调整后胜率与原始胜率分别展示；样本不代表全服。";
+            if(id!=0)_detail.AutoScrollPosition=new Point(0,detailScroll);
+            _status.Text=$"arammeta · 海克斯大乱斗 · 数据版本 {page.Index.Patch} · {(page.UpdateFailed?"\u66f4\u65b0\u5931\u8d25\uff0c\u663e\u793a\u65e7\u7f13\u5b58":page.Cached?"缓存":"已更新")} {page.FetchedAt.ToLocalTime():MM-dd HH:mm}\n调整后胜率与原始胜率分别展示；样本不代表全服。";
         }
-        catch(OperationCanceledException){if(!request.IsCancellationRequested && !IsDisposed)_status.Text="请求超时，点击刷新重试。";}
-        catch(Exception ex){if(!request.IsCancellationRequested && !IsDisposed)_status.Text="加载失败："+ex.Message+" 点击刷新重试；保留上次内容。";}
+        catch(OperationCanceledException){if(!request.IsCancellationRequested && !IsDisposed){MarkDetailUnavailable();_status.Text="请求超时，点击刷新重试。";}}
+        catch(Exception ex){if(!request.IsCancellationRequested && !IsDisposed){MarkDetailUnavailable();_status.Text="加载失败："+ex.Message+" 点击刷新重试；保留上次内容。";}}
     }
     private void FillGrid()
     {

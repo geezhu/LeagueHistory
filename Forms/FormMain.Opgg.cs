@@ -25,7 +25,7 @@ public partial class FormMain
             TextRenderer.DrawText(graphics,"AM",font,new Rectangle(0,0,40,40),Color.White,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);
         }
         var aramPage=new TabPage("arammeta · 海克斯大乱斗") {Tag=aramIcon};
-        aramPage.Controls.Add(new AramMetaView());aramPage.Disposed+=(_,_)=>aramIcon.Dispose();
+        aramPage.Controls.Add(new AramMetaView(()=>TimeSpan.FromMinutes(Math.Clamp(_appConfig?.AramMetaCacheMinutes??1440,1,10080))));aramPage.Disposed+=(_,_)=>aramIcon.Dispose();
         imageTabControl1.TabPages.Add(aramPage);
     }
 }

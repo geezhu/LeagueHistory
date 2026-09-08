@@ -137,6 +137,7 @@ namespace League
 
                 // 读取配置
                 _appConfig = _configUpdateManager!.LoadConfig();
+                ConfigureAramMetaSettings();
 
                 // 恢复复选框状态（新增）
                 chkNormal.Checked = _appConfig.EnablePreliminaryInNormal;   //匹配
