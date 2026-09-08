@@ -7,6 +7,29 @@ public sealed class RankEmblem : Control
     private Bitmap? _image;
     private Rectangle _source;
     private string? _tier;
+    // Bounds of the shipped original PNGs, computed once during development.
+    private static readonly Dictionary<string, Rectangle> BoundsByTier = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["bronze"] = new(522,274,238,158), ["challenger"] = new(479,218,324,243),
+        ["diamond"] = new(483,261,316,191), ["emerald"] = new(990,458,584,434),
+        ["gold"] = new(509,235,260,220), ["grandmaster"] = new(483,240,315,225),
+        ["iron"] = new(541,295,200,123), ["master"] = new(490,236,302,220),
+        ["platinum"] = new(1016,445,529,449), ["silver"] = new(510,246,260,184)
+    };
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<Bitmap>> Cache = new();
+
+    private static Bitmap LoadEmblem(string tier, Rectangle source)
+    {
+        using var stream = typeof(RankEmblem).Assembly.GetManifestResourceStream($"League.Assets.Ranked.emblem-{tier}.png")
+            ?? throw new InvalidOperationException($"Missing rank emblem: {tier}");
+        using var original = new Bitmap(stream);
+        float scale = Math.Min(1f, 256f / Math.Max(source.Width,source.Height));
+        var bitmap = new Bitmap(Math.Max(1,(int)(source.Width*scale)),Math.Max(1,(int)(source.Height*scale)));
+        using var graphics = Graphics.FromImage(bitmap);
+        graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        graphics.DrawImage(original,new Rectangle(0,0,bitmap.Width,bitmap.Height),source,GraphicsUnit.Pixel);
+        return bitmap;
+    }
 
     public RankEmblem()
     {
@@ -19,18 +42,12 @@ public sealed class RankEmblem : Control
     {
         if (_tier == tier) return;
         _tier = tier;
-        _image?.Dispose(); _image = null;
-        using var stream = typeof(RankEmblem).Assembly.GetManifestResourceStream($"League.Assets.Ranked.emblem-{tier.ToLowerInvariant()}.png");
-        if (stream != null)
+        _image = null;
+        string key = tier.ToLowerInvariant();
+        if (BoundsByTier.TryGetValue(key,out var bounds))
         {
-            using var original = new Bitmap(stream);
-            _image = new Bitmap(original);
-            int left = original.Width, top = original.Height, right = 0, bottom = 0;
-            for (int y = 0; y < original.Height; y += 2)
-                for (int x = 0; x < original.Width; x += 2)
-                    if (original.GetPixel(x,y).A > 20)
-                    { left = Math.Min(left,x); top = Math.Min(top,y); right = Math.Max(right,x); bottom = Math.Max(bottom,y); }
-            _source = right >= left ? Rectangle.FromLTRB(Math.Max(0,left-2), Math.Max(0,top-2), Math.Min(original.Width,right+3), Math.Min(original.Height,bottom+3)) : Rectangle.Empty;
+            _image = Cache.GetOrAdd(key,k => new Lazy<Bitmap>(() => LoadEmblem(k,bounds))).Value;
+            _source = new Rectangle(0,0,_image.Width,_image.Height);
         }
         Invalidate();
     }
@@ -47,7 +64,8 @@ public sealed class RankEmblem : Control
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _image?.Dispose(); _image = null; }
+        // The ten small cached images are shared for the application lifetime.
+        if (disposing) _image = null;
         base.Dispose(disposing);
     }
 }
