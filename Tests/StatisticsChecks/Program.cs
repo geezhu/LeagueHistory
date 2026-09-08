@@ -101,6 +101,8 @@ internal static class Program
         var stats = CareerStatistics.Parse(records,"self");
         Check(stats.Games.Count == 1 && stats.Kda == 15 && stats.Wins == 1,"Deduplication/zero-death KDA");
         Check(stats.ExcludedRemakes == 1 && stats.Unrecognized == 1,"Remake/player identity filtering");
+        var recentWithRemakes = CareerStatistics.Parse(records,"self",includeRemakes: true);
+        Check(recentWithRemakes.ExcludedRemakes == 0 && recentWithRemakes.Games.Count == stats.Games.Count + 1, "Recent activity includes remakes while retaining deduplication");
         var missing = (JObject)game.DeepClone(); ((JObject)missing["participants"]![0]!["stats"]!).Remove("kills");
         Check(CareerStatistics.Parse(new JArray(missing),"self").Kda == null,"Missing kills must not become zero");
         Check(CareerStatistics.Records(new JObject { ["games"]="invalid" }) == null,"Unknown record shape");
@@ -194,6 +196,25 @@ internal static class Program
         extendedMastery.Add(JObject.Parse("{\"championId\":5,\"championPoints\":0,\"championLevel\":0}"));
         Check(ProfileMasteryView.SelectAll(extendedMastery).Length == 4 && ProfileMasteryView.SelectTop(extendedMastery).Length == 3, "Gallery includes zero-point records beyond homepage preview");
         var galleryType = typeof(ProfileMasteryView).Assembly.GetType("League.Controls.MasteryGalleryView")!;
+        var activityType = typeof(ProfileMasteryView).Assembly.GetType("League.Controls.RecentActivityView")!;
+        var roleGames = new[] {
+            new League.Models.CareerGame(1,1,450,1,true,null,null,null,null,null,null),
+            new League.Models.CareerGame(2,2,450,2,true,null,null,null,null,null,null),
+            new League.Models.CareerGame(3,3,450,3,true,null,null,null,null,null,null)
+        };
+        object?[] roleArgs = { roleGames, JArray.Parse("[{\"id\":1,\"roles\":[\"mage\",\"support\"]},{\"id\":2,\"roles\":[\"mage\",\"mage\"]}]"), 0 };
+        var roleWeights = (double[])activityType.GetMethod("CountRoles")!.Invoke(null,roleArgs)!;
+        Check((int)roleArgs[2]! == 2 && roleWeights.Sum() == 2 && roleWeights[2] == 1.5 && roleWeights[5] == .5, "Recent roles split dual classes, deduplicate roles and exclude missing classifications");
+        using (var activity = (Control)Activator.CreateInstance(activityType)!)
+        {
+            activity.Width = 900;
+            Check(activity.Height == 86, "Wide recent activity uses compact strip");
+            activity.Width = 500;
+            Check(activity.Height == 150, "Narrow recent activity wraps compact strip");
+            using var preview = new Bitmap(500,150);
+            activity.DrawToBitmap(preview,new Rectangle(0,0,500,150));
+            preview.Save(Path.Combine(AppContext.BaseDirectory,"recent-activity.png"));
+        }
         var backgroundType = typeof(ProfileMasteryView).Assembly.GetType("League.Controls.ProfileBackgroundPanel")!;
         var findSplash = backgroundType.GetMethod("FindSplash")!;
         var selectSkin = backgroundType.GetMethod("SelectSkin")!;

@@ -20,7 +20,7 @@ public sealed class CareerStatistics
         _ => null
     };
 
-    public static CareerStatistics Parse(JArray records, string puuid)
+    public static CareerStatistics Parse(JArray records, string puuid, bool includeRemakes = false)
     {
         var result = new CareerStatistics();
         var seen = new HashSet<long>();
@@ -38,7 +38,7 @@ public sealed class CareerStatistics
             var stats = player?["stats"] as JObject ?? player;
             if (stats == null || stats["win"]?.Type != JTokenType.Boolean) { result.Unrecognized++; continue; }
             seen.Add(id);
-            if (MatchResult.IsRemake(game)) { result.ExcludedRemakes++; continue; }
+            if (!includeRemakes && MatchResult.IsRemake(game)) { result.ExcludedRemakes++; continue; }
             int? Number(string key) => stats[key]?.Type == JTokenType.Integer ? stats[key]!.Value<int>() : null;
             long? Long(string key) => stats[key]?.Type == JTokenType.Integer ? stats[key]!.Value<long>() : null;
             result.Games.Add(new(id,game["gameCreation"]?.Value<long>() ?? 0,game["queueId"]?.Value<int>() ?? 0,

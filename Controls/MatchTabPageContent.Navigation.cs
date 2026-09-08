@@ -11,6 +11,7 @@ public partial class MatchTabPageContent
     private Button _backToProfile = null!;
     private Point _profileHistoryScroll;
     private ProfileMasteryView _masteryView = null!;
+    private RecentActivityView _recentActivity = null!;
     private ProfileBackgroundPanel _profileBackground = null!;
     private readonly Dictionary<string, RankedStats> _profileRanks = new();
     private Label _highestRank = null!;
@@ -36,6 +37,7 @@ public partial class MatchTabPageContent
     {
         _profileSurface = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true };
         _masteryView = new ProfileMasteryView { Dock = DockStyle.Top };
+        _recentActivity = new RecentActivityView { Dock = DockStyle.Top };
         _masteryView.ProfileLoaded += picChampionId.SetExperience;
         _masteryView.AllRequested += records =>
         {
@@ -45,6 +47,7 @@ public partial class MatchTabPageContent
             gallery.BringToFront();
         };
         _profileSurface.Controls.Add(_masteryView);
+        _profileSurface.Controls.Add(_recentActivity);
         _profileSurface.Controls.Add(profile);
         _contentSurface = new BufferedPanel { Dock = DockStyle.Fill, Padding = new Padding(0,0,12,0) };
         _contentSurface.Controls.Add(_profileSurface);
