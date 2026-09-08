@@ -343,6 +343,60 @@ internal static class Program
         foreach (var queue in new[] { "", "0", "900", "1700", "700", "99999" })
             Check(League.Parsers.PlayerMatchDataFetcher.GetQueueFilter(queue) == "",
                 "Other room modes use global history " + queue);
+        var launcherFixtureRoot = Path.Combine(AppContext.BaseDirectory, "launcher-fixture-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(launcherFixtureRoot);
+        try
+        {
+            string FixtureFile(string relative)
+            {
+                var path = Path.Combine(launcherFixtureRoot, relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllText(path, "fixture");
+                return path;
+            }
+            var delta = FixtureFile(@"Delta Force\Launcher\startup_runner.exe");
+            var deltaWeGame = FixtureFile(@"Delta Force\Launcher\WeGameLauncher\launcher.exe");
+            Check(League.UIHelpers.LOLHelper.ResolveInstallation(delta) == null && League.UIHelpers.LOLHelper.ResolveInstallation(deltaWeGame) == null,
+                "Generic Delta Force launchers are not recognized as League");
+            var official = FixtureFile(@"League\Launcher\startup_runner.exe");
+            var wegame = FixtureFile(@"League\WeGameLauncher\launcher.exe");
+            FixtureFile(@"League\LeagueClient\LeagueClient.exe");
+            var ux = FixtureFile(@"League\LeagueClient\LeagueClientUx.exe");
+            var installation = League.UIHelpers.LOLHelper.ResolveInstallation(ux);
+            Check(installation?.OfficialPath == official && installation.WeGamePath == wegame,
+                "Verified League install resolves both launchers despite other games");
+            var launcherPanelType = typeof(PlayerCardControl).Assembly.GetType("League.Controls.LolLauncherPanel")!;
+            using (var launcherPanel = (Control)Activator.CreateInstance(launcherPanelType)!)
+            {
+                launcherPanelType.GetMethod("ShowInstallation",System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                    .Invoke(launcherPanel,new object?[] { installation });
+                Check(Children(launcherPanel).OfType<Button>().Count(b => b.Enabled) == 3,"Verified launchers enable launch and manual selection controls");
+                using var screenshot = new Bitmap(580,150);
+                launcherPanel.DrawToBitmap(screenshot,new Rectangle(0,0,580,150));
+                screenshot.Save(Path.Combine(AppContext.BaseDirectory,"launcher-panel.png"));
+            }
+            var configPath = Path.Combine(launcherFixtureRoot,"LOLPathConfig.json");
+            var helper = new League.UIHelpers.LOLHelper(configPath);
+            File.WriteAllText(configPath, new JObject { ["LastLOLPath"] = delta }.ToString());
+            Check(helper.ReadSavedInstallation() == null, "Legacy wrong-game cache is ignored");
+            bool rejected = false;
+            try { helper.StartValidatedLauncher(delta); } catch (InvalidOperationException) { rejected = true; }
+            Check(rejected, "Wrong-game launcher is rejected before process start");
+            helper.SaveInstallation(Path.GetDirectoryName(Path.GetDirectoryName(ux)!)!);
+            var saved = JObject.Parse(File.ReadAllText(configPath));
+            Check(saved["OfficialPath"]?.ToString() == official && saved["WeGamePath"]?.ToString() == wegame && saved["LastLOLPath"] == null,
+                "Official and WeGame paths persist separately");
+            Check(helper.ReadSavedInstallation()?.OfficialPath == official, "Validated settings reload successfully");
+            File.Delete(ux);
+            Check(helper.ReadSavedInstallation() == null, "Moved or damaged install invalidates saved paths");
+            File.WriteAllText(configPath,"broken json");
+            Check(helper.ReadSavedInstallation() == null, "Damaged launcher config does not prevent startup");
+        }
+        finally
+        {
+            if (Path.GetFullPath(launcherFixtureRoot).StartsWith(Path.GetFullPath(AppContext.BaseDirectory),StringComparison.OrdinalIgnoreCase))
+                Directory.Delete(launcherFixtureRoot,true);
+        }
         var roomCache = new League.Parsers.PlayerMatchCacheManager();
         var roomStatisticsFixture = new PlayerMatchInfo {
             RecentMatches = new() { new() { Kills = 2, Deaths = 1, Assists = 2 }, new() { Kills = 4, Deaths = 3, Assists = 4 } },
