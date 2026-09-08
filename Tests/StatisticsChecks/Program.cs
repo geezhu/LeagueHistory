@@ -12,6 +12,22 @@ internal static class Program
     {
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
+        string historyFile = Path.Combine(Path.GetTempPath(),"league-search-"+Guid.NewGuid().ToString("N")+".json");
+        try
+        {
+            var history = new League.Services.PlayerSearchHistory(historyFile);
+            history.Add("玩家#123"); history.Add("Other#456"); history.Add(" 玩家#123 ");
+            Check(history.Items.Count == 2 && history.Items[0] == "玩家#123", "Search history deduplicates and promotes");
+            Check(new League.Services.PlayerSearchHistory(historyFile).Items.SequenceEqual(history.Items), "Search history survives reload");
+            history.Add("invalid"); Check(history.Items.Count == 2,"Invalid ID excluded");
+            for (int i=0;i<25;i++) history.Add($"Player{i}#123");
+            Check(history.Items.Count == 20 && history.Items[0] == "Player24#123","Search history bounded");
+            history.Remove("player24#123"); Check(history.Items.Count == 19,"History removal ignores case");
+            history.Clear(); Check(new League.Services.PlayerSearchHistory(historyFile).Items.Count == 0,"History clear persists");
+            File.WriteAllText(historyFile,"invalid json");
+            Check(new League.Services.PlayerSearchHistory(historyFile).Items.Count == 0,"Damaged history does not prevent startup");
+        }
+        finally { if (File.Exists(historyFile)) File.Delete(historyFile); }
         Check(LcuProcessDiscovery.TryParse("\"C:\\Program Files\\LeagueClientUx.exe\" \"--app-port=12345\" --remoting-auth-token=\"test-value\"",out var connectionPort,out var connectionToken)
             && connectionPort == "12345" && connectionToken == "test-value", "Quoted LCU arguments");
         Check(!LcuProcessDiscovery.TryParse("client.exe --app-port=70000 --remoting-auth-token=test",out _,out _), "Reject invalid port");
