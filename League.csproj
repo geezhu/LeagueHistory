@@ -11,6 +11,7 @@
 
 	<ItemGroup>
 	  <Content Include="favicon.ico" />
+	  <EmbeddedResource Include="Assets\WeGame\honor16.png" LogicalName="League.WeGame.honor16.png" />
 	  <None Update="Assets\Defaults\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>
 
