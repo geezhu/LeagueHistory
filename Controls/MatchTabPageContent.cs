@@ -388,18 +388,22 @@ namespace League.Controls
             if (!string.IsNullOrEmpty(summonerId))
                 _summonerId = summonerId;
 
-            await Task.Delay(200);
-            await LoadDataAsync();      //查段位
+            await Task.Delay(200); // 可选延迟，确保控件加载完
+
+            SafeInvoke(() => _careerView.LoadPlayer(puuid));
+
+            await LoadDataAsync();
         }
 
-        public async Task InitiaRank(string fullName, string profileIconId, string summonerLevel, string privacy, Dictionary<string, RankedStats> rankedStats)
+
+        public async Task InitiaRank(string fullName, string profileIconId, string summonerLevel, string privacy, Dictionary<string, RankedStats> rankedStats, bool isOwnProfile = false)
         {
             // 检查是否在UI线程
             if (this.InvokeRequired)
             {
                 // 使用异步方式，避免死锁
                 await Task.Run(async () =>
-                    await InitiaRank(fullName, profileIconId, summonerLevel, privacy, rankedStats));
+                    await InitiaRank(fullName, profileIconId, summonerLevel, privacy, rankedStats, isOwnProfile));
                 return;
             }
 
@@ -430,9 +434,10 @@ namespace League.Controls
                 if (rankedStats.TryGetValue("单双排", out var soloStats))
                 {
                     lblSoloTier.Text = soloStats.FormattedTier;
-                    lblSoloGames.Text = $"{soloStats.TotalGames} 场";
-                    lblSoloWins.Text = $"{soloStats.Wins}场";
-                    lblSoloLosses.Text = $"{soloStats.Losses}场";
+                    lblSoloGames.Text = soloStats.TotalGamesDisplay;
+                    lblSoloWins.Text = soloStats.WinsDisplay;
+                    SetRankHistory("SoloRankHistory", soloStats);
+                    lblSoloLosses.Text = soloStats.LossesDisplay;
                     lblSoloWinRate.Text = soloStats.WinRateDisplay;
                     lblSoloLeaguePoints.Text = $"{soloStats.LeaguePoints}点";
                 }
@@ -441,11 +446,18 @@ namespace League.Controls
                 if (rankedStats.TryGetValue("灵活组排", out var flexStats))
                 {
                     lblFlexTier.Text = flexStats.FormattedTier;
-                    lblFlexGames.Text = $"{flexStats.TotalGames} 场";
-                    lblFlexWins.Text = $"{flexStats.Wins}场";
-                    lblFlexLosses.Text = $"{flexStats.Losses}场";
+                    lblFlexGames.Text = flexStats.TotalGamesDisplay;
+                    lblFlexWins.Text = flexStats.WinsDisplay;
+                    SetRankHistory("FlexRankHistory", flexStats);
+                    lblFlexLosses.Text = flexStats.LossesDisplay;
                     lblFlexWinRate.Text = flexStats.WinRateDisplay;
                     lblFlexLeaguePoints.Text = $"{flexStats.LeaguePoints}点";
+                }
+                // Other-player ranked responses can contain placeholder loss counts.
+                if (!isOwnProfile)
+                {
+                    lblSoloGames.Text = lblSoloLosses.Text = lblSoloWinRate.Text = "—";
+                    lblFlexGames.Text = lblFlexLosses.Text = lblFlexWinRate.Text = "—";
                 }
             }
             catch (Exception ex)

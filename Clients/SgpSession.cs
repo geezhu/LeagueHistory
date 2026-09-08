@@ -131,17 +131,85 @@ namespace League.Clients
             Debug.WriteLine("[SGP] 未能获取 SGP 地址");
             return null;
         }
-
-        public async Task<JArray> SgpFetchLatestMatches(
-        string puuid,
-        int startIndex = 0,
-        int count = 19,
-        string tag = null)
+       
+        public async Task<JArray> SgpFetchLatestMatches(string puuid, int startIndex = 0, int count = 19, string tag = null, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(_sgpUrl))
             {
-                Debug.WriteLine("❌ _sgpUrl 为空");
-                return null; // 配置/初始化失败，视为不可用
+                using (CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    cts.CancelAfter(TimeSpan.FromSeconds(30));
+                    try
+                    {
+                        using var handler = new HttpClientHandler
+                        {
+                            ServerCertificateCustomValidationCallback = (msg, cert, chain, err) => true
+                        };
+
+                        using HttpClient client = new HttpClient(handler);
+                        client.Timeout = TimeSpan.FromSeconds(30);   // 双重保险
+
+                        client.DefaultRequestHeaders.Clear();
+                        client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "LeagueOfLegendsClient/14.13.596.7996 (rcp-be-lol-match-history)");
+                        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+                        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                        client.DefaultRequestHeaders.TryAddWithoutValidation("X-Riot-ClientPlatform", "Windows");
+                        // client.DefaultRequestHeaders.TryAddWithoutValidation("X-Riot-ClientVersion", await GetClientVersionAsync());
+
+                        if (string.IsNullOrWhiteSpace(_sgpUrl))
+                        {
+                            Debug.WriteLine("❌ _sgpUrl 为空");
+                            return null;
+                        }
+
+                        string path = $"/match-history-query/v1/products/lol/player/{puuid}/SUMMARY";
+                        var queries = new List<string> { $"startIndex={startIndex}", $"count={count}" };
+                        if (!string.IsNullOrEmpty(tag)) queries.Add($"tag={tag}");
+
+                        string fullUrl = _sgpUrl.TrimEnd('/') + path + "?" + string.Join("&", queries);
+                        Debug.WriteLine($"SGP 请求地址: {fullUrl} (尝试 {attempt}/3)");
+
+                        Stopwatch watch = Stopwatch.StartNew();
+                        HttpResponseMessage response = await client.GetAsync(fullUrl, cts.Token);
+                        watch.Stop();
+
+                        Debug.WriteLine($"SGP 查询状态: {response.StatusCode} 耗时: {watch.ElapsedMilliseconds}ms");
+
+                        if (response.IsSuccessStatusCode)
+                        {
+                            string content = await response.Content.ReadAsStringAsync();
+                            JObject json = JObject.Parse(content);
+                            //Debug.WriteLine(json);
+                            return json["games"] as JArray;
+                        }
+                        else
+                        {
+                            string errorContent = await response.Content.ReadAsStringAsync();
+                            Debug.WriteLine($"请求失败: {response.StatusCode} - {errorContent}");
+                        }
+                    }
+                    catch (TaskCanceledException tce)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        Debug.WriteLine($"SGP 查询超时（尝试 {attempt}/3）: {tce.Message}");
+                    }
+                    catch (HttpRequestException hre)
+                    {
+                        Debug.WriteLine($"HTTP 请求异常: {hre.Message} (Inner: {hre.InnerException?.Message})");
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"其他异常: {ex.Message}");
+                    }
+                }
+
+                if (!await LoadEntitlementsTokenAsync())
+                {
+                    Debug.WriteLine("刷新 Token 失败");
+                    return null;
+                }
+                await Task.Delay(1500,cancellationToken);
             }
 
             if (string.IsNullOrWhiteSpace(_accessToken))

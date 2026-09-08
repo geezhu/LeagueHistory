@@ -14,237 +14,11 @@ namespace League.Managers
     public class MatchDetailManager
     {
         private readonly FormMain _form;
-        private ToolTip? _toolTip;
 
         public MatchDetailManager(FormMain form)
         {
             _form = form;
         }
-
-        #region 比赛详情显示
-        /// <summary>
-        /// 显示比赛详情
-        /// </summary>
-        public async void ShowMatchDetails(MatchInfo matchInfo)
-        {
-            try
-            {
-                Debug.WriteLine("显示比赛详情: " + matchInfo.SelfPlayer?.GameName + " - " + matchInfo.GameTime);
-
-                if (!ValidateMatchData(matchInfo))
-                    return;
-
-                using var detailForm = CreateDetailForm(matchInfo);
-                InitializeDetailForm(detailForm, matchInfo);
-                detailForm.ShowDialog(_form);
-                if (detailForm.Tag is string summonerId && !_form.IsDisposed)
-                    await _form.OpenPlayerProfileAsync(summonerId);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("显示详情失败: " + ex.Message + "\n" + ex.StackTrace);
-                MessageBox.Show("显示详情失败: " + ex.Message);
-            }
-        }
-
-        /// <summary>
-        /// 验证比赛数据
-        /// </summary>
-        private bool ValidateMatchData(MatchInfo matchInfo)
-        {
-            if (matchInfo?.AllParticipants == null || matchInfo.AllParticipants.Count == 0)
-            {
-                MessageBox.Show("比赛数据不完整，无法显示详情");
-                return false;
-            }
-            return true;
-        }
-
-        /// <summary>
-        /// 创建详情窗体
-        /// </summary>
-        private Form CreateDetailForm(MatchInfo matchInfo)
-        {
-            string championName = matchInfo.ChampionName ?? "未知英雄";
-            string gameTime = matchInfo.GameTime ?? "未知时间";
-
-            return new Form
-            {
-                Text = $"比赛详情 - {championName} - {gameTime}",
-                Size = new Size(1180, 760),
-                MinimumSize = new Size(1000, 650),
-                StartPosition = FormStartPosition.CenterScreen,
-                BackColor = Color.White,
-                MinimizeBox = false,
-                MaximizeBox = true,
-                ShowIcon = true,
-                ShowInTaskbar = true
-            };
-        }
-
-        /// <summary>
-        /// 初始化详情窗体
-        /// </summary>
-        private void InitializeDetailForm(Form detailForm, MatchInfo matchInfo)
-        {
-            _toolTip = new ToolTip
-            {
-                AutoPopDelay = 30000,
-                InitialDelay = 100,
-                ReshowDelay = 50,
-                ShowAlways = true,
-                UseAnimation = true,
-                UseFading = true
-            };
-
-            var layoutManager = new DetailedViewLayoutManager(_toolTip)
-            {
-                ResolvePlayerProfile = async id => await Globals.lcuClient.GetGameNameBySummonerId(id)
-            };
-            layoutManager.PlayerProfileRequested += id =>
-            {
-                if (detailForm.IsDisposed) return;
-                detailForm.Tag = id;
-                detailForm.Close();
-            };
-            detailForm.BackColor = Color.FromArgb(244, 247, 251);
-            var summary = new Label
-            {
-                Dock = DockStyle.Top, Height = 72, Padding = new Padding(22, 12, 0, 0),
-                Font = new Font("Microsoft YaHei UI", 11f), ForeColor = Color.FromArgb(36, 48, 65),
-                Text = $"{matchInfo.Mode}     ·     {matchInfo.DurationText}     ·     {matchInfo.GameTime}\n比赛 {matchInfo.GameId}    |    基础数据 · 点击列标题排序，悬停查看完整数据"
-            };
-            Panel panel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = detailForm.BackColor };
-            detailForm.Controls.Add(panel);
-            detailForm.Controls.Add(summary);
-            CreateDetailedPlayerViews(panel, matchInfo, layoutManager);
-            detailForm.FormClosed += (s, e) => CleanupDetailForm(detailForm);
-        }
-
-        /// <summary>
-        /// 创建Tab控件
-        /// </summary>
-        private TabControl CreateTabControl()
-        {
-            return new TabControl
-            {
-                Dock = DockStyle.Fill,
-                Font = new Font("微软雅黑", 9f),
-                ItemSize = new Size(80, 25),
-                Padding = new Point(10, 5)
-            };
-        }
-
-        /// <summary>
-        /// 清理详情窗体资源
-        /// </summary>
-        private void CleanupDetailForm(Form detailForm)
-        {
-            try
-            {
-                _toolTip?.RemoveAll();
-                _toolTip?.Dispose();
-                DisposeImagesInControls(detailForm.Controls);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("释放资源时出错: " + ex.Message);
-            }
-        }
-        #endregion
-
-        #region 玩家视图创建
-        /// <summary>
-        /// 创建详细玩家视图
-        /// </summary>
-        private async void CreateDetailedPlayerViews(Panel panel, MatchInfo matchInfo, DetailedViewLayoutManager layoutManager)
-        {
-            if (matchInfo.AllParticipants == null) return;
-            var loading = new Label { Text = "正在加载比赛数据…", ForeColor = Color.FromArgb(111, 123, 139), AutoSize = true, Location = new Point(20, 10) };
-            panel.Controls.Add(loading);
-            try
-            {
-                int y = 8;
-                foreach (int teamId in new[] { 100, 200 })
-                {
-                    var team = matchInfo.AllParticipants.Where(p => p["teamId"]?.Value<int>() == teamId).ToList();
-                    if (team.Count == 0) continue;
-                    var rows = new List<(JObject Player, Panel Row)>();
-                    // Build the whole team before displaying it so headers never detach from rows.
-                    var section = new Panel { Location = new Point(12, y), Size = new Size(1120, 64 + team.Count * 44),
-                        BackColor = Color.White };
-                    panel.Controls.Add(section);
-                    var win = team.Select(p => p["win"]?.Value<bool>()).FirstOrDefault(v => v.HasValue);
-                    Color teamColor = win == true ? Color.FromArgb(38, 139, 113) : win == false ? Color.FromArgb(191, 81, 91) : Color.FromArgb(111, 123, 139);
-                    int Sum(string key) => team.Sum(p => p[key]?.Value<int>() ?? 0);
-                    section.Controls.Add(new Label { Text = $"{(win == true ? "胜方" : win == false ? "败方" : "队伍")}  ·  {(teamId == 100 ? "蓝队" : "红队")}     {Sum("kills")} / {Sum("deaths")} / {Sum("assists")}     总经济 {Sum("goldEarned") / 1000d:0.0}k",
-                        Location = new Point(12, 0), Size = new Size(1096, 32), ForeColor = teamColor,
-                        Font = new Font("Microsoft YaHei UI", 10f, FontStyle.Bold), TextAlign = ContentAlignment.MiddleLeft } );
-                    string? activeSort = null;
-                    bool descending = true;
-                    void Header(string title, int x, int width, string? key = null)
-                    {
-                        var button = new Button { Text = title, Location = new Point(x,32), Size = new Size(width,30),
-                            FlatStyle = FlatStyle.Flat, ForeColor = Color.FromArgb(111,123,139), BackColor = section.BackColor,
-                            TextAlign = ContentAlignment.MiddleLeft, Font = new Font("Microsoft YaHei UI", 9f), TabStop = key != null };
-                        button.FlatAppearance.BorderSize=0;
-                        section.Controls.Add(button);
-                        if (key == null) return;
-                        button.Cursor=Cursors.Hand;
-                        button.Click += (_,_) =>
-                        {
-                            if(rows.Count != team.Count) return;
-                            descending = activeSort == key ? !descending : true;
-                            activeSort=key;
-                            double Value(JObject p) => key == "cs" ? (p["totalMinionsKilled"]?.Value<int>() ?? 0)+(p["neutralMinionsKilled"]?.Value<int>() ?? 0)
-                                : key == "kda" ? ((p["kills"]?.Value<double>() ?? 0)+(p["assists"]?.Value<double>() ?? 0))/Math.Max(1,p["deaths"]?.Value<double>() ?? 0)
-                                : key == "kp" ? p["challenges"]?["killParticipation"]?.Value<double>() ?? 0 : p[key]?.Value<double>() ?? 0;
-                            var ordered=descending ? rows.OrderByDescending(r=>Value(r.Player)) : rows.OrderBy(r=>Value(r.Player));
-                            int rowY=64;
-                            section.SuspendLayout();
-                            foreach(var item in ordered) { item.Row.Top=rowY; rowY+=44; }
-                            foreach(var header in section.Controls.OfType<Button>())header.Text=header.Text.TrimEnd(' ','↑','↓');
-                            button.Text=title+(descending ? " ↓" : " ↑");
-                            section.ResumeLayout();
-                        };
-                    }
-                    Header("玩家",58,180); Header("技能 / 装备",242,182); Header("符文 / 海克斯",436,148);
-                    Header("KDA",592,90,"kda"); Header("经济",686,90,"goldEarned"); Header("英雄伤害",780,96,"totalDamageDealtToChampions");
-                    Header("参团率",880,76,"kp"); Header("补刀",958,64,"cs"); Header("承受伤害",1026,94,"totalDamageTaken");
-                    foreach (var participant in team)
-                    {
-                        if(panel.IsDisposed)return;
-                        var row=await layoutManager.CreateDetailedPlayerPanel(participant,matchInfo,0,64+rows.Count*44,teamId);
-                        if(panel.IsDisposed) { DisposeImagesInControls(row.Controls); row.Dispose(); return; }
-                        section.Controls.Add(row); rows.Add((participant,row));
-                    }
-                    y+=section.Height+10;
-                }
-                loading.Dispose();
-            }
-            catch(Exception ex)
-            {
-                Debug.WriteLine($"详情加载失败: {ex}");
-                if(!panel.IsDisposed) { loading.Text="部分数据加载失败，请关闭详情后重试。"; loading.BringToFront(); }
-            }
-        }
-        /// <summary>
-        /// 添加队伍标签
-        /// </summary>
-        private void AddTeamLabel(Panel panel, string text, Color color, ref int y)
-        {
-            var label = new Label
-            {
-                Text = text,
-                Location = new Point(10, y),
-                Size = new Size(200, 25),
-                Font = new Font("微软雅黑", 11f, FontStyle.Bold),
-                ForeColor = color
-            };
-            panel.Controls.Add(label);
-            y += 30;
-        }
-        #endregion
 
         #region 回放功能
         /// <summary>
@@ -361,28 +135,20 @@ namespace League.Managers
         /// <summary>
         /// 释放控件中的图片资源
         /// </summary>
-        private void DisposeImagesInControls(Control.ControlCollection controls)
-        {
-            foreach (Control control in controls)
-            {
-                if (control is PictureBox pictureBox && pictureBox.Image != null)
-                {
-                    try
-                    {
-                        pictureBox.Image.Dispose();
-                        pictureBox.Image = null;
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine("释放图片资源失败: " + ex.Message);
-                    }
-                }
-                if (control.HasChildren)
-                {
-                    DisposeImagesInControls(control.Controls);
-                }
-            }
-        }
+        ///// <summary>
+        ///// 检查是否是召唤师峡谷或大乱斗模式
+        ///// </summary>
+        //public bool IsSummonersRiftOrAram(string queueTag)
+        //{
+        //    if (string.IsNullOrEmpty(queueTag)) return false;
+
+        //    string[] allowed = new string[18]
+        //    {
+        //        "q_400", "q_420", "q_430", "q_440", "q_450", "q_480", "q_830", "q_840", "q_850", "q_900", "q_1010",
+        //        "q_1020", "q_1900", "q_2400","q_3270","q_4310","q_2450","q_4320"
+        //    };
+        //    return allowed.Contains(queueTag);
+        //}
 
         /// <summary>
         /// 检查是否支持显示详细对局信息
