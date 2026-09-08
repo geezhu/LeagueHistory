@@ -134,7 +134,9 @@ namespace League.Controls
                 new QueueFilterItem { Text = "单双排位", Value = "q_420" },
                 new QueueFilterItem { Text = "灵活排位", Value = "q_440" },
                 new QueueFilterItem { Text = "匹配模式", Value = "q_430" },
-                new QueueFilterItem { Text = "大乱斗", Value = "q_450" }
+                new QueueFilterItem { Text = "极地大乱斗", Value = "q_450" },
+                new QueueFilterItem { Text = "海克斯大乱斗", Value = "q_2400" },
+                new QueueFilterItem { Text = "斗魂竞技场", Value = "q_1700" }
             });
             comboFilter.SelectedIndex = 0;
         }
@@ -175,6 +177,7 @@ namespace League.Controls
             {
                 Debug.WriteLine("[严重错误] 未绑定数据加载事件");
                 ShowErrorMessage("系统错误：功能未初始化");
+                _loadSemaphore.Release();
                 return;
             }
             try
@@ -192,7 +195,14 @@ namespace League.Controls
                     }
                 }
                 TotalPages = (int)Math.Ceiling(200.0 / (double)_pageSize);
-                JArray matches = await this.LoadDataRequested(_puuid, startIndex, count, _selectedQueueId);
+                JArray matches;
+                if (_selectedWin.HasValue) matches = await LoadOutcomePage();
+                else
+                {
+                    matches = await this.LoadDataRequested(_puuid, startIndex, count, _selectedQueueId);
+                    if (matches != null && matches.Count < count) TotalPages = _currentPage;
+                    SafeInvoke(() => _filterScope.Text = $"第 {_currentPage} 页 · 按时间从新到旧");
+                }
                 Debug.WriteLine($"收到 {matches?.Count ?? 0} 条数据，请求参数: startIndex={startIndex}, count={count}");
                 if (matches == null || matches.Count == 0)
                 {
@@ -459,6 +469,7 @@ namespace League.Controls
         // 分离出实际的刷新逻辑
         private async Task ForceRefreshDataInternal(string puuid)
         {
+            _outcomePager = null;
             // 重置页面状态
             _currentPage = 1;
 
@@ -656,8 +667,9 @@ namespace League.Controls
 
         private void SetLoadingState(bool isLoading)
         {
-            SafeSetEnabled(btnPrev, !isLoading);
-            SafeSetEnabled(btnNext, !isLoading);
+            SafeSetEnabled(btnPrev, !isLoading && _currentPage > 1);
+            SafeSetEnabled(btnNext, !isLoading && _currentPage < TotalPages);
+            SafeSetEnabled(_outcomeFilter, !isLoading);
             SafeSetEnabled(comboPage, !isLoading);
             SafeSetEnabled(comboFilter, !isLoading);
         }

@@ -76,12 +76,35 @@
             var filter = new Button { Text = "\u7b5b\u9009", Dock = DockStyle.Right, Width = 60, FlatStyle = FlatStyle.Flat };
             filter.FlatAppearance.BorderSize = 0;
             toolbar.Controls.Add(heading); toolbar.Controls.Add(filter);
-            var options = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 34, Visible = false, WrapContents = false };
-            comboFilter.Width = 155; comboFilter.Margin = new Padding(0,4,4,0);
+            var options = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 152, Visible = false,
+                ColumnCount = 2, RowCount = 4, Padding = new Padding(8), BackColor = Color.White };
+            options.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,64));
+            options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+            for (int row = 0; row < 3; row++) options.RowStyles.Add(new RowStyle(SizeType.Absolute,32));
+            options.RowStyles.Add(new RowStyle(SizeType.Percent,100));
+            comboFilter.Dock = DockStyle.Fill; comboFilter.Margin = new Padding(0,2,0,2);
             comboPage.Width = 54; comboPage.DropDownStyle = ComboBoxStyle.DropDownList;
-            options.Controls.Add(comboFilter); options.Controls.Add(comboPage);
+            _outcomeFilter.Items.AddRange(new object[] { "全部", "只看胜利", "只看失败" });
+            _outcomeFilter.SelectedIndex = 0; _outcomeFilter.Dock = DockStyle.Fill;
+            _outcomeFilter.SelectedIndexChanged += async (_, _) =>
+            {
+                _selectedWin = _outcomeFilter.SelectedIndex switch { 1 => true, 2 => false, _ => null };
+                _currentPage = 1;
+                if (!string.IsNullOrEmpty(_puuid)) await UpdateMatchesDisplay();
+            };
+            string[] filterLabels = { "比赛模式", "比赛结果", "每页场数" };
+            Control[] filterControls = { comboFilter, _outcomeFilter, comboPage };
+            for (int row = 0; row < 3; row++)
+            {
+                options.Controls.Add(new Label { Text = filterLabels[row], Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleLeft },0,row);
+                options.Controls.Add(filterControls[row],1,row);
+            }
+            _filterScope.Text = "按需查找，满页即停；下一页继续加载";
+            _filterScope.ForeColor = Color.FromArgb(111,123,139);
+            options.Controls.Add(_filterScope,0,3); options.SetColumnSpan(_filterScope,2);
             toolbar.Controls.Add(options);
-            filter.Click += (_, _) => { options.Visible = !options.Visible; toolbar.Height = options.Visible ? 74 : 40; };
+            filter.Click += (_, _) => { options.Visible = !options.Visible; toolbar.Height = options.Visible ? 192 : 40; };
             var paging = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 40, ColumnCount = 2, RowCount = 1,
                 Padding = new Padding(0,8,0,0) };
             paging.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));
