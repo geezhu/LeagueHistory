@@ -2,6 +2,9 @@
 {
     public partial class MatchTabPageContent
     {
+        private readonly Label _pageNumber = new() { Name = "CurrentHistoryPage", Text = "1", Size = new Size(32,32),
+            TextAlign = ContentAlignment.MiddleCenter, BackColor = Color.FromArgb(46,103,190), ForeColor = Color.White,
+            Font = new Font("Microsoft YaHei UI",10f,FontStyle.Bold) };
         private void ConfigureHistoryLayout()
         {
             SuspendLayout();
@@ -105,19 +108,27 @@
             options.Controls.Add(_filterScope,0,3); options.SetColumnSpan(_filterScope,2);
             toolbar.Controls.Add(options);
             filter.Click += (_, _) => { options.Visible = !options.Visible; toolbar.Height = options.Visible ? 192 : 40; };
-            var paging = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 40, ColumnCount = 2, RowCount = 1,
+            var paging = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 48, ColumnCount = 3, RowCount = 1,
                 Padding = new Padding(0,8,0,0) };
-            paging.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));
-            paging.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));
+            paging.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,32));
+            paging.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+            paging.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,32));
             int column = 0;
             foreach(var button in new[]{btnPrev,btnNext})
             {
-                button.Dock = DockStyle.Fill; button.FlatStyle = FlatStyle.Flat;
-                button.FlatAppearance.BorderColor = Color.FromArgb(215,223,233);
-                button.BackColor = Color.White; button.ForeColor = ForeColor;
-                button.Margin = new Padding(0,0,column == 0 ? 6 : 0,0);
-                paging.Controls.Add(button,column++,0);
+                button.Dock = DockStyle.None; button.Size = new Size(32,32); button.FlatStyle = FlatStyle.Flat;
+                button.FlatAppearance.BorderSize = 0;
+                button.FlatAppearance.MouseOverBackColor = Color.FromArgb(225,237,253);
+                button.BackColor = Color.FromArgb(232,239,248); button.ForeColor = ForeColor;
+                button.Text = column == 0 ? "‹" : "›";
+                button.AccessibleName = column == 0 ? "上一页" : "下一页";
+                button.Font = new Font("Segoe UI",18f);
+                button.Margin = Padding.Empty;
+                paging.Controls.Add(button,column == 0 ? 0 : 2,0); column++;
             }
+            _pageNumber.Anchor = AnchorStyles.Top;
+            _pageNumber.Margin = Padding.Empty;
+            paging.Controls.Add(_pageNumber,1,0);
 
             Controls.Clear();
             label8.Dispose(); // The player name already identifies the profile.
