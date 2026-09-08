@@ -50,11 +50,13 @@ public partial class MatchDetailView
                         header.Visible = bounds.X < 592 || MetricVisible(bounds.X);
                         if (bounds.X >= 592) header.SetBounds(520+MetricIndex(bounds.X)*metricWidth,bounds.Y,metricWidth,bounds.Height);
                         else if (bounds.X >= 242) header.Left = bounds.X-64;
+                        else if (bounds.X == 58) header.Width = 116;
                     }
                     else header.Visible = true;
 
                 }
                 foreach (var title in section.Controls.OfType<Label>()) title.Width = width - (section.Controls.ContainsKey("TeamBans") ? 100 : 24);
+                foreach (var title in section.Controls.OfType<TeamSummaryHeader>()) title.Width = width - (section.Controls.ContainsKey("TeamBans") ? 100 : 24);
                 int rowY = 64;
                 foreach (var row in section.Controls.OfType<Panel>().OrderBy(r => r.Top))
                 {
