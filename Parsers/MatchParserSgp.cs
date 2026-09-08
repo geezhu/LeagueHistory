@@ -133,7 +133,7 @@ namespace League.Parsers
                     {
                         int[] augmentIds = ExtractAugments(participant);
                         var augments = await LoadAugmentsAsync(augmentIds);
-                        allAugments[puuid] = augments;
+                        lock (allAugments) allAugments[puuid] = augments;
                     }
                 }
                 finally
@@ -149,47 +149,25 @@ namespace League.Parsers
         // 修改海克斯符文加载方法，确保正确处理空值
         private async Task<RuneInfo[]> LoadAugmentsAsync(int[] augmentIds)
         {
-            if (augmentIds == null || augmentIds.Length == 0)
-            {
-                return Array.Empty<RuneInfo>();
-            }
-
-            // 使用并发加载，但限制并发数避免过多网络请求
-            var semaphore = new SemaphoreSlim(3); // 限制同时下载3个图标
+            if (augmentIds == null || augmentIds.Length == 0) return Array.Empty<RuneInfo>();
+            using var semaphore = new SemaphoreSlim(3);
             var tasks = augmentIds.Where(id => id > 0).Select(async id =>
             {
+                var rune = new RuneInfo { id = id, name = $"海克斯 {id}", longDesc = "图片加载失败，打开详情时将重试" };
                 await semaphore.WaitAsync();
                 try
                 {
                     var (img, name, desc) = await FormMain.Globals.resLoading.GetAugmentInfoAsync(id);
-                    if (img != null)
-                    {
-                        return new RuneInfo
-                        {
-                            id = id,
-                            Icon = img,
-                            name = name,
-                            longDesc = desc
-                        };
-                    }
-                    return null;
+                    rune.Icon = img;
+                    rune.name = name;
+                    rune.longDesc = img == null ? desc + "\n图片未加载，打开详情时将重试" : desc;
                 }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"加载海克斯符文 {id} 失败: {ex.Message}");
-                    return null;
-                }
-                finally
-                {
-                    semaphore.Release();
-                }
+                catch (Exception ex) { Debug.WriteLine($"加载海克斯符文 {id} 失败: {ex.Message}"); }
+                finally { semaphore.Release(); }
+                return rune; // Keep its ID and position even when the image is missing.
             });
-
-            var results = await Task.WhenAll(tasks);
-            return results.Where(r => r != null).ToArray();
+            return await Task.WhenAll(tasks);
         }
-        
-
         // 修改 ExtractAugments 方法，确保正确处理空值
         private int[] ExtractAugments(JObject participant)
         {
