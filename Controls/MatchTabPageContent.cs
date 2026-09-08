@@ -364,8 +364,7 @@ namespace League.Controls
             if (this.InvokeRequired)
             {
                 // 使用异步方式，避免死锁
-                await Task.Run(async () =>
-                    await InitiaRank(fullName, profileIconId, summonerLevel, privacy, rankedStats, isOwnProfile));
+                await this.Invoke((Func<Task>)(() => InitiaRank(fullName, profileIconId, summonerLevel, privacy, rankedStats, isOwnProfile)));
                 return;
             }
 
@@ -378,20 +377,7 @@ namespace League.Controls
                 lblPrivacy.Text = $"隐私：【{privacy}】";
 
                 // 只在头像ID不同时才更新图片
-                if (int.TryParse(profileIconId, out int iconId))
-                {
-                    // 获取当前头像ID（如果有的话）
-                    int currentIconId = GetCurrentProfileIconId();
-
-                    // 只有当头像ID不同时才更新
-                    if (currentIconId != iconId)
-                    {
-                        await UpdateProfileIcon(iconId);
-                    }
-                }
-
-                // 检查数据是否存在
-                if (rankedStats == null) return;
+                rankedStats ??= new Dictionary<string, RankedStats>();
 
                 // 访问单双排数据（安全访问）
                 if (rankedStats.TryGetValue("单双排", out var soloStats))
@@ -422,6 +408,20 @@ namespace League.Controls
                     lblSoloGames.Text = lblSoloLosses.Text = lblSoloWinRate.Text = "—";
                     lblFlexGames.Text = lblFlexLosses.Text = lblFlexWinRate.Text = "—";
                 }
+                if (int.TryParse(profileIconId, out int iconId))
+                {
+                    // 获取当前头像ID（如果有的话）
+                    int currentIconId = GetCurrentProfileIconId();
+
+                    // 只有当头像ID不同时才更新
+                    if (currentIconId != iconId)
+                    {
+                        await UpdateProfileIcon(iconId);
+                    }
+                }
+
+                // 检查数据是否存在
+
             }
             catch (Exception ex)
             {
