@@ -412,7 +412,7 @@ namespace League.Controls
 
             await Task.Delay(200); // 可选延迟，确保控件加载完
 
-            SafeInvoke(() => _masteryView.LoadPlayer(puuid));
+            SafeInvoke(() => { _masteryView.LoadPlayer(puuid); _profileBackground.LoadPlayer(puuid); });
 
             await LoadDataAsync();
         }

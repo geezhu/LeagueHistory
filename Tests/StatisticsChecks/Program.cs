@@ -187,6 +187,26 @@ internal static class Program
         extendedMastery.Add(JObject.Parse("{\"championId\":5,\"championPoints\":0,\"championLevel\":0}"));
         Check(ProfileMasteryView.SelectAll(extendedMastery).Length == 4 && ProfileMasteryView.SelectTop(extendedMastery).Length == 3, "Gallery includes zero-point records beyond homepage preview");
         var galleryType = typeof(ProfileMasteryView).Assembly.GetType("League.Controls.MasteryGalleryView")!;
+        var backgroundType = typeof(ProfileMasteryView).Assembly.GetType("League.Controls.ProfileBackgroundPanel")!;
+        var findSplash = backgroundType.GetMethod("FindSplash")!;
+        var selectSkin = backgroundType.GetMethod("SelectSkin")!;
+        Check((int)selectSkin.Invoke(null, new object?[] { new JObject(), masteryData })! == 2000, "Missing profile background uses highest mastery champion base skin");
+        Check((int)selectSkin.Invoke(null, new object?[] { JObject.Parse("{\"backgroundSkinId\":103015}"), masteryData })! == 103015, "Explicit client background takes priority over mastery");
+        Check((int)selectSkin.Invoke(null, new object?[] { new JObject(), new JArray() })! == 0, "No profile or mastery keeps default background");
+        var skinFixture = JObject.Parse("{\"skins\":[{\"id\":103000,\"splashPath\":\"/lol-game-data/assets/center.jpg\",\"uncenteredSplashPath\":\"/lol-game-data/assets/full.jpg\"}]}");
+        Check((string?)findSplash.Invoke(null, new object[] { skinFixture, 103000 }) == "/lol-game-data/assets/full.jpg", "Profile background resolves exact skin artwork");
+        Check(findSplash.Invoke(null, new object[] { skinFixture, 103001 }) == null, "Missing background skin does not substitute another skin");
+        using (var background = (Control)Activator.CreateInstance(backgroundType)!)
+        {
+            background.Size = new Size(800,200);
+            var name = new LinkLabel { Text = "Player", LinkColor = Color.Blue, BackColor = Color.LightBlue };
+            background.Controls.Add(name);
+            var setArtwork = backgroundType.GetMethod("SetArtwork", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            setArtwork.Invoke(background, new object[] { new Bitmap(100,100) });
+            Check(name.LinkColor == Color.White && name.BackColor == Color.Transparent, "Artwork uses readable transparent identity controls");
+            setArtwork.Invoke(background, new object?[] { null });
+            Check(name.LinkColor == Color.Blue && name.BackColor == Color.LightBlue, "Missing background restores original profile colors");
+        }
         using var gallery = (Control)Activator.CreateInstance(galleryType, new object[] { ProfileMasteryView.SelectAll(extendedMastery), "— / —" })!;
         gallery.Dock = DockStyle.Fill;
         form.Controls.Add(gallery); gallery.BringToFront(); Application.DoEvents();
