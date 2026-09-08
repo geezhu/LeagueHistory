@@ -45,9 +45,10 @@ namespace League.Controls
             _matchInfo = match;
             SetStyle(ControlStyles.UserPaint | ControlStyles.ResizeRedraw | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, value: true);
             BorderStyle = BorderStyle.None;
-            BackColor = Color.FloralWhite;
+            BackColor = Color.White;
             DoubleBuffered = true;
-            Size = new Size(950, 90);
+            Size = new Size(1000, (int)(112 * DeviceDpi / 96f));
+            Margin = new Padding(0, 0, 0, 10);
             _tooltip = new ToolTip
             {
                 InitialDelay = 100,
@@ -195,285 +196,125 @@ namespace League.Controls
         {
         }
 
+        private readonly List<(Rectangle Bounds, string Text)> _imageHints = new();
+        private readonly List<Tuple<Rectangle, PlayerInfo>> _playerRegions = new();
+        private static readonly Color Ink = Color.FromArgb(36, 48, 65);
+        private static readonly Color Muted = Color.FromArgb(111, 123, 139);
+        private static readonly Color Accent = Color.FromArgb(46, 103, 190);
+
+        private Rectangle ScreenRect(int x, int y, int width, int height)
+        {
+            float scale = DeviceDpi / 96f;
+            return Rectangle.Round(new RectangleF(x * scale, y * scale, width * scale, height * scale));
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            if (MatchInfo == null)
+            _imageHints.Clear();
+            _playerRegions.Clear();
+            _detailsRect = _replayRect = Rectangle.Empty;
+            if (MatchInfo == null) return;
+
+            var g = e.Graphics;
+            var state = g.Save();
+            try
             {
-                return;
-            }
-            Graphics g = e.Graphics;
-            using (SolidBrush backgroundBrush = new SolidBrush(BackColor))
-            {
-                g.FillRectangle(backgroundBrush, ClientRectangle);
-            }
-            Font indexFont = new Font("微软雅黑", 8f);
-            string indexText = MatchInfo.Index.ToString();
-            SizeF textSize = g.MeasureString(indexText, indexFont);
-            int borderPadding = 2;
-            Rectangle borderRect = new Rectangle(0, Height - (int)textSize.Height - borderPadding - 2, (int)textSize.Width + borderPadding * 2, (int)textSize.Height + borderPadding * 2);
-            using (SolidBrush bgBrush = new SolidBrush(Color.White))
-            {
-                g.FillRectangle(bgBrush, borderRect);
-            }
-            using (Pen borderPen = new Pen(Color.Purple, 1f))
-            {
-                g.DrawRectangle(borderPen, borderRect);
-            }
-            using (SolidBrush indexBrush = new SolidBrush(Color.Blue))
-            {
-                g.DrawString(indexText, indexFont, indexBrush, borderRect.X + borderPadding, borderRect.Y + borderPadding);
-            }
-            Font primaryFont = new Font("微软雅黑", 9f);
-            Font boldFont = new Font("微软雅黑", 11f, FontStyle.Bold);
-            int headerY = 14;
-            int iconX = 70;
-            using (SolidBrush resultBrush = new SolidBrush(MatchInfo.ResultColor))
-            {
-                g.DrawString(MatchInfo.ResultText, boldFont, resultBrush, new RectangleF(10f, headerY, 90f, boldFont.Height));
-            }
-            int durationY = headerY + boldFont.Height + 10;
-            g.DrawString(MatchInfo.DurationText, primaryFont, Brushes.DimGray, 10f, durationY);
-            g.DrawString(MatchInfo.GameTime, primaryFont, Brushes.DimGray, 140f, durationY);
-            if (MatchInfo.HeroIcon != null)
-            {
-                g.DrawImage(MatchInfo.HeroIcon, iconX, 10, 64, 64);
-            }
-            int modeX = iconX + 64 + 10;
-            g.DrawString(MatchInfo.Mode, primaryFont, Brushes.DarkSlateBlue, new RectangleF(modeX, headerY + 5, 120f, 20f));
-            int spellY = headerY - 6;
-            if (MatchInfo.SummonerSpells != null)
-            {
-                for (int i = 0; i < Math.Min(2, MatchInfo.SummonerSpells.Length); i++)
+                float scale = DeviceDpi / 96f;
+                g.ScaleTransform(scale, scale);
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                float width = Width / scale;
+                float height = Height / scale;
+                g.Clear(Color.White);
+                using var border = new Pen(Color.FromArgb(225, 231, 239));
+                g.DrawRectangle(border, 0, 0, width - 1, height - 1);
+                Color result = MatchInfo.ResultText == "胜利" ? Color.FromArgb(38, 139, 113) : Color.FromArgb(191, 81, 91);
+                using var resultBrush = new SolidBrush(result);
+                g.FillRectangle(resultBrush, 0, 0, 4, height);
+                // Layout is expressed in 96-DPI pixels; the transform applies display scaling once.
+                using var normal = new Font("Microsoft YaHei UI", 12f, FontStyle.Regular, GraphicsUnit.Pixel);
+                using var strong = new Font("Microsoft YaHei UI", 13.33f, FontStyle.Bold, GraphicsUnit.Pixel);
+                using var headline = new Font("Microsoft YaHei UI", 21.33f, FontStyle.Bold, GraphicsUnit.Pixel);
+                using var small = new Font("Microsoft YaHei UI", 10.67f, FontStyle.Regular, GraphicsUnit.Pixel);
+                using var format = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
+
+                void Text(string? text, Font font, Color color, int x, int y, int w, int h = 24)
                 {
-                    if (MatchInfo.SummonerSpells[i] != null)
-                    {
-                        g.DrawImage(MatchInfo.SummonerSpells[i], 395 + i * 34, spellY, 30, 30);
-                    }
+                    using var brush = new SolidBrush(color);
+                    g.DrawString(text ?? "", font, brush, new RectangleF(x, y, w, h), format);
                 }
-            }
-            string kdaText = $"{MatchInfo.Kills} / {MatchInfo.Deaths} / {MatchInfo.Assists}";
-            g.DrawString(kdaText, primaryFont, Brushes.DarkSlateGray, 280f, headerY - 2);
-            int runeY = headerY + 30 - 34;
-            
-
-            //新增海克斯符文判断
-            // 判断是否为海克斯大乱斗模式
-            bool isHextechArena = MatchInfo.Mode?.Contains("海克斯") == true ||
-                                 MatchInfo.QueueId == "q_2400";
-
-            if (isHextechArena && MatchInfo.Augments != null && MatchInfo.Augments.Length > 0)
-            {
-                // 显示海克斯符文
-                for (int j = 0; j < 6; j++)
+                void Icon(Image? image, int x, int y, int size, string? hint, bool dark = false)
                 {
-                    int x = 470 + j * 34;
-                    Rectangle rect = new Rectangle(x, runeY, 30, 30);
+                    using var fill = new SolidBrush(dark ? Color.FromArgb(40, 49, 63) : Color.FromArgb(239, 243, 248));
+                    g.FillRectangle(fill, x, y, size, size);
+                    if (image != null) g.DrawImage(image, x, y, size, size);
+                    if (!string.IsNullOrWhiteSpace(hint)) _imageHints.Add((ScreenRect(x, y, size, size), hint));
+                }
 
-                    // 绘制深色背景
-                    using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(40, 40, 40))) // 深灰色背景
-                    {
-                        g.FillRectangle(bgBrush, rect);
-                    }
+                Text(MatchInfo.ResultText, strong, result, 16, 18, 64);
+                Text(MatchInfo.DurationText, small, Muted, 16, 47, 65);
+                Text($"#{MatchInfo.Index:00}", small, Muted, 16, 78, 58);
+                Icon(MatchInfo.HeroIcon, 88, 18, 52, MatchInfo.ChampionName);
+                Text(MatchInfo.ChampionName, strong, Ink, 150, 16, 120);
+                Text(MatchInfo.Mode, normal, Muted, 150, 43, 120);
+                Text(MatchInfo.GameTime, small, Muted, 88, 80, 184);
 
-                    using (Pen pen = new Pen(Color.Purple, 1f)) // 紫色边框表示海克斯符文
-                    {
-                        g.DrawRectangle(pen, rect);
-                    }
-                    using (SolidBrush bgBrush2 = new SolidBrush(Color.Black))
-                    {
-                        g.FillRectangle(bgBrush2, rect);
-                    }
+                Text($"{MatchInfo.Kills} / {MatchInfo.Deaths} / {MatchInfo.Assists}", headline, Ink, 282, 13, 194, 34);
+                for (int i = 0; i < 6; i++)
+                {
+                    var item = MatchInfo.Items?.ElementAtOrDefault(i);
+                    Icon(item?.Icon, 282 + i * 31, 62, 28, item == null ? null : item.Name + "\n" + StripHtmlTags(item.Description));
+                }
+                for (int i = 0; i < 2; i++)
+                    Icon(MatchInfo.SummonerSpells?.ElementAtOrDefault(i), 488 + i * 28, 18, 24,
+                        MatchInfo.SpellNames?.ElementAtOrDefault(i) + "\n" + StripHtmlTags(MatchInfo.SpellDescriptions?.ElementAtOrDefault(i)));
+                bool augments = MatchInfo.Mode?.Contains("海克斯") == true || MatchInfo.QueueId == "q_2400";
+                for (int i = 0; i < 6; i++)
+                {
+                    var rune = augments ? MatchInfo.Augments?.ElementAtOrDefault(i)
+                        : i < 4 ? MatchInfo.PrimaryRunes?.ElementAtOrDefault(i) : MatchInfo.SecondaryRunes?.ElementAtOrDefault(i - 4);
+                    Icon(rune?.Icon, 552 + i * 23, 18, 21, rune == null ? null : rune.name + "\n" + StripHtmlTags(rune.longDesc ?? rune.Description), dark: true);
+                }
+                Text(augments ? "海克斯强化" : "技能与符文", small, Muted, 488, 45, 190);
+                _detailsRect = ScreenRect(488, 72, 88, 26);
+                _replayRect = ScreenRect(582, 72, 90, 26);
+                Text("查看详情 →", normal, Accent, 488, 73, 90);
+                Text(MatchInfo.IsReplayDownloaded ? "播放回放" : "下载回放", normal, Accent, 582, 73, 90);
 
-                    Image runeImage = null;
-                    if (j < MatchInfo.Augments.Length)
+                bool showTeams = width >= 980;
+                int statsX = 704;
+                int statsWidth = showTeams ? (int)width - 158 - statsX : (int)width - 16 - statsX;
+                Text("伤害  " + MatchInfo.DamageText, small, Ink, statsX, 18, statsWidth);
+                Text("经济  " + MatchInfo.GoldText, small, Muted, statsX, 44, statsWidth);
+                Text("参团  " + MatchInfo.KPPercentage, small, Muted, statsX, 70, statsWidth);
+                if (showTeams)
+                {
+                    int teamX = (int)width - 148;
+                    for (int row = 0; row < 2; row++)
                     {
-                        RuneInfo augment = MatchInfo.Augments[j];
-                        if (augment != null && augment.Icon != null)
+                        var team = row == 0 ? MatchInfo.RedTeam : MatchInfo.BlueTeam;
+                        if (team == null) continue;
+                        for (int i = 0; i < Math.Min(5, team.Count); i++)
                         {
-                            runeImage = augment.Icon;
+                            var player = team[i];
+                            if (player == null) continue;
+                            int x = teamX + i * 27, y = 18 + row * 34;
+                            Icon(player.Avatar, x, y, 24, player.FullName);
+                            _playerRegions.Add(Tuple.Create(ScreenRect(x, y, 24, 24), player));
+                            if (player.IsSelf)
+                            {
+                                using var selfPen = new Pen(Accent, 2);
+                                g.DrawRectangle(selfPen, x, y, 24, 24);
+                            }
                         }
                     }
-
-                    if (runeImage != null)
-                    {
-                        g.DrawImage(runeImage, rect);
-                    }
-                }
-
-            }
-            else
-            {
-                // 显示普通符文（原有逻辑）
-                for (int j = 0; j < 6; j++)
-                {
-                    int x = 470 + j * 34;
-                    Rectangle rect = new Rectangle(x, runeY, 30, 30);
-                    using (Pen pen = new Pen(Color.Gray))
-                    {
-                        g.DrawRectangle(pen, rect);
-                    }
-                    using (SolidBrush bgBrush2 = new SolidBrush(Color.Black))
-                    {
-                        g.FillRectangle(bgBrush2, rect);
-                    }
-
-                    Image runeImage = null;
-                    if (j < 4 && MatchInfo.PrimaryRunes != null && j < MatchInfo.PrimaryRunes.Length)
-                    {
-                        RuneInfo primaryRune = MatchInfo.PrimaryRunes[j];
-                        if (primaryRune != null && primaryRune.Icon != null)
-                        {
-                            runeImage = primaryRune.Icon;
-                        }
-                    }
-                    else if (j >= 4 && MatchInfo.SecondaryRunes != null && j - 4 < MatchInfo.SecondaryRunes.Length)
-                    {
-                        RuneInfo secondaryRune = MatchInfo.SecondaryRunes[j - 4];
-                        if (secondaryRune != null && secondaryRune.Icon != null)
-                        {
-                            runeImage = secondaryRune.Icon;
-                        }
-                    }
-
-                    if (runeImage == null)
-                    {
-                        continue;
-                    }
-                    g.DrawImage(runeImage, rect);
-                    if (j == 0 && MatchInfo.PrimaryRunes != null && MatchInfo.PrimaryRunes.Length != 0)
-                    {
-                        using Pen pen2 = new Pen(Color.Goldenrod, 2f);
-                        g.DrawRectangle(pen2, rect);
-                    }
+                    Text("双方阵容", small, Muted, teamX, 82, 140);
                 }
             }
-            //结束----
-
-            Font linkFont = new Font("微软雅黑", 9f, FontStyle.Underline);
-            string detailsText = "查看详情数据";
-            //string replayText = MatchInfo.IsReplayDownloaded ? "播放回放" : "下载回放";
-            //int detailsX = 570;
-            //int replayX = detailsX - 80;
-            //int linkY = runeY + 30 + 8;
-            //using (SolidBrush linkBrush = new SolidBrush(Color.DodgerBlue))
-            //{
-            //    g.DrawString(replayText, linkFont, linkBrush, replayX, linkY);
-            //    g.DrawString(detailsText, linkFont, linkBrush, detailsX, linkY);
-            //}
-
-            string replayText;
-            Color replayColor = Color.DodgerBlue;
-
-            if (MatchInfo.IsReplayExpired)
-            {
-                replayText = "回放已过期";
-                replayColor = Color.Gray;          // 灰色，表示不可点
-            }
-            else if (MatchInfo.IsReplayDownloaded)
-            {
-                replayText = "播放回放";
-            }
-            else
-            {
-                replayText = "下载回放";
-            }
-
-            int detailsX = 570;
-            int replayX = detailsX - 80;
-            int linkY = runeY + 30 + 8;
-
-            using (SolidBrush replayBrush = new SolidBrush(replayColor))
-            using (SolidBrush detailsBrush = new SolidBrush(Color.DodgerBlue))
-            {
-                g.DrawString(replayText, linkFont, replayBrush, replayX, linkY);
-                g.DrawString(detailsText, linkFont, detailsBrush, detailsX, linkY);
-            }
-
-            SizeF detailsSize = g.MeasureString(detailsText, linkFont);
-            SizeF replaySize = g.MeasureString(replayText, linkFont);
-            _detailsRect = new Rectangle(detailsX, linkY, (int)detailsSize.Width, (int)detailsSize.Height);
-            _replayRect = new Rectangle(replayX, linkY, (int)replaySize.Width, (int)replaySize.Height);
-            int itemsY = headerY + 30;
-            if (MatchInfo.Items != null)
-            {
-                for (int k = 0; k < Math.Min(6, MatchInfo.Items.Length); k++)
-                {
-                    Item item = MatchInfo.Items[k];
-                    if (item != null && item.Icon != null)
-                    {
-                        g.DrawImage(item.Icon, 260 + k * 34, itemsY + 5, 30, 30);
-                    }
-                }
-            }
-            int statsX = Width + 190 - 10 - 450;
-            g.DrawString("伤害：" + MatchInfo.DamageText, primaryFont, Brushes.OrangeRed, statsX, headerY);
-            g.DrawString("经济：" + MatchInfo.GoldText, primaryFont, Brushes.Goldenrod, statsX, headerY + 20);
-            g.DrawString("参团：" + MatchInfo.KPPercentage, primaryFont, Brushes.DodgerBlue, statsX, headerY + 40);
-            DrawTeamMembers(g, statsX + 100, headerY - 2);
-            using Pen borderPen2 = new Pen(MatchInfo.ResultColor, 1f);
-            g.DrawRectangle(borderPen2, 0, 0, Width - 1, Height - 1);
+            finally { g.Restore(state); }
         }
 
-        private void DrawTeamMembers(Graphics g, int startX, int baseY)
-        {
-            if (MatchInfo?.RedTeam != null && MatchInfo?.BlueTeam != null)
-            {
-                for (int i = 0; i < Math.Min(5, MatchInfo.RedTeam.Count); i++)
-                {
-                    int x = startX + i * 32;
-                    DrawPlayerIcon(g, MatchInfo.RedTeam[i], x, baseY - 4, 30);
-                }
-                int blueY = baseY + 30 + 8 + 4;
-                for (int j = 0; j < Math.Min(5, MatchInfo.BlueTeam.Count); j++)
-                {
-                    int x2 = startX + j * 32;
-                    DrawPlayerIcon(g, MatchInfo.BlueTeam[j], x2, blueY, 30);
-                }
-            }
-        }
-
-        private void DrawPlayerIcon(Graphics g, PlayerInfo player, int x, int y, int size)
-        {
-            if (player?.Avatar == null)
-            {
-                return;
-            }
-            g.DrawImage(player.Avatar, x, y, size, size);
-            if (!player.IsSelf)
-            {
-                return;
-            }
-            using Pen pen = new Pen(Color.Lime, 3f);
-            g.DrawRectangle(pen, x, y, size, size);
-        }
-
-        private IEnumerable<Tuple<Rectangle, PlayerInfo>> GetPlayerIconRegions()
-        {
-            if (MatchInfo == null)
-            {
-                yield break;
-            }
-            int statsX = Width - 10 - 250;
-            int teamStartX = statsX + 100;
-            int baseY = 10;
-            if (MatchInfo.RedTeam != null)
-            {
-                for (int i = 0; i < MatchInfo.RedTeam.Count; i++)
-                {
-                    yield return Tuple.Create(new Rectangle(teamStartX + i * 32, baseY - 4, 30, 30), MatchInfo.RedTeam[i]);
-                }
-            }
-            int blueY = baseY + 30 + 8 - 6;
-            if (MatchInfo.BlueTeam != null)
-            {
-                for (int j = 0; j < MatchInfo.BlueTeam.Count; j++)
-                {
-                    yield return Tuple.Create(new Rectangle(teamStartX + j * 32, blueY, 30, 30), MatchInfo.BlueTeam[j]);
-                }
-            }
-        }
-
+        private IEnumerable<Tuple<Rectangle, PlayerInfo>> GetPlayerIconRegions() => _playerRegions;
         protected override void OnMouseClick(MouseEventArgs e)
         {
             base.OnMouseClick(e);
@@ -505,7 +346,7 @@ namespace League.Controls
                     {
                         if (tuple.Item2.IsSelf)
                         {
-                            new ToolTip().Show("这是当前玩家", this, e.Location, 1500);
+                            _tooltip.Show("这是当前玩家", this, e.Location, 1500);
                         }
                         else
                         {
@@ -524,117 +365,25 @@ namespace League.Controls
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
-            if (MatchInfo == null)
+            string? text = _replayRect.Contains(e.Location) ? "查看本场比赛的回放"
+                : _detailsRect.Contains(e.Location) ? "查看本场比赛的详细数据"
+                : _imageHints.FirstOrDefault(h => h.Bounds.Contains(e.Location)).Text;
+            Cursor = _replayRect.Contains(e.Location) || _detailsRect.Contains(e.Location)
+                || _playerRegions.Any(p => p.Item1.Contains(e.Location)) ? Cursors.Hand : Cursors.Default;
+            if (text != _lastTooltip)
             {
-                return;
-            }
-            string tooltipText = null;
-            //if (_replayRect.Contains(e.Location))
-            //{
-            //    tooltipText = "查看本场比赛的回放";
-            //}
-            if (_replayRect.Contains(e.Location))
-            {
-                if (MatchInfo?.IsReplayExpired == true)
-                    tooltipText = "该场回放已因版本更新失效，无法下载观看";
-                else
-                    tooltipText = MatchInfo.IsReplayDownloaded ? "播放本场比赛回放" : "下载并观看本场比赛回放";
-            }
-            else if (_detailsRect.Contains(e.Location))
-            {
-                tooltipText = "查看本场比赛的详细数据";
-            }
-            if (new Rectangle(70, 10, 64, 64).Contains(e.Location) && tooltipText == null)
-            {
-                tooltipText = MatchInfo.ChampionName;
-            }
-            int spellY = 8;
-            for (int i = 0; i < 2; i++)
-            {
-                if (new Rectangle(395 + i * 34, spellY, 30, 30).Contains(e.Location) && tooltipText == null)
-                {
-                    if (MatchInfo.SpellNames != null && MatchInfo.SpellDescriptions != null && i < MatchInfo.SpellNames.Length && i < MatchInfo.SpellDescriptions.Length)
-                    {
-                        tooltipText = MatchInfo.SpellNames[i] + "\n" + StripHtmlTags(MatchInfo.SpellDescriptions[i]);
-                    }
-                    break;
-                }
-            }
-            int itemY = 44;
-            if (MatchInfo.Items != null)
-            {
-                for (int j = 0; j < Math.Min(6, MatchInfo.Items.Length); j++)
-                {
-                    if (new Rectangle(260 + j * 34, itemY, 30, 30).Contains(e.Location) && tooltipText == null)
-                    {
-                        Item item = MatchInfo.Items[j];
-                        if (item != null)
-                        {
-                            tooltipText = item.Name + "\n" + StripHtmlTags(item.Description);
-                        }
-                        break;
-                    }
-                }
-            }
-            int runeY = 10;
-
-            //根据不同的符文判断显示提示描述
-            bool isHextechArena = MatchInfo.Mode?.Contains("海克斯") == true ||
-                         MatchInfo.QueueId == "q_2400";
-            for (int k = 0; k < 6; k++)
-            {
-                int x = 470 + k * 34;
-                if (new Rectangle(x, runeY, 30, 30).Contains(e.Location) && tooltipText == null)
-                {
-                    RuneInfo rune = null;
-
-                    if (isHextechArena && MatchInfo.Augments != null && k < MatchInfo.Augments.Length)
-                    {
-                        // 海克斯符文提示
-                        rune = MatchInfo.Augments[k];
-                    }
-                    else
-                    {
-                        // 普通符文提示
-                        if (k < 4 && MatchInfo.PrimaryRunes != null && k < MatchInfo.PrimaryRunes.Length)
-                        {
-                            rune = MatchInfo.PrimaryRunes[k];
-                        }
-                        else if (k >= 4 && MatchInfo.SecondaryRunes != null && k - 4 < MatchInfo.SecondaryRunes.Length)
-                        {
-                            rune = MatchInfo.SecondaryRunes[k - 4];
-                        }
-                    }
-
-                    if (rune != null)
-                    {
-                        tooltipText = rune.name + "\n" + StripHtmlTags(rune.longDesc ?? rune.Description ?? "");
-                    }
-                    break;
-                }
-            }
-
-
-            foreach (Tuple<Rectangle, PlayerInfo> tuple in GetPlayerIconRegions())
-            {
-                if (tuple.Item1.Contains(e.Location) && tuple.Item2 != null && tooltipText == null)
-                {
-                    tooltipText = tuple.Item2.FullName;
-                    break;
-                }
-            }
-            if (tooltipText != null && tooltipText != _lastTooltip)
-            {
-                _tooltip.SetToolTip(this, tooltipText);
-                _lastTooltip = tooltipText;
-            }
-            else if (tooltipText == null)
-            {
-                _tooltip.SetToolTip(this, null);
-                _lastTooltip = null;
+                _tooltip.SetToolTip(this, text);
+                _lastTooltip = text;
             }
         }
 
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _tooltip.SetToolTip(this, null);
+            _lastTooltip = "";
+            Cursor = Cursors.Default;
+        }
         public static string StripHtmlTags(string input)
         {
             if (string.IsNullOrEmpty(input))
