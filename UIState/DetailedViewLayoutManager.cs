@@ -6,7 +6,7 @@ using Newtonsoft.Json.Linq;
 
 namespace League.UIState
 {
-    public class DetailedViewLayoutManager : IDisposable
+    public partial class DetailedViewLayoutManager : IDisposable
     {
         private static readonly Dictionary<int, (Image, string, string)> _championCache = new Dictionary<int, (Image, string, string)>();
 
@@ -43,14 +43,14 @@ namespace League.UIState
             Panel panel = new Panel
             {
                 Location = new Point(x, y),
-                Size = new Size(1200, 80),
-                BorderStyle = BorderStyle.FixedSingle,
-                BackColor = backColor
+                Size = new Size(1120, 44),
+                BorderStyle = BorderStyle.None,
+                BackColor = isSelf ? Color.FromArgb(232, 241, 253) : Color.White
             };
             await PreloadAllAsync(participant, matchInfo); // 修改：传入matchInfo
             (int damage, int damageRank, int gold, int goldRank, double kp, int kpRank, int damageTaken, int damageTakenRank) ranks = CalculateRanks(participant, matchInfo);
             panel.SuspendLayout();
-            CreateAllUI(panel, participant, playerName, isSelf, ranks, matchInfo); // 修改：传入matchInfo
+            CreateScoreboardRow(panel, participant, playerName, isSelf, ranks, matchInfo);
             panel.ResumeLayout(performLayout: false);
             return panel;
         }
@@ -60,16 +60,18 @@ namespace League.UIState
             string summonerId = participant["summonerId"]?.ToString();
             string riotName = participant["riotIdGameName"]?.ToString();
             string ritoTag = participant["riotIdTagline"]?.ToString();
+            bool isSelf = (!string.IsNullOrEmpty(matchInfo.CurrPuuid) && participant["puuid"]?.ToString() == matchInfo.CurrPuuid)
+                || (!string.IsNullOrEmpty(matchInfo.CurrSummonerId) && summonerId == matchInfo.CurrSummonerId);
             if (!string.IsNullOrEmpty(riotName) && !string.IsNullOrEmpty(ritoTag))
             {
-                return new ValueTuple<string, bool>(item2: riotName == matchInfo.SelfPlayer?.FullName, item1: riotName + "#" + ritoTag);
+                return (riotName + "#" + ritoTag, isSelf);
             }
             if (!string.IsNullOrEmpty(summonerId))
             {
                 JObject summonerData = await FormMain.Globals.lcuClient.GetGameNameBySummonerId(summonerId);
                 if (summonerData != null)
                 {
-                    return new ValueTuple<string, bool>(item2: summonerData["gameName"].ToString() == matchInfo.SelfPlayer?.FullName, item1: $"{summonerData["gameName"]}#{summonerData["tagLine"]}");
+                    return ($"{summonerData["gameName"]}#{summonerData["tagLine"]}", isSelf);
                 }
             }
             return (name: "未知玩家", isSelf: false);
