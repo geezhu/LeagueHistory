@@ -25,7 +25,7 @@ namespace League.Managers
         /// <summary>
         /// 显示比赛详情
         /// </summary>
-        public void ShowMatchDetails(MatchInfo matchInfo)
+        public async void ShowMatchDetails(MatchInfo matchInfo)
         {
             try
             {
@@ -34,9 +34,11 @@ namespace League.Managers
                 if (!ValidateMatchData(matchInfo))
                     return;
 
-                var detailForm = CreateDetailForm(matchInfo);
+                using var detailForm = CreateDetailForm(matchInfo);
                 InitializeDetailForm(detailForm, matchInfo);
-                detailForm.ShowDialog();
+                detailForm.ShowDialog(_form);
+                if (detailForm.Tag is string summonerId && !_form.IsDisposed)
+                    await _form.OpenPlayerProfileAsync(summonerId);
             }
             catch (Exception ex)
             {
@@ -95,7 +97,16 @@ namespace League.Managers
                 UseFading = true
             };
 
-            var layoutManager = new DetailedViewLayoutManager(_toolTip);
+            var layoutManager = new DetailedViewLayoutManager(_toolTip)
+            {
+                ResolvePlayerProfile = async id => await Globals.lcuClient.GetGameNameBySummonerId(id)
+            };
+            layoutManager.PlayerProfileRequested += id =>
+            {
+                if (detailForm.IsDisposed) return;
+                detailForm.Tag = id;
+                detailForm.Close();
+            };
             detailForm.BackColor = Color.FromArgb(244, 247, 251);
             var summary = new Label
             {
