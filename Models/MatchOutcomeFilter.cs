@@ -6,6 +6,7 @@ public static class MatchOutcomeFilter
 {
     public static bool? GetWin(JObject entry, string puuid)
     {
+        if (MatchResult.IsRemake(entry)) return null;
         var game = entry["json"] as JObject ?? entry;
         game = game["info"] as JObject ?? game;
         if (game["participants"] is not JArray players) return null;

@@ -221,7 +221,7 @@ namespace League.Controls
 
             if (Compact)
             {
-                var color = MatchInfo.ResultText == "胜利" ? Color.FromArgb(38,139,113) : Color.FromArgb(191,81,91);
+                var color = MatchInfo.ResultColor;
                 e.Graphics.Clear(SelectedMatch ? Color.FromArgb(232,241,253) : Color.White);
                 using var stripe = new SolidBrush(color);
                 if (SelectedMatch) e.Graphics.FillRectangle(stripe, 0, 0, 3, Height);
@@ -255,7 +255,7 @@ namespace League.Controls
                 g.Clear(Color.White);
                 using var border = new Pen(Color.FromArgb(225, 231, 239));
                 g.DrawRectangle(border, 0, 0, width - 1, height - 1);
-                Color result = MatchInfo.ResultText == "胜利" ? Color.FromArgb(38, 139, 113) : Color.FromArgb(191, 81, 91);
+                Color result = MatchInfo.ResultColor;
                 using var resultBrush = new SolidBrush(result);
                 g.FillRectangle(resultBrush, 0, 0, 4, height);
                 // Layout is expressed in 96-DPI pixels; the transform applies display scaling once.

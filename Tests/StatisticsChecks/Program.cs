@@ -65,6 +65,12 @@ internal static class Program
         {"gameId":1,"queueId":420,"participants":[{"participantId":1,"puuid":"self","championId":1,"stats":{"win":true,"kills":10,"deaths":0,"assists":5,"totalDamageDealtToChampions":20000,"goldEarned":12000,"pentaKills":0}}]}
         """);
         var remake = (JObject)game.DeepClone(); remake["gameId"] = 2; remake["participants"]![0]!["stats"]!["gameEndedInEarlySurrender"] = true;
+        Check(MatchOutcomeFilter.GetWin(remake,"self") == null,"Remakes excluded from win/loss filters");
+        using (var remakeInfo = new MatchInfo { ResultText = "胜利", RawGameData = new JObject { ["json"] = new JObject { ["info"] = remake.DeepClone() } } })
+            Check(remakeInfo.ResultText == "重开" && remakeInfo.ResultColor == MatchResult.RemakeColor,"Remake overrides win text and color");
+        Check(MatchResult.IsRemake(new JObject { ["gameEndedInEarlySurrender"] = true }),"Root remake flag");
+        Check(MatchResult.IsRemake(null,new[] { new JObject { ["gameEndedInEarlySurrender"] = true } }),"Flattened participant remake flag");
+        Check(!MatchResult.IsRemake(new JObject { ["gameDuration"] = 90, ["gameEndedInSurrender"] = true }),"Short matches and ordinary surrenders are not assumed remakes");
         Check(MatchOutcomeFilter.GetWin(game,"self") == true && MatchOutcomeFilter.GetWin(game,"other") == null,
             "Outcome filtering must select the viewed player");
         var lost = (JObject)game.DeepClone(); lost["participants"]![0]!["stats"]!["win"] = false;
