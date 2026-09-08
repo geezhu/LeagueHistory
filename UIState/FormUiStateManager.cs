@@ -1,4 +1,4 @@
-﻿using League.Controls;
+using League.Controls;
 using League.Infrastructure;
 using League.UIHelpers;
 using System.Diagnostics;
@@ -294,75 +294,12 @@ namespace League.UIState
 
             if (showLolLauncher)
             {
-                LOLHelper helper = new LOLHelper();
-                string officialPath = helper.GetOfficialLauncherPath();
-                string wegamePath = helper.GetWeGameLauncherPath();
-
-                LinkLabel linkOfficial = new LinkLabel
+                var launchers = new League.Controls.LolLauncherPanel
                 {
-                    AutoSize = true,
-                    Font = new Font("微软雅黑", 9.5f, FontStyle.Regular),
-                    Text = string.IsNullOrEmpty(officialPath) ? "未找到官方客户端" : officialPath,
-                    LinkColor = Color.DodgerBlue
+                    Left = 0, Top = progress.Bottom + 8, Width = containerPanel.Width
                 };
-
-                LinkLabel linkWeGame = new LinkLabel
-                {
-                    AutoSize = true,
-                    Font = new Font("微软雅黑", 9.5f, FontStyle.Regular),
-                    Text = string.IsNullOrEmpty(wegamePath) ? "未找到 WeGame 版" : wegamePath,
-                    LinkColor = Color.DodgerBlue
-                };
-
-                Button btnOfficial = new Button
-                {
-                    Text = "启动官方客户端",
-                    Width = 170,
-                    Height = 38,
-                    Enabled = !string.IsNullOrEmpty(officialPath)
-                };
-
-                Button btnWeGame = new Button
-                {
-                    Text = "启动 WeGame 版",
-                    Width = 170,
-                    Height = 38,
-                    Enabled = !string.IsNullOrEmpty(wegamePath)
-                };
-
-                linkOfficial.LinkClicked += (s, e) => OpenFolder(officialPath);
-                linkWeGame.LinkClicked += (s, e) => OpenFolder(wegamePath);
-
-                linkOfficial.Left = (containerPanel.Width - linkOfficial.PreferredWidth) / 2;
-                linkOfficial.Top = progress.Bottom + 15;
-
-                linkWeGame.Left = (containerPanel.Width - linkWeGame.PreferredWidth) / 2;
-                linkWeGame.Top = linkOfficial.Bottom + 8;
-
-                btnOfficial.Left = (containerPanel.Width - btnOfficial.Width * 2 - 30) / 2;
-                btnOfficial.Top = linkWeGame.Bottom + 15;
-
-                btnWeGame.Left = btnOfficial.Left + btnOfficial.Width + 30;
-                btnWeGame.Top = btnOfficial.Top;
-
-                containerPanel.Controls.Add(linkOfficial);
-                containerPanel.Controls.Add(linkWeGame);
-                containerPanel.Controls.Add(btnOfficial);
-                containerPanel.Controls.Add(btnWeGame);
-
-                btnOfficial.Click += (s, e) =>
-                {
-                    helper.StartOfficialClient();
-                    if (!string.IsNullOrEmpty(officialPath)) helper.SaveCustomPath(officialPath);
-                };
-
-                btnWeGame.Click += (s, e) =>
-                {
-                    helper.StartWeGameClient();
-                    if (!string.IsNullOrEmpty(wegamePath)) helper.SaveCustomPath(wegamePath);
-                };
+                containerPanel.Controls.Add(launchers);
             }
-
             return containerPanel;
         }
 

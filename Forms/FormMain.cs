@@ -60,6 +60,7 @@ namespace League
         public FormMain()
         {
             InitializeComponent();
+            ConfigureLauncherSettings();
             InitializeSearchHistory();
             InitializeManagers();
         }
