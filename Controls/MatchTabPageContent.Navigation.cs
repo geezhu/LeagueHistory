@@ -11,6 +11,7 @@ public partial class MatchTabPageContent
     private Button _backToProfile = null!;
     private Point _profileHistoryScroll;
     private ProfileMasteryView _masteryView = null!;
+    private ProfileBackgroundPanel _profileBackground = null!;
     private readonly Dictionary<string, RankedStats> _profileRanks = new();
     private Label _highestRank = null!;
 

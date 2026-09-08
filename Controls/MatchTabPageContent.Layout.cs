@@ -21,7 +21,7 @@
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
             header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            var identity = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty, BackColor = Color.FromArgb(232, 241, 253) };
+            var identity = _profileBackground = new ProfileBackgroundPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, BackColor = Color.FromArgb(232, 241, 253) };
             identity.Controls.Add(new Panel { Dock = DockStyle.Left, Width = 3, BackColor = Color.FromArgb(46,103,190) });
             identity.Controls.Add(new Label { Text = "玩家主页 / 点击姓名复制 Riot ID", AutoSize = true, Location = new Point(18,14), ForeColor = Color.FromArgb(89,115,151) });
             picChampionId.SetBounds(18, 36, 100, 100);
