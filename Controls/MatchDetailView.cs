@@ -9,6 +9,7 @@ public partial class MatchDetailView : UserControl
     private readonly Panel _scoreboard;
     private readonly MatchInfo _match;
     private bool _started;
+    private Task? _preparation;
     private TimelineView? _timeline;
     private MatchStatisticsView? _statistics;
     private MatchChartsView? _charts;
@@ -66,6 +67,13 @@ public partial class MatchDetailView : UserControl
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
+        _ = PrepareAsync();
+    }
+
+    public Task PrepareAsync() => _preparation ??= PrepareCoreAsync();
+
+    private async Task PrepareCoreAsync()
+    {
         if (_started) return;
         _started = true;
         if (_match.AllParticipants == null || _match.AllParticipants.Count == 0)
@@ -77,7 +85,7 @@ public partial class MatchDetailView : UserControl
             ResolvePlayerProfile = async id => await FormMain.Globals.lcuClient.GetGameNameBySummonerId(id)
         };
         layout.PlayerProfileRequested += id => PlayerProfileRequested?.Invoke(id);
-        CreateDetailedPlayerViews(_scoreboard, _match, layout);
+        await CreateDetailedPlayerViews(_scoreboard, _match, layout);
     }
 
     protected override void Dispose(bool disposing)

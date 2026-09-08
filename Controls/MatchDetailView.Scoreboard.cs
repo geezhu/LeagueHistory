@@ -5,7 +5,7 @@ using System.Diagnostics;
 namespace League.Controls;
 public partial class MatchDetailView
 {
-        private async void CreateDetailedPlayerViews(Panel panel, MatchInfo matchInfo, DetailedViewLayoutManager layoutManager)
+        private async Task CreateDetailedPlayerViews(Panel panel, MatchInfo matchInfo, DetailedViewLayoutManager layoutManager)
         {
             if (matchInfo.AllParticipants == null) return;
             var loading = new Label { Text = "正在加载比赛数据…", ForeColor = Color.FromArgb(111, 123, 139), AutoSize = true, Location = new Point(20, 10) };
