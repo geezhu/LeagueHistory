@@ -12,6 +12,17 @@ internal static class Program
     {
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
+        Check(MatchMap.GetName(null) == "未知地图", "Missing map must not be inferred from queue");
+        Check(MatchMap.GetName(JObject.Parse("{\"json\":{\"info\":{\"mapId\":12}}}")) == "随机地图", "ARAM ID must not imply a specific bridge");
+        Check(MatchMap.GetName(new JObject { ["mapId"] = 11 }) == "召唤师峡谷", "Rift map name");
+        foreach (var (mutator,name) in new[] { ("MapSkin_Map12_Bloom","莲华栈桥"), ("MapSkin_HA_Bilgewater","屠夫之桥"), ("MapSkin_HA_Crepe","进步之桥") })
+        {
+            var mapData = new JObject { ["mapId"] = 12, ["gameModeMutators"] = new JArray("ARAM",mutator.ToLowerInvariant()) };
+            Check(MatchMap.GetName(new JObject { ["json"] = new JObject { ["info"] = mapData } }) == name, "Map variants in nested SGP data");
+            mapData["mapId"] = 11;
+            Check(MatchMap.GetName(mapData) == "召唤师峡谷", "Bridge overrides apply only to map 12");
+        }
+        Check(MatchMap.GetName(new JObject { ["mapId"] = 12, ["gameModeMutators"] = new JArray() }) == "嚎哭深渊", "Explicit base map without variant");
         var metricSelection = new MatchMetricSelection();
         Check(metricSelection.Set(new[] { "a", "b", "c", "d", "e", "f" }, true), "Six chart metrics allowed");
         Check(!metricSelection.Set(new[] { "g", "h" }, true) && metricSelection.Count == 6 && !metricSelection.Contains("g"), "Over-limit group is atomic");
