@@ -46,8 +46,9 @@ internal sealed partial class AramMetaView : UserControl
         _grid.RowTemplate.Height=46;_grid.ColumnHeadersHeight=36;
         _grid.DefaultCellStyle.SelectionBackColor=Color.FromArgb(222,242,243);_grid.DefaultCellStyle.SelectionForeColor=Color.FromArgb(30,60,75);
         _grid.Columns.Add(new DataGridViewImageColumn {HeaderText="",Width=46,MinimumWidth=46,FillWeight=40,ImageLayout=DataGridViewImageCellLayout.Zoom,DefaultCellStyle=new(){NullValue=null}});
-        foreach(var (text,min) in new[]{("英雄",125),("梯队",55),("原始胜率",85),("调整后胜率",95),("样本量",80)})
+        foreach(var (text,min) in new[]{("英雄",125),("梯队",55),("原始胜率",85),("调整后胜率",95),("样本量",80),("样本选取率",100)})
             _grid.Columns.Add(new DataGridViewTextBoxColumn {HeaderText=text,MinimumWidth=min,FillWeight=min,SortMode=DataGridViewColumnSortMode.Programmatic});
+        ConfigureRankings();
         _grid.CellClick+=async (_,e)=>{if(e.RowIndex>=0 && _grid.Rows[e.RowIndex].Tag is AramMetaChampion c){_follow.Checked=false;await NavigateAsync(c.Id);}};
         _grid.RowPrePaint+=(_,e)=>
         {
@@ -129,11 +130,13 @@ internal sealed partial class AramMetaView : UserControl
         var rows=_page.Index.Champions.Where(c=>(_role.SelectedIndex==0 || c.Roles.Contains(Roles[_role.SelectedIndex])) &&
             (Name(c)+" "+c.Name+" "+c.Alias+" "+c.Id).Contains(_search.Text.Trim(),StringComparison.OrdinalIgnoreCase));
         if(_sort==1)rows=_descending?rows.OrderByDescending(Name):rows.OrderBy(Name);
-        else {double Value(AramMetaChampion c)=>_sort switch {3=>c.RawWinRate??-1,5=>c.Games??-1,_=>c.WinRate??-1};rows=_descending?rows.OrderByDescending(Value):rows.OrderBy(Value);}
+        else {double Value(AramMetaChampion c)=>_sort switch {3=>c.RawWinRate??-1,5=>c.Games??-1,6=>_page.Index.PickRate(c)??-1,_=>c.WinRate??-1};rows=_descending?rows.OrderByDescending(Value):rows.OrderBy(Value);}
+        var displayed=rows.ToArray();
+        _maximumWinRate=displayed.Select(c=>c.WinRate??0).DefaultIfEmpty(0).Max();
         _grid.Rows.Clear();
-        foreach(var c in rows)
+        foreach(var c in displayed)
         {
-            int index=_grid.Rows.Add(null,Name(c),c.Tier,Rate(c.RawWinRate),Rate(c.WinRate),c.Games?.ToString("N0")??"—");
+            int index=_grid.Rows.Add(null,Name(c),c.Tier,Rate(c.RawWinRate),Rate(c.WinRate),c.Games?.ToString("N0")??"—",Rate(_page.Index.PickRate(c)));
             var row=_grid.Rows[index];row.Tag=c;
         }
         foreach(DataGridViewColumn column in _grid.Columns)column.HeaderCell.SortGlyphDirection=column.Index==_sort?(_descending?SortOrder.Descending:SortOrder.Ascending):SortOrder.None;
@@ -159,7 +162,7 @@ internal sealed partial class AramMetaView : UserControl
     }
     protected override void Dispose(bool disposing)
     {
-        if(disposing){_timer.Stop();_timer.Dispose();_request?.Cancel();_poll?.Cancel();_client.Dispose();_tips.Dispose();_imageHttp.Dispose();foreach(var image in _images.Values)image.Dispose();_images.Clear();}
+        if(disposing){_timer.Stop();_timer.Dispose();_request?.Cancel();_poll?.Cancel();_client.Dispose();_tips.Dispose();_rankingBold?.Dispose();_imageHttp.Dispose();foreach(var image in _images.Values)image.Dispose();_images.Clear();}
         base.Dispose(disposing);
     }
 }

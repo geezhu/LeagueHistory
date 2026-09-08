@@ -17,6 +17,11 @@ internal static class AramMetaChecks
         var index=AramMetaIndex.Parse(Fixture("index"));var ahri=index.Champions.Single(c=>c.Id==103);
         Check(index.Patch=="16.17" && ahri.WinRate!=ahri.RawWinRate && ahri.Tier=="T1","arammeta preserves adjusted and raw rates separately");
         Check(AramMetaIndex.Rate(null)==null && AramMetaIndex.Rate(new JValue(2))==null,"Missing or invalid rates are not zero");
+        var population=index with {Champions=Enumerable.Range(1,20).Select(id=>ahri with {Id=id,Games=50}).ToArray()};
+        Check(population.SampleMatches==100 && population.PickRate(population.Champions[0])==.5,"Pick rate uses match count, not share of participant slots");
+        var missing=population with {Champions=new[]{ahri with {Games=null}}};
+        Check(missing.SampleMatches==null && missing.PickRate(ahri)==null,"Incomplete population has no fabricated pick rate");
+        Check(AramMetaIndex.RelativeRate(.6,.6)==1 && AramMetaIndex.RelativeRate(.3,.6)==.5 && AramMetaIndex.RelativeRate(0,0)==0,"Win-rate bars normalize to the highest displayed rate");
         int calls=0;bool fail=false;
         using var client=new AramMetaClient(new Handler((r,t)=>
         {
@@ -152,7 +157,7 @@ internal static class AramMetaChecks
         Run("LoadAsync",false);
         var grid=(DataGridView)type.GetField("_grid",flags)!.GetValue(view)!;
         var search=(TextBox)type.GetField("_search",flags)!.GetValue(view)!;
-        Check(grid.Rows.Count==3,"Rankings display complete fixture (rows="+grid.Rows.Count+", search="+search.Text+", context="+SynchronizationContext.Current?.GetType().Name+"): "+((Label)type.GetField("_status",flags)!.GetValue(view)!).Text);search.Text="Ahri";Check(grid.Rows.Count==1,"Champion search filters aliases");
+        Check(grid.Rows.Count==3,"Rankings display complete fixture (rows="+grid.Rows.Count+", search="+search.Text+", context="+SynchronizationContext.Current?.GetType().Name+"): "+((Label)type.GetField("_status",flags)!.GetValue(view)!).Text);Save("arammeta-rankings",1060,800);search.Text="Ahri";Check(grid.Rows.Count==1,"Champion search filters aliases");
         Run("NavigateAsync",103);
         var detailPanel=(FlowLayoutPanel)type.GetField("_detail",flags)!.GetValue(view)!;
         var complete=(AramMetaPage)type.GetField("_page",flags)!.GetValue(view)!;
