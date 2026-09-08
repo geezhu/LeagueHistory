@@ -296,7 +296,7 @@ internal static class Program
             var avatar = playerCard.SummaryPanel.Controls.Cast<Control>().Single(c => c.AccessibleName == "召唤师头像");
             avatar.GetType().GetMethod("SetProfile")!.Invoke(avatar, new object?[] { null, 108 });
             Application.DoEvents();
-            Check(playerCard.ListViewControl.GetItemRect(0).Height >= 50,"Redesigned player card has room for two-line match rows");
+            Check(playerCard.ListViewControl.GetItemRect(0).Height >= 46,"Redesigned player card has room for two-line match rows");
             using var bitmap = new Bitmap(360,480);
             playerCard.DrawToBitmap(bitmap,new Rectangle(0,0,360,480));
             bitmap.Save(Path.Combine(AppContext.BaseDirectory,"player-card.png"));
@@ -316,16 +316,12 @@ internal static class Program
             var opposingHost = new Panel { Tag = false, Dock = DockStyle.Fill }; opposingHost.Controls.Add(opposing);
             teamTable.Controls.Add(friendlyHost,0,0); teamTable.Controls.Add(opposingHost,0,1);
             teamForm.Show(); Application.DoEvents();
-            Check(friendly.SummaryPanel.Parent is FlowLayoutPanel && !friendly.lblSoloRank.Visible && !friendly.lblFlexRank.Visible,"Team sidebar separates summaries and hides unranked labels");
-            Children(teamForm).OfType<Button>().Single(b=>b.Text=="敌方").PerformClick(); Application.DoEvents();
-            Check(opposingHost.Visible && !friendlyHost.Visible && opposing.SummaryPanel.Parent is FlowLayoutPanel,"Team switching preserves player cards and changes visible team");
-            int removedSummaries = 0;
-            opposing.SummaryPanel.Parent.ControlRemoved += (_,_) => removedSummaries++;
-            for(int i=0;i<12;i++) { teamTable.Width = 610+i*3; Application.DoEvents(); }
-            Check(removedSummaries == 0,"Resizing sparse teams does not detach existing summary cards");
+            Check(friendly.SummaryPanel.Parent == friendly && !friendly.lblSoloRank.Visible && !friendly.lblFlexRank.Visible,"Grid cards keep summaries and hide unranked labels");
+            Check(opposingHost.Visible && friendlyHost.Visible && opposing.SummaryPanel.Parent == opposing,"Both teams remain visible together");
+            for(int i=0;i<12;i++) { teamForm.ClientSize = new Size(900+i*3,600); Application.DoEvents(); }
+            Check(teamTable.ColumnCount == 5 && teamTable.RowCount == 2 && teamTable.Width >= 1100,"Sparse rooms retain ten stable grid slots");
             teamTable.Controls.Remove(opposingHost); opposingHost.Dispose(); Application.DoEvents();
-            Children(teamForm).OfType<Button>().Single(b=>b.Text=="友方").PerformClick(); Application.DoEvents();
-            Check(friendlyHost.Visible,"Single-player team remains usable after enemy team is removed");
+            Check(friendlyHost.Visible,"Single player remains visible after another player leaves");
             var teamsLayout = typeof(PlayerCardControl).Assembly.GetType("League.Controls.PlayerTeamsLayout")!;
             var originalSurface = teamTable.Parent;
             teamForm.Controls.Clear(); // Connection status replaces the page contents.
@@ -334,7 +330,33 @@ internal static class Program
             Application.DoEvents();
             Check(originalSurface?.Parent == teamForm && originalSurface.Visible && teamTable.Visible,
                 "Entering room restores detached team surface after connection status clears the page");
-            Check(Children(teamForm).OfType<Button>().Any(b=>b.Text=="友方"),"Restored room retains sidebar controls");
+            Check(friendly.SummaryPanel.Parent == friendly,"Restored room retains player summary inside card");
+            teamForm.ClientSize = new Size(1200,800);
+            for (int slot = 0; slot < 10; slot++)
+            {
+                var card = slot == 0 ? friendly : new PlayerCardControl { Dock = DockStyle.Fill };
+                var matches = Enumerable.Range(0,20).Select(i => {
+                    var item = new ListViewItem { ForeColor = i % 2 == 0 ? Color.Green : Color.Red };
+                    item.SubItems.AddRange(new[] { "海克斯大乱斗", "12/5/18", "2026-09-08" }); return item;
+                }).ToList();
+                card.SetPlayerInfo($"玩家{slot+1}#1234","华贵铂金 II","璀璨钻石 II",null!,"公开",matches,Color.SteelBlue);
+                card.SetRecentStatistics(new PlayerMatchInfo { RecentMatches = new() { new() { Kills = 12, Deaths = 5, Assists = 18 } }, WinHistory = new() { true } });
+                if (slot > 0)
+                {
+                    var host = new Panel { Tag = slot < 5, Dock = DockStyle.Fill, Margin = new Padding(5) };
+                    host.Controls.Add(card); teamTable.Controls.Add(host,slot%5,slot/5);
+                }
+            }
+            Application.DoEvents();
+            Check(friendly.lblSoloRank.Visible && friendly.lblFlexRank.Visible,"Both ranked queues remain visible in card header");
+            friendly.ListViewControl.TopItem = friendly.ListViewControl.Items[10];
+            Check(friendly.ListViewControl.TopItem.Index > 0 && teamTable.Controls.Cast<Control>().Where(p => p != friendlyHost)
+                .SelectMany(p=>p.Controls.OfType<PlayerCardControl>()).All(c=>c.ListViewControl.TopItem.Index == 0),"Card histories scroll independently");
+            using (var gridBitmap = new Bitmap(1200,800))
+            {
+                teamForm.DrawToBitmap(gridBitmap,new Rectangle(0,0,1200,800));
+                gridBitmap.Save(Path.Combine(AppContext.BaseDirectory,"room-grid.png"));
+            }
             teamForm.Close();
         }
         foreach (var queue in new[] { "400", "420", "430", "440", "450", "480", "490", "2400" })
