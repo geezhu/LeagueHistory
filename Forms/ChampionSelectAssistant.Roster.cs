@@ -35,11 +35,16 @@ internal sealed partial class ChampionSelectAssistant
         var toolbar=new FlowLayoutPanel{Dock=DockStyle.Top,Height=42,Padding=new Padding(10,5,10,5)};
         var sort=new Controls.DarkFilterComboBox{Width=125};sort.Items.AddRange(new object[]{"梯队优先","胜率优先"});sort.SelectedIndex=0;
         var retry=new Button{Text="重试数据",AutoSize=true,FlatStyle=FlatStyle.Flat};toolbar.Controls.AddRange(new Control[]{sort,retry});
+        var analysisButton=new Button{Text="阵容分析",AutoSize=true,FlatStyle=FlatStyle.Flat};toolbar.Controls.Add(analysisButton);
         var status=new Label{Dock=DockStyle.Top,Height=42,Padding=new Padding(10,3,10,3),Text="正在读取英雄梯队…",ForeColor=Color.FromArgb(135,162,173)};
         void FitStatus()=>status.Height=Math.Max(42,TextRenderer.MeasureText(status.Text,Font,new Size(Math.Max(200,window.ClientSize.Width-20),0),TextFormatFlags.WordBreak).Height+8);
         window.SizeChanged+=(_,_)=>FitStatus();status.TextChanged+=(_,_)=>FitStatus();
         var content=new BufferedFlow{Dock=DockStyle.Fill,AutoScroll=true,FlowDirection=FlowDirection.TopDown,WrapContents=false,Padding=new Padding(10)};
         window.Controls.Add(content);window.Controls.Add(status);window.Controls.Add(toolbar);
+        var analysis=new Controls.ChampionCompositionView(id=>{var hero=FormMain.Globals.resLoading.GetChampionById(id);return(hero?.Name??$"英雄 {id}",hero?.Alias??"");},
+            ()=>TimeSpan.FromMinutes(Math.Clamp(_owner.GetAppConfig()?.ChampionAnalysisCacheMinutes??1440,1,10080))){Dock=DockStyle.Fill,Visible=false};
+        window.Controls.Add(analysis);analysis.BringToFront();
+        analysisButton.Click+=(_,_)=>{analysis.Visible=!analysis.Visible;content.Visible=!analysis.Visible;status.Visible=!analysis.Visible;sort.Visible=!analysis.Visible;retry.Visible=!analysis.Visible;analysisButton.Text=analysis.Visible?"返回英雄梯队":"阵容分析";if(analysis.Visible && _roster!=null)analysis.SetRoster(_roster);};
         var ranks=new Dictionary<int,(string Tier,double? Win)>();bool loading=false;
         int Rank(string tier)=>tier=="OP"?0:int.TryParse(tier.TrimStart('T'),out int n)?n:99;
         string Name(int id)=>FormMain.Globals.resLoading.GetChampionById(id)?.Name??$"英雄 {id}";
@@ -91,7 +96,7 @@ internal sealed partial class ChampionSelectAssistant
             catch(Exception ex){if(!window.IsDisposed){status.Text="梯队数据暂不可用，可重试；仍显示客户端提供的英雄。";_tips.SetToolTip(status,ex.Message);System.Diagnostics.Debug.WriteLine(ex);}}
             finally{loading=false;if(!window.IsDisposed)retry.Enabled=true;}
         }
-        _rosterChanged=Render;sort.SelectedIndexChanged+=(_,_)=>Render();retry.Click+=(_,_)=>_=Load();
+        _rosterChanged=()=>{Render();if(analysis.Visible && _roster!=null)analysis.SetRoster(_roster);};sort.SelectedIndexChanged+=(_,_)=>Render();retry.Click+=(_,_)=>_=Load();
         content.SizeChanged+=(_,_)=>{foreach(var grid in content.Controls.OfType<FlowLayoutPanel>())grid.MaximumSize=new Size(Math.Max(260,content.ClientSize.Width-36),0);};
         window.FormClosed+=(_,_)=>{lifetime.Cancel();painting?.Cancel();painting?.Dispose();lifetime.Dispose();_rosterChanged=null;_rosterWindow=null;window.Dispose();};
         window.Shown+=(_,_)=>{PositionEquipmentEditor(window,new Size(340,360));Render();_=Load();};window.Show(this);
