@@ -43,5 +43,18 @@ public partial class FormMain
         var aramPage=new TabPage("arammeta · 海克斯大乱斗") {Tag=aramIcon};
         aramPage.Controls.Add(new AramMetaView(()=>TimeSpan.FromMinutes(Math.Clamp(_appConfig?.AramMetaCacheMinutes??1440,1,10080))));aramPage.Disposed+=(_,_)=>aramIcon.Dispose();
         imageTabControl1.TabPages.Add(aramPage);
+        var liveIcon=new Bitmap(40,40);
+        using(var graphics=Graphics.FromImage(liveIcon))
+        using(var font=new Font("Microsoft YaHei UI",10,FontStyle.Bold))
+        {graphics.Clear(Color.FromArgb(16,70,85));TextRenderer.DrawText(graphics,"对局",font,new Rectangle(0,0,40,40),Color.White,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);}
+        var livePage=new TabPage("当前对局"){Tag=liveIcon};
+        livePage.Controls.Add(new LiveMatchView(async ()=>
+        {
+            var client=Globals.lcuClient?.Client;if(client==null)return 0;
+            using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            var flow=Newtonsoft.Json.Linq.JObject.Parse(await client.GetStringAsync("/lol-gameflow/v1/session",timeout.Token));
+            return (int?)flow["gameData"]?["queue"]?["id"]??0;
+        },(hero,queue)=>OpenAssistantGuide(hero,queue,"none"),()=>TimeSpan.FromMinutes(Math.Clamp(_appConfig?.AramMetaCacheMinutes??1440,1,10080))));
+        livePage.Disposed+=(_,_)=>liveIcon.Dispose();imageTabControl1.TabPages.Add(livePage);
     }
 }

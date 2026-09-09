@@ -1,0 +1,76 @@
+using League.Clients;
+using League.Controls;
+using League.Models;
+using Newtonsoft.Json.Linq;
+using System.Net;
+using System.Reflection;
+
+internal static class LiveMatchChecks
+{
+    private const string Sample="""
+    {"activePlayer":{"riotId":"Self#CN"},"gameData":{"gameMode":"ARAM","mapNumber":12,"gameTime":125},"allPlayers":[
+    {"riotId":"Enemy#CN","rawChampionName":"game_character_displayname_Lux","championName":"拉克丝","team":"ORDER","level":8,"items":[{"itemID":3089,"displayName":"灭世者的死亡之帽","count":1}]},
+    {"riotId":"Self#CN","rawChampionName":"game_character_displayname_Morgana","championName":"莫甘娜","team":"CHAOS","level":9,"items":[],"runes":{"keystone":{"id":8112}}},
+    {"riotId":"Ally#CN","rawChampionName":"game_character_displayname_Lux","championName":"拉克丝","team":"CHAOS","level":8}
+    ]}
+    """;
+    private static void Check(bool condition,string message){if(!condition)throw new Exception(message);}
+    private sealed class Handler:HttpMessageHandler
+    {
+        public bool Fail;
+        public int Calls;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token)
+        {
+            Calls++;
+            Check(request.Method==HttpMethod.Get && request.RequestUri!.ToString()=="https://127.0.0.1:2999/liveclientdata/allgamedata","Live API is loopback read-only");
+            return Task.FromResult(Fail?new HttpResponseMessage(HttpStatusCode.ServiceUnavailable):new(HttpStatusCode.OK){Content=new StringContent(Sample)});
+        }
+    }
+    public static void Run()
+    {
+        var previousContext=SynchronizationContext.Current;
+        var snapshot=LiveMatchSnapshot.Parse(JObject.Parse(Sample));
+        Check(snapshot.TeamLabel(snapshot.Players[0])=="对方" && snapshot.TeamLabel(snapshot.Players[1])=="我方","Team determined by self, not ORDER");
+        Check(snapshot.Players[0].ChampionAlias=="Lux" && snapshot.Players[0].Items![0].Id==3089,"Raw champion alias and current item IDs");
+        Check(snapshot.Players[1].Items is {Length:0} && snapshot.Players[2].Items==null,"Empty equipment differs from unavailable");
+        Check(snapshot.Players.Length==3 && snapshot.Players[0].Key!=snapshot.Players[2].Key,"Duplicate champions remain independent players");
+        var unknown=JObject.Parse(Sample);unknown.Remove("activePlayer");
+        var neutral=LiveMatchSnapshot.Parse(unknown);
+        Check(neutral.Players.All(p=>!p.Self) && neutral.TeamLabel(neutral.Players[0])=="ORDER","Unknown self must not assign friend/enemy");
+        try{LiveMatchSnapshot.Parse(new JObject());throw new Exception("Malformed snapshot accepted");}catch(InvalidDataException){}
+        var handler=new Handler();
+        var champions=League.FormMain.Globals.resLoading.Champions.Champions;
+        var testLux=new Champion{Id=99,Alias="Lux",Name="拉克丝",Description=""};var testMorgana=new Champion{Id=25,Alias="Morgana",Name="莫甘娜",Description=""};
+        champions.Add(testLux);champions.Add(testMorgana);
+        using var client=new LiveMatchClient(handler);
+        using var form=new Form{ClientSize=new Size(1100,740)};
+        using var view=new LiveMatchView(()=>Task.FromResult(0),(_,_)=>throw new Exception("Guide must not open automatically"),()=>TimeSpan.FromDays(1),client,
+            (kind,id)=>{var bitmap=new Bitmap(48,48);using(var g=Graphics.FromImage(bitmap)){g.Clear(kind=="augment"?Color.Purple:Color.Teal);g.DrawEllipse(Pens.Gold,5,5,36,36);}return Task.FromResult<(Image?,string,string)>((bitmap,"测试图标","悬浮说明"));});
+        form.Controls.Add(view);form.Show();Application.DoEvents();
+        IEnumerable<Control> All(Control root)=>root.Controls.Cast<Control>().SelectMany(c=>new[]{c}.Concat(All(c)));
+        var cards=All(view).OfType<Panel>().Where(c=>c.Tag is string).ToArray();
+        Check(cards.Length==3 && handler.Calls>=1,"Live page loads participant cards");
+        Check(All(view).OfType<Button>().Any(b=>b.AccessibleName?.Contains("死亡之帽")==true && b.BackgroundImage!=null),"Current equipment uses loaded icons");
+        var type=typeof(LiveMatchView);
+        type.GetField("_currentQueue",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(view,450);
+        type.GetMethod("Render",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(view,null);
+        var retained=All(view).OfType<Panel>().First(c=>c.Tag is string);
+        type.GetMethod("Render",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(view,null);
+        Check(!retained.IsDisposed,"Unchanged poll must retain card controls to prevent flashing");
+        var builds=new List<(int[] Ids,double? Win,double? Pick)>{(new[]{3089,3020},.53,.16),(new[]{3089,3157},.52,.11)};
+        var augments=new List<(string Title,AramMetaRecommendation[] Rows)>{("棱彩强化",new[]{new AramMetaRecommendation(new[]{2095},"测试强化","强化说明",.56,.03,100,new JObject())})};
+        type.GetMethod("RenderRecommendations",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(view,new object[]{builds,augments});
+        using(var image=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(image,new Rectangle(Point.Empty,form.Size));image.Save(Path.Combine(AppContext.BaseDirectory,"live-match.png"));}
+        form.ClientSize=new Size(650,700);Application.DoEvents();
+        using(var image=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(image,new Rectangle(Point.Empty,form.Size));image.Save(Path.Combine(AppContext.BaseDirectory,"live-match-narrow.png"));}
+        Check(All(view).OfType<Button>().Any(b=>b.BackgroundImage!=null),"Icons survive responsive layout");
+        handler.Fail=true;
+        var task=(Task)type.GetMethod("PollAsync",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(view,null)!;
+        while(!task.IsCompleted){Application.DoEvents();Thread.Sleep(5);}task.GetAwaiter().GetResult();
+        Check(!All(view).OfType<Panel>().Any(c=>c.Tag is string),"Disconnect clears previous player cards");
+        form.Close();
+        champions.Remove(testLux);champions.Remove(testMorgana);
+        SynchronizationContext.SetSynchronizationContext(previousContext);
+        Console.WriteLine("PASS: live match teams, unknown identity, duplicate champions, equipment, loopback endpoint, UI and disconnect cleanup.");
+    }
+}
