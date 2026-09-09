@@ -8,11 +8,20 @@ internal static class Program
 {
     private static void Check(bool condition,string message) { if (!condition) throw new Exception(message); }
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "--champion-analysis")
+        {
+            ChampionAnalysisChecks.Run(args.Length > 1 ? args[1] : Path.Combine(AppContext.BaseDirectory, "ChampionAnalysisReports"));
+            return;
+        }
+        ChampionAnalysisChecks.Run();
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+        Task.Run(ChampionCompositionChecks.RunAsync).GetAwaiter().GetResult();
+        ChampionCompositionChecks.Render();
+        if (args.Contains("--composition-checks")) return;
         Task.Run(OpggChecks.RunAsync).GetAwaiter().GetResult();
         OpggChecks.Render();
         Task.Run(AramMetaChecks.RunAsync).GetAwaiter().GetResult();
