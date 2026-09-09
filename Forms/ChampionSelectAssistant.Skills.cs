@@ -30,8 +30,8 @@ internal sealed partial class ChampionSelectAssistant
     }
     private async Task LoadSkillsAsync(int hero,CancellationToken token)
     {
-        var section=new FlowLayoutPanel {AutoSize=true,FlowDirection=FlowDirection.TopDown,WrapContents=false,MaximumSize=new Size(282,0),Margin=new Padding(0,4,0,10)};
-        var artwork=new ProfileBackgroundPanel {Size=new Size(282,138),Padding=new Padding(10),BackColor=Color.FromArgb(16,31,43),Margin=Padding.Empty};
+        var section=new FlowLayoutPanel {AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,FlowDirection=FlowDirection.TopDown,WrapContents=false,MaximumSize=new Size(282,0),Margin=new Padding(0,0,0,4)};
+        var artwork=new ProfileBackgroundPanel {Size=new Size(282,80),Padding=new Padding(8,4,8,4),BackColor=Color.FromArgb(16,31,43),Margin=Padding.Empty};
         var title=new Label {Text=FormMain.Globals.resLoading?.GetChampionById(hero)?.Name??$"英雄 {hero}",Dock=DockStyle.Top,Height=28,ForeColor=Color.WhiteSmoke,BackColor=Color.Transparent};
         var titleFont=new Font(Font.FontFamily,12,FontStyle.Bold);title.Font=titleFont;title.Disposed+=(_,_)=>titleFont.Dispose();
         var icons=new FlowLayoutPanel {Dock=DockStyle.Bottom,Height=44,Margin=Padding.Empty,BackColor=Color.Transparent};
@@ -51,7 +51,8 @@ internal sealed partial class ChampionSelectAssistant
             }
             var skills=ParseSkills(data);
             if(section.IsDisposed || token.IsCancellationRequested)return;
-            description.Text=skills.Length==0?"暂无技能资料":skills[0].Name+"\n"+skills[0].Description;
+            description.Text="暂无技能资料";
+            description.Visible=skills.Length==0;
             var cache=new ImageCacheService(client);
             _=LoadArtwork();
             async Task LoadArtwork()
@@ -68,9 +69,8 @@ internal sealed partial class ChampionSelectAssistant
             }
             foreach(var skill in skills)
             {
-                var button=new Button {Text=skill.Key,Size=new Size(36,36),Margin=new Padding(2),FlatStyle=FlatStyle.Flat,TextAlign=ContentAlignment.BottomCenter,ForeColor=Color.White,BackColor=Color.FromArgb(29,45,61),BackgroundImageLayout=ImageLayout.Zoom};
+                var button=new Button {Text="",AccessibleName=skill.Key+" · "+skill.Name,Size=new Size(36,36),Margin=new Padding(2),FlatStyle=FlatStyle.Flat,ForeColor=Color.White,BackColor=Color.FromArgb(29,45,61),BackgroundImageLayout=ImageLayout.Zoom};
                 icons.Controls.Add(button);
-                button.Click+=(_,_)=>{var text=skill.Key+" · "+skill.Name+"\n"+skill.Description;description.Visible=!description.Visible || description.Text!=text;description.Text=text;};
                 _tips.SetToolTip(button,TooltipText.Format(skill.Key+" · "+skill.Name,skill.Description));
                 _=LoadIcon(button,skill);
             }

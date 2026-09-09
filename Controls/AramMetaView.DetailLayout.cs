@@ -1,4 +1,4 @@
-using League.Models;
+﻿using League.Models;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -8,13 +8,13 @@ internal sealed partial class AramMetaView
     private AramMetaPage? _detailData;
     private FlowLayoutPanel? _detailBody;
     private int _detailHero,_detailTab,_rarity,_augmentSort;
-    private bool _allAugments,_detailFailed;
+    private bool _detailFailed;
     private CancellationToken _detailToken;
 
     private void MarkDetailUnavailable()
     {
         _detailFailed=true;
-        if(_detailTab!=0)RenderDetailBody();
+        if(_detailTab!=1)RenderDetailBody();
     }
 
     private void RenderDetail(AramMetaPage page,int id,CancellationToken token,bool equipmentOnly=false)
@@ -22,10 +22,11 @@ internal sealed partial class AramMetaView
         _detailData=page;_detailToken=token;_detailFailed=false;
         if(equipmentOnly && _detailHero==id && _detailBody is {IsDisposed:false})
         {
-            if(_detailTab!=0)RenderDetailBody();
+            if(_detailTab==0 && _overviewEquipment is {IsDisposed:false})RenderOverviewEquipment();
+            else if(_detailTab==2)RenderDetailBody();
             return;
         }
-        if(_detailHero!=id){_detailTab=0;_rarity=0;_augmentSort=0;_allAugments=false;}
+        if(_detailHero!=id){_detailTab=0;_rarity=0;_augmentSort=0;_augmentSearch="";}
         _detailHero=id;
         _detail.SuspendLayout();
         try
@@ -37,18 +38,18 @@ internal sealed partial class AramMetaView
             summary.BackColor=Color.FromArgb(226,242,243);
             summary.Controls[0].Font=new Font(Font.FontFamily,14,FontStyle.Bold);
             var header=Row(summary);
-            Icon(header,(string?)champion.Data["image"],Name(champion),token,64,"champion",id);
+            Icon(header,(string?)champion.Data["image"],Name(champion),token,48,"champion",id);
             var tierInk=TierColor(champion.Tier);
             header.Controls.Add(new Label {Text=champion.Tier,Size=new Size(44,30),TextAlign=ContentAlignment.MiddleCenter,ForeColor=tierInk,BackColor=Color.FromArgb(24,tierInk),Margin=new Padding(4,17,8,0)});
             foreach(var (label,value) in new[]{("调整后胜率",Rate(champion.WinRate)),("原始胜率",Rate(champion.RawWinRate)),("样本选取率",Rate(page.Index.PickRate(champion))),("样本量",champion.Games?.ToString("N0")??"—")})
             {
-                var metric=new Label {Text=value+"\n"+label,AutoSize=false,Size=new Size(116,58),TextAlign=ContentAlignment.MiddleCenter,ForeColor=Color.FromArgb(0,130,141),Margin=new Padding(4)};
+                var metric=new Label {Text=value+"\n"+label,AutoSize=false,Size=new Size(116,46),TextAlign=ContentAlignment.MiddleCenter,ForeColor=label=="调整后胜率"?Color.FromArgb(0,130,141):Color.FromArgb(115,133,145),Margin=new Padding(4)};
                 header.Controls.Add(metric);
             }
             _tips.SetToolTip(summary,"调整后胜率来自 arammeta 的统计模型；样本选取率按完整 5v5 样本计算，仅代表来源样本。");
-            var navigation=Section("海克斯大乱斗 · 版本 "+page.Index.Patch);
+            var navigation=Section("");navigation.Controls[0].Dispose();
             var tabs=Row(navigation);
-            var names=new[]{"强化推荐","装备推荐","召唤师技能"};
+            var names=new[]{"概览","强化比较","出装与技能"};
             for(int i=0;i<names.Length;i++)
             {
                 int selected=i;
@@ -78,47 +79,10 @@ internal sealed partial class AramMetaView
         try
         {
             foreach(Control control in _detailBody.Controls.Cast<Control>().ToArray())control.Dispose();
-            if(_detailTab==0)RenderAugments();else RenderEquipment();
+            if(_detailTab==0)RenderOverview();else if(_detailTab==1)RenderAugmentComparison();else RenderBuildComparison();
             ResizeSections();
         }
         finally {_detailBody.ResumeLayout(true);}
-    }
-
-    private void RenderAugments()
-    {
-        var page=_detailData!;var host=_detailBody!;
-        var filters=Row(host);
-        var rarity=new ComboBox {Width=112,DropDownStyle=ComboBoxStyle.DropDownList};
-        rarity.Items.AddRange(new object[]{"棱彩强化","黄金强化","白银强化"});rarity.SelectedIndex=_rarity;
-        var sort=new ComboBox {Width=144,DropDownStyle=ComboBoxStyle.DropDownList};
-        sort.Items.AddRange(new object[]{"来源推荐顺序","胜率从高到低","选取率从高到低"});sort.SelectedIndex=_augmentSort;
-        filters.Controls.AddRange(new Control[]{rarity,sort});
-        rarity.SelectedIndexChanged+=(_,_)=>{_rarity=rarity.SelectedIndex;_allAugments=false;RenderDetailBody();};
-        sort.SelectedIndexChanged+=(_,_)=>{_augmentSort=sort.SelectedIndex;RenderDetailBody();};
-        var champion=page.Index.Champions.First(c=>c.Id==_detailHero);
-        var entries=(champion.Data["top"]?[new[]{"kPrismatic","kGold","kSilver"}[_rarity]] as JArray??new()).OfType<JObject>();
-        if(_augmentSort!=0)entries=entries.OrderByDescending(e=>AramMetaIndex.Rate(e[_augmentSort==1?"wr":"pick"])??-1);
-        var all=entries.ToArray();
-        AddStatsRow(host,null,"强化","调整后胜率","选取率","样本量",true);
-        foreach(var entry in all.Take(_allAugments?all.Length:10))
-        {
-            int id=(int?)entry["id"]??0;
-            var meta=page.Index.Augments[id.ToString()] as JObject??new();
-            var local=FormMain.Globals.resLoading?.GetAugmentById(id);
-            string name=local?.Name??(string?)meta["name_zh"]??(string?)meta["name_en"]??$"强化 {id}";
-            string desc=local?.Description??(string?)meta["desc_zh"]??(string?)meta["desc_en"]??"暂无说明";
-            var icons=new FlowLayoutPanel {Dock=DockStyle.Fill,Margin=Padding.Empty};
-            var picture=Icon(icons,(string?)meta["icon"],TooltipText.Format(name,desc),_detailToken,40,"augment",id);
-            picture.BackColor=Color.FromArgb(25,31,43);
-            var row=AddStatsRow(host,icons,name,Rate(entry["wr"]),Rate(entry["pick"]),((long?)entry["g"])?.ToString("N0")??"—");
-            _tips.SetToolTip(row.Controls[1],TooltipText.Format(name,desc+$"\n来源推荐分：{(double?)entry["score"]:0.000}（不是胜率）"));
-        }
-        if(all.Length==0)host.Controls.Add(Text("暂无推荐数据"));
-        if(all.Length>10)
-        {
-            var expand=new Button {Text=_allAugments?"收起":"展开全部（"+all.Length+"）",AutoSize=true,Height=32};
-            expand.Click+=(_,_)=>{_allAugments=!_allAugments;RenderDetailBody();};host.Controls.Add(expand);
-        }
     }
 
     private TableLayoutPanel AddStatsRow(Control host,Control? icon,string name,string win,string pick,string games,bool heading=false)
@@ -133,28 +97,4 @@ internal sealed partial class AramMetaView
         host.Controls.Add(row);return row;
     }
 
-    private void RenderEquipment()
-    {
-        var page=_detailData!;var host=_detailBody!;
-        if(page.Detail==null){host.Controls.Add(Text(_detailFailed?"详情加载失败，请点击刷新重试。":"正在加载详情…"));return;}
-        var groups=_detailTab==2?new[]{("spells","召唤师技能")}:new[]{("items","装备组合"),("singleItems","单件装备"),("boots","鞋子")};
-        foreach(var (key,title) in groups)
-        {
-            host.Controls.Add(Text(title+" · 来源推荐顺序"));
-            var entries=(page.Detail[key]?["top"] as JArray??new()).OfType<JObject>().ToArray();
-            if(entries.Length==0)host.Controls.Add(Text("暂无数据"));
-            foreach(var entry in entries)
-            {
-                var row=Row(host);row.BackColor=Color.FromArgb(247,250,252);
-                foreach(var item in (entry["items"] as JArray??new()).OfType<JObject>())
-                {
-                    int id=(int?)item["id"]??0;bool spell=key=="spells";
-                    var name=spell?FormMain.Globals.resLoading?.GetSpellById(id)?.Name:FormMain.Globals.resLoading?.GetItemById(id)?.Name;
-                    var url=spell?(string?)item["icon"]:$"https://ddragon.leagueoflegends.com/cdn/{page.Index.Raw["ddv"]}/img/item/{id}.png";
-                    Icon(row,url,name??(string?)item["name_en"]??id.ToString(),_detailToken,36,spell?"spell":"item",id);
-                }
-                row.Controls.Add(Text($"胜率 {Rate(entry["wr"])}    选取率 {Rate(entry["pick"])}    {(long?)entry["g"]:N0} 场"));
-            }
-        }
-    }
 }
