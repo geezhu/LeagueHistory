@@ -6,7 +6,7 @@ internal sealed partial class AramMetaView
 {
     private Font? _rankingBold;
     private double _maximumWinRate;
-    private static Color TierColor(string tier)=>tier switch
+    internal static Color TierColor(string tier)=>tier switch
     {
         "OP"=>Color.FromArgb(139,83,187),"T1"=>Color.FromArgb(0,145,153),
         "T2"=>Color.FromArgb(58,119,185),"T4"=>Color.FromArgb(185,112,24),

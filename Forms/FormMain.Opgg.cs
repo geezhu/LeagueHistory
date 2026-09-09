@@ -4,7 +4,7 @@ namespace League;
 
 public partial class FormMain
 {
-    internal async void OpenAssistantGuide(int hero,int queue,string? position)
+    internal async void OpenAssistantGuide(int hero,int queue,string? position,League.Models.OpggQuery? query=null)
     {
         Show();WindowState=FormWindowState.Normal;Activate();
         if(queue==2400)
@@ -15,7 +15,9 @@ public partial class FormMain
         else
         {
             imageTabControl1.SelectedIndex=3;
-            await imageTabControl1.TabPages[3].Controls.OfType<OpggView>().Single().OpenChampionAsync(hero,queue,position);
+            var view=imageTabControl1.TabPages[3].Controls.OfType<OpggView>().Single();
+            if(query!=null)await view.OpenQueryAsync(query);
+            else await view.OpenChampionAsync(hero,queue,position);
         }
     }
     private void ConfigureOpgg()

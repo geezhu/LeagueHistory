@@ -8,6 +8,14 @@ namespace League.Controls;
 internal sealed partial class OpggView : UserControl
 {
     private readonly OpggClient _client = new();
+    internal Task OpenQueryAsync(OpggQuery query)
+    {
+        query=query.Normalize();_follow.Checked=false;_assignedPosition=query.Position;
+        _syncing=true;SelectHero(query.ChampionId);SetValue(_mode,query.Mode);SetValue(_region,query.Region);
+        SetValue(_position,query.Mode=="ranked"?query.Position:"mid");SetValue(_tier,query.Tier);_modeTiers[query.Mode]=query.Tier;_syncing=false;
+        _position.Visible=query.Mode=="ranked";_tier.Visible=query.Mode!="arena";
+        return LoadAsync(false);
+    }
     internal Task OpenChampionAsync(int id,int queue,string? position)
     {
         _follow.Checked=false;_assignedPosition=position;

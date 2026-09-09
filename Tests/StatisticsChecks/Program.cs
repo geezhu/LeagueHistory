@@ -19,6 +19,8 @@ internal static class Program
         AramMetaChecks.Render();
         SettingsChecks.Render();
         AssistantChecks.Run();
+        MayhemAssistantChecks.Run();
+        Task.Run(ItemSetChecks.RunAsync).GetAwaiter().GetResult();
         string historyFile = Path.Combine(Path.GetTempPath(),"league-search-"+Guid.NewGuid().ToString("N")+".json");
         try
         {
