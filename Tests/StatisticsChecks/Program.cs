@@ -20,6 +20,7 @@ internal static class Program
         SettingsChecks.Render();
         AssistantChecks.Run();
         MayhemAssistantChecks.Run();
+        RosterChecks.Run();
         Task.Run(ItemSetChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(AramBalanceChecks.RunAsync).GetAwaiter().GetResult();
         string historyFile = Path.Combine(Path.GetTempPath(),"league-search-"+Guid.NewGuid().ToString("N")+".json");
