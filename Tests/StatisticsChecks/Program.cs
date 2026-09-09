@@ -21,6 +21,7 @@ internal static class Program
         AssistantChecks.Run();
         MayhemAssistantChecks.Run();
         Task.Run(ItemSetChecks.RunAsync).GetAwaiter().GetResult();
+        Task.Run(AramBalanceChecks.RunAsync).GetAwaiter().GetResult();
         string historyFile = Path.Combine(Path.GetTempPath(),"league-search-"+Guid.NewGuid().ToString("N")+".json");
         try
         {

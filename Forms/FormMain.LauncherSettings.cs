@@ -13,6 +13,11 @@ public partial class FormMain
         layout.Controls.Add(minutes);
         layout.Controls.Add(new Label {Text="单位：分钟，默认 1440 分钟（1 天），最多 7 天。修改后自动保存，下次加载时生效。\n未过期的数据可在重启后直接使用；过期后检查更新。\n点击页面“刷新”可立即检查更新；更新失败时显示旧缓存并注明状态。",AutoSize=true,Margin=new Padding(0,10,0,0)});
         minutes.ValueChanged+=(_,_)=>{if(_appConfig!=null){_appConfig.AramMetaCacheMinutes=(int)minutes.Value;SaveAppConfig();}};
+        layout.Controls.Add(new Label{Text="普通大乱斗平衡缓存有效期 · aramonly",AutoSize=true,Margin=new Padding(0,18,0,10)});
+        var balanceMinutes=new NumericUpDown{Minimum=1,Maximum=10080,Increment=30,Width=150,Value=Math.Clamp(_appConfig?.AramBalanceCacheMinutes??1440,1,10080)};
+        layout.Controls.Add(balanceMinutes);
+        layout.Controls.Add(new Label{Text="单位：分钟，默认 1440（1 天）。缓存保存到本地，过期后在查看平衡提示时更新；失败时保留旧数据。",AutoSize=true,Margin=new Padding(0,10,0,0)});
+        balanceMinutes.ValueChanged+=(_,_)=>{if(_appConfig!=null){_appConfig.AramBalanceCacheMinutes=(int)balanceMinutes.Value;SaveAppConfig();}};
         page.Controls.Add(layout);tabControl1.TabPages.Add(page);
     }
     private void ConfigureLauncherSettings()
