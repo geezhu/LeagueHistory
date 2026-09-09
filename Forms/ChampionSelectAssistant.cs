@@ -178,6 +178,7 @@ internal sealed partial class ChampionSelectAssistant : Form
                 string laneName=query.Position switch {"top"=>"上路","jungle"=>"打野","mid"=>"中路","adc"=>"下路","support"=>"辅助",_=>""};
                 var tier=(int?)(build.Stats["tier_data"]?["tier"]??build.Stats["tier"]);
                 AddTierSummary(tier.HasValue?"T"+tier:"—",$"胜率 {((double?)build.Stats["win_rate"]??OpggBuild.Ratio(build.Stats["win"],build.Stats["play"])):P2} · {laneName}");
+                if(mode=="aram")AddBalanceHint((FlowLayoutPanel)_body.Controls[^1],hero,token);
                 if(_runes!=null)
                 {
                     Line("推荐符文",true);
