@@ -4,8 +4,11 @@ namespace League.Controls;
 
 internal sealed class LolLauncherPanel : UserControl
 {
-    private readonly Label _status = new() { Dock = DockStyle.Top, Height = 44, TextAlign = ContentAlignment.MiddleCenter,
-        AutoEllipsis = true, Text = "正在查找英雄联盟安装目录…" };
+    private readonly Label _status = new() { AutoEllipsis = true, Text = "正在查找安装目录…", TextAlign=ContentAlignment.MiddleLeft };
+    private readonly Panel _pathFrame = new() { BackColor=Color.FromArgb(244,247,251) };
+    private readonly TextBox _path = new() { ReadOnly=true,BorderStyle=BorderStyle.None,BackColor=Color.FromArgb(244,247,251),ForeColor=Color.FromArgb(39,62,79),Text="尚未识别安装位置",AccessibleName="英雄联盟安装路径" };
+    private readonly FlowLayoutPanel _buttons = new() { WrapContents=true,Margin=Padding.Empty };
+    private readonly Label _hint = new() { Text="也可手动启动游戏，登录后会自动连接。",ForeColor=Color.FromArgb(112,129,145) };
     private readonly Button _official = new() { Text = "启动官方客户端", AutoSize = true, Enabled = false };
     private readonly Button _wegame = new() { Text = "启动 WeGame 版", AutoSize = true, Enabled = false };
     private readonly ToolTip _tips = new();
@@ -14,18 +17,25 @@ internal sealed class LolLauncherPanel : UserControl
 
     public LolLauncherPanel()
     {
-        Size = new Size(580,150);
+        Font=new Font("Microsoft YaHei UI",9);
+        Size = new Size(580,156);
         var choose = new Button { Text = "选择安装目录", AutoSize = true };
-        var buttons = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 42, WrapContents = false, Padding = new Padding(50,4,0,0) };
-        buttons.Controls.AddRange(new Control[] { _official, _wegame, choose });
-        var hint = new Label { Dock = DockStyle.Top, Height = 35, TextAlign = ContentAlignment.MiddleCenter,
-            Text = "也可以手动启动英雄联盟，登录后会自动连接。", ForeColor = Color.DimGray };
-        Controls.Add(hint); Controls.Add(buttons); Controls.Add(_status);
+        foreach(var button in new[]{choose,_official,_wegame})
+        {
+            button.AutoSize=false;button.Size=new Size(button==_wegame?132:124,34);button.FlatStyle=FlatStyle.Flat;button.Margin=new Padding(0,0,8,6);
+            button.BackColor=button==choose?Color.FromArgb(0,143,153):Color.FromArgb(247,250,252);
+            button.ForeColor=button==choose?Color.White:Color.FromArgb(59,81,99);
+            button.FlatAppearance.BorderColor=button==choose?button.BackColor:Color.FromArgb(207,220,230);
+        }
+        _buttons.Controls.AddRange(new Control[]{choose,_official,_wegame});
+        _pathFrame.Controls.Add(_path);
+        Controls.AddRange(new Control[]{_status,_pathFrame,_buttons,_hint});
+        Arrange();
         _official.Click += (_,_) => Start(_installation?.OfficialPath);
         _wegame.Click += (_,_) => Start(_installation?.WeGamePath);
         choose.Click += async (_,_) =>
         {
-            using var dialog = new FolderBrowserDialog { Description = "选择英雄联盟安装目录（包含 LeagueClient 文件夹）", UseDescriptionForTitle = true };
+            using var dialog = new FolderBrowserDialog { Description = "选择英雄联盟安装目录（包含 LeagueClient 文件夹）", UseDescriptionForTitle = true,SelectedPath=_installation?.Root??"" };
             if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
             _selected = true;
             choose.Enabled = false;
@@ -56,19 +66,42 @@ internal sealed class LolLauncherPanel : UserControl
         }
         catch (Exception)
         {
-            if (!IsDisposed && !_selected) _status.Text = "暂时无法识别安装目录，请手动选择。";
+            if (!IsDisposed && !_selected){ShowInstallation(null);_status.Text = "识别暂不可用 · 请手动选择目录";}
         }
     }
 
     private void ShowInstallation(LolInstallation? installation)
     {
         _installation = installation;
-        _status.Text = installation?.Root ?? "未找到有效的英雄联盟安装目录，请手动选择。";
-        _tips.SetToolTip(_status, installation?.Root);
+        _status.Text = installation!=null?"已识别安装目录":"未找到安装目录 · 请手动选择";
+        _status.ForeColor=installation!=null?Color.FromArgb(0,143,153):Color.FromArgb(166,113,44);
+        _path.Text=installation?.Root??"尚未设置英雄联盟安装路径";
+        _tips.SetToolTip(_path,installation?.Root);_path.Select(0,0);
         _official.Enabled = installation?.OfficialPath != null;
         _wegame.Enabled = installation?.WeGamePath != null;
         _tips.SetToolTip(_official, installation?.OfficialPath);
         _tips.SetToolTip(_wegame, installation?.WeGamePath);
+    }
+
+    protected override void OnSizeChanged(EventArgs e){base.OnSizeChanged(e);Arrange();}
+    private void Arrange()
+    {
+        if(_buttons==null || _buttons.Controls.Count==0)return;
+        int width=Math.Max(180,ClientSize.Width),line=Math.Max(22,Font.Height+5);
+        _status.SetBounds(0,0,width,line);
+        int pathHeight=Math.Max(38,_path.PreferredHeight+16);
+        _pathFrame.SetBounds(0,_status.Bottom+6,width,pathHeight);
+        _path.SetBounds(12,(pathHeight-_path.PreferredHeight)/2,width-24,_path.PreferredHeight);
+        int rows=1,used=0;
+        foreach(Control button in _buttons.Controls)
+        {
+            int space=button.Width+button.Margin.Horizontal;
+            if(used>0 && used+space>width){rows++;used=0;}used+=space;
+        }
+        _buttons.SetBounds(0,_pathFrame.Bottom+10,width,rows*40);
+        int hintHeight=TextRenderer.MeasureText(_hint.Text,Font,new Size(width,0),TextFormatFlags.WordBreak).Height+4;
+        _hint.SetBounds(0,_buttons.Bottom+2,width,hintHeight);
+        int height=_hint.Bottom+2;if(Height!=height)Height=height;
     }
 
     private async void Start(string? path)

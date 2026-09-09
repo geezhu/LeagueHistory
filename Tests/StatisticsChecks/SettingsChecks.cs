@@ -18,6 +18,7 @@ internal static class SettingsChecks
         preview.Controls.Add(tabs);preview.Show();Application.DoEvents();
         Save("settings-general");
         tabs.SelectedIndex=1;Application.DoEvents();Save("settings-messages");
+        tabs.SelectedIndex=2;Application.DoEvents();Save("settings-launcher");
         preview.ClientSize=new Size(650,720);tabs.SelectedIndex=3;Application.DoEvents();Save("settings-cache-narrow");
         void Save(string name)
         {
