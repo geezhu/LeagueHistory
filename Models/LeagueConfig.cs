@@ -7,6 +7,7 @@ namespace League.Models
         public bool EnableChampionSelectAssistant { get; set; } = true;
         public int AramMetaCacheMinutes { get; set; } = 1440;
         public int AramBalanceCacheMinutes { get; set; } = 1440;
+        public int ChampionAnalysisCacheMinutes { get; set; } = 1440;
         /// <summary>
         /// 游戏结束后自动退出并返回客户端
         /// </summary>

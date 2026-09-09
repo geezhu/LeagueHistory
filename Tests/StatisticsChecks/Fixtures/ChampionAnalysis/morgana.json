@@ -1,0 +1,1269 @@
+{
+  "Characters/Morgana/CharacterRecords/Root": {
+    "mCharacterName": "Morgana",
+    "baseHPModifiable": {
+      "baseValue": 630.0,
+      "__type": "ModifiableFloat"
+    },
+    "hpPerLevelModifiable": {
+      "baseValue": 104.0,
+      "__type": "ModifiableFloat"
+    },
+    "baseStaticHPRegenModifiable": {
+      "baseValue": 1.100000023841858,
+      "__type": "ModifiableFloat"
+    },
+    "hpRegenPerLevelModifiable": {
+      "baseValue": 0.07999999821186066,
+      "__type": "ModifiableFloat"
+    },
+    "primaryAbilityResource": {
+      "arType": 0,
+      "{726ee5cd}": {
+        "baseValue": 340.0,
+        "__type": "ModifiableFloat"
+      },
+      "{6216bf7b}": {
+        "baseValue": 60.0,
+        "__type": "ModifiableFloat"
+      },
+      "{c4ab3550}": {
+        "baseValue": 2.200000047683716,
+        "__type": "ModifiableFloat"
+      },
+      "{3a509002}": {
+        "baseValue": 0.07999999821186066,
+        "__type": "ModifiableFloat"
+      },
+      "__type": "AbilityResourceSlotInfo"
+    },
+    "baseDamageModifiable": {
+      "baseValue": 56.0,
+      "__type": "ModifiableFloat"
+    },
+    "damagePerLevelModifiable": {
+      "baseValue": 3.5,
+      "__type": "ModifiableFloat"
+    },
+    "baseArmorModifiable": {
+      "baseValue": 25.0,
+      "__type": "ModifiableFloat"
+    },
+    "armorPerLevelModifiable": {
+      "baseValue": 4.199999809265137,
+      "__type": "ModifiableFloat"
+    },
+    "baseMR": {
+      "baseValue": 30.0,
+      "__type": "ModifiableFloat"
+    },
+    "mrPerLevel": {
+      "baseValue": 1.2999999523162842,
+      "__type": "ModifiableFloat"
+    },
+    "critDamageMultiplier": 2.0,
+    "baseMoveSpeedModifiable": {
+      "baseValue": 335.0,
+      "__type": "ModifiableFloat"
+    },
+    "attackRangeModifiable": {
+      "baseValue": 450.0,
+      "__type": "ModifiableFloat"
+    },
+    "attackSpeedModifiable": {
+      "baseValue": 0.625,
+      "__type": "ModifiableFloat"
+    },
+    "attackSpeedRatioModifiable": {
+      "baseValue": 0.625,
+      "__type": "ModifiableFloat"
+    },
+    "attackSpeedPerLevelModifiable": {
+      "baseValue": 1.5299999713897705,
+      "__type": "ModifiableFloat"
+    },
+    "mAdaptiveForceToAbilityPowerWeight": 1.0,
+    "acquisitionRange": 600.0,
+    "basicAttack": {
+      "mAttackDelayCastOffsetPercent": -0.1599999964237213,
+      "mAttackProbability": 0.5,
+      "__type": "AttackSlotData"
+    },
+    "extraAttacks": [
+      {
+        "mAttackProbability": 0.5,
+        "mAttackName": "MorganaBasicAttack2",
+        "__type": "AttackSlotData"
+      }
+    ],
+    "critAttacks": [
+      {
+        "mAttackDelayCastOffsetPercent": -0.1599999964237213,
+        "mAttackName": "MorganaCritAttack",
+        "__type": "AttackSlotData"
+      }
+    ],
+    "spellNames": [
+      "MorganaQAbility/MorganaQ",
+      "MorganaWAbility/MorganaW",
+      "MorganaEAbility/MorganaE",
+      "MorganaRAbility/MorganaR"
+    ],
+    "spells": [
+      "Characters/Morgana/Spells/MorganaQAbility/MorganaQ",
+      "Characters/Morgana/Spells/MorganaWAbility/MorganaW",
+      "Characters/Morgana/Spells/MorganaEAbility/MorganaE",
+      "Characters/Morgana/Spells/MorganaRAbility/MorganaR"
+    ],
+    "extraSpells": [
+      "",
+      "BaseSpell",
+      "BaseSpell",
+      "BaseSpell",
+      "BaseSpell",
+      "BaseSpell",
+      "BaseSpell",
+      "BaseSpell",
+      "BaseSpell",
+      "BaseSpell",
+      "BaseSpell",
+      "BaseSpell",
+      "BaseSpell",
+      "BaseSpell",
+      "BaseSpell",
+      "BaseSpell"
+    ],
+    "extraSpellsList": [
+      "{00000000}",
+      "Shared/Spells/BaseSpell",
+      "Shared/Spells/BaseSpell",
+      "Shared/Spells/BaseSpell",
+      "Shared/Spells/BaseSpell",
+      "Shared/Spells/BaseSpell",
+      "Shared/Spells/BaseSpell",
+      "Shared/Spells/BaseSpell",
+      "Shared/Spells/BaseSpell",
+      "Shared/Spells/BaseSpell",
+      "Shared/Spells/BaseSpell",
+      "Shared/Spells/BaseSpell",
+      "Shared/Spells/BaseSpell",
+      "Shared/Spells/BaseSpell",
+      "Shared/Spells/BaseSpell",
+      "Shared/Spells/BaseSpell"
+    ],
+    "mAbilities": [
+      "Characters/Morgana/Spells/MorganaQAbility",
+      "Characters/Morgana/Spells/MorganaWAbility",
+      "Characters/Morgana/Spells/MorganaEAbility",
+      "Characters/Morgana/Spells/MorganaRAbility",
+      "Characters/Morgana/Spells/MorganaPassiveAbility"
+    ],
+    "passiveName": "Spell_MorganaPassive_Name",
+    "passiveLuaName": "MorganaPassive",
+    "passiveToolTip": "Spell_MorganaPassive_Summary",
+    "passiveSpell": "MorganaPassive",
+    "passive1IconName": "assets/characters/morgana/hud/icons2d/fallenangel_empathize.dds",
+    "name": "game_character_displayname_Morgana",
+    "selectionHeight": 145.0,
+    "selectionRadius": 120.0,
+    "pathfindingCollisionRadius": 35.0,
+    "unitTagsString": "Champion",
+    "mEducationToolData": {
+      "firstItem": 1056,
+      "skillOrder": 1,
+      "__type": "ToolEducationData"
+    },
+    "mAbilitySlotCC": [
+      15,
+      0,
+      0,
+      16
+    ],
+    "characterToolData": {
+      "spellData": [
+        {
+          "desc": "Latches chains of energy onto nearby enemy champions dealing damage and stunning them, and if they move too far from Morgana Hex, they are dealt additional damage and stunned again.",
+          "displayName": "Soul Shackles",
+          "__type": "ToolSpellDesc"
+        },
+        {
+          "desc": "Latches chains of energy onto nearby enemy champions dealing damage and stunning them, and if they move too far from Morgana Hex, they are dealt additional damage and stunned again.",
+          "displayName": "Soul Shackles",
+          "__type": "ToolSpellDesc"
+        },
+        {
+          "desc": "Latches chains of energy onto nearby enemy champions dealing damage and stunning them, and if they move too far from Morgana Hex, they are dealt additional damage and stunned again.",
+          "displayName": "Soul Shackles",
+          "__type": "ToolSpellDesc"
+        },
+        {
+          "desc": "Latches chains of energy onto nearby enemy champions dealing damage and stunning them, and if they move too far from Morgana Hex, they are dealt additional damage and stunned again.",
+          "displayName": "Soul Shackles",
+          "__type": "ToolSpellDesc"
+        }
+      ],
+      "mapAIPresence": {
+        "0": {
+          "intro": true,
+          "{ca762bfc}": true,
+          "{b75b2ab8}": true,
+          "{b66d0e47}": true,
+          "{6175bb7b}": true,
+          "__type": "ToolAiPresence"
+        },
+        "3": {
+          "{ca762bfc}": true,
+          "{b75b2ab8}": true,
+          "{b66d0e47}": true,
+          "{6175bb7b}": true,
+          "__type": "ToolAiPresence"
+        },
+        "4": {
+          "{ca762bfc}": true,
+          "{b75b2ab8}": true,
+          "{b66d0e47}": true,
+          "{6175bb7b}": true,
+          "__type": "ToolAiPresence"
+        },
+        "5": {
+          "{6175bb7b}": true,
+          "__type": "ToolAiPresence"
+        }
+      },
+      "passiveData": [
+        {
+          "name": "game_character_passiveName_Morgana",
+          "__type": "ToolPassiveData"
+        }
+      ],
+      "searchTags": "support",
+      "searchTagsSecondary": "mage",
+      "championId": 25,
+      "roles": "SUPPORT",
+      "magicRank": 8,
+      "LevelSpellEffectiveness": 4.5,
+      "difficultyRank": 1,
+      "description": "game_character_description_Morgana",
+      "defenseRank": 6,
+      "classification": "Arcane",
+      "ChasingAttackRangePercent": 0.800000011920929,
+      "botEnabled": true,
+      "botEnabledMM": true,
+      "attackRank": 1,
+      "__type": "CharacterToolData"
+    },
+    "platformEnabled": true,
+    "purchaseIdentities": [
+      "Ranged"
+    ],
+    "mPreferredPerkStyle": "Perks/Styles/Sorcery",
+    "mCharacterPassiveSpell": "Characters/Morgana/Spells/MorganaPassiveAbility/MorganaPassive",
+    "mCharacterPassiveBuffs": [
+      {
+        "mParentPassiveBuff": "{0fd25b11}",
+        "SkinFilter": {
+          "skinIds": [
+            80
+          ],
+          "__type": "SkinFilterData"
+        },
+        "__type": "CharacterPassiveData"
+      }
+    ],
+    "{c5c48b41}": 1,
+    "__type": "CharacterRecord"
+  },
+  "Characters/Morgana/Spells/MorganaQAbility/MorganaQ": {
+    "mSpell": {
+      "mAffectsTypeFlags": 6154,
+      "mSpellTags": [
+        "Trait_ImmobilizingCCSpell",
+        "Trait_DamageAbility",
+        "Trait_SignatureSpell"
+      ],
+      "DataValues": [
+        {
+          "name": "Damage",
+          "values": [
+            25.0,
+            80.0,
+            135.0,
+            190.0,
+            245.0,
+            300.0,
+            355.0
+          ],
+          "__type": "SpellDataValue"
+        },
+        {
+          "name": "RootDuration",
+          "values": [
+            1.75,
+            2.0,
+            2.25,
+            2.5,
+            2.75,
+            3.0,
+            3.25
+          ],
+          "__type": "SpellDataValue"
+        }
+      ],
+      "{f9c2333e}": {
+        "cherry": {
+          "value": [
+            12.0,
+            12.0,
+            12.0,
+            12.0,
+            12.0,
+            12.0,
+            12.0
+          ],
+          "__type": "SpellEffectAmount"
+        }
+      },
+      "mSpellCalculations": {
+        "TotalDamage": {
+          "mSimpleTooltipCalculationDisplay": 6,
+          "mFormulaParts": [
+            {
+              "mDataValue": "Damage",
+              "__type": "NamedDataValueCalculationPart"
+            },
+            {
+              "mCoefficient": 0.8999999761581421,
+              "__type": "StatByCoefficientCalculationPart"
+            }
+          ],
+          "__type": "GameCalculation"
+        }
+      },
+      "mAnimationName": "Spell1",
+      "mImgIconName": [
+        "ASSETS/Characters/Morgana/HUD/Icons2D/FallenAngel_DarkBinding.dds"
+      ],
+      "mCastTime": 0.25,
+      "spellCastTime": 0.0,
+      "spellTotalTime": 0.0,
+      "mCantCancelWhileWindingUp": true,
+      "useAnimatorFramerate": true,
+      "bHaveHitEffect": true,
+      "mTurnSpeedScalar": 3.0,
+      "castRange": [
+        1300.0,
+        1300.0,
+        1300.0,
+        1300.0,
+        1300.0,
+        1300.0,
+        1300.0
+      ],
+      "castRangeValues": {
+        "values": [
+          1300.0,
+          1300.0,
+          1300.0,
+          1300.0,
+          1300.0,
+          1300.0,
+          1300.0
+        ],
+        "{0a3e0478}": 1300.0,
+        "__type": "{0a0eddc9}"
+      },
+      "castRangeDisplayOverride": [
+        1250.0,
+        1250.0,
+        1250.0,
+        1250.0,
+        1250.0,
+        1250.0,
+        1250.0
+      ],
+      "castRadius": [
+        210.0,
+        210.0,
+        210.0,
+        210.0,
+        210.0,
+        210.0,
+        210.0
+      ],
+      "castConeDistance": 100.0,
+      "mMissileSpec": {
+        "mMissileWidth": 70.0,
+        "movementComponent": {
+          "mUseHeightOffsetAtEnd": true,
+          "mTracksTarget": false,
+          "mOffsetInitialTargetHeight": 100.0,
+          "mStartBoneName": "root",
+          "mProjectTargetToCastRange": true,
+          "mSpeed": 1200.0,
+          "__type": "FixedSpeedMovement"
+        },
+        "heightSolver": {
+          "__type": "BlendedLinearHeightSolver"
+        },
+        "verticalFacing": {
+          "__type": "VerticalFacingFaceTarget"
+        },
+        "behaviors": [
+          {
+            "__type": "CastOnHit"
+          },
+          {
+            "__type": "DestroyOnMovementComplete"
+          },
+          {
+            "__type": "DestroyOnHit"
+          }
+        ],
+        "__type": "MissileSpecification"
+      },
+      "mCastType": 3,
+      "castFrame": 4.545000076293945,
+      "missileSpeed": 1200.0,
+      "mMissileEffectKey": "Morgana_Q_Mis",
+      "mLineWidth": 70.0,
+      "mHitEffectKey": "Morgana_Q_Tar",
+      "bHaveHitBone": true,
+      "mHitBoneName": "root",
+      "mana": [
+        50.0,
+        55.0,
+        60.0,
+        65.0,
+        70.0,
+        75.0
+      ],
+      "manaValues": {
+        "values": [
+          50.0,
+          55.0,
+          60.0,
+          65.0,
+          70.0,
+          75.0
+        ],
+        "{0a3e0478}": 50.0,
+        "__type": "{630af303}"
+      },
+      "selectionPriority": 2,
+      "mTargetingTypeData": {
+        "__type": "Direction"
+      },
+      "mSpellCooldownOrSealedQueueThreshold": 0.5,
+      "mCastingBreaksStealth": true,
+      "mClientData": {
+        "mTooltipData": {
+          "mObjectName": "MorganaQ",
+          "mFormat": "{d7c27163}",
+          "mLocKeys": {
+            "keyName": "Spell_MorganaQ_Name",
+            "keyTooltip": "Spell_MorganaQ_Tooltip",
+            "keySummary": "Spell_MorganaQ_Summary"
+          },
+          "mLists": {
+            "LevelUp": {
+              "levelCount": 5,
+              "Elements": [
+                {
+                  "type": "Damage",
+                  "nameOverride": "Spell_ListType_Damage",
+                  "__type": "TooltipInstanceListElement"
+                },
+                {
+                  "type": "RootDuration",
+                  "nameOverride": "Spell_ListType_RootDuration",
+                  "__type": "TooltipInstanceListElement"
+                },
+                {
+                  "type": "Cost",
+                  "__type": "TooltipInstanceListElement"
+                }
+              ],
+              "__type": "TooltipInstanceList"
+            }
+          },
+          "__type": "TooltipInstanceSpell"
+        },
+        "mTargeterDefinitions": [
+          {
+            "hideWithLineIndicator": true,
+            "__type": "TargeterDefinitionRange"
+          },
+          {
+            "endLocator": {
+              "basePosition": 3,
+              "__type": "DrawablePositionLocator"
+            },
+            "lineStopsAtEndPosition": false,
+            "lineWidth": {
+              "mPerLevelValues": [
+                70.0,
+                70.0,
+                70.0,
+                70.0,
+                70.0,
+                70.0
+              ],
+              "mValueType": 2,
+              "__type": "FloatPerSpellLevel"
+            },
+            "__type": "TargeterDefinitionLine"
+          }
+        ],
+        "__type": "SpellDataResourceClient"
+      },
+      "__type": "SpellDataResource"
+    }
+  },
+  "Characters/Morgana/Spells/MorganaWAbility/MorganaW": {
+    "mSpell": {
+      "mAffectsTypeFlags": 6154,
+      "mSpellTags": [
+        "Trait_DamageAbility",
+        "Trait_DoT",
+        "Trait_Target_Area",
+        "Trait_Ranged_Zone",
+        "Trait_AoE"
+      ],
+      "DataValues": [
+        {
+          "name": "BaseDamage",
+          "values": [
+            5.0,
+            18.0,
+            31.0,
+            44.0,
+            57.0,
+            70.0,
+            83.0
+          ],
+          "__type": "SpellDataValue"
+        },
+        {
+          "name": "BaseAPRatio",
+          "values": [
+            0.20000000298023224,
+            0.20000000298023224,
+            0.20000000298023224,
+            0.20000000298023224,
+            0.20000000298023224,
+            0.20000000298023224,
+            0.20000000298023224
+          ],
+          "__type": "SpellDataValue"
+        },
+        {
+          "name": "TickRate",
+          "values": [
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5
+          ],
+          "__type": "SpellDataValue"
+        },
+        {
+          "name": "MissingHealthAmpPercent",
+          "values": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "__type": "SpellDataValue"
+        },
+        {
+          "name": "WDuration",
+          "values": [
+            5.0,
+            5.0,
+            5.0,
+            5.0,
+            5.0,
+            5.0,
+            5.0
+          ],
+          "__type": "SpellDataValue"
+        },
+        {
+          "name": "CDRefundPercent",
+          "values": [
+            0.05000000074505806,
+            0.05000000074505806,
+            0.05000000074505806,
+            0.05000000074505806,
+            0.05000000074505806,
+            0.05000000074505806,
+            0.05000000074505806
+          ],
+          "__type": "SpellDataValue"
+        },
+        {
+          "name": "MonsterMod",
+          "values": [
+            170.0,
+            170.0,
+            170.0,
+            170.0,
+            170.0,
+            170.0,
+            170.0
+          ],
+          "__type": "SpellDataValue"
+        }
+      ],
+      "mSpellCalculations": {
+        "TotalMinDamage": {
+          "mSimpleTooltipCalculationDisplay": 6,
+          "mFormulaParts": [
+            {
+              "mDataValue": "BaseDamage",
+              "__type": "NamedDataValueCalculationPart"
+            },
+            {
+              "mDataValue": "BaseApRatio",
+              "__type": "StatByNamedDataValueCalculationPart"
+            }
+          ],
+          "__type": "GameCalculation"
+        },
+        "TotalMaxDamage": {
+          "mMultiplier": {
+            "mSubparts": [
+              {
+                "mNumber": 1.0,
+                "__type": "NumberCalculationPart"
+              },
+              {
+                "mDataValue": "MissingHealthAmpPercent",
+                "__type": "NamedDataValueCalculationPart"
+              }
+            ],
+            "__type": "SumOfSubPartsCalculationPart"
+          },
+          "mModifiedGameCalculation": "TotalMinDamage",
+          "__type": "GameCalculationModified"
+        }
+      },
+      "mAnimationName": "Spell2",
+      "mImgIconName": [
+        "ASSETS/Characters/Morgana/HUD/Icons2D/FallenAngel_TormentedSoil.dds"
+      ],
+      "mCastTime": 0.25,
+      "spellCastTime": 0.0,
+      "spellTotalTime": 0.0,
+      "cooldownTime": [
+        12.0,
+        12.0,
+        12.0,
+        12.0,
+        12.0,
+        12.0,
+        12.0
+      ],
+      "Cooldown": {
+        "values": [
+          12.0,
+          12.0,
+          12.0,
+          12.0,
+          12.0,
+          12.0,
+          12.0
+        ],
+        "{0a3e0478}": 12.0,
+        "__type": "{0a0eddc9}"
+      },
+      "mCantCancelWhileWindingUp": true,
+      "mSpellRevealsChampion": false,
+      "useAnimatorFramerate": true,
+      "mTurnSpeedScalar": 3.0,
+      "castRange": [
+        900.0,
+        900.0,
+        900.0,
+        900.0,
+        900.0,
+        900.0,
+        900.0
+      ],
+      "castRangeValues": {
+        "values": [
+          900.0,
+          900.0,
+          900.0,
+          900.0,
+          900.0,
+          900.0,
+          900.0
+        ],
+        "{0a3e0478}": 900.0,
+        "__type": "{0a0eddc9}"
+      },
+      "castRadius": [
+        280.0,
+        280.0,
+        280.0,
+        280.0,
+        280.0,
+        280.0,
+        280.0
+      ],
+      "castConeDistance": 100.0,
+      "castFrame": 20.15999984741211,
+      "missileSpeed": 20.0,
+      "mana": [
+        70.0,
+        80.0,
+        90.0,
+        100.0,
+        110.0,
+        120.0
+      ],
+      "manaValues": {
+        "values": [
+          70.0,
+          80.0,
+          90.0,
+          100.0,
+          110.0,
+          120.0
+        ],
+        "{0a3e0478}": 70.0,
+        "__type": "{630af303}"
+      },
+      "selectionPriority": 2,
+      "mTargetingTypeData": {
+        "__type": "Area"
+      },
+      "mSpellCooldownOrSealedQueueThreshold": 0.5,
+      "mCastingBreaksStealth": true,
+      "mClientData": {
+        "mTooltipData": {
+          "mObjectName": "MorganaW",
+          "mFormat": "{d7c27163}",
+          "mLocKeys": {
+            "keyName": "Spell_MorganaW_Name",
+            "keySummary": "Spell_MorganaW_Summary",
+            "keyTooltip": "Spell_MorganaW_Tooltip",
+            "keyTooltipExtendedBelowLine": "Spell_MorganaW_TooltipExtendedBelowLine"
+          },
+          "mLists": {
+            "LevelUp": {
+              "levelCount": 5,
+              "Elements": [
+                {
+                  "type": "BaseDamage",
+                  "nameOverride": "Spell_ListType_DamagePerSecond",
+                  "__type": "TooltipInstanceListElement"
+                },
+                {
+                  "type": "Cost",
+                  "__type": "TooltipInstanceListElement"
+                }
+              ],
+              "__type": "TooltipInstanceList"
+            }
+          },
+          "__type": "TooltipInstanceSpell"
+        },
+        "mTargeterDefinitions": [
+          {
+            "__type": "TargeterDefinitionRange"
+          },
+          {
+            "centerLocator": {
+              "basePosition": 3,
+              "__type": "DrawablePositionLocator"
+            },
+            "__type": "TargeterDefinitionAoe"
+          }
+        ],
+        "__type": "SpellDataResourceClient"
+      },
+      "__type": "SpellDataResource"
+    }
+  },
+  "Characters/Morgana/Spells/MorganaEAbility/MorganaE": {
+    "mSpell": {
+      "flags": 4,
+      "mAffectsTypeFlags": 1,
+      "mRequiredUnitTags": {
+        "mObjectTagList": [
+          "{ea595ca6}"
+        ],
+        "__type": "ObjectTags"
+      },
+      "mSpellTags": [
+        "PositiveEffect_Boon",
+        "Trait_Shield",
+        "Trait_CCImmune"
+      ],
+      "DataValues": [
+        {
+          "name": "ShieldStrength",
+          "values": [
+            45.0,
+            100.0,
+            155.0,
+            210.0,
+            265.0,
+            320.0,
+            375.0
+          ],
+          "__type": "SpellDataValue"
+        },
+        {
+          "name": "ShieldDuration",
+          "values": [
+            5.0,
+            5.0,
+            5.0,
+            5.0,
+            5.0,
+            5.0,
+            5.0
+          ],
+          "__type": "SpellDataValue"
+        }
+      ],
+      "mSpellCalculations": {
+        "TotalShieldStrength": {
+          "mSimpleTooltipCalculationDisplay": 6,
+          "mFormulaParts": [
+            {
+              "mDataValue": "ShieldStrength",
+              "__type": "NamedDataValueCalculationPart"
+            },
+            {
+              "mCoefficient": 0.699999988079071,
+              "__type": "StatByCoefficientCalculationPart"
+            }
+          ],
+          "__type": "GameCalculation"
+        }
+      },
+      "mAnimationName": "Spell3",
+      "mImgIconName": [
+        "ASSETS/Characters/Morgana/HUD/Icons2D/FallenAngel_BlackShield.dds"
+      ],
+      "spellCastTime": 0.515250027179718,
+      "spellTotalTime": 1.2666000127792358,
+      "cooldownTime": [
+        26.0,
+        26.0,
+        23.5,
+        21.0,
+        18.5,
+        16.0,
+        16.0
+      ],
+      "Cooldown": {
+        "values": [
+          26.0,
+          26.0,
+          23.5,
+          21.0,
+          18.5,
+          16.0,
+          16.0
+        ],
+        "__type": "{0a0eddc9}"
+      },
+      "mCantCancelWhileWindingUp": true,
+      "castRange": [
+        800.0,
+        800.0,
+        800.0,
+        800.0,
+        800.0,
+        800.0,
+        800.0
+      ],
+      "castRangeValues": {
+        "values": [
+          800.0,
+          800.0,
+          800.0,
+          800.0,
+          800.0,
+          800.0,
+          800.0
+        ],
+        "{0a3e0478}": 800.0,
+        "__type": "{0a0eddc9}"
+      },
+      "castRadius": [
+        210.0,
+        210.0,
+        210.0,
+        210.0,
+        210.0,
+        210.0,
+        210.0
+      ],
+      "castConeDistance": 100.0,
+      "castFrame": 20.15999984741211,
+      "missileSpeed": 20.0,
+      "bHaveHitBone": true,
+      "mHitBoneName": "head",
+      "mana": [
+        80.0,
+        80.0,
+        80.0,
+        80.0,
+        80.0,
+        80.0
+      ],
+      "manaValues": {
+        "values": [
+          80.0,
+          80.0,
+          80.0,
+          80.0,
+          80.0,
+          80.0
+        ],
+        "{0a3e0478}": 80.0,
+        "__type": "{630af303}"
+      },
+      "selectionPriority": 2,
+      "TargetingForgivenessDefinitions": [
+        {
+          "ForgivenessRange": 175.0,
+          "TargetForgivenessDefinitions": [
+            {
+              "mUnitTags": {
+                "mObjectTagList": [
+                  "{ea595ca6}",
+                  "{c02a7870}"
+                ],
+                "__type": "ObjectTags"
+              },
+              "__type": "HasUnitTagsCastRequirement"
+            }
+          ],
+          "__type": "TargetingForgivenessDefinitions"
+        }
+      ],
+      "mSpellCooldownOrSealedQueueThreshold": 0.5,
+      "mClientData": {
+        "mTooltipData": {
+          "mObjectName": "MorganaE",
+          "mFormat": "{d7c27163}",
+          "mLocKeys": {
+            "keyName": "Spell_MorganaE_Name",
+            "keySummary": "Spell_MorganaE_Summary",
+            "keyTooltip": "Spell_MorganaE_Tooltip"
+          },
+          "mLists": {
+            "LevelUp": {
+              "levelCount": 5,
+              "Elements": [
+                {
+                  "type": "ShieldStrength",
+                  "nameOverride": "Spell_ListType_ShieldAmount",
+                  "__type": "TooltipInstanceListElement"
+                },
+                {
+                  "type": "Cooldown",
+                  "__type": "TooltipInstanceListElement"
+                }
+              ],
+              "__type": "TooltipInstanceList"
+            }
+          },
+          "__type": "TooltipInstanceSpell"
+        },
+        "mTargeterDefinitions": [
+          {
+            "__type": "TargeterDefinitionRange"
+          }
+        ],
+        "__type": "SpellDataResourceClient"
+      },
+      "__type": "SpellDataResource"
+    }
+  },
+  "Characters/Morgana/Spells/MorganaRAbility/MorganaR": {
+    "mSpell": {
+      "mAffectsTypeFlags": 6154,
+      "mRequiredUnitTags": {
+        "mObjectTagList": [
+          "{ea595ca6}"
+        ],
+        "__type": "ObjectTags"
+      },
+      "mCastRequirementsCaster": [
+        {
+          "mUnitsRequirements": [
+            {
+              "mAffectsTypeFlags": 2,
+              "__type": "HasTypeAndStatusFlags"
+            }
+          ],
+          "mUnitsRequired": 1,
+          "mRange": 575.0,
+          "mDistanceType": 1,
+          "__type": "HasNNearbyUnitsRequirement"
+        }
+      ],
+      "mSpellTags": [
+        "Trait_Ultimate",
+        "Trait_ImmobilizingCCSpell",
+        "Trait_DamageAbility",
+        "Trait_AoE"
+      ],
+      "DataValues": [
+        {
+          "name": "Damage",
+          "values": [
+            125.0,
+            200.0,
+            275.0,
+            350.0,
+            425.0,
+            500.0,
+            575.0
+          ],
+          "__type": "SpellDataValue"
+        },
+        {
+          "name": "ChainDuration",
+          "values": [
+            3.0,
+            3.0,
+            3.0,
+            3.0,
+            3.0,
+            3.0,
+            3.0
+          ],
+          "__type": "SpellDataValue"
+        },
+        {
+          "name": "StunDuration",
+          "values": [
+            1.25,
+            1.5,
+            1.75,
+            2.0,
+            2.25,
+            2.5,
+            2.75
+          ],
+          "__type": "SpellDataValue"
+        },
+        {
+          "name": "SlowPercent",
+          "values": [
+            20.0,
+            20.0,
+            20.0,
+            20.0,
+            20.0,
+            20.0,
+            20.0
+          ],
+          "__type": "SpellDataValue"
+        },
+        {
+          "name": "HastePercent",
+          "values": [
+            0.0,
+            20.0,
+            40.0,
+            60.0,
+            80.0,
+            100.0,
+            120.0
+          ],
+          "__type": "SpellDataValue"
+        }
+      ],
+      "mSpellCalculations": {
+        "TotalDamage": {
+          "mSimpleTooltipCalculationDisplay": 6,
+          "mFormulaParts": [
+            {
+              "mDataValue": "Damage",
+              "__type": "NamedDataValueCalculationPart"
+            },
+            {
+              "mCoefficient": 0.800000011920929,
+              "__type": "StatByCoefficientCalculationPart"
+            }
+          ],
+          "__type": "GameCalculation"
+        }
+      },
+      "mAnimationName": "Spell4",
+      "mImgIconName": [
+        "ASSETS/Characters/Morgana/HUD/Icons2D/FallenAngel_Purgatory.dds"
+      ],
+      "spellCastTime": 0.3499999940395355,
+      "spellTotalTime": 1.399999976158142,
+      "cooldownTime": [
+        10.0,
+        120.0,
+        110.0,
+        100.0,
+        10.0,
+        10.0,
+        10.0
+      ],
+      "Cooldown": {
+        "values": [
+          10.0,
+          120.0,
+          110.0,
+          100.0,
+          10.0,
+          10.0,
+          10.0
+        ],
+        "__type": "{0a0eddc9}"
+      },
+      "mCantCancelWhileWindingUp": true,
+      "useAnimatorFramerate": true,
+      "mPingableWhileDisabled": true,
+      "castRange": [
+        625.0,
+        625.0,
+        625.0,
+        625.0,
+        625.0,
+        625.0,
+        625.0
+      ],
+      "castRangeValues": {
+        "values": [
+          625.0,
+          625.0,
+          625.0,
+          625.0,
+          625.0,
+          625.0,
+          625.0
+        ],
+        "{0a3e0478}": 625.0,
+        "__type": "{0a0eddc9}"
+      },
+      "castRadius": [
+        625.0,
+        625.0,
+        625.0,
+        625.0,
+        625.0,
+        625.0,
+        625.0
+      ],
+      "castConeDistance": 100.0,
+      "castFrame": 28.0,
+      "missileSpeed": 20.0,
+      "bHaveHitBone": true,
+      "mHitBoneName": "head",
+      "mFloatVarsDecimals": [
+        0,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "mana": [
+        100.0,
+        100.0,
+        100.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "manaValues": {
+        "values": [
+          100.0,
+          100.0,
+          100.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "__type": "{630af303}"
+      },
+      "selectionPriority": 1,
+      "mTargetingTypeData": {
+        "__type": "SelfAoe"
+      },
+      "mSpellCooldownOrSealedQueueThreshold": 0.5,
+      "mCastingBreaksStealth": true,
+      "mClientData": {
+        "mTooltipData": {
+          "mObjectName": "MorganaR",
+          "mFormat": "{d7c27163}",
+          "mLocKeys": {
+            "keyName": "Spell_MorganaR_Name",
+            "keySummary": "Spell_MorganaR_Summary",
+            "keyTooltip": "Spell_MorganaR_Tooltip",
+            "keyTooltipExtendedBelowLine": "Spell_MorganaR_TooltipExtendedBelowLine"
+          },
+          "mLists": {
+            "LevelUp": {
+              "levelCount": 3,
+              "Elements": [
+                {
+                  "type": "Damage",
+                  "nameOverride": "Spell_ListType_Damage",
+                  "__type": "TooltipInstanceListElement"
+                },
+                {
+                  "type": "HastePercent",
+                  "nameOverride": "Spell_ListType_MovementSpeed",
+                  "Style": 1,
+                  "__type": "TooltipInstanceListElement"
+                },
+                {
+                  "type": "StunDuration",
+                  "nameOverride": "Spell_ListType_StunDuration",
+                  "__type": "TooltipInstanceListElement"
+                },
+                {
+                  "type": "Cooldown",
+                  "__type": "TooltipInstanceListElement"
+                }
+              ],
+              "__type": "TooltipInstanceList"
+            }
+          },
+          "__type": "TooltipInstanceSpell"
+        },
+        "mTargeterDefinitions": [
+          {
+            "__type": "TargeterDefinitionRange"
+          }
+        ],
+        "__type": "SpellDataResourceClient"
+      },
+      "__type": "SpellDataResource"
+    }
+  }
+}
