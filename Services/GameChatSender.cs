@@ -27,6 +27,26 @@ namespace League.Services
             Debug.WriteLine("[GameChatSender] ChatMessageBuilder 已成功设置");
         }
 
+        public async Task HandleTierAsync(Func<CancellationToken,Task<IReadOnlyList<string>>> build)
+        {
+            if(_isSendingMessage || _mainForm.IsDisposed || !GameInputService.IsGameForeground())return;
+            _isSendingMessage=true;
+            using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(25));
+            try
+            {
+                var messages=await build(timeout.Token);
+                if(messages.Count==0 || _mainForm.IsDisposed || await GetGameflowPhaseSafeAsync()!="InProgress")return;
+                // Release Ctrl before Enter so the chord cannot change the chat channel.
+                var until=DateTime.UtcNow.AddSeconds(2);
+                while(!GameInputService.ModifiersReleased() && DateTime.UtcNow<until)await Task.Delay(30,timeout.Token);
+                if(!GameInputService.ModifiersReleased())return;
+                await new GameInputService().SendInGameMessageAsync(string.Join("\n",messages),
+                    ()=>!_mainForm.IsDisposed && !timeout.IsCancellationRequested && GameInputService.IsGameForeground() && GameInputService.ModifiersReleased());
+            }
+            catch(Exception ex){Debug.WriteLine("梯队快捷发送未完成："+ex.Message);}
+            finally{_isSendingMessage=false;}
+        }
+
         // Ctrl + F7 - 选人阶段
         public async Task HandleChampSelectF7Async()
         {

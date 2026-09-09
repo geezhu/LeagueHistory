@@ -46,14 +46,26 @@ namespace League.Services
         private const ushort SCAN_RETURN = 0x1C;
 
         private readonly Random _random = new Random();
+        private static readonly SemaphoreSlim SendGate=new(1,1);
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window,out uint processId);
+        [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+        public static bool ModifiersReleased()=>new[]{0x10,0x11,0x12}.All(key=>(GetAsyncKeyState(key)&0x8000)==0);
+        public static bool IsGameForeground()
+        {
+            try{GetWindowThreadProcessId(GetForegroundWindow(),out uint id);using var process=Process.GetProcessById((int)id);
+                return process.ProcessName.Equals("League of Legends",StringComparison.OrdinalIgnoreCase);}
+            catch{return false;}
+        }
         #endregion
 
         /// <summary>
         /// 游戏内秒级战绩发送（原子级瞬发版：全队发送仅需 3-4 秒）
         /// </summary>
-        public async Task<bool> SendInGameMessageAsync(string message)
+        public async Task<bool> SendInGameMessageAsync(string message,Func<bool>? canContinue=null)
         {
             if (string.IsNullOrWhiteSpace(message)) return false;
+            if(!await SendGate.WaitAsync(0))return false;
 
             try
             {
@@ -61,6 +73,7 @@ namespace League.Services
 
                 foreach (var line in lines)
                 {
+                    if(canContinue?.Invoke()==false)return false;
                     // 1. 唤起聊天框 (压缩回车时间)
                     SendHardwareKey(VK_RETURN, SCAN_RETURN, false);
                     await Task.Delay(_random.Next(15, 25));
@@ -68,12 +81,14 @@ namespace League.Services
 
                     // 预留极短的 UI 响应时间（100ms 足够游戏内 UI 聚焦）
                     await Task.Delay(_random.Next(80, 120));
+                    if(canContinue?.Invoke()==false)return false;
 
                     // 2. 核心优化：整行文本作为一个原子操作瞬间注入 (耗时 0ms)
                     SendUnicodeStringInstant(line);
 
                     // 预留极其短暂的字数缓冲区反应时间
                     await Task.Delay(_random.Next(100, 150));
+                    if(canContinue?.Invoke()==false)return false;
 
                     // 3. 回车发送
                     SendHardwareKey(VK_RETURN, SCAN_RETURN, false);
@@ -91,6 +106,7 @@ namespace League.Services
                 Debug.WriteLine($"[秒级输入失败]: {ex.Message}");
                 return false;
             }
+            finally{SendGate.Release();}
         }
 
         /// <summary>
@@ -145,7 +161,7 @@ namespace League.Services
             }
 
             // 一条系统指令将整个数组全部发送出去，底层多线程原子化执行
-            SendInput((uint)inputs.Length, inputs, inputSize);
+            if(SendInput((uint)inputs.Length, inputs, inputSize)!=(uint)inputs.Length)throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
         }
 
         private void SendHardwareKey(ushort vk, ushort scan, bool isKeyUp)
@@ -166,7 +182,7 @@ namespace League.Services
                     }
                 }
             };
-            SendInput(1, inputs, Marshal.SizeOf(typeof(INPUT)));
+            if(SendInput(1, inputs, Marshal.SizeOf(typeof(INPUT)))!=1)throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
         }
     }
 }

@@ -13,14 +13,13 @@ namespace League.Managers
         private DateTime _lastHookTrigger = DateTime.MinValue;
         private readonly TimeSpan _debounceInterval = TimeSpan.FromMilliseconds(800);
         private readonly FormMain _mainForm;
+        private readonly HashSet<Keys> _heldTierKeys=new();
 
-        private HotkeySpec _champSelect = HotkeySpec.Parse("Ctrl+F7");
-        private HotkeySpec _myTeam = HotkeySpec.Parse("F9");
-        private HotkeySpec _fullTeam = HotkeySpec.Parse("F11");
-
-        public event Action? OnMyTeamHotkey;      // 游戏内·我方
-        public event Action? OnFullTeamHotkey;    // 游戏内·全队
-        public event Action? OnChampSelectF7;     // 选人阶段发送（事件名可保持）
+        public event Action? OnMyTeamHotkey;      // F9  发送我方
+        public event Action? OnFullTeamHotkey;    // F11  发送全队（原F12）
+        public event Action? OnChampSelectF7;     // Ctrl + F7
+        public event Action? OnMyTierHotkey;      // Ctrl + F9
+        public event Action? OnEnemyTierHotkey;   // Ctrl + F11
 
         public HotkeyManager(FormMain mainForm)
         {
@@ -81,15 +80,14 @@ namespace League.Managers
 
             try
             {
-                // 正在热键框里改键时，不拦截、不触发发送
-                if (_mainForm.IsHotkeyCaptureFocused())
-                    return CallNextHookEx(_hookId, nCode, wParam, lParam);
-
+                if(wParam==(IntPtr)0x0101)_heldTierKeys.Remove((Keys)Marshal.ReadInt32(lParam));
                 if (wParam == (IntPtr)WM_KEYDOWN)
                 {
                     int vkCode = Marshal.ReadInt32(lParam);
                     Keys key = (Keys)vkCode;
                     bool isCtrlDown = (GetAsyncKeyState((int)Keys.ControlKey) & 0x8000) != 0;
+                    if(_heldTierKeys.Contains(key))return (IntPtr)1;
+                    if(isCtrlDown && key is Keys.F9 or Keys.F11)_heldTierKeys.Add(key);
 
                     bool isTargetKey =
                         _champSelect.Matches(key, isCtrlDown) ||
@@ -141,7 +139,9 @@ namespace League.Managers
 
                 if (phase == "InProgress")
                 {
-                    if (_myTeam.Matches(key, isCtrlDown))
+                    if (isCtrlDown && key == Keys.F9)OnMyTierHotkey?.Invoke();
+                    else if (isCtrlDown && key == Keys.F11)OnEnemyTierHotkey?.Invoke();
+                    else if (key == Keys.F9)
                     {
                         Debug.WriteLine("[HotkeyManager] 我方热键 → 发送我方队伍");
                         OnMyTeamHotkey?.Invoke();
@@ -184,6 +184,7 @@ namespace League.Managers
             OnMyTeamHotkey = null;
             OnFullTeamHotkey = null;
             OnChampSelectF7 = null;
+            OnMyTierHotkey=null;OnEnemyTierHotkey=null;
         }
 
         private readonly struct HotkeySpec
