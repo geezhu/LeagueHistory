@@ -13,10 +13,13 @@ namespace League.Managers
         private readonly TimeSpan _debounceInterval = TimeSpan.FromMilliseconds(800);
 
         private readonly FormMain _mainForm;
+        private readonly HashSet<Keys> _heldTierKeys=new();
 
         public event Action? OnMyTeamHotkey;      // F9  发送我方
         public event Action? OnFullTeamHotkey;    // F11  发送全队（原F12）
         public event Action? OnChampSelectF7;     // Ctrl + F7
+        public event Action? OnMyTierHotkey;      // Ctrl + F9
+        public event Action? OnEnemyTierHotkey;   // Ctrl + F11
 
         public HotkeyManager(FormMain mainForm)
         {
@@ -66,11 +69,14 @@ namespace League.Managers
 
             try
             {
+                if(wParam==(IntPtr)0x0101)_heldTierKeys.Remove((Keys)Marshal.ReadInt32(lParam));
                 if (wParam == (IntPtr)WM_KEYDOWN)
                 {
                     int vkCode = Marshal.ReadInt32(lParam);
                     Keys key = (Keys)vkCode;
                     bool isCtrlDown = (GetAsyncKeyState((int)Keys.ControlKey) & 0x8000) != 0;
+                    if(_heldTierKeys.Contains(key))return (IntPtr)1;
+                    if(isCtrlDown && key is Keys.F9 or Keys.F11)_heldTierKeys.Add(key);
 
                     // 判断是否是我们需要处理的热键（F12 不再拦截）
                     bool isTargetKey = (key == Keys.F9 || key == Keys.F11 ||
@@ -120,7 +126,9 @@ namespace League.Managers
                 }
                 else if (phase == "InProgress")
                 {
-                    if (key == Keys.F9)
+                    if (isCtrlDown && key == Keys.F9)OnMyTierHotkey?.Invoke();
+                    else if (isCtrlDown && key == Keys.F11)OnEnemyTierHotkey?.Invoke();
+                    else if (key == Keys.F9)
                     {
                         Debug.WriteLine("[HotkeyManager] F9 已触发 → 发送我方队伍");
                         OnMyTeamHotkey?.Invoke();
@@ -168,6 +176,7 @@ namespace League.Managers
             OnMyTeamHotkey = null;
             OnFullTeamHotkey = null;
             OnChampSelectF7 = null;
+            OnMyTierHotkey=null;OnEnemyTierHotkey=null;
         }
     }
 }
