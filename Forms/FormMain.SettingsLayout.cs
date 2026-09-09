@@ -42,7 +42,7 @@ public partial class FormMain
                 var group=page.Controls.OfType<GroupBox>().First();
                 var launcher=group.Controls[0];group.Controls.Remove(launcher);
                 var layout=SettingsPage(page,"客户端目录","管理英雄联盟安装路径，用于启动客户端和检测连接。");
-                launcher.Dock=DockStyle.None;launcher.Height=170;
+                launcher.Dock=DockStyle.None;
                 SettingsCard(layout,"英雄联盟安装目录",launcher);group.Dispose();
             }
             else if(page.Text=="数据缓存")

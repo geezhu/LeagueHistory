@@ -404,6 +404,13 @@ internal static class Program
                 using var screenshot = new Bitmap(580,150);
                 launcherPanel.DrawToBitmap(screenshot,new Rectangle(0,0,580,150));
                 screenshot.Save(Path.Combine(AppContext.BaseDirectory,"launcher-panel.png"));
+                launcherPanel.Width=300;launcherPanel.PerformLayout();
+                var buttons=Children(launcherPanel).OfType<Button>().ToArray();
+                Check(buttons.All(b=>b.Right<=b.Parent!.ClientSize.Width && b.Bottom<=b.Parent.ClientSize.Height),"Launcher buttons wrap without clipping in narrow panels");
+                Check(Children(launcherPanel).OfType<TextBox>().Single().ReadOnly,"Installation paths can be selected and copied without bypassing validation");
+                using var narrow=new Bitmap(launcherPanel.Width,launcherPanel.Height);
+                launcherPanel.DrawToBitmap(narrow,new Rectangle(Point.Empty,narrow.Size));
+                narrow.Save(Path.Combine(AppContext.BaseDirectory,"launcher-panel-narrow.png"));
             }
             var configPath = Path.Combine(launcherFixtureRoot,"LOLPathConfig.json");
             var helper = new League.UIHelpers.LOLHelper(configPath);
