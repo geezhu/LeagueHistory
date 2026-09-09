@@ -4,6 +4,7 @@ namespace League.Models
 {
     public class LeagueConfig
     {
+        public bool EnableChampionSelectAssistant { get; set; } = true;
         public int AramMetaCacheMinutes { get; set; } = 1440;
         /// <summary>
         /// 游戏结束后自动退出并返回客户端

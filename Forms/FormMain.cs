@@ -138,6 +138,9 @@ namespace League
                 // 读取配置
                 _appConfig = _configUpdateManager!.LoadConfig();
                 ConfigureAramMetaSettings();
+                ConfigureSettingsLayout();
+                var assistant=new ChampionSelectAssistant(this);
+                Disposed+=(_,_)=>assistant.Dispose();
 
                 // 恢复复选框状态（新增）
                 chkNormal.Checked = _appConfig.EnablePreliminaryInNormal;   //匹配
