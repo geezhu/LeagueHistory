@@ -12,6 +12,7 @@ internal sealed class ProfileBackgroundPanel : Panel
     private readonly Dictionary<Control, (Color background, Color foreground, Color? link)> _colors = new();
 
     public ProfileBackgroundPanel() { DoubleBuffered = true; }
+    internal void SetChampionArtwork(Image? image)=>SetArtwork(image);
 
     public static int SelectSkin(JToken? profile, JToken? mastery)
     {
