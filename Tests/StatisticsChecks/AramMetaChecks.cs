@@ -1,4 +1,4 @@
-using League.Clients;
+﻿using League.Clients;
 using League.Controls;
 using League.Models;
 using Newtonsoft.Json.Linq;
@@ -17,6 +17,10 @@ internal static class AramMetaChecks
         var index=AramMetaIndex.Parse(Fixture("index"));var ahri=index.Champions.Single(c=>c.Id==103);
         Check(index.Patch=="16.17" && ahri.WinRate!=ahri.RawWinRate && ahri.Tier=="T1","arammeta preserves adjusted and raw rates separately");
         Check(AramMetaIndex.Rate(null)==null && AramMetaIndex.Rate(new JValue(2))==null,"Missing or invalid rates are not zero");
+        var spellRows=new[]{new AramMetaRecommendation(new[]{4,7},"","",.51,.8,100,new()),new AramMetaRecommendation(new[]{4,21},"","",.6,.2,20,new()),new AramMetaRecommendation(new[]{4},"","",1,1,10,new())};
+        var highlights=AramMetaRecommendation.SpellHighlights(spellRows);
+        Check(ReferenceEquals(highlights[0].Entry,spellRows[0]) && ReferenceEquals(highlights[1].Entry,spellRows[1]),"Spell highlights independently choose highest pick and win rates, ignoring invalid combinations");
+        Check(AramMetaRecommendation.SpellHighlights(new[]{spellRows[0] with {WinRate=null,PickRate=null}}).All(h=>h.Entry==null),"Missing rates do not fabricate a top recommendation");
         var population=index with {Champions=Enumerable.Range(1,20).Select(id=>ahri with {Id=id,Games=50}).ToArray()};
         Check(population.SampleMatches==100 && population.PickRate(population.Champions[0])==.5,"Pick rate uses match count, not share of participant slots");
         var missing=population with {Champions=new[]{ahri with {Games=null}}};
@@ -141,6 +145,16 @@ internal static class AramMetaChecks
             while(!task.IsCompleted){Application.DoEvents();Thread.Sleep(5);}
             var cached=task.GetAwaiter().GetResult();
             Check(cached is Bitmap bitmap && bitmap.GetPixel(0,0).R==255 && imageRequests==0,"arammeta reuses match-history disk images without a public image request");
+            var localTask=(Task<Image?>)type.GetMethod("ImageAsync",flags)!.Invoke(view,new object?[]{null,"champion",champion.Id})!;
+            while(!localTask.IsCompleted){Application.DoEvents();Thread.Sleep(5);}
+            Check(localTask.GetAwaiter().GetResult() is Bitmap localBitmap && localBitmap.GetPixel(0,0).R==255 && imageRequests==0,"ID-only recommendations load local images without a remote URL");
+            using var iconHost=new Panel();
+            var icon=(PictureBox)type.GetMethod("Icon",flags)!.Invoke(view,new object?[]{iconHost,null,"test",CancellationToken.None,36,"champion",champion.Id})!;
+            Application.DoEvents();
+            Check(icon.Image!=null,"Recommendation picture boxes display ID-only resources");
+            var missing=(Task<Image?>)type.GetMethod("ImageAsync",flags)!.Invoke(view,new object?[]{null,"item",champion.Id})!;
+            while(!missing.IsCompleted){Application.DoEvents();Thread.Sleep(5);}
+            Check(missing.GetAwaiter().GetResult()==null && imageRequests==0,"Resource cache separates categories with the same numeric ID");
         }
         finally
         {
@@ -165,20 +179,26 @@ internal static class AramMetaChecks
         render.Invoke(view,new object[]{complete with {Detail=null},103,CancellationToken.None,false});
         var summary=detailPanel.Controls[0];
         var tabs=detailPanel.Controls[1].Controls.OfType<FlowLayoutPanel>().Single();
-        ((Button)tabs.Controls[1]).PerformClick();
+        ((Button)tabs.Controls[2]).PerformClick();
         render.Invoke(view,new object[]{complete,103,CancellationToken.None,true});
         Check(ReferenceEquals(summary,detailPanel.Controls[0]) && detailPanel.Controls.Count==3,"Equipment completion preserves summary controls and replaces only placeholders");
-        Check((int)type.GetField("_detailTab",flags)!.GetValue(view)! ==1,"Detail completion preserves the selected equipment tab");
+        Check((int)type.GetField("_detailTab",flags)!.GetValue(view)! ==2,"Detail completion preserves the selected equipment tab");
         ((Button)tabs.Controls[2]).PerformClick();
-        Check((int)type.GetField("_detailTab",flags)!.GetValue(view)! ==2,"Summoner spells have a direct tab");
-        ((Button)tabs.Controls[0]).PerformClick();
+        Check((int)type.GetField("_detailTab",flags)!.GetValue(view)! ==2,"Equipment and spells share a dedicated tab");
+        ((Button)tabs.Controls[1]).PerformClick();
         var body=detailPanel.Controls[2];
-        var filters=body.Controls.OfType<FlowLayoutPanel>().First().Controls.OfType<ComboBox>().ToArray();
-        filters[0].SelectedIndex=1;
-        Check((int)type.GetField("_rarity",flags)!.GetValue(view)! ==1,"Rarity filter switches recommendations");
-        body.Controls.OfType<FlowLayoutPanel>().First().Controls.OfType<ComboBox>().Last().SelectedIndex=1;
-        Check((int)type.GetField("_augmentSort",flags)!.GetValue(view)! ==1,"Augment win-rate sorting is selectable");
+        ((Button)body.Controls.OfType<FlowLayoutPanel>().First().Controls[1]).PerformClick();
+        Check((int)type.GetField("_rarity",flags)!.GetValue(view)! ==1,"Rarity buttons switch recommendations");
+        body.Controls.OfType<FlowLayoutPanel>().SelectMany(c=>c.Controls.OfType<ComboBox>()).Single().SelectedIndex=1;
+        Check((int)type.GetField("_augmentSort",flags)!.GetValue(view)! ==1,"Augment sorting remains available");
         Save("arammeta-detail",1060,800);
+        var comparison=body.Controls.OfType<FlowLayoutPanel>().SelectMany(c=>c.Controls.OfType<FlowLayoutPanel>()).First(c=>c.Tag is string tag && tag=="comparison-list");
+        var first=comparison.Controls.OfType<TableLayoutPanel>().Skip(1).First();
+        typeof(Control).GetMethod("OnClick",flags)!.Invoke(first,new object[]{EventArgs.Empty});
+        Save("arammeta-comparison-selected",1060,800);
+        ((Button)tabs.Controls[0]).PerformClick();Save("arammeta-overview",1060,800);
+        ((Button)tabs.Controls[2]).PerformClick();Save("arammeta-build-comparison",1060,800);
+        ((Button)tabs.Controls[1]).PerformClick();
         Run("TravelAsync",-1);Check(search.Text=="Ahri" && grid.Rows.Count==1 && grid.Visible,"Back restores ranking search");
         Run("TravelAsync",1);Check((int)type.GetField("_champion",flags)!.GetValue(view)! ==103,"Forward restores hero");
         form.ClientSize=new Size(660,700);Application.DoEvents();Save("arammeta-narrow",660,700);

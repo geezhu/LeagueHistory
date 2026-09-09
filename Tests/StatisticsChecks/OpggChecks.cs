@@ -85,19 +85,36 @@ internal static class OpggChecks
             && !(bool)selected.Invoke(null,new object[]{shardPlan,5008,2})!,"Repeated shards highlight only their selected rows");
         foreach(bool existing in new[]{false,true})
         {
-            string? method=null,path=null;JObject? body=null;
+            string? method=null,path=null;JObject? body=null;bool switched=false;
             using var lcu=new HttpClient(new Handler(async (request,token)=>
             {
+                if(request.RequestUri!.AbsolutePath=="/lol-perks/v1/currentpage")
+                {
+                    if(request.Method==HttpMethod.Put)
+                    {
+                        Check(await request.Content!.ReadAsStringAsync(token)=="12","Explicitly select the written page ID");
+                        switched=true;return Json(new JObject());
+                    }
+                    var current=switched?(JObject)body!.DeepClone():new JObject();current["id"]=switched?12:99;return Json(current);
+                }
                 if(request.Method==HttpMethod.Get)return Json(existing
                     ? JArray.Parse("[{\"id\":99,\"name\":\"Personal\",\"isEditable\":true,\"current\":true},{\"id\":12,\"name\":\"[League] OP.GG Ahri\",\"isEditable\":true}]")
                     : JArray.Parse("[{\"id\":99,\"name\":\"Personal\",\"isEditable\":true,\"current\":true}]"));
                 method=request.Method.Method;path=request.RequestUri!.AbsolutePath;
-                body=JObject.Parse(await request.Content!.ReadAsStringAsync(token));return Json(new JObject());
+                body=JObject.Parse(await request.Content!.ReadAsStringAsync(token));return Json(new JObject{["id"]=12});
             })) {BaseAddress=new Uri("https://localhost")};
             await OpggRuneService.ApplyAsync(lcu,runes,"阿狸",default);
             Check(method==(existing?"PUT":"POST") && path==(existing?"/lol-perks/v1/pages/12":"/lol-perks/v1/pages"),"Only tool-owned rune page is updated");
             Check(body!["selectedPerkIds"]!.Count()==9 && (bool?)body["current"]==true,"Full rune payload selects page");
+            Check(switched,"A successful write alone does not imply the page is active");
         }
+        using var unchanged=new HttpClient(new Handler((request,token)=>Task.FromResult(
+            request.RequestUri!.AbsolutePath=="/lol-perks/v1/pages" && request.Method==HttpMethod.Get
+                ? Json(JArray.Parse("[{\"id\":12,\"name\":\"[League] OP.GG Ahri\",\"isEditable\":true}]"))
+                : Json(new JObject{["id"]=99})))){BaseAddress=new Uri("https://localhost")};
+        bool rejected=false;
+        try{await OpggRuneService.ApplyAsync(unchanged,runes,"Ahri",default);}catch(InvalidOperationException){rejected=true;}
+        Check(rejected,"HTTP success without active rune changes must not report successful application");
     }
     public static void Render()
     {

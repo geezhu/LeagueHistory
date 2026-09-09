@@ -11,14 +11,17 @@ internal sealed partial class AramMetaView
     private readonly Dictionary<string,Task<Image?>> _imageLoads=new();
     private Task<Image?> ImageAsync(string? url,string kind="",int id=0)
     {
-        if(string.IsNullOrWhiteSpace(url))return Task.FromResult<Image?>(null);
-        if(!Uri.TryCreate(new Uri("https://arammeta.com/"),url,out var uri) || uri.Scheme!="https" || !new[]{"arammeta.com","ddragon.leagueoflegends.com"}.Contains(uri.Host))return Task.FromResult<Image?>(null);
-        string key=uri.AbsoluteUri;
+        // ID-based recommendations use the existing game resources without a public URL.
+        string? fallback=null;
+        if(!string.IsNullOrWhiteSpace(url) && Uri.TryCreate(new Uri("https://arammeta.com/"),url,out var uri) && uri.Scheme=="https" && new[]{"arammeta.com","ddragon.leagueoflegends.com"}.Contains(uri.Host))fallback=uri.AbsoluteUri;
+        bool local=id>0 && kind is "champion" or "item" or "spell" or "augment";
+        if(!local && fallback==null)return Task.FromResult<Image?>(null);
+        string key=local?$"{kind}:{id}:{fallback}":fallback!;
         if(_images.TryGetValue(key,out var cached))return Task.FromResult<Image?>(cached);
         if(_imageLoads.TryGetValue(key,out var pending))return pending;
-        return _imageLoads[key]=FetchImageAsync(key,kind,id);
+        return _imageLoads[key]=FetchImageAsync(key,fallback,kind,id);
     }
-    private async Task<Image?> FetchImageAsync(string url,string kind,int id)
+    private async Task<Image?> FetchImageAsync(string key,string? url,string kind,int id)
     {
         await _imageGate.WaitAsync();
         try
@@ -42,13 +45,13 @@ internal sealed partial class AramMetaView
                 catch { /* Missing client resources fall back to the public image cache. */ }
             }
             if(IsDisposed){image?.Dispose();return null;}
-            if(image==null)
+            if(image==null && url!=null)
             {
                 var filename=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(url)))+".png";
                 image=await new League.Infrastructure.ImageCacheService(_imageHttp).GetOrDownloadImageAsync(url,"arammeta",filename);
             }
             if(IsDisposed){image?.Dispose();return null;}
-            if(image!=null)_images[url]=image;
+            if(image!=null)_images[key]=image;
             return image;
         }
         catch {return null;}
@@ -88,6 +91,7 @@ internal sealed partial class AramMetaView
             section.MinimumSize=new Size(width,0);section.MaximumSize=new Size(width,0);section.Width=width;
             foreach(Control child in section.Controls)if(child is FlowLayoutPanel || child is Label)child.MaximumSize=new Size(width-24,0);
             foreach(var table in section.Controls.OfType<TableLayoutPanel>())table.Width=Math.Max(510,width-24);
+            ResizeComparison(section,width-24);
         }
     }
     private FlowLayoutPanel Row(Control parent)=>AddRow(parent);
