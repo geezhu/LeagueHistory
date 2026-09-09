@@ -299,6 +299,8 @@ namespace League.UIState
                     Left = 0, Top = progress.Bottom + 8, Width = containerPanel.Width
                 };
                 containerPanel.Controls.Add(launchers);
+                containerPanel.Height=launchers.Bottom+16;
+                launchers.SizeChanged+=(_,_)=>containerPanel.Height=launchers.Bottom+16;
             }
             return containerPanel;
         }
