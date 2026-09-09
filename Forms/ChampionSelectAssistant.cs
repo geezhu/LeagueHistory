@@ -47,7 +47,11 @@ internal sealed partial class ChampionSelectAssistant : Form
         var footer=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=44,Padding=new Padding(8)};
         var guide=new Button{Text="完整攻略",AutoSize=true};
         var retry=new Button{Text="重试",AutoSize=true};footer.Controls.AddRange(new Control[]{guide,_apply,retry});
-        Controls.Add(_body);Controls.Add(_status);Controls.Add(toolbar);Controls.Add(footer);
+        var statusBar=new Panel{Dock=DockStyle.Top,Height=26};_status.Dock=DockStyle.Fill;_status.AutoEllipsis=true;
+        _rosterButton.BackColor=Color.FromArgb(16,45,57);_rosterButton.ForeColor=Color.FromArgb(208,185,130);_rosterButton.FlatAppearance.BorderColor=Color.FromArgb(49,113,126);_rosterButton.FlatAppearance.BorderSize=1;
+        _tips.SetToolTip(_rosterButton,"等待客户端提供大乱斗选人数据");
+        _rosterButton.Click+=(_,_)=>ShowRoster();statusBar.Controls.Add(_status);statusBar.Controls.Add(_rosterButton);
+        Controls.Add(_body);Controls.Add(statusBar);Controls.Add(toolbar);Controls.Add(footer);
         foreach(var button in toolbar.Controls.OfType<Button>().Concat(footer.Controls.OfType<Button>()))
         {
             button.FlatStyle=FlatStyle.Flat;button.FlatAppearance.BorderColor=Color.FromArgb(49,83,95);
@@ -62,7 +66,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         _tips.SetToolTip(_mode,"默认跟随选人模式，也可以手动切换攻略模式。英雄仍自动跟随当前选人。");
         _tips.SetToolTip(_region,"OP.GG 统计地区，与登录账号大区无关。");
         _tips.SetToolTip(_tier,"统计段位；各模式分别保留选择。");
-        _fold.Click+=(_,_)=>{_collapsed=!_collapsed;_fold.Text=_collapsed?"展开":"收起";_body.Visible=!_collapsed;_status.Visible=!_collapsed;footer.Visible=!_collapsed;_region.Visible=_tier.Visible=_lane.Visible=!_collapsed;toolbar.Height=_collapsed?44:74;Height=_collapsed?84:630;SyncFilters();};
+        _fold.Click+=(_,_)=>{_collapsed=!_collapsed;_fold.Text=_collapsed?"展开":"收起";_body.Visible=!_collapsed;statusBar.Visible=!_collapsed;footer.Visible=!_collapsed;_region.Visible=_tier.Visible=_lane.Visible=!_collapsed;toolbar.Height=_collapsed?44:74;Height=_collapsed?84:630;SyncFilters();};
         guide.Click+=(_,_)=>{if(_hero>0)_owner.OpenAssistantGuide(_hero,SelectedMode=="mayhem"?2400:0,_position,SelectedMode=="mayhem"?null:SelectedQuery);};
         retry.Click+=(_,_)=>{if(_hero>0)_ = LoadHeroAsync();};
         _apply.Click+=async (_,_)=>await ApplyAsync();
@@ -113,6 +117,8 @@ internal sealed partial class ChampionSelectAssistant : Form
             if(IsDisposed)return;
             _pollFailures=0;
             _selecting=true;
+            int queue=(int?)flow["gameData"]?["queue"]?["id"]??0;
+            _queue=queue;UpdateRoster(session,queue);
             var own=(session["myTeam"] as JArray)?.OfType<JObject>().FirstOrDefault(p=>(int?)p["cellId"]==(int?)session["localPlayerCellId"]);
             int hero=(int?)own?["championId"]??0;
             if(hero<=0)hero=(session["actions"] as JArray??new()).OfType<JArray>().SelectMany(a=>a.OfType<JObject>())
@@ -123,7 +129,6 @@ internal sealed partial class ChampionSelectAssistant : Form
                 if(_hero!=0){_load?.Cancel();_hero=0;_key="";_runes=null;_apply.Enabled=false;ClearBody();}
                 _status.Text="等待选择英雄…";PositionWindow();return;
             }
-            int queue=(int?)flow["gameData"]?["queue"]?["id"]??0;
             string? lane=((string?)own?["assignedPosition"])?.ToLowerInvariant() switch {"middle"=>"mid","bottom"=>"adc","utility"=>"support","top"=>"top","jungle"=>"jungle",_=>null};
             string key=$"{hero}:{queue}:{lane}";
             if(key!=_key)
@@ -141,7 +146,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         }
         finally{_busy=false;}
     }
-    private void Reset(){_selecting=false;_key="";_hero=0;_load?.Cancel();_runes=null;_apply.Enabled=false;if(Visible)Hide();}
+    private void Reset(){_selecting=false;_key="";_hero=0;_load?.Cancel();_runes=null;_apply.Enabled=false;ClearRoster();if(Visible)Hide();}
     private void ClearBody()
     {
         foreach(Control control in _body.Controls.Cast<Control>().ToArray())control.Dispose();
