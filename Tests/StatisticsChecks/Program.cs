@@ -20,6 +20,8 @@ internal static class Program
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+        LiveMatchChecks.Run();
+        if(args.Contains("--live-match-checks"))return;
         Task.Run(ChampionCompositionChecks.RunAsync).GetAwaiter().GetResult();
         ChampionCompositionChecks.Render();
         if (args.Contains("--composition-checks")) return;
