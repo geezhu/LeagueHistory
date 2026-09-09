@@ -4,6 +4,20 @@ namespace League;
 
 public partial class FormMain
 {
+    internal async void OpenAssistantGuide(int hero,int queue,string? position)
+    {
+        Show();WindowState=FormWindowState.Normal;Activate();
+        if(queue==2400)
+        {
+            imageTabControl1.SelectedIndex=4;
+            await imageTabControl1.TabPages[4].Controls.OfType<AramMetaView>().Single().OpenChampionAsync(hero);
+        }
+        else
+        {
+            imageTabControl1.SelectedIndex=3;
+            await imageTabControl1.TabPages[3].Controls.OfType<OpggView>().Single().OpenChampionAsync(hero,queue,position);
+        }
+    }
     private void ConfigureOpgg()
     {
         var icon=new Bitmap(40,40);

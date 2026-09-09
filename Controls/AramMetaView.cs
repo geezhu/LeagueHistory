@@ -65,6 +65,7 @@ internal sealed partial class AramMetaView : UserControl
         _detail.SizeChanged+=(_,_)=>ResizeSections();
     }
     private void FilterChanged(){if(_syncing)return;_follow.Checked=false;if(_champion==0)FillGrid();}
+    internal Task OpenChampionAsync(int id){_follow.Checked=false;return NavigateAsync(id);}
     private Visit Capture()=>new(_champion,_search.Text,_role.SelectedIndex,_sort,_descending,_champion==0?Math.Max(0,_grid.FirstDisplayedScrollingRowIndex):Math.Max(0,-_detail.AutoScrollPosition.Y));
     private void Buttons(){_back.Enabled=_historyIndex>0;_forward.Enabled=_historyIndex<_history.Count-1;}
     private async Task NavigateAsync(int id)

@@ -8,6 +8,14 @@ namespace League.Controls;
 internal sealed partial class OpggView : UserControl
 {
     private readonly OpggClient _client = new();
+    internal Task OpenChampionAsync(int id,int queue,string? position)
+    {
+        _follow.Checked=false;_assignedPosition=position;
+        var mode=OpggQuery.ModeForFollowing(queue);
+        _syncing=true;SelectHero(id);SetValue(_mode,mode);SetValue(_position,position??"mid");SetValue(_tier,_modeTiers[mode]);_syncing=false;
+        _position.Visible=mode=="ranked";_tier.Visible=mode!="arena";
+        return LoadAsync(false);
+    }
     private int _championId;
     private readonly ComboBox _region = Select("全球|global","韩服|kr","北美|na","西欧|euw");
     private readonly ComboBox _mode = Select("召唤师峡谷|ranked","极地大乱斗|aram","斗魂竞技场|arena","无限火力|urf","极限闪击|nexus_blitz");
