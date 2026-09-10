@@ -15,6 +15,11 @@ internal static class ChampionTierChatChecks
         if(ChampionTierChatMessage.Build("大乱斗","OP.GG","16.17","我方",Array.Empty<ChampionTierChatEntry>()).Count!=0)throw new Exception("Empty roster must not send");
         var players=new[]{new League.Models.LiveMatchPlayer("a","self","Lux","拉克丝","CHAOS",true,9,[]),new League.Models.LiveMatchPlayer("b","enemy","Morgana","莫甘娜","ORDER",false,9,[])};
         var match=new League.Models.LiveMatchSnapshot("ARAM",12,100,players);
+        if(League.Models.LiveMatchMode.RecommendationQueue(3270,match with{Mode="KIWI"})!=2400
+            || League.Models.LiveMatchMode.RecommendationQueue(0,match)!=450
+            || League.Models.LiveMatchMode.RecommendationQueue(3270,match with{Mode="CLASSIC",Map=11})!=0
+            || League.Models.LiveMatchMode.RecommendationQueue(3270,match with{Mode="UNKNOWN"})!=0)
+            throw new Exception("Special queues must use actual ARAM/KIWI mode; unknown queues and map alone cannot select statistics");
         var heroes=new[]{new League.Models.Champion{Id=99,Alias="Lux",Name="拉克丝"},new League.Models.Champion{Id=25,Alias="Morgana",Name="莫甘娜"}};
         var ranks=new Dictionary<int,(string Tier,double? Win,double? Pick)>{{99,("T1",.53,.08)},{25,("T2",.51,.1)}};
         string ours=string.Join("",LiveTierChatService.BuildMessages(match,450,false,heroes,ranks,"16.17"));

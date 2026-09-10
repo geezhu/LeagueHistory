@@ -29,21 +29,40 @@ namespace League.Services
 
         public async Task HandleTierAsync(Func<CancellationToken,Task<IReadOnlyList<string>>> build)
         {
-            if(_isSendingMessage || _mainForm.IsDisposed || !GameInputService.IsGameForeground())return;
+            var diagnostics=ChatSendDiagnostics.Shared;
+            if(_mainForm.IsDisposed)return;
+            if(!GameInputService.HasInputPermission()){diagnostics.Report("permission","未发送：请以管理员身份重新启动 League，游戏内快捷键和输入需要相应权限。");return;}
+            if(_isSendingMessage){diagnostics.Report("busy","未发送：上一条消息仍在处理，请稍后重试。");return;}
+            var foreground=GameInputService.GetGameForegroundState();
+            if(!foreground.IsGame){diagnostics.Report("foreground","未发送："+foreground.Reason+"。");return;}
+            diagnostics.Report("foreground-ok",foreground.Reason+"。");
             _isSendingMessage=true;
             using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(25));
             try
             {
+                diagnostics.Report("loading","正在读取对局和统计数据，最长等待 25 秒。");
                 var messages=await build(timeout.Token);
-                if(messages.Count==0 || _mainForm.IsDisposed || await GetGameflowPhaseSafeAsync()!="InProgress")return;
+                if(messages.Count==0 || _mainForm.IsDisposed)return;
+                string phase=await GetGameflowPhaseSafeAsync();
+                if(phase!="InProgress"){diagnostics.Report("phase",$"未发送：数据读取后游戏阶段变为 {phase}。");return;}
                 // Release Ctrl before Enter so the chord cannot change the chat channel.
                 var until=DateTime.UtcNow.AddSeconds(2);
+                if(!GameInputService.ModifiersReleased())diagnostics.Report("modifiers","请松开 Ctrl、Shift、Alt，等待发送（最多 2 秒）。");
                 while(!GameInputService.ModifiersReleased() && DateTime.UtcNow<until)await Task.Delay(30,timeout.Token);
-                if(!GameInputService.ModifiersReleased())return;
-                await new GameInputService().SendInGameMessageAsync(string.Join("\n",messages),
-                    ()=>!_mainForm.IsDisposed && !timeout.IsCancellationRequested && GameInputService.IsGameForeground() && GameInputService.ModifiersReleased());
+                if(!GameInputService.ModifiersReleased()){diagnostics.Report("modifiers","未发送：Ctrl、Shift 或 Alt 在等待后仍未松开。");return;}
+                string? stopped=null;
+                var input=new GameInputService();
+                diagnostics.Report("input",$"正在输入 {messages.Count} 条消息，请保持游戏窗口在前台。");
+                bool completed=await input.SendInGameMessageAsync(string.Join("\n",messages),()=>
+                {
+                    var current=GameInputService.GetGameForegroundState();
+                    stopped=_mainForm.IsDisposed?"程序正在关闭":timeout.IsCancellationRequested?"发送超时":!current.IsGame?current.Reason:!GameInputService.ModifiersReleased()?"发送时按下了 Ctrl、Shift 或 Alt":null;
+                    return stopped==null;
+                });
+                diagnostics.Report(completed?"input-complete":"input-stopped",completed?"键盘输入已完成，请查看游戏聊天（无法确认服务器是否接收）。":"发送未完成，可能已输入部分内容："+(stopped??input.LastFailureReason??"输入未完成"));
             }
-            catch(Exception ex){Debug.WriteLine("梯队快捷发送未完成："+ex.Message);}
+            catch(OperationCanceledException){diagnostics.Report("timeout","未完成：对局或统计数据读取超时，请稍后重试。");}
+            catch(Exception ex){diagnostics.Report("error","快捷发送失败："+ex.GetType().Name+$"（HRESULT {ex.HResult:X8}）。请查看失败前的日志阶段。");}
             finally{_isSendingMessage=false;}
         }
 

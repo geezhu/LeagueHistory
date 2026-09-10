@@ -61,6 +61,8 @@ public sealed partial class LiveMatchView : UserControl
         var record=Button("记录已选");var clear=Button("清除记录");
         _augmentBar.Controls.AddRange(new Control[]{new Label{Text="手动记录海克斯",AutoSize=true,Margin=new Padding(8,8,4,0)},_augment,record,clear});
         Controls.Add(panels);Controls.Add(_augmentBar);Controls.Add(toolbar);Controls.Add(_status);
+        var chatStatus=new ChatSendStatusLabel{Dock=DockStyle.Bottom,AutoSize=false,Height=28,AutoEllipsis=true,Padding=new Padding(8,4,8,2),ForeColor=Muted};
+        Controls.Add(chatStatus);
         _augmentBar.Visible=false;
         refresh.Click+=(_,_)=>{_rankChecked=DateTime.MinValue;_=PollAsync();};
         _mode.SelectedIndexChanged+=(_,_)=>{_rankChecked=DateTime.MinValue;_=PollAsync();};
@@ -87,7 +89,7 @@ public sealed partial class LiveMatchView : UserControl
             var snapshot=await _live.GetAsync(_life.Token);
             int detected;try{detected=await _queue();}catch{detected=0;}
             if(IsDisposed || _life.IsCancellationRequested)return;
-            int queue=_mode.SelectedIndex switch{1=>450,2=>2400,_=>detected};
+            int queue=_mode.SelectedIndex switch{1=>450,2=>2400,_=>LiveMatchMode.RecommendationQueue(detected,snapshot)};
             if(_snapshot!=null && (snapshot.Time+2<_snapshot.Time || string.Join("|",snapshot.Players.Select(p=>p.Key))!=string.Join("|",_snapshot.Players.Select(p=>p.Key))))
                 _manualAugments.Clear();
             _snapshot=snapshot;_currentQueue=queue;
