@@ -112,7 +112,7 @@ namespace League
             {
                 await _chatSender.HandleTierAsync(async token=>
                 {
-                    var client=Globals.lcuClient?.Client;if(client==null)return Array.Empty<string>();
+                    var client=Globals.lcuClient?.Client;if(client==null){ChatSendDiagnostics.Shared.Report("connection","未发送：客户端连接尚未建立。");return Array.Empty<string>();}
                     var flow=JObject.Parse(await client.GetStringAsync("/lol-gameflow/v1/session",token));
                     int queue=(int?)flow["gameData"]?["queue"]?["id"]??0;
                     return await tierChat.BuildAsync(queue,enemy,Globals.resLoading.Champions.Champions,token);

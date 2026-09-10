@@ -20,6 +20,8 @@ internal static class Program
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+        TierHotkeyChecks.Run();
+        Task.Run(ChatSendDiagnosticsChecks.RunAsync).GetAwaiter().GetResult();
         LiveMatchChecks.Run();
         if(args.Contains("--live-match-checks"))return;
         Task.Run(ChampionCompositionChecks.RunAsync).GetAwaiter().GetResult();
