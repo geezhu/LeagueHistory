@@ -30,7 +30,7 @@ public partial class FormMain
         groupBox1.Dispose();groupBox2.Dispose();groupBox3.Dispose();
 
         var messages=SettingsPage(tabPage5,"消息发送","选择发送内容，并配置显示方式。实际发送仍由快捷键触发。");
-        label2.Text="选人窗口：Ctrl + F7 发送我方战绩。游戏内：F9 发送我方战绩，F11 发送双方战绩。\n大乱斗 / 海克斯大乱斗：Ctrl + F9 发送我方梯队与胜率，Ctrl + F11 发送对方梯队与胜率（发到当前游戏聊天频道）。";
+        label2.Text="【游戏内快捷键需要管理员权限】请以管理员身份运行本程序。\n选人窗口：Ctrl + F7 发送我方战绩。游戏内：F9 发送我方战绩，F11 发送双方战绩。\n大乱斗 / 海克斯大乱斗：Ctrl + F9 发送我方梯队与胜率，Ctrl + F11 发送对方梯队与胜率（发到当前游戏聊天频道）。";
         label3.Text="自定义内容每行一条，使用相同快捷键发送。\n游戏内发送前请关闭聊天输入框和游戏菜单，按快捷键后松开 Ctrl，并保持游戏在前台。程序启动时需要允许管理员权限。";
         SettingsCard(messages,"发送内容",rbModeMatch,rbModeCustom,label2,label3,txtCustomContent);
         SettingsCard(messages,"战绩显示",chkHideSelf,chkUseChampionName);
