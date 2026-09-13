@@ -158,7 +158,8 @@ internal sealed partial class AramMetaView : UserControl
         var total=_page.Index.SampleMatches;
         var batch=displayed.Select(c=>
         {
-            var row=new DataGridViewRow();
+            // Explicit rows added in a batch must inherit the configured ranking row layout.
+            var row=(DataGridViewRow)_grid.RowTemplate.Clone();
             double? pick=total is long count && c.Games is long games && games>=0 && games<=count?(double)games/count:null;
             row.CreateCells(_grid,null,Name(c),c.Tier,Rate(c.RawWinRate),Rate(c.WinRate),c.Games?.ToString("N0")??"—",Rate(pick));
             row.Tag=c;return row;
