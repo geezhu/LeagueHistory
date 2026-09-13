@@ -8,65 +8,93 @@ namespace League.Clients;
 public sealed class AramMetaClient : IDisposable
 {
     private readonly HttpClient _http;
-    private readonly SemaphoreSlim _gate=new(1,1);
-    private readonly Dictionary<string,JObject> _details=new();
-    private AramMetaIndex? _index;
-    private DateTime _fetched;
-    private AramMetaIndex? _validatedIndex;
-    private EntityTagHeaderValue? _indexTag;
-    private DateTimeOffset? _indexModified;
+    // Clients in the main page, assistant and game tools share one snapshot per file.
+    private sealed class CacheState
+    {
+        public readonly SemaphoreSlim Gate=new(1,1);
+        public readonly Dictionary<string,JObject> Details=new();
+        public AramMetaIndex? Index;
+        public DateTime Fetched;
+        public AramMetaIndex? ValidatedIndex;
+        public EntityTagHeaderValue? IndexTag;
+        public DateTimeOffset? IndexModified;
+        public bool DiskLoaded;
+        public Task SaveTask=Task.CompletedTask;
+        public int Users;
+    }
+    private static readonly Dictionary<string,CacheState> SharedCaches=new(StringComparer.OrdinalIgnoreCase);
+    private readonly CacheState _cache;
     private readonly string? _cachePath;
     private readonly Func<TimeSpan> _cacheLifetime;
-    private bool _diskLoaded;
-    private Task _saveTask=Task.CompletedTask;
+    private int _disposed;
     public AramMetaClient(HttpMessageHandler? handler=null,string? cachePath=null,Func<TimeSpan>? cacheLifetime=null)
     {
         _cachePath=cachePath??(handler==null?Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"League","Cache","arammeta","statistics.json"):null);
+        if(_cachePath!=null)_cachePath=Path.GetFullPath(_cachePath);
+        lock(SharedCaches)
+        {
+            if(_cachePath==null)_cache=new();
+            else if(SharedCaches.TryGetValue(_cachePath,out var shared))_cache=shared;
+            else SharedCaches[_cachePath]=_cache=new();
+            _cache.Users++;
+        }
         _cacheLifetime=cacheLifetime??(()=>TimeSpan.FromDays(1));
         _http=new(handler??new HttpClientHandler {AutomaticDecompression=DecompressionMethods.All});
         _http.BaseAddress=new Uri("https://arammeta.com/");_http.Timeout=TimeSpan.FromSeconds(20);
     }
+    public bool IsCurrent(AramMetaPage page,int champion)
+    {
+        if(_disposed!=0 || !_cache.Gate.Wait(0))return false;
+        try
+        {
+            return !page.UpdateFailed && _cache.Index!=null && page.FetchedAt==_cache.Fetched &&
+                page.Index.Version==_cache.Index.Version && DateTime.UtcNow-_cache.Fetched<_cacheLifetime() &&
+                (champion==0 || page.Detail!=null && _cache.Details.ContainsKey(_cache.Index.Version+":"+champion));
+        }
+        finally {_cache.Gate.Release();}
+    }
     private async Task<AramMetaIndex> FetchIndex(CancellationToken token)
     {
         using var request=new HttpRequestMessage(HttpMethod.Get,"api/tier-list.json");
-        if(_validatedIndex!=null)
+        if(_cache.ValidatedIndex!=null)
         {
-            if(_indexTag!=null)request.Headers.IfNoneMatch.Add(_indexTag);
-            else if(_indexModified.HasValue)request.Headers.IfModifiedSince=_indexModified;
+            if(_cache.IndexTag!=null)request.Headers.IfNoneMatch.Add(_cache.IndexTag);
+            else if(_cache.IndexModified.HasValue)request.Headers.IfModifiedSince=_cache.IndexModified;
         }
         using var response=await _http.SendAsync(request,token).ConfigureAwait(false);
-        if(response.StatusCode==HttpStatusCode.NotModified && _validatedIndex!=null)return _validatedIndex;
+        if(response.StatusCode==HttpStatusCode.NotModified && _cache.ValidatedIndex!=null)return _cache.ValidatedIndex;
         response.EnsureSuccessStatusCode();
         var index=AramMetaIndex.Parse(JObject.Parse(await response.Content.ReadAsStringAsync(token).ConfigureAwait(false)));
-        _validatedIndex=index;_indexTag=response.Headers.ETag;_indexModified=response.Content.Headers.LastModified;
+        _cache.ValidatedIndex=index;_cache.IndexTag=response.Headers.ETag;_cache.IndexModified=response.Content.Headers.LastModified;
         return index;
     }
     public async Task<AramMetaPage> GetAsync(int champion,bool refresh,CancellationToken token,Action<AramMetaPage>? preview=null)
     {
-        await _gate.WaitAsync(token);
+        ObjectDisposedException.ThrowIf(_disposed!=0,this);
+        await _cache.Gate.WaitAsync(token);
         try
         {
-            if(!_diskLoaded){await LoadDiskAsync();_diskLoaded=true;}
+            if(!_cache.DiskLoaded){await LoadDiskAsync();_cache.DiskLoaded=true;}
             token.ThrowIfCancellationRequested();
-            var old=_index;var oldTime=_fetched;
+            var old=_cache.Index;var oldTime=_cache.Fetched;
             try
             {
-                var index=_index;
-                bool cached=!refresh && index!=null && DateTime.UtcNow-_fetched<_cacheLifetime();
-                var indexTime=_fetched;
+                var index=_cache.Index;
+                bool cached=!refresh && index!=null && DateTime.UtcNow-_cache.Fetched<_cacheLifetime();
+                var indexTime=_cache.Fetched;
                 if(!cached){index=await FetchIndex(token);indexTime=DateTime.UtcNow;}
                 if(champion>0 && !index!.Champions.Any(c=>c.Id==champion))throw new InvalidDataException("此英雄暂无海克斯统计，可返回英雄榜查看。");
                 JObject? detail=null;
                 if(champion>0)
                 {
                     var key=index!.Version+":"+champion;
-                    if(!refresh && _details.TryGetValue(key,out var saved))detail=saved;
+                    if(!refresh && _cache.Details.TryGetValue(key,out var saved))detail=saved;
                     else
                     {
                         for(int attempt=0;attempt<2;attempt++)
                         {
                             token.ThrowIfCancellationRequested();
-                            preview?.Invoke(ClonePage(index,null,cached,indexTime));
+                            if(preview!=null)preview(await ClonePageAsync(index,null,cached,indexTime,token));
                             detail=JObject.Parse(await _http.GetStringAsync($"api/champions/{champion}.json?v={Uri.EscapeDataString(index.Version)}",token));
                             var confirmed=await FetchIndex(token);
                             indexTime=DateTime.UtcNow;
@@ -75,27 +103,28 @@ public sealed class AramMetaClient : IDisposable
                         }
                         if(detail==null)throw new InvalidDataException("数据正在更新，请稍后刷新。");
                         if(!detail.Properties().Any(p=>p.Name is "items" or "spells" or "boots" or "bot"))throw new InvalidDataException("英雄详情数据不完整。");
-                        if(_details.Count>=200)_details.Clear();
-                        _details[index.Version+":"+champion]=(JObject)detail.DeepClone();
+                        if(_cache.Details.Count>=200)_cache.Details.Clear();
+                        _cache.Details[index.Version+":"+champion]=(JObject)detail.DeepClone();
                         cached=false;
                     }
                 }
-                if(_index?.Version!=index!.Version)_details.Keys.Where(k=>!k.StartsWith(index.Version+":",StringComparison.Ordinal)).ToList().ForEach(k=>_details.Remove(k));
-                _index=index;_fetched=indexTime;
+                if(_cache.Index?.Version!=index!.Version)_cache.Details.Keys.Where(k=>!k.StartsWith(index.Version+":",StringComparison.Ordinal)).ToList().ForEach(k=>_cache.Details.Remove(k));
+                _cache.Index=index;_cache.Fetched=indexTime;
                 if(!cached)QueueDiskSave();
-                return ClonePage(index,detail,cached,_fetched);
+                return await ClonePageAsync(index,detail,cached,_cache.Fetched,token);
             }
             catch(Exception ex) when(!token.IsCancellationRequested && ex is HttpRequestException or TaskCanceledException)
             {
-                if(old!=null && (champion==0 || _details.ContainsKey(old.Version+":"+champion)))
-                    return ClonePage(old,champion==0?null:_details[old.Version+":"+champion],true,oldTime) with {UpdateFailed=true};
+                if(old!=null && (champion==0 || _cache.Details.ContainsKey(old.Version+":"+champion)))
+                    return (await ClonePageAsync(old,champion==0?null:_cache.Details[old.Version+":"+champion],true,oldTime,token)) with {UpdateFailed=true};
                 throw;
             }
         }
-        finally {_gate.Release();}
+        finally {_cache.Gate.Release();}
     }
-    private static AramMetaPage ClonePage(AramMetaIndex index,JObject? detail,bool cached,DateTime time)=>
-        new(AramMetaIndex.Parse(index.Raw),(JObject?)detail?.DeepClone(),cached,time);
+    // Keep the caller's synchronization context for previews, but copy large JSON off the UI thread.
+    private static Task<AramMetaPage> ClonePageAsync(AramMetaIndex index,JObject? detail,bool cached,DateTime time,CancellationToken token)=>
+        Task.Run(()=>new AramMetaPage(AramMetaIndex.Parse(index.Raw),(JObject?)detail?.DeepClone(),cached,time),token);
     private Task LoadDiskAsync()=>_cachePath==null?Task.CompletedTask:Task.Run(()=>
     {
         if(_cachePath==null || !File.Exists(_cachePath))return;
@@ -109,24 +138,24 @@ public sealed class AramMetaClient : IDisposable
             var details=(saved["details"] as JObject??new()).Properties()
                 .Where(p=>p.Name.StartsWith(index.Version+":",StringComparison.Ordinal) && p.Value is JObject value && value.Properties().Any(v=>v.Name is "items" or "spells" or "boots" or "bot"))
                 .Take(200).ToArray();
-            _index=_validatedIndex=index;_fetched=fetched;
-            if(EntityTagHeaderValue.TryParse((string?)saved["etag"],out var tag))_indexTag=tag;
-            _indexModified=(DateTimeOffset?)saved["lastModified"];
-            foreach(var entry in details)_details[entry.Name]=(JObject)entry.Value;
+            _cache.Index=_cache.ValidatedIndex=index;_cache.Fetched=fetched;
+            if(EntityTagHeaderValue.TryParse((string?)saved["etag"],out var tag))_cache.IndexTag=tag;
+            _cache.IndexModified=(DateTimeOffset?)saved["lastModified"];
+            foreach(var entry in details)_cache.Details[entry.Name]=(JObject)entry.Value;
         }
         catch(Exception ex){System.Diagnostics.Debug.WriteLine("arammeta cache read: "+ex.Message);}
     });
     private void QueueDiskSave()
     {
-        if(_cachePath==null || _index==null)return;
-        // Stored documents are immutable internally. Capture references while holding _gate;
+        if(_cachePath==null || _cache.Index==null)return;
+        // Stored documents are immutable internally. Capture references while holding _cache.Gate;
         // serialize and write on the worker, without blocking rendering or the next request.
-        var raw=_index.Raw;
-        var details=_details.ToDictionary(entry=>entry.Key,entry=>entry.Value);
-        var fetched=_fetched;var tag=_indexTag?.ToString();var modified=_indexModified;
-        _saveTask=_saveTask.ContinueWith(_=>WriteDisk(raw,details,fetched,tag,modified),CancellationToken.None,TaskContinuationOptions.None,TaskScheduler.Default);
+        var raw=_cache.Index.Raw;
+        var details=_cache.Details.ToDictionary(entry=>entry.Key,entry=>entry.Value);
+        var fetched=_cache.Fetched;var tag=_cache.IndexTag?.ToString();var modified=_cache.IndexModified;
+        _cache.SaveTask=_cache.SaveTask.ContinueWith(_=>WriteDisk(raw,details,fetched,tag,modified),CancellationToken.None,TaskContinuationOptions.None,TaskScheduler.Default);
     }
-    public Task FlushAsync()=>_saveTask;
+    public Task FlushAsync()=>_cache.SaveTask;
     private void WriteDisk(JObject raw,Dictionary<string,JObject> details,DateTime fetched,string? tag,DateTimeOffset? modified)
     {
         string temporary=_cachePath+"."+Guid.NewGuid().ToString("N")+".tmp";
@@ -142,5 +171,14 @@ public sealed class AramMetaClient : IDisposable
         catch(Exception ex){System.Diagnostics.Debug.WriteLine("arammeta cache write: "+ex.Message);}
         finally{try{if(File.Exists(temporary))File.Delete(temporary);}catch{}}
     }
-    public void Dispose(){_http.Dispose();_saveTask.GetAwaiter().GetResult();}
+    public void Dispose()
+    {
+        if(Interlocked.Exchange(ref _disposed,1)!=0)return;
+        _http.Dispose();
+        lock(SharedCaches)
+        {
+            _cache.SaveTask.GetAwaiter().GetResult();
+            if(--_cache.Users==0 && _cachePath!=null)SharedCaches.Remove(_cachePath);
+        }
+    }
 }

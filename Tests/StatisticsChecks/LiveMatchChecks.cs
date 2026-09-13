@@ -44,8 +44,9 @@ internal static class LiveMatchChecks
         champions.Add(testLux);champions.Add(testMorgana);
         using var client=new LiveMatchClient(handler);
         using var form=new Form{ClientSize=new Size(1100,740)};
+        var imageCalls=new Dictionary<(string,int),int>();
         using var view=new LiveMatchView(()=>Task.FromResult(0),(_,_)=>throw new Exception("Guide must not open automatically"),()=>TimeSpan.FromDays(1),client,
-            (kind,id)=>{var bitmap=new Bitmap(48,48);using(var g=Graphics.FromImage(bitmap)){g.Clear(kind=="augment"?Color.Purple:Color.Teal);g.DrawEllipse(Pens.Gold,5,5,36,36);}return Task.FromResult<(Image?,string,string)>((bitmap,"测试图标","悬浮说明"));});
+            (kind,id)=>{imageCalls[(kind,id)]=imageCalls.GetValueOrDefault((kind,id))+1;var bitmap=new Bitmap(48,48);using(var g=Graphics.FromImage(bitmap)){g.Clear(kind=="augment"?Color.Purple:Color.Teal);g.DrawEllipse(Pens.Gold,5,5,36,36);}return Task.FromResult<(Image?,string,string)>((bitmap,"测试图标","悬浮说明"));});
         form.Controls.Add(view);form.Show();Application.DoEvents();
         IEnumerable<Control> All(Control root)=>root.Controls.Cast<Control>().SelectMany(c=>new[]{c}.Concat(All(c)));
         var cards=All(view).OfType<Panel>().Where(c=>c.Tag is string).ToArray();
@@ -60,10 +61,24 @@ internal static class LiveMatchChecks
         var builds=new List<(int[] Ids,double? Win,double? Pick)>{(new[]{3089,3020},.53,.16),(new[]{3089,3157},.52,.11)};
         var augments=new List<(string Title,AramMetaRecommendation[] Rows)>{("棱彩强化",new[]{new AramMetaRecommendation(new[]{2095},"测试强化","强化说明",.56,.03,100,new JObject())})};
         type.GetMethod("RenderRecommendations",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(view,new object[]{builds,augments});
+        var flags=BindingFlags.NonPublic|BindingFlags.Instance;
+        var before=All(view).OfType<Panel>().Where(p=>p.Tag is string).ToDictionary(p=>(string)p.Tag!);
+        var recommendationHost=(FlowLayoutPanel)type.GetField("_recommendations",flags)!.GetValue(view)!;
+        var recommendationControl=recommendationHost.Controls[0];
+        var purchased=JObject.Parse(Sample);
+        purchased["allPlayers"]![1]!["items"]=new JArray(new JObject{["itemID"]=3089,["count"]=1});
+        type.GetField("_snapshot",flags)!.SetValue(view,LiveMatchSnapshot.Parse(purchased));
+        type.GetMethod("Render",flags)!.Invoke(view,null);
+        var after=All(view).OfType<Panel>().Where(p=>p.Tag is string).ToDictionary(p=>(string)p.Tag!);
+        var selfKey=snapshot.Players.Single(p=>p.Self).Key;
+        Check(before.Where(p=>p.Key!=selfKey).All(p=>ReferenceEquals(p.Value,after[p.Key])),"Buying an item retains all other player cards");
+        Check(ReferenceEquals(recommendationControl,recommendationHost.Controls[0]),"Buying an item updates ownership without rebuilding recommendations");
+        Check(All(recommendationHost).OfType<Button>().Where(b=>b.Tag is ValueTuple<string,int> item && item.Item2==3089).All(b=>b.FlatAppearance.BorderSize==2),"Owned recommendation items update immediately");
         using(var image=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(image,new Rectangle(Point.Empty,form.Size));image.Save(Path.Combine(AppContext.BaseDirectory,"live-match.png"));}
         form.ClientSize=new Size(650,700);Application.DoEvents();
         using(var image=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(image,new Rectangle(Point.Empty,form.Size));image.Save(Path.Combine(AppContext.BaseDirectory,"live-match-narrow.png"));}
         Check(All(view).OfType<Button>().Any(b=>b.BackgroundImage!=null),"Icons survive responsive layout");
+        Check(imageCalls.Values.All(count=>count==1),"Each icon is loaded once across duplicate champions, recommendations and resizing");
         handler.Fail=true;
         var task=(Task)type.GetMethod("PollAsync",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(view,null)!;
         while(!task.IsCompleted){Application.DoEvents();Thread.Sleep(5);}task.GetAwaiter().GetResult();

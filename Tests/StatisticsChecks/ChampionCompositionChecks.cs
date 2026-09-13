@@ -70,18 +70,27 @@ internal static class ChampionCompositionChecks
             form.Controls.Add(view); form.Show();
             var roster = new ChampionSelectRoster([new(99, 0, true, false), new(25, 1, false, true), new(111, 2, false, false), new(0, 3, false, false), new(99, 4, false, false)], [25, 111], true);
             view.SetRoster(roster);
-            var grid = view.Controls.OfType<DataGridView>().Single();
+            IEnumerable<Control> Descendants(Control root)=>root.Controls.Cast<Control>().SelectMany(c=>new[]{c}.Concat(Descendants(c)));
+            var grid = Descendants(view).OfType<DataGridView>().Single();
             var deadline = DateTime.UtcNow.AddSeconds(5);
             while (grid.Rows.Cast<DataGridViewRow>().Count(r => Equals(r.Cells[5].Value, "已读取")) < 4 && DateTime.UtcNow < deadline) { Application.DoEvents(); Thread.Sleep(10); }
             Check(grid.Rows.Count == 5 && handler.Calls == 3, "Team duplicates and empty slots retained; only unique heroes downloaded");
             Check(grid.Rows.Cast<DataGridViewRow>().Count(r => Equals(r.Cells[5].Value, "已读取")) == 4, "Rows finish loading");
-            var select = view.Controls.OfType<FlowLayoutPanel>().Single().Controls.OfType<ComboBox>().Single();
+            var select = Descendants(view).OfType<ComboBox>().Single();
+            Check(Descendants(view).OfType<Label>().Any(l=>l.Text.Contains("硬控制") && l.Text.Contains("个位置有记录")),"Overview exposes sourced capability coverage");
+            Check(Descendants(view).OfType<Label>().Any(l=>l.Text.Contains("未记录不代表没有")),"Unknown coverage is not presented as a missing capability");
             select.SelectedIndex = 1; Application.DoEvents();
             Check(grid.Rows[0].Cells[0].Value!.ToString()!.Contains("莫甘娜"), "Swap preview replaces only self");
             Check(roster.Team[0].ChampionId == 99 && grid.Rows.Count == 5, "Preview does not mutate actual roster");
             using var image = new Bitmap(form.ClientSize.Width, form.ClientSize.Height);
             form.DrawToBitmap(image, form.ClientRectangle);
             image.Save(Path.Combine(AppContext.BaseDirectory, "champion-composition.png"));
+            form.ClientSize=new Size(620,650);Application.DoEvents();
+            var heroStrip=view.Controls.OfType<FlowLayoutPanel>().Single(p=>p.Controls.Count==5 && p.Controls.Cast<Control>().All(c=>c is Panel));
+            Check(heroStrip.Controls.Cast<Control>().All(c=>c.Right<=heroStrip.ClientSize.Width),"All five heroes remain visible in a narrow window");
+            Check(Descendants(view).OfType<Label>().Any(l=>l.Text.Contains("移除已记录来源")),"Swap reports capability changes without claiming an unknown ability is absent");
+            using var narrow=new Bitmap(form.ClientSize.Width,form.ClientSize.Height);
+            form.DrawToBitmap(narrow,form.ClientRectangle);narrow.Save(Path.Combine(AppContext.BaseDirectory,"champion-composition-narrow.png"));
             form.Close(); Application.DoEvents();
         }
         finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }

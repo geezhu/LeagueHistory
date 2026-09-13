@@ -4,7 +4,7 @@ using System.Text;
 
 namespace League.Controls;
 
-public sealed class ChampionCompositionView : UserControl
+public sealed partial class ChampionCompositionView : UserControl
 {
     private readonly ChampionAnalysisClient _client;
     private readonly Func<int, (string Name, string Alias)> _champion;
@@ -44,7 +44,7 @@ public sealed class ChampionCompositionView : UserControl
             _grid.Columns.Add(name, name);
         _grid.Columns[0].FillWeight = 130;
         _details.BackColor = BackColor; _details.ForeColor = ForeColor; _details.Font = Font;
-        Controls.Add(_details); Controls.Add(_grid); Controls.Add(bar); Controls.Add(_summary);
+        InitializeDashboard(bar);
         _replacement.SelectedIndexChanged += (_, _) => { if (!_changing) { Render(); _ = LoadAsync(); } };
         _grid.SelectionChanged += (_, _) => ShowDetails();
         retry.Click += (_, _) => _ = LoadAsync();
@@ -128,7 +128,7 @@ public sealed class ChampionCompositionView : UserControl
             _grid.CurrentCell = row.Cells[0];
         }
         int known = team.Count(e => _snapshots.ContainsKey(e.ChampionId));
-        _summary.Text = $"基础阵容对比 · 已读取 {known}/{team.Length} 人\n基础值，不含成长、装备、符文、强化与地图平衡。换人预览不会操作客户端。";
+        _summary.Text = $"阵容分析 · 已读取 {known}/{team.Length} 人\n基础值，不含成长、装备、符文、强化与地图平衡。换人预览不会操作客户端。";
         int replacement = (_replacement.SelectedItem as Choice)?.Id ?? 0;
         int original = _roster?.Team.FirstOrDefault(e => e.IsSelf)?.ChampionId ?? 0;
         if (replacement > 0 && _snapshots.TryGetValue(original, out var before) && _snapshots.TryGetValue(replacement, out var after))
@@ -136,6 +136,7 @@ public sealed class ChampionCompositionView : UserControl
             string Delta(string field) => (Value(after.Report, field) - Value(before.Report, field))?.ToString("+0.#;-0.#;0") ?? "未知";
             _summary.Text += $"\n相对 {_champion(original).Name}：生命 {Delta("基础生命")} · 护甲 {Delta("基础护甲")} · 魔抗 {Delta("基础魔抗")} · 普攻距离 {Delta("普攻距离")}";
         }
+        RenderDashboard();
         ShowDetails();
     }
 
@@ -163,7 +164,7 @@ public sealed class ChampionCompositionView : UserControl
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _request?.Cancel(); _request?.Dispose(); _request = null; }
+        if (disposing) { DisposeDashboard(); _request?.Cancel(); _request?.Dispose(); _request = null; }
         base.Dispose(disposing);
     }
 }
