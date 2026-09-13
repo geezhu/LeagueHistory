@@ -32,6 +32,7 @@ internal static class Program
         Task.Run(AramMetaChecks.RunAsync).GetAwaiter().GetResult();
         AramMetaChecks.Render();
         SettingsChecks.Render();
+        PlayerChampionChecks.Run();
         AssistantChecks.Run();
         MayhemAssistantChecks.Run();
         RosterChecks.Run();

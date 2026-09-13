@@ -10,11 +10,13 @@ namespace League.Managers
     public class PlayerCardUIManager
     {
         private readonly FormMain _form;
+        private readonly League.Services.PlayerChampionTierService _championTiers;
         public readonly SemaphoreSlim _uiLock = new SemaphoreSlim(1, 1);
 
         public PlayerCardUIManager(FormMain form)
         {
             _form = form;
+            _championTiers=new(form);form.Disposed+=(_,_)=>_championTiers.Dispose();
             PlayerTeamsLayout.Attach(form.tableLayoutPanel1);
         }
 
@@ -156,6 +158,7 @@ namespace League.Managers
                 _form.tableLayoutPanel1.Controls.Add(panel, column, row);
             });
             if (card.IsLoading || player.SummonerId == 0) LoadCardAvatar(card,player.ChampionId);
+            card.BindChampionInfo(id=>_championTiers.GetAsync(id,card.CurrentPuuId),(id,tier)=>_form.OpenAssistantGuide(id,tier.Queue,tier.Position));
             _ = card.LoadSummonerProfileAsync();
         }
 
