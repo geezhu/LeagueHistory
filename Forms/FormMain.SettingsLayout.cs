@@ -17,7 +17,30 @@ public partial class FormMain
         };
         var general=SettingsPage(tabPage4,"功能辅助","配置对局流程、英雄预选和客户端维护。开关修改后自动保存。");
         chkAutoAccept.Text="自动接受对局";
-        SettingsCard(general,"对局自动化",checkBoxFilterMode,chkAutoAccept,chkSkipHonor,chkSkipEndOfGameStats);
+        var historyCount=new ComboBox {Name="CardMatchHistoryCount",DropDownStyle=ComboBoxStyle.DropDownList,Width=180};
+        historyCount.Items.AddRange(new object[]{10,20,30,50});
+        int count=_appConfig?.CardMatchHistoryCount??20;
+        historyCount.SelectedItem=count is 10 or 20 or 30 or 50?count:20;
+        _matchQueryProcessor?.SetMatchHistoryCount((int)historyCount.SelectedItem);
+        historyCount.SelectedIndexChanged+=(_,_)=>
+        {
+            if(_appConfig==null)return;
+            _appConfig.CardMatchHistoryCount=(int)historyCount.SelectedItem;
+            _matchQueryProcessor?.SetMatchHistoryCount(_appConfig.CardMatchHistoryCount);SaveAppConfig();
+        };
+        var acceptDelay=new ComboBox {Name="AutoAcceptDelaySeconds",DropDownStyle=ComboBoxStyle.DropDownList,Width=180};
+        acceptDelay.Items.AddRange(new object[]{"立即接受","延迟 5 秒","延迟 10 秒"});
+        acceptDelay.SelectedIndex=_appConfig?.AutoAcceptDelaySeconds switch {5=>1,10=>2,_=>0};
+        acceptDelay.Enabled=chkAutoAccept.Checked;
+        chkAutoAccept.CheckedChanged+=(_,_)=>acceptDelay.Enabled=chkAutoAccept.Checked;
+        acceptDelay.SelectedIndexChanged+=(_,_)=>
+        {
+            if(_appConfig==null)return;
+            _appConfig.AutoAcceptDelaySeconds=acceptDelay.SelectedIndex switch {1=>5,2=>10,_=>0};SaveAppConfig();
+        };
+        checkBoxFilterMode.Text="按当前模式查询近期战绩，其他模式查询全模式战绩。";
+        SettingsCard(general,"选人战绩",checkBoxFilterMode,new Label {Text="每位玩家查询场数"},historyCount);
+        SettingsCard(general,"对局自动化",chkAutoAccept,acceptDelay,chkSkipHonor,chkSkipEndOfGameStats);
         var assistant=new CheckBox {Text="选人时自动显示侧边助手",Checked=_appConfig?.EnableChampionSelectAssistant??true};
         assistant.CheckedChanged+=(_,_)=>{if(_appConfig!=null){_appConfig.EnableChampionSelectAssistant=assistant.Checked;SaveAppConfig();}};
         SettingsCard(general,"选人助手",assistant,new Label {Text="贴靠客户端显示英雄推荐，可固定位置或收起；离开选人后自动隐藏。符文仅在点击“应用符文”时修改。"});

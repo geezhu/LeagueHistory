@@ -1,4 +1,4 @@
-﻿using League.Managers;
+using League.Managers;
 using League.Models;
 using Newtonsoft.Json.Linq;
 using System.Collections.Concurrent;
@@ -21,6 +21,13 @@ namespace League.Parsers
         private PlayerInfoFactory _factory;
 
         private PlayerCardManager _playerCardManager;
+        private int _matchHistoryCount=20;
+        public void SetMatchHistoryCount(int count)
+        {
+            int valid=count is 10 or 20 or 30 or 50?count:20;
+            if(_matchHistoryCount==valid)return;
+            _matchHistoryCount=valid;ClearPlayerMatchCache();
+        }
 
         public MatchQueryProcessor()
         {
@@ -121,7 +128,8 @@ namespace League.Parsers
 
             // 缓存检查
             string queueId = await _fetcher.GetCurrentQueueIdAsync();
-            string historyFilter = PlayerMatchDataFetcher.GetQueueFilter(queueId);
+            int count=_matchHistoryCount;
+            string historyFilter = PlayerMatchDataFetcher.GetQueueFilter(queueId)+":"+count;
             if (summonerId != 0 && _cacheManager.TryGetPlayerMatch(summonerId, historyFilter, out var cached))
             {
                 cached.Player.ChampionId = championId;
@@ -153,7 +161,7 @@ namespace League.Parsers
             string soloRank = GetFormattedRank(rankedStats, "单双排");
             string flexRank = GetFormattedRank(rankedStats, "灵活组排");
 
-            var matchesJson = await _fetcher.GetPlayerMatchesAsync(puuid, queueId);
+            var matchesJson = await _fetcher.GetPlayerMatchesAsync(puuid, queueId, count);
             var result = await _parser.ParsePlayerMatchInfo(puuid, matchesJson);
 
             result.Player = new PlayerInfo

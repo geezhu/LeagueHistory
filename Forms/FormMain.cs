@@ -166,13 +166,6 @@ namespace League
                 chkUrf.Checked = _appConfig.EnablePreliminaryInUrf;             // 无限乱斗（900）
                 chkPickUrf.Checked = _appConfig.EnablePreliminaryInPickUrf;     // 无限火力（1900）
 
-                // 恢复自动接受对局延时配置
-                cboAutoAcceptDelay.SelectedIndex = _appConfig.AutoAcceptDelaySeconds switch
-                {
-                    5 => 1,     // 配置是5秒 → 选中第1项
-                    10 => 2,    // 配置是10秒 → 选中第2项
-                    _ => 0      // 0秒 或 其他值 → 默认选中第0项（立即）
-                };
                 chkHideSelf.Checked = _appConfig.HideSelfWhenSending;   //发送战绩时是否隐藏自己
                 chkUseChampionName.Checked = _appConfig.UseChampionNameWhenSending; //发送战绩时是否使用英雄名称
                 chkSkipHonor.Checked = _appConfig.EnableSkipHonor;  //自动跳过点赞界面
@@ -214,13 +207,10 @@ namespace League
                 chkUrf.CheckedChanged += ModeCheckBox_CheckedChanged;
                 chkPickUrf.CheckedChanged += ModeCheckBox_CheckedChanged;
                 chkAutoAccept.CheckedChanged += AutoAccept_CheckedChanged;
-                cboAutoAcceptDelay.SelectedIndexChanged += cboAutoAcceptDelay_SelectedIndexChanged;
                 chkHideSelf.CheckedChanged += HideSelf_CheckedChanged;
                 chkUseChampionName.CheckedChanged += UseChampionName_CheckedChanged;
                 chkSkipHonor.CheckedChanged += ChkSkipHonor_CheckedChanged;
                 chkSkipEndOfGameStats.CheckedChanged += ChkSkipEndOfGameStats_CheckedChanged;
-                cboCardMatchCount.SelectedIndexChanged += cboCardMatchCount_SelectedIndexChanged;
-                chkAutoSkinSelect.CheckedChanged += chkAutoSkinSelect_CheckedChanged;
 
                 // 启动轮询 LCU 检测
                 StartLcuConnectPolling();
@@ -899,12 +889,6 @@ namespace League
 
             _appConfig.EnableAutoAcceptQueue = chkAutoAccept.Checked;
 
-            _appConfig.AutoAcceptDelaySeconds = cboAutoAcceptDelay.SelectedIndex switch
-            {
-                1 => 5,     // 选中第1项 → 存5
-                2 => 10,    // 选中第2项 → 存10
-                _ => 0      // 选中第0项 或 其他 → 存0
-            };
 
             SaveAppConfig();
             Debug.WriteLine($"[自动接受] 开关={_appConfig.EnableAutoAcceptQueue}, 延迟={_appConfig.AutoAcceptDelaySeconds}秒");
