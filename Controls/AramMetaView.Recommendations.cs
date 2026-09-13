@@ -90,6 +90,9 @@ internal sealed partial class AramMetaView
         split.Controls.AddRange(new Control[]{list,information});
         void Populate()
         {
+            list.SuspendLayout();
+            try
+            {
             foreach(Control child in list.Controls.Cast<Control>().ToArray())child.Dispose();
             AddStatsRow(list,null,"强化","调整后胜率","选取率","样本量",true);
             var entries=AramMetaRecommendation.Sort(Recommendations(RarityKeys[_rarity]),_augmentSort).Where(r=>RecommendationName(r,true).Contains(_augmentSearch,StringComparison.OrdinalIgnoreCase)).ToArray();
@@ -106,6 +109,8 @@ internal sealed partial class AramMetaView
                 void Clickable(Control c){c.Cursor=Cursors.Hand;c.Click+=(_,_)=>Select();foreach(Control child in c.Controls)Clickable(child);}Clickable(row);
             }
             if(entries.Length==0)list.Controls.Add(Text("没有匹配的强化"));
+            }
+            finally {list.ResumeLayout(true);}
         }
         search.TextChanged+=(_,_)=>{_augmentSearch=search.Text;Populate();};sort.SelectedIndexChanged+=(_,_)=>{_augmentSort=sort.SelectedIndex;Populate();};Populate();
     }
@@ -119,6 +124,9 @@ internal sealed partial class AramMetaView
         var later=Row(host);later.FlowDirection=FlowDirection.TopDown;later.WrapContents=false;
         void Update()
         {
+            later.SuspendLayout();
+            try
+            {
             foreach(Control child in later.Controls.Cast<Control>().ToArray())child.Dispose();
             if(cores.Length==0){later.Controls.Add(Text("暂无装备组合"));return;}
             _recommendationChoices[$"{_detailHero}:items"]=core.SelectedIndex;
@@ -126,6 +134,8 @@ internal sealed partial class AramMetaView
             later.Controls.Add(Text("单件备选 · 已排除所选组合中的装备（不是固定购买顺序）"));
             var excluded=chosen.Ids.ToHashSet();var seen=new HashSet<int>();
             foreach(var item in Recommendations("singleItems").Where(r=>r.Ids.All(id=>!excluded.Contains(id)) && seen.Add(r.Ids[0])))RecommendationRow(later,item);
+            }
+            finally {later.ResumeLayout(true);}
         }
         core.SelectedIndexChanged+=(_,_)=>Update();Update();
         foreach(var (key,title) in new[]{("boots","鞋子")})

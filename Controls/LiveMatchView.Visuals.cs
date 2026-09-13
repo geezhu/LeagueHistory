@@ -6,7 +6,11 @@ namespace League.Controls;
 
 public sealed partial class LiveMatchView
 {
+    private readonly Dictionary<string,Task<(Image? image,string name,string description)>> _imageTasks=new();
+    private readonly List<Image> _cachedImages=new();
+    private readonly Dictionary<string,(string Signature,Panel Card)> _playerCards=new();
     private readonly ToolTip _tips=new(){ShowAlways=true};
+    private int _recommendationMode=-1;
     private string _cardsSignature="",_equipmentSignature="",_selectedItems="";
     private readonly Dictionary<int,JObject> _championDetails=new();
     private static readonly Color Surface=Color.FromArgb(16,45,57),Muted=Color.FromArgb(139,170,181),Gold=Color.FromArgb(215,191,130);
@@ -24,14 +28,18 @@ public sealed partial class LiveMatchView
         _status.Text=(_currentQueue==2400?"海克斯大乱斗":_currentQueue==450?"普通大乱斗":"选择模式后查看梯队")+" · "+_rankStatus;
         _augmentBar.Visible=_currentQueue==2400;
         RenderCards();ShowEquipment();
-        if(changed || items!=_selectedItems){_selectedItems=items;_=LoadRecommendationsAsync();}
+        if(changed || _recommendationMode!=_currentQueue){_recommendationMode=_currentQueue;_=LoadRecommendationsAsync();}
+        else if(items!=_selectedItems)UpdateOwnedItems();
+        _selectedItems=items;
     }
     private void RenderCards()
     {
         if(_snapshot==null || _rendering)return;
         string signature=_selectedKey+"|"+_players.Width+"|"+string.Join(";",_snapshot.Players.Select(p=>$"{p.Key}:{p.Level}:{ChampionId(p)}:{ItemsKey(p)}:{_ranks.GetValueOrDefault(ChampionId(p))}"));
         if(signature==_cardsSignature)return;_cardsSignature=signature;
-        _rendering=true;_players.SuspendLayout();var scroll=_players.AutoScrollPosition;Clear(_players);
+        _rendering=true;_players.SuspendLayout();var scroll=_players.AutoScrollPosition;
+        foreach(var cached in _playerCards.Values)if(!cached.Card.IsDisposed)cached.Card.Parent?.Controls.Remove(cached.Card);
+        Clear(_players);var active=new HashSet<string>();
         int width=Math.Max(160,(_players.ClientSize.Width-42)/2);
         foreach(var team in _snapshot.Players.GroupBy(p=>_snapshot.TeamLabel(p)).OrderBy(g=>g.Key=="我方"?0:1))
         {
@@ -40,8 +48,15 @@ public sealed partial class LiveMatchView
             foreach(var p in team)
             {
                 int id=ChampionId(p);var rank=_ranks.GetValueOrDefault(id);bool selected=p.Key==_selectedKey;
+                string cardSignature=$"{width}|{id}|{p.Level}|{ItemsKey(p)}|{rank}|{selected}";
+                active.Add(p.Key);
+                if(_playerCards.TryGetValue(p.Key,out var retained))
+                {
+                    if(retained.Signature==cardSignature && !retained.Card.IsDisposed){column.Controls.Add(retained.Card);continue;}
+                    retained.Card.Dispose();
+                }
                 var card=new Panel{Size=new Size(width,112),BackColor=selected?Color.FromArgb(23,76,89):Surface,Margin=new Padding(0,0,0,7),Tag=p.Key,AccessibleName=ChampionName(p)};
-                column.Controls.Add(card);
+                _playerCards[p.Key]=(cardSignature,card);column.Controls.Add(card);
                 var portrait=Icon("champion",id,40,ChampionName(p));portrait.Location=new Point(6,7);card.Controls.Add(portrait);
                 var name=new Label{Text=ChampionName(p),Location=new Point(52,6),Size=new Size(width-58,22),AutoEllipsis=true,ForeColor=Color.White};card.Controls.Add(name);
                 var badge=new Label{Text=rank.Tier??"—",Location=new Point(52,31),Size=new Size(34,19),ForeColor=AramMetaView.TierColor(rank.Tier??"—"),BackColor=Color.FromArgb(9,32,44),TextAlign=ContentAlignment.MiddleCenter};card.Controls.Add(badge);
@@ -54,6 +69,7 @@ public sealed partial class LiveMatchView
                 void Select(Control c){c.Cursor=Cursors.Hand;c.Click+=(_,_)=>{_selectedKey=p.Key;_equipmentSignature="";RenderCards();ShowEquipment();_selectedItems=ItemsKey(Selected());_=LoadRecommendationsAsync();};foreach(Control child in c.Controls)Select(child);}Select(card);
             }
         }
+        foreach(var key in _playerCards.Keys.Where(k=>!active.Contains(k)).ToArray()){_playerCards[key].Card.Dispose();_playerCards.Remove(key);}
         _players.ResumeLayout();_players.AutoScrollPosition=new Point(-scroll.X,-scroll.Y);_rendering=false;
     }
     private void ShowEquipment()
@@ -91,24 +107,65 @@ public sealed partial class LiveMatchView
     private FlowLayoutPanel IconRow()=>new(){AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,MaximumSize=new Size(Math.Max(200,_equipment.Width-18),0),Margin=new Padding(0,0,0,8),BackColor=Color.Transparent};
     private Button Icon(string kind,int id,int size,string name,string description="",bool owned=false,int count=1)
     {
-        var icon=new Button{Size=new Size(size,size),Text=id>0?name[..Math.Min(2,name.Length)]:"?",AccessibleName=name,Margin=new Padding(2),FlatStyle=FlatStyle.Flat,BackColor=Color.FromArgb(25,54,67),ForeColor=Color.White,BackgroundImageLayout=ImageLayout.Zoom};
+        var icon=new Button{Tag=(kind,id),Size=new Size(size,size),Text=id>0?name[..Math.Min(2,name.Length)]:"?",AccessibleName=name,Margin=new Padding(2),FlatStyle=FlatStyle.Flat,BackColor=Color.FromArgb(25,54,67),ForeColor=Color.White,BackgroundImageLayout=ImageLayout.Zoom};
         icon.FlatAppearance.BorderSize=owned?2:0;icon.FlatAppearance.BorderColor=Color.Turquoise;
         _tips.SetToolTip(icon,TooltipText.Format(name+(count>1?$" ×{count}":"")+(owned?" · 已拥有":""),description));
-        icon.Disposed+=(_,_)=>icon.BackgroundImage?.Dispose();
+
         _=Load();return icon;
         async Task Load()
         {
             try
             {
                 if(id<=0)return;
-                var r=FormMain.Globals.resLoading;
-                var info=_iconLoader!=null?await _iconLoader(kind,id):kind=="champion"?await r.GetChampionInfoAsync(id):kind=="augment"?await r.GetAugmentInfoAsync(id):await r.GetItemInfoAsync(id);
-                if(icon.IsDisposed || _life.IsCancellationRequested){info.image?.Dispose();return;}
+                var info=await CachedIconAsync(kind,id);
+                if(icon.IsDisposed || _life.IsCancellationRequested)return;
                 if(info.image!=null){icon.BackgroundImage=info.image;icon.Text=count>1?"×"+count:"";icon.TextAlign=ContentAlignment.BottomRight;}
                 _tips.SetToolTip(icon,TooltipText.Format(name+(count>1?$" ×{count}":"")+(owned?" · 已拥有":""),string.IsNullOrWhiteSpace(description)?info.description:description));
             }
             catch{ /* Keep a named placeholder when local artwork is unavailable. */ }
         }
+    }
+    private void UpdateOwnedItems()
+    {
+        void Update(Control parent)
+        {
+            foreach(Control child in parent.Controls)
+            {
+                if(child is Button button && button.Tag is ValueTuple<string,int> item && item.Item1=="item")
+                {
+                    bool owned=Selected()?.Items?.Any(i=>i.Id==item.Item2)==true;
+                    button.FlatAppearance.BorderSize=owned?2:0;
+                    string description="";
+                    if(_imageTasks.TryGetValue($"item:{item.Item2}",out var task) && task.IsCompletedSuccessfully)description=task.Result.description;
+                    _tips.SetToolTip(button,TooltipText.Format(ItemName(item.Item2)+(owned?" · 已拥有":""),description));
+                }
+                Update(child);
+            }
+        }
+        Update(_recommendations);
+    }
+    private Task<(Image? image,string name,string description)> CachedIconAsync(string kind,int id)
+    {
+        string key=$"{kind}:{id}";
+        if(_imageTasks.TryGetValue(key,out var existing))return existing;
+        return _imageTasks[key]=Load();
+        async Task<(Image? image,string name,string description)> Load()
+        {
+            try
+            {
+                var r=FormMain.Globals.resLoading;
+                var info=_iconLoader!=null?await _iconLoader(kind,id):await Task.Run(async ()=>kind=="champion"?await r.GetChampionInfoAsync(id):kind=="augment"?await r.GetAugmentInfoAsync(id):await r.GetItemInfoAsync(id));
+                if(_life.IsCancellationRequested){info.image?.Dispose();return(null,info.name,info.description);}
+                if(info.image!=null)_cachedImages.Add(info.image);
+                return info;
+            }
+            catch {return(null,"","");}
+        }
+    }
+    private void DisposeImageCache()
+    {
+        foreach(var cached in _playerCards.Values)cached.Card.Dispose();_playerCards.Clear();
+        foreach(var image in _cachedImages)image.Dispose();_cachedImages.Clear();_imageTasks.Clear();
     }
     private async Task LoadArtworkAsync(ProfileBackgroundPanel panel,int id)
     {
