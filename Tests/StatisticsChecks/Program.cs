@@ -16,6 +16,7 @@ internal static class Program
             return;
         }
         ChampionAnalysisChecks.Run();
+        AssistantVisibilityChecks.Run();
         ChampionTierChatChecks.Run();
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
