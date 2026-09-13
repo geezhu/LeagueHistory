@@ -231,7 +231,8 @@ internal static class AramMetaChecks
         Run("LoadAsync",false);
         var grid=(DataGridView)type.GetField("_grid",flags)!.GetValue(view)!;
         var search=(TextBox)type.GetField("_search",flags)!.GetValue(view)!;
-        Check(grid.Rows.Count==3,"Rankings display complete fixture (rows="+grid.Rows.Count+", search="+search.Text+", context="+SynchronizationContext.Current?.GetType().Name+"): "+((Label)type.GetField("_status",flags)!.GetValue(view)!).Text);Save("arammeta-rankings",1060,800);search.Text="Ahri";Check(grid.Rows.Count==1,"Champion search filters aliases");
+        Check(grid.Rows.Count==3,"Rankings display complete fixture (rows="+grid.Rows.Count+", search="+search.Text+", context="+SynchronizationContext.Current?.GetType().Name+"): "+((Label)type.GetField("_status",flags)!.GetValue(view)!).Text);Check(grid.Rows.Cast<DataGridViewRow>().All(r=>r.Height==56),"Batched ranking rows retain space for portraits, badges and win-rate bars");Save("arammeta-rankings",1060,800);search.Text="Ahri";Check(grid.Rows.Count==1,"Champion search filters aliases");
+        Check(grid.Rows[0].Height==56,"Filtering retains ranking row height");
         Run("NavigateAsync",103);
         var detailPanel=(FlowLayoutPanel)type.GetField("_detail",flags)!.GetValue(view)!;
         var complete=(AramMetaPage)type.GetField("_page",flags)!.GetValue(view)!;
