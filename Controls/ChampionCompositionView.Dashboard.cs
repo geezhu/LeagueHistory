@@ -14,9 +14,16 @@ public sealed partial class ChampionCompositionView
     private readonly Dictionary<int,ChampionSelectAssistant.Skill[]> _skills=new();
     private readonly Dictionary<string,Image> _skillIcons=new();
     private readonly HashSet<int> _skillRequests=new();
+    private readonly Dictionary<int,DateTime> _skillRetryAfter=new();
     private readonly ToolTip _abilityTips=new(){AutoPopDelay=20000};
     private int _selectedHero;
     private bool _dashboardDisposed,_resizingDashboard;
+    private readonly System.Windows.Forms.Timer _refreshTimer=new(){Interval=100};
+    private bool _renderingDashboard;
+    private void QueueDashboardRefresh()
+    {
+        if(!_dashboardDisposed && !_refreshTimer.Enabled)_refreshTimer.Start();
+    }
     private static readonly (string Title,string Tag,string Note)[] Capabilities=
     [
         ("硬控制","Trait_ImmobilizingCCSpell","技能带有限制移动标签；具体类型、时长和命中条件需核对。"),
@@ -26,6 +33,7 @@ public sealed partial class ChampionCompositionView
     ];
     private void InitializeDashboard(FlowLayoutPanel bar)
     {
+        _refreshTimer.Tick+=(_,_)=>{_refreshTimer.Stop();if(!_dashboardDisposed)Render();};
         _summary.Height=78;
         _basic.Controls.Add(_details);_basic.Controls.Add(_grid);
         var tabs=new FlowLayoutPanel{Dock=DockStyle.Top,Height=40};
@@ -63,6 +71,9 @@ public sealed partial class ChampionCompositionView
     private void RenderDashboard()
     {
         if(_dashboardDisposed)return;
+        if(_renderingDashboard){QueueDashboardRefresh();return;}
+        _renderingDashboard=true;
+        var scroll=_overview.AutoScrollPosition;
         var team=Team();
         if(_selectedHero<=0 || !team.Any(e=>e.ChampionId==_selectedHero))_selectedHero=team.FirstOrDefault(e=>e.ChampionId>0)?.ChampionId??0;
         _heroes.SuspendLayout();_overview.SuspendLayout();
@@ -83,6 +94,7 @@ public sealed partial class ChampionCompositionView
                 card.Click+=(_,_)=>SelectHero(id);foreach(Control child in card.Controls)child.Click+=(_,_)=>SelectHero(id);
                 _heroes.Controls.Add(card);if(id>0)_=LoadPortraitAsync(id);
             }
+            RenderWeaknesses();
             if((_replacement.SelectedItem as Choice)?.Id>0)RenderSwap();
             int loaded=team.Count(e=>_snapshots.ContainsKey(e.ChampionId));
             var coverage=Card("能力覆盖",$"已读取 {loaded}/{team.Length} 个位置。以下是技能标签记录，未记录不代表没有；不包含装备、符文、强化和地图修正。");
@@ -123,14 +135,17 @@ public sealed partial class ChampionCompositionView
             }
             else selected.Controls.Add(new Label{Text=_errors.GetValueOrDefault(_selectedHero)??"等待英雄数据",AutoSize=true});
         }
-        finally {_heroes.ResumeLayout();_overview.ResumeLayout();}
+        finally {_heroes.ResumeLayout();_overview.ResumeLayout();_renderingDashboard=false;}
         ResizeDashboard();
-        if(_selectedHero>0)_=LoadSkillsAsync(_selectedHero);
+        _overview.AutoScrollPosition=new Point(-scroll.X,-scroll.Y);
+        foreach(int id in Team().Concat(_roster?.Team.Where(e=>e.IsSelf)??[]).Select(e=>e.ChampionId).Where(id=>id>0).Distinct())
+            _=LoadSkillsAsync(id);
     }
     private void ResizeDashboard()
     {
         if(_resizingDashboard || _dashboardDisposed)return;
         _resizingDashboard=true;
+        _overview.SuspendLayout();
         try
         {
             int heroWidth=Math.Max(80,(_heroes.ClientSize.Width-4*_heroes.Controls.Count)/Math.Max(1,_heroes.Controls.Count));
@@ -142,11 +157,20 @@ public sealed partial class ChampionCompositionView
             int width=Math.Max(280,_overview.ClientSize.Width-24);
             foreach(Control card in _overview.Controls)
             {
+                card.SuspendLayout();
+                try
+                {
                 card.MinimumSize=new Size(width,0);card.MaximumSize=new Size(width,0);card.Width=width;
-                foreach(Control child in card.Controls)child.MaximumSize=new Size(width-24,0);
+                foreach(Control child in card.Controls)
+                {
+                    child.MaximumSize=new Size(width-24,0);
+                    if(child is CompositionRadar)child.Width=width-24;
+                }
+                }
+                finally {card.ResumeLayout();}
             }
         }
-        finally {_resizingDashboard=false;}
+        finally {_overview.ResumeLayout();_resizingDashboard=false;}
     }
     private void RenderSwap()
     {
@@ -155,6 +179,8 @@ public sealed partial class ChampionCompositionView
         var card=Card("换人预览",next==0?"从上方交换池选择英雄，查看替换自己后的能力变化。":_champion(original).Name+" → "+_champion(next).Name+"（只预览，不操作客户端）");
         if(next==0)return;
         if(!_snapshots.ContainsKey(original)||!_snapshots.ContainsKey(next)){card.Controls.Add(new Label{Text="等待双方数据后比较",AutoSize=true});return;}
+        foreach(var change in CompositionWeakness.Compare(_roster?.Team.Select(e=>e.ChampionId).ToArray()??[],Team().Select(e=>e.ChampionId).ToArray(),Reports()))
+            WeaknessLine(card,change,true);
         foreach(var category in Capabilities)
         {
             bool before=Sources(original,category.Tag).Length>0,after=Sources(next,category.Tag).Length>0;
@@ -180,12 +206,13 @@ public sealed partial class ChampionCompositionView
     private async Task LoadSkillsAsync(int id)
     {
         var client=FormMain.Globals.lcuClient?.Client;
-        if(client==null||!_skillRequests.Add(id))return;
+        if(client==null||_skillRetryAfter.GetValueOrDefault(id)>DateTime.UtcNow||!_skillRequests.Add(id))return;
         try
         {
             var document=JObject.Parse(await client.GetStringAsync($"/lol-game-data/assets/v1/champions/{id}.json"));
             if(_dashboardDisposed || (int?)document["id"]!=id)return;
             var skills=ChampionSelectAssistant.ParseSkills(document);_skills[id]=skills;
+            QueueDashboardRefresh();
             var cache=new ImageCacheService(client);
             foreach(var skill in skills.Where(s=>!string.IsNullOrWhiteSpace(s.Icon)))
             {
@@ -194,12 +221,12 @@ public sealed partial class ChampionCompositionView
                 if(_dashboardDisposed)return;
                 if(source!=null && !_skillIcons.ContainsKey(skill.Icon))_skillIcons[skill.Icon]=new Bitmap(source,new Size(28,28));
             }
-            if(!_dashboardDisposed && _selectedHero==id)RenderDashboard();
+            if(!_dashboardDisposed && _selectedHero==id)QueueDashboardRefresh();
         }
-        catch { _skillRequests.Remove(id); }
+        catch { _skillRequests.Remove(id);_skillRetryAfter[id]=DateTime.UtcNow.AddSeconds(30); }
     }
     private void DisposeDashboard()
     {
-        _dashboardDisposed=true;_abilityTips.Dispose();foreach(var icon in _skillIcons.Values)icon.Dispose();_skillIcons.Clear();foreach(var image in _portraits.Values)image.Dispose();_portraits.Clear();
+        _dashboardDisposed=true;_refreshTimer.Stop();_refreshTimer.Dispose();_abilityTips.Dispose();foreach(var icon in _skillIcons.Values)icon.Dispose();_skillIcons.Clear();foreach(var image in _portraits.Values)image.Dispose();_portraits.Clear();
     }
 }
