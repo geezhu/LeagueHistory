@@ -76,6 +76,7 @@ namespace League.Services
         /// </summary>
         private void HandleLcuDisconnected()
         {
+            _autoAccepter.Reset();
             Debug.WriteLine("[GameFlowWatcher] 检测到 LCU 断开，准备重启连接轮询");
 
             _uiManager.LcuReady = false;
@@ -96,6 +97,7 @@ namespace League.Services
         /// </summary>
         public async Task OnGameflowPhaseChanged(string phase, string? previousPhase)
         {
+            if(phase!="ReadyCheck")_autoAccepter.Reset();
             try
             {
                 // 🔥 最重要的调试日志
@@ -159,7 +161,7 @@ namespace League.Services
                 // 只允许 0 / 5 / 10，防止配置被改乱
                 if (delay != 5 && delay != 10) delay = 0;
 
-                await _autoAccepter.TryAcceptAsync(delay);
+                _ = _autoAccepter.TryAcceptAsync(delay);
             }
 
             FormUiStateManager.SafeInvoke(_form.imageTabControl1, () =>

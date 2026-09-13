@@ -43,7 +43,6 @@ namespace League
             tabPage3 = new TabPage();
             tabControl1 = new TabControl();
             tabPage4 = new TabPage();
-            label10 = new Label();
             groupBox3 = new GroupBox();
             checkBoxFilterMode = new Label();
             chkAutoAccept = new CheckBox();
@@ -214,7 +213,6 @@ namespace League
             // 
             // tabPage4
             // 
-            tabPage4.Controls.Add(label10);
             tabPage4.Controls.Add(groupBox3);
             tabPage4.Controls.Add(groupBox2);
             tabPage4.Controls.Add(lk_QQGroup);
@@ -230,21 +228,10 @@ namespace League
             tabPage4.Text = "功能辅助";
             tabPage4.UseVisualStyleBackColor = true;
             // 
-            // label10
             // 
-            label10.AutoSize = true;
-            label10.Location = new Point(16, 552);
-            label10.Name = "label10";
-            label10.Size = new Size(860, 17);
-            label10.TabIndex = 16;
-            label10.Text = "注意：如果登录了游戏，还一直显示连接中，请右键，以管理员方式运行软件，另外，如已经进入了游戏内再打开是无法使用的，必须是游戏开始前，或者结束后";
             // 
             // groupBox3
             // 
-            groupBox3.Controls.Add(label9);
-            groupBox3.Controls.Add(cboCardMatchCount);
-            groupBox3.Controls.Add(cboAutoAcceptDelay);
-            groupBox3.Controls.Add(lblAutoAcceptDelay);
             groupBox3.Controls.Add(checkBoxFilterMode);
             groupBox3.Controls.Add(chkAutoAccept);
             groupBox3.Controls.Add(chkSkipEndOfGameStats);
@@ -256,43 +243,13 @@ namespace League
             groupBox3.TabStop = false;
             groupBox3.Text = "自动化功能";
             // 
-            // label9
             // 
-            label9.AutoSize = true;
-            label9.Location = new Point(306, 22);
-            label9.Name = "label9";
-            label9.Size = new Size(128, 17);
-            label9.TabIndex = 17;
-            label9.Text = "卡片战绩要查询的数量";
             // 
-            // cboCardMatchCount
             // 
-            cboCardMatchCount.DropDownStyle = ComboBoxStyle.DropDownList;
-            cboCardMatchCount.FormattingEnabled = true;
-            cboCardMatchCount.Items.AddRange(new object[] { "10场", "20场", "30场", "50场" });
-            cboCardMatchCount.Location = new Point(443, 18);
-            cboCardMatchCount.Name = "cboCardMatchCount";
-            cboCardMatchCount.Size = new Size(79, 25);
-            cboCardMatchCount.TabIndex = 16;
             // 
-            // cboAutoAcceptDelay
             // 
-            cboAutoAcceptDelay.DropDownStyle = ComboBoxStyle.DropDownList;
-            cboAutoAcceptDelay.FormattingEnabled = true;
-            cboAutoAcceptDelay.Items.AddRange(new object[] { "0秒（立即）", "5秒", "10秒" });
-            cboAutoAcceptDelay.Location = new Point(306, 54);
-            cboAutoAcceptDelay.Name = "cboAutoAcceptDelay";
-            cboAutoAcceptDelay.Size = new Size(79, 25);
-            cboAutoAcceptDelay.TabIndex = 15;
             // 
-            // lblAutoAcceptDelay
             // 
-            lblAutoAcceptDelay.AutoSize = true;
-            lblAutoAcceptDelay.Location = new Point(196, 58);
-            lblAutoAcceptDelay.Name = "lblAutoAcceptDelay";
-            lblAutoAcceptDelay.Size = new Size(104, 17);
-            lblAutoAcceptDelay.TabIndex = 14;
-            lblAutoAcceptDelay.Text = "自动接受等待时间";
             // 
             // checkBoxFilterMode
             // 
@@ -647,10 +604,5 @@ namespace League
         private GroupBox groupBox3;
         private Label label8;
         private Button btnDodgeNow;
-        private ComboBox cboAutoAcceptDelay;
-        private Label lblAutoAcceptDelay;
-        private Label label9;
-        private ComboBox cboCardMatchCount;
-        private Label label10;
     }
 }

@@ -14,6 +14,14 @@ internal static class SettingsChecks
         if(original.IsDisposed || original.Parent is not FlowLayoutPanel)throw new Exception("Settings must retain existing bound controls");
         if(Field("rbModeMatch").Parent!=Field("rbModeCustom").Parent)throw new Exception("Send modes must remain mutually exclusive");
         var tabs=(TabControl)Field("tabControl1");
+        IEnumerable<Control> All(Control root)=>root.Controls.Cast<Control>().SelectMany(c=>new[]{c}.Concat(All(c)));
+        var count=All(tabs).OfType<ComboBox>().Single(c=>c.Name=="CardMatchHistoryCount");
+        if(!count.Items.Cast<int>().SequenceEqual(new[]{10,20,30,50}) || !Equals(count.SelectedItem,20))throw new Exception("Upstream history count choices default to 20");
+        var delay=All(tabs).OfType<ComboBox>().Single(c=>c.Name=="AutoAcceptDelaySeconds");
+        ((CheckBox)original).Checked=true;
+        if(!delay.Enabled || delay.Items.Count!=3)throw new Exception("Auto-accept delay follows enable switch");
+        ((CheckBox)original).Checked=false;
+        if(delay.Enabled)throw new Exception("Disabled auto accept also disables delay");
         using var preview=new Form {ClientSize=new Size(1050,800)};
         preview.Controls.Add(tabs);preview.Show();Application.DoEvents();
         Save("settings-general");

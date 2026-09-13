@@ -1,4 +1,4 @@
-﻿using League.Models;
+using League.Models;
 using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 using static League.FormMain;
@@ -21,10 +21,11 @@ namespace League.Parsers
             return RankedStats.FromJson(rankedJson);
         }
 
-        public async Task<JArray> GetPlayerMatchesAsync(string puuid, string currentQueueId)
+        public async Task<JArray> GetPlayerMatchesAsync(string puuid, string currentQueueId, int count=20)
         {
+            count=count is 10 or 20 or 30 or 50?count:20;
             string queueFilter = GetQueueFilter(currentQueueId);
-            return await Globals.sgpClient.SgpFetchLatestMatches(puuid, 0, 20, queueFilter);
+            return await Globals.sgpClient.SgpFetchLatestMatches(puuid, 0, count, queueFilter);
         }
 
         public async Task<string> GetCurrentQueueIdAsync()
