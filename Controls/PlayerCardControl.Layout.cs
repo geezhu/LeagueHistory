@@ -41,7 +41,7 @@ public partial class PlayerCardControl
         {
             bool Show(Label label) => !string.IsNullOrWhiteSpace(label.Text) && !label.Text.Contains("未定级") && !label.Text.Contains("未评级") && !label.Text.Contains("未知");
             lblSoloRank.Visible = Show(lblSoloRank); lblFlexRank.Visible = Show(lblFlexRank);
-            header.Height = Show(lblSoloRank) || Show(lblFlexRank) ? 112 : 78;
+            header.Height = Show(lblSoloRank) || Show(lblFlexRank) ? 154 : 120;
         }
         lblSoloRank.TextChanged += (_,_) => UpdateRanks();
         lblFlexRank.TextChanged += (_,_) => UpdateRanks();
@@ -53,6 +53,7 @@ public partial class PlayerCardControl
             int half = Math.Max(20,(header.Width-25)/2);
             lblSoloRank.Width = lblFlexRank.Width = half; lblFlexRank.Left = half+15;
         };
+        ConfigureChampionBar();
         Controls.Add(header);
         UpdateRanks();
         listViewGames.Dock = DockStyle.Fill; listViewGames.BringToFront();

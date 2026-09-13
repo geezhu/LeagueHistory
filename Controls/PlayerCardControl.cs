@@ -1,11 +1,12 @@
-﻿namespace League.Controls
+namespace League.Controls
 {
     public partial class PlayerCardControl : UserControl
     {
         public bool IsLoading { get; private set; }
         // 新增：用来精准判断“这个卡片到底属于谁、选了什么英雄”
         public long CurrentSummonerId { get; set; } = 0;
-        public int CurrentChampionId { get; set; } = 0;
+        private int _currentChampionId;
+        public int CurrentChampionId { get=>_currentChampionId; set {if(_currentChampionId==value)return;_currentChampionId=value;if(_championBar.Parent!=null)_=RefreshChampionAsync();} }
         public string CurrentPuuId { get; set; } ="";
         public int RetryCount { get; set; } = 0;
 
