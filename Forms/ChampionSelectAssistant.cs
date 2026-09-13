@@ -28,6 +28,10 @@ internal sealed partial class ChampionSelectAssistant : Form
     private string? _position;
     private string _key="";
     private int _pollFailures;
+    private readonly AssistantVisibility _visibility=new();
+    private IntPtr _clientWindow;
+    private bool _moving;
+    private long _lastSessionRead;
     private OpggRunes? _runes;
     private int _runeChoice;
     protected override bool ShowWithoutActivation=>true;
@@ -71,6 +75,8 @@ internal sealed partial class ChampionSelectAssistant : Form
         retry.Click+=(_,_)=>{if(_hero>0)_ = LoadHeroAsync();};
         _apply.Click+=async (_,_)=>await ApplyAsync();
         FormClosing+=(_,e)=>{if(e.CloseReason==CloseReason.UserClosing){e.Cancel=true;if(!_collapsed)_fold.PerformClick();}};
+        ResizeBegin+=(_,_)=>_moving=true;
+        ResizeEnd+=(_,_)=>_moving=false;
         _timer.Tick+=async (_,_)=>await TickAsync();_timer.Start();
     }
 
@@ -83,18 +89,27 @@ internal sealed partial class ChampionSelectAssistant : Form
     }
     private void PositionWindow()
     {
-        IntPtr handle=IntPtr.Zero;
-        foreach(var process in Process.GetProcessesByName("LeagueClientUx"))
+        IntPtr handle=_clientWindow;
+        if(handle==IntPtr.Zero || !IsWindow(handle) || !IsWindowVisible(handle))
         {
-            using(process){try{if(process.MainWindowHandle!=IntPtr.Zero && IsWindowVisible(process.MainWindowHandle)){handle=process.MainWindowHandle;break;}}catch{}}
+            handle=IntPtr.Zero;
+            foreach(var process in Process.GetProcessesByName("LeagueClientUx"))
+            {
+                using(process){try{var candidate=process.MainWindowHandle;if(handle==IntPtr.Zero && candidate!=IntPtr.Zero && IsWindowVisible(candidate))handle=candidate;}catch{}}
+            }
+            _clientWindow=handle;
         }
         var foreground=GetForegroundWindow();
         GetWindowThreadProcessId(handle,out uint clientProcess);
         GetWindowThreadProcessId(foreground,out uint foregroundProcess);
         bool clientFocused=handle!=IntPtr.Zero && clientProcess!=0 && clientProcess==foregroundProcess;
         bool editorFocused=OwnedForms.Any(form=>form.ContainsFocus || form.Handle==foreground);
-        if(!_selecting || handle==IntPtr.Zero || IsIconic(handle) || (!clientFocused && foreground!=Handle && !ContainsFocus && !editorFocused && !_owner.ContainsFocus)){if(Visible)Hide();return;}
-        if(GetWindowRect(handle,out var rect) && !_pin.Checked)
+        bool focused=clientFocused || foreground==Handle || ContainsFocus || editorFocused || _owner.ContainsFocus;
+        bool show=_visibility.ShouldShow(_selecting,handle!=IntPtr.Zero && IsIconic(handle),handle!=IntPtr.Zero,focused,_moving,Environment.TickCount64);
+        if(!show){if(Visible)Hide();return;}
+        // Grace preserves an existing panel; it must not open one over an unrelated app.
+        if(!Visible && (!focused || handle==IntPtr.Zero))return;
+        if(handle!=IntPtr.Zero && GetWindowRect(handle,out var rect) && rect.Right>rect.Left && rect.Bottom>rect.Top && !_pin.Checked && !_moving)
         {
             var target=Placement(Rectangle.FromLTRB(rect.Left,rect.Top,rect.Right,rect.Bottom),Screen.FromHandle(handle).WorkingArea,new Size(Width,_collapsed?84:630));
             if(Bounds!=target)Bounds=target;
@@ -116,6 +131,7 @@ internal sealed partial class ChampionSelectAssistant : Form
             var session=JObject.Parse(await client.GetStringAsync("/lol-champ-select/v1/session",_poll.Token));
             if(IsDisposed)return;
             _pollFailures=0;
+            _lastSessionRead=Environment.TickCount64;
             _selecting=true;
             int queue=(int?)flow["gameData"]?["queue"]?["id"]??0;
             _queue=queue;UpdateRoster(session,queue);
@@ -141,7 +157,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         }
         catch(Exception ex)
         {
-            if(!IsDisposed && ++_pollFailures>=3)Reset();
+            if(!IsDisposed && ++_pollFailures>=3 && Environment.TickCount64-_lastSessionRead>15000)Reset();
             Debug.WriteLine("Assistant poll: "+ex.GetType().Name);
         }
         finally{_busy=false;}
@@ -276,6 +292,7 @@ internal sealed partial class ChampionSelectAssistant : Form
     [StructLayout(LayoutKind.Sequential)]private struct RECT{public int Left,Top,Right,Bottom;}
     [DllImport("user32.dll")]private static extern bool GetWindowRect(IntPtr window,out RECT rectangle);
     [DllImport("user32.dll")]private static extern bool IsWindowVisible(IntPtr window);
+    [DllImport("user32.dll")]private static extern bool IsWindow(IntPtr window);
     [DllImport("user32.dll")]private static extern bool IsIconic(IntPtr window);
     [DllImport("user32.dll")]private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")]private static extern uint GetWindowThreadProcessId(IntPtr window,out uint process);
