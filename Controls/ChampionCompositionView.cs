@@ -47,7 +47,7 @@ public sealed partial class ChampionCompositionView : UserControl
         InitializeDashboard(bar);
         _replacement.SelectedIndexChanged += (_, _) => { if (!_changing) { Render(); _ = LoadAsync(); } };
         _grid.SelectionChanged += (_, _) => ShowDetails();
-        retry.Click += (_, _) => _ = LoadAsync();
+        retry.Click += (_, _) => { _skillRetryAfter.Clear(); _ = LoadAsync(); };
     }
 
     public void SetRoster(ChampionSelectRoster roster)
@@ -97,7 +97,7 @@ public sealed partial class ChampionCompositionView : UserControl
                 _errors[id] = ex.Message;
             }
             finally { if (entered) concurrency.Release(); }
-            if (!token.IsCancellationRequested && !IsDisposed) Render();
+            if (!token.IsCancellationRequested && !IsDisposed) QueueDashboardRefresh();
         }));
     }
 
