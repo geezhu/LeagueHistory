@@ -16,7 +16,7 @@ internal sealed partial class AramMetaView
         if(!string.IsNullOrWhiteSpace(url) && Uri.TryCreate(new Uri("https://arammeta.com/"),url,out var uri) && uri.Scheme=="https" && new[]{"arammeta.com","ddragon.leagueoflegends.com"}.Contains(uri.Host))fallback=uri.AbsoluteUri;
         bool local=id>0 && kind is "champion" or "item" or "spell" or "augment";
         if(!local && fallback==null)return Task.FromResult<Image?>(null);
-        string key=local?$"{kind}:{id}:{fallback}":fallback!;
+        string key=local?$"{kind}:{id}":fallback!;
         if(_images.TryGetValue(key,out var cached))return Task.FromResult<Image?>(cached);
         if(_imageLoads.TryGetValue(key,out var pending))return pending;
         return _imageLoads[key]=FetchImageAsync(key,fallback,kind,id);
@@ -33,14 +33,15 @@ internal sealed partial class AramMetaView
             {
                 try
                 {
-                    image=kind switch
+                    // Disk hits still decode bitmaps and draw augment frames; do that off the UI thread.
+                    image=await Task.Run(async ()=>kind switch
                     {
                         "champion" => (await resources.GetChampionInfoAsync(id)).image,
                         "item" => (await resources.GetItemInfoAsync(id)).image,
                         "spell" => (await resources.GetSpellInfoAsync(id)).image,
                         "augment" => (await resources.GetAugmentInfoAsync(id)).image,
                         _ => null
-                    };
+                    });
                 }
                 catch { /* Missing client resources fall back to the public image cache. */ }
             }
@@ -48,7 +49,7 @@ internal sealed partial class AramMetaView
             if(image==null && url!=null)
             {
                 var filename=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(url)))+".png";
-                image=await new League.Infrastructure.ImageCacheService(_imageHttp).GetOrDownloadImageAsync(url,"arammeta",filename);
+                image=await Task.Run(()=>new League.Infrastructure.ImageCacheService(_imageHttp).GetOrDownloadImageAsync(url,"arammeta",filename));
             }
             if(IsDisposed){image?.Dispose();return null;}
             if(image!=null)_images[key]=image;

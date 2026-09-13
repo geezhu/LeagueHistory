@@ -1,4 +1,4 @@
-﻿using League.Clients;
+using League.Clients;
 using League.Controls;
 using League.Models;
 using Newtonsoft.Json.Linq;
@@ -92,7 +92,9 @@ internal static class AramMetaChecks
             {
                 var restored=await reader.GetAsync(103,false,default);
                 Check(requests==0 && restored.Cached && restored.Detail!=null,"Restart reuses unexpired statistics without network");
+                Check(reader.IsCurrent(restored,103),"Fresh visible pages can skip cache copying");
                 lifetime=TimeSpan.Zero;
+                Check(!reader.IsCurrent(restored,103),"Changed expiry forces visible pages to reload");
                 var stale=await reader.GetAsync(103,false,default);
                 Check(requests==1 && stale.UpdateFailed && stale.FetchedAt==restored.FetchedAt,"Lifetime changes apply immediately and failed refresh does not renew stale data");
                 lifetime=TimeSpan.FromHours(1);
@@ -123,10 +125,67 @@ internal static class AramMetaChecks
         int repeatedPreviews=0;
         await progressive.GetAsync(103,false,default,_=>repeatedPreviews++);
         Check(repeatedPreviews==0,"Cached heroes render once without a loading preview");
+        await SharedCacheChecks();
         Console.WriteLine("PASS: arammeta models, cache, cancellation, version consistency.");
+    }
+    private static async Task SharedCacheChecks()
+    {
+        var path=Path.Combine(Path.GetTempPath(),"arammeta-shared-"+Guid.NewGuid().ToString("N")+".json");
+        var started=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int requests=0;
+        Handler Network()=>new(async (r,t)=>
+        {
+            Interlocked.Increment(ref requests);
+            if(r.RequestUri!.AbsolutePath.EndsWith("tier-list.json"))return Json(Fixture("index"));
+            started.TrySetResult();
+            await release.Task.WaitAsync(t);
+            return Json(Fixture("103"));
+        });
+        try
+        {
+            using(var first=new AramMetaClient(Network(),path))
+            using(var second=new AramMetaClient(Network(),Path.Combine(Path.GetDirectoryName(path)!,".",Path.GetFileName(path))))
+            {
+                var loading=first.GetAsync(103,false,default);
+                await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                using(var cancel=new CancellationTokenSource())
+                {
+                    var waiting=second.GetAsync(157,false,cancel.Token);
+                    cancel.Cancel();
+                    bool cancelled=false;
+                    try{await waiting;}catch(OperationCanceledException){cancelled=true;}
+                    Check(cancelled,"Cancelling a waiting page does not cancel another page's request");
+                }
+                var duplicate=second.GetAsync(103,false,default);
+                release.TrySetResult();
+                await Task.WhenAll(loading,duplicate);
+                Check(requests==3 && duplicate.Result.Cached,"Concurrent pages share one hero download and normalized cache path");
+                await second.GetAsync(157,false,default);
+                Check(requests==5,"A second hero reuses the shared index");
+                first.Dispose();
+                var retained=await second.GetAsync(103,false,default);
+                Check(requests==5 && retained.Detail!=null,"Closing one page preserves the other page's cache");
+                await second.FlushAsync();
+                var disk=JObject.Parse(File.ReadAllText(path));
+                Check(((JObject)disk["details"]!).Count==2,"Shared disk snapshot retains details fetched by both pages");
+            }
+            int offlineRequests=0;
+            using var restarted=new AramMetaClient(new Handler((r,t)=>
+            {
+                offlineRequests++;
+                throw new HttpRequestException("offline");
+            }),path);
+            foreach(var hero in new[]{103,157})
+                Check((await restarted.GetAsync(hero,false,default)).Detail!=null,"Restart restores every shared hero detail");
+            Check(offlineRequests==0,"Restarted pages use persisted statistics without network");
+        }
+        finally{release.TrySetResult();if(File.Exists(path))File.Delete(path);}
     }
     public static void Render()
     {
+        // This test pumps a real WinForms window; prior checks can leave a base context installed.
+        SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
         var client=new AramMetaClient(new Handler((r,t)=>Task.FromResult(Json(Fixture(r.RequestUri!.AbsolutePath.EndsWith("tier-list.json")?"index":"103")))));
         int imageRequests=0;
         using var images=new HttpClient(new Handler((r,t)=>{imageRequests++;return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));}));
@@ -164,9 +223,10 @@ internal static class AramMetaChecks
         using var form=new Form {ClientSize=new Size(1060,800)};form.Controls.Add(view);form.Show();Application.DoEvents();
         void Run(string method,params object[] args)
         {
+            SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
             var task=(Task)type.GetMethod(method,flags)!.Invoke(view,args)!;
             var deadline=DateTime.UtcNow.AddSeconds(10);
-            while(!task.IsCompleted){Application.DoEvents();Thread.Sleep(5);if(DateTime.UtcNow>deadline)throw new Exception("Timed out: "+method);}task.GetAwaiter().GetResult();Application.DoEvents();
+            while(!task.IsCompleted){Application.DoEvents();Thread.Sleep(5);if(DateTime.UtcNow>deadline)throw new Exception("Timed out: "+method+" / "+task.Status+" / "+((Label)type.GetField("_status",flags)!.GetValue(view)!).Text+" / "+SynchronizationContext.Current?.GetType().Name);}task.GetAwaiter().GetResult();Application.DoEvents();
         }
         Run("LoadAsync",false);
         var grid=(DataGridView)type.GetField("_grid",flags)!.GetValue(view)!;
@@ -175,6 +235,11 @@ internal static class AramMetaChecks
         Run("NavigateAsync",103);
         var detailPanel=(FlowLayoutPanel)type.GetField("_detail",flags)!.GetValue(view)!;
         var complete=(AramMetaPage)type.GetField("_page",flags)!.GetValue(view)!;
+        var retainedSummary=detailPanel.Controls[0];
+        Run("LoadAsync",false);
+        Check(ReferenceEquals(retainedSummary,detailPanel.Controls[0]),"Unchanged cached detail retains controls instead of rebuilding");
+        Run("LoadAsync",true);
+        Check(!ReferenceEquals(retainedSummary,detailPanel.Controls[0]),"Manual refresh still rebuilds updated detail");
         var render=type.GetMethod("RenderDetail",flags)!;
         render.Invoke(view,new object[]{complete with {Detail=null},103,CancellationToken.None,false});
         var summary=detailPanel.Controls[0];

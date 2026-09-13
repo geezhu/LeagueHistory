@@ -18,7 +18,8 @@ internal sealed partial class AramMetaView : UserControl
     private readonly FlowLayoutPanel _detail=new(){Dock=DockStyle.Fill,AutoScroll=true,FlowDirection=FlowDirection.TopDown,WrapContents=false,Padding=new Padding(12),Visible=false};
     private readonly ToolTip _tips=new();
     private readonly System.Windows.Forms.Timer _timer=new(){Interval=2500};
-    private CancellationTokenSource? _request,_poll;
+    private CancellationTokenSource? _request,_poll,_renderLifetime;
+    private int _renderedChampion=-1;
     private AramMetaPage? _page;
     private int _champion,_sort=4,_historyIndex=0;
     private bool _descending=true,_syncing,_polling;
@@ -53,7 +54,7 @@ internal sealed partial class AramMetaView : UserControl
         _grid.RowPrePaint+=(_,e)=>
         {
             var row=_grid.Rows[e.RowIndex];
-            if(row.Cells[0].Value==null && row.Tag is AramMetaChampion c)_=SetGridImageAsync(row,c,_request?.Token??default);
+            if(row.Cells[0].Value==null && row.Tag is AramMetaChampion c)_=SetGridImageAsync(row,c,_renderLifetime?.Token??default);
         };
         _grid.KeyDown+=async (_,e)=>{if(e.KeyCode==Keys.Enter && _grid.CurrentRow?.Tag is AramMetaChampion c){e.SuppressKeyPress=true;_follow.Checked=false;await NavigateAsync(c.Id);}};
         _grid.ColumnHeaderMouseClick+=(_,e)=>{if(e.ColumnIndex==0)return;_follow.Checked=false;_descending=_sort==e.ColumnIndex?!_descending:e.ColumnIndex!=1;_sort=e.ColumnIndex;FillGrid();};
@@ -94,6 +95,7 @@ internal sealed partial class AramMetaView : UserControl
     }
     private async Task LoadAsync(bool refresh)
     {
+        if(!refresh && _renderedChampion==_champion && _page!=null && _client.IsCurrent(_page,_champion)){UpdateStatus(_page);return;}
         _request?.Cancel();_request?.Dispose();var request=_request=new();int id=_champion;
         _status.Text="正在加载 arammeta · 海克斯大乱斗…";
         try
@@ -105,25 +107,44 @@ internal sealed partial class AramMetaView : UserControl
                 if(IsDisposed || request.IsCancellationRequested || _request!=request)return;
                 _page=preview;_search.Visible=false;_role.Visible=false;
                 _grid.Visible=false;_detail.Visible=true;
-                RenderDetail(preview,id,request.Token);_detail.BringToFront();
+                RenderDetail(preview,id,NewRenderToken());_renderedChampion=id;_detail.BringToFront();
                 _detail.AutoScrollPosition=new Point(0,_history[_historyIndex].Scroll);
                 previewShown=true;
                 previewVersion=preview.Index.Version;
                 _status.Text=$"arammeta · 海克斯大乱斗 · 数据版本 {preview.Index.Patch} · 英雄概要与强化推荐已加载，正在获取装备详情…";
             });request.Token.ThrowIfCancellationRequested();
-            if(IsDisposed)return;_page=page;
+            if(IsDisposed)return;
+            bool reuse=page.Cached && !previewShown && _renderedChampion==id && _page!=null &&
+                _page.FetchedAt==page.FetchedAt && _page.Index.Version==page.Index.Version &&
+                (id==0 || _page.Detail!=null);
+            _page=page;
             int detailScroll=previewShown?Math.Max(0,-_detail.AutoScrollPosition.Y):_history[_historyIndex].Scroll;
             _search.Visible=id==0;_role.Visible=id==0;
             _grid.Visible=id==0;_detail.Visible=id!=0;
-            if(id==0){FillGrid();_grid.BringToFront();}
-            else {RenderDetail(page,id,request.Token,previewShown && previewVersion==page.Index.Version);_detail.BringToFront();}
+            if(!reuse)
+            {
+                bool equipmentOnly=previewShown && previewVersion==page.Index.Version;
+                var renderToken=equipmentOnly?_renderLifetime!.Token:NewRenderToken();
+                if(id==0){FillGrid();_grid.BringToFront();}
+                else {RenderDetail(page,id,renderToken,equipmentOnly);_detail.BringToFront();}
+                _renderedChampion=id;
+            }
             var visit=_history[_historyIndex];
             if(id==0 && _grid.Rows.Count>0)_grid.FirstDisplayedScrollingRowIndex=Math.Min(visit.Scroll,_grid.Rows.Count-1);
             if(id!=0)_detail.AutoScrollPosition=new Point(0,detailScroll);
-            _status.Text=$"arammeta · 海克斯大乱斗 · 数据版本 {page.Index.Patch} · {(page.UpdateFailed?"\u66f4\u65b0\u5931\u8d25\uff0c\u663e\u793a\u65e7\u7f13\u5b58":page.Cached?"缓存":"已更新")} {page.FetchedAt.ToLocalTime():MM-dd HH:mm}\n调整后胜率与原始胜率分别展示；样本不代表全服。";
+            UpdateStatus(page);
         }
         catch(OperationCanceledException){if(!request.IsCancellationRequested && !IsDisposed){MarkDetailUnavailable();_status.Text="请求超时，点击刷新重试。";}}
         catch(Exception ex){if(!request.IsCancellationRequested && !IsDisposed){MarkDetailUnavailable();_status.Text="加载失败："+ex.Message+" 点击刷新重试；保留上次内容。";}}
+    }
+    private void UpdateStatus(AramMetaPage page)
+    {
+        _status.Text=$"arammeta · 海克斯大乱斗 · 数据版本 {page.Index.Patch} · {(page.UpdateFailed?"\u66f4\u65b0\u5931\u8d25\uff0c\u663e\u793a\u65e7\u7f13\u5b58":page.Cached?"缓存":"已更新")} {page.FetchedAt.ToLocalTime():MM-dd HH:mm}\n调整后胜率与原始胜率分别展示；样本不代表全服。";
+    }
+    private CancellationToken NewRenderToken()
+    {
+        _renderLifetime?.Cancel();_renderLifetime?.Dispose();
+        _renderLifetime=new();return _renderLifetime.Token;
     }
     private void FillGrid()
     {
@@ -134,12 +155,17 @@ internal sealed partial class AramMetaView : UserControl
         else {double Value(AramMetaChampion c)=>_sort switch {3=>c.RawWinRate??-1,5=>c.Games??-1,6=>_page.Index.PickRate(c)??-1,_=>c.WinRate??-1};rows=_descending?rows.OrderByDescending(Value):rows.OrderBy(Value);}
         var displayed=rows.ToArray();
         _maximumWinRate=displayed.Select(c=>c.WinRate??0).DefaultIfEmpty(0).Max();
-        _grid.Rows.Clear();
-        foreach(var c in displayed)
+        var total=_page.Index.SampleMatches;
+        var batch=displayed.Select(c=>
         {
-            int index=_grid.Rows.Add(null,Name(c),c.Tier,Rate(c.RawWinRate),Rate(c.WinRate),c.Games?.ToString("N0")??"—",Rate(_page.Index.PickRate(c)));
-            var row=_grid.Rows[index];row.Tag=c;
-        }
+            var row=new DataGridViewRow();
+            double? pick=total is long count && c.Games is long games && games>=0 && games<=count?(double)games/count:null;
+            row.CreateCells(_grid,null,Name(c),c.Tier,Rate(c.RawWinRate),Rate(c.WinRate),c.Games?.ToString("N0")??"—",Rate(pick));
+            row.Tag=c;return row;
+        }).ToArray();
+        _grid.SuspendLayout();
+        try {_grid.Rows.Clear();if(batch.Length>0)_grid.Rows.AddRange(batch);}
+        finally {_grid.ResumeLayout();}
         foreach(DataGridViewColumn column in _grid.Columns)column.HeaderCell.SortGlyphDirection=column.Index==_sort?(_descending?SortOrder.Descending:SortOrder.Ascending):SortOrder.None;
         _grid.ClearSelection();
     }
@@ -163,7 +189,7 @@ internal sealed partial class AramMetaView : UserControl
     }
     protected override void Dispose(bool disposing)
     {
-        if(disposing){_timer.Stop();_timer.Dispose();_request?.Cancel();_poll?.Cancel();_client.Dispose();_tips.Dispose();_rankingBold?.Dispose();_imageHttp.Dispose();foreach(var image in _images.Values)image.Dispose();_images.Clear();}
+        if(disposing){_timer.Stop();_timer.Dispose();_request?.Cancel();_poll?.Cancel();_renderLifetime?.Cancel();_renderLifetime?.Dispose();_renderLifetime=null;_client.Dispose();_tips.Dispose();_rankingBold?.Dispose();_imageHttp.Dispose();foreach(var image in _images.Values)image.Dispose();_images.Clear();}
         base.Dispose(disposing);
     }
 }
