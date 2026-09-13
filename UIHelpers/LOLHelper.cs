@@ -85,8 +85,6 @@ public class LOLHelper
             }
             return _detection;
         }
-
-        #endregion
     }
 
     private LolInstallation? Detect()

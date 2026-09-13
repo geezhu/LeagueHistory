@@ -59,11 +59,8 @@ namespace League.Services
 
         private void HandleLcuDisconnected()
         {
-            if (!_uiManager.LcuReady)
-            {
-                //Debug.WriteLine("[GameFlowWatcher] 收到 Disconnected，但 LcuReady=false，忽略");
-                return;
-            }
+            _autoAccepter.Reset();
+            Debug.WriteLine("[GameFlowWatcher] 检测到 LCU 断开，准备重启连接轮询");
 
             Debug.WriteLine("[GameFlowWatcher] 检测到 LCU 断开");
 
@@ -84,26 +81,7 @@ namespace League.Services
 
         public async Task OnGameflowPhaseChanged(string phase, string? previousPhase)
         {
-            if (!_uiManager.LcuReady)
-            {
-                //Debug.WriteLine($"[Phase Changed] 忽略（LcuReady=false）: {previousPhase ?? "null"} → {phase}");
-                return;
-            }
-
-            // 刚重连且曾在对局、敌方明显不足时，允许对 InProgress 再处理一次
-            bool allowInProgressRetry =
-                phase == "InProgress"
-                && _wasInGameBeforeDisconnect
-                && (_form._cachedEnemyTeam == null || _form._cachedEnemyTeam.Count == 0
-                    || _cardManager.CountCardsInRow(1) < 3);
-
-            if (phase == _lastHandledPhase && !allowInProgressRetry)
-            {
-                Debug.WriteLine($"[Phase Changed] 忽略重复: {phase}");
-                return;
-            }
-            _lastHandledPhase = phase;
-
+            if(phase!="ReadyCheck")_autoAccepter.Reset();
             try
             {
                 //Debug.WriteLine($"[Phase Changed] {previousPhase ?? "null"} → {phase} | 时间: {DateTime.Now:HH:mm:ss.fff}");
@@ -168,7 +146,8 @@ namespace League.Services
             {
                 int delay = _form.GetAppConfig()?.AutoAcceptDelaySeconds ?? 0;
                 if (delay != 5 && delay != 10) delay = 0;
-                await _autoAccepter.TryAcceptAsync(delay);
+
+                _ = _autoAccepter.TryAcceptAsync(delay);
             }
 
             FormUiStateManager.SafeInvoke(_form.imageTabControl1, () =>

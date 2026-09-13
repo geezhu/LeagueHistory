@@ -266,12 +266,10 @@ namespace League
             tabPage4.Text = "功能辅助";
             tabPage4.UseVisualStyleBackColor = true;
             // 
+            // 
+            // 
             // groupBox3
             // 
-            groupBox3.Controls.Add(label9);
-            groupBox3.Controls.Add(cboCardMatchCount);
-            groupBox3.Controls.Add(cboAutoAcceptDelay);
-            groupBox3.Controls.Add(lblAutoAcceptDelay);
             groupBox3.Controls.Add(checkBoxFilterMode);
             groupBox3.Controls.Add(chkAutoAccept);
             groupBox3.Controls.Add(chkSkipEndOfGameStats);
@@ -283,43 +281,13 @@ namespace League
             groupBox3.TabStop = false;
             groupBox3.Text = "自动化功能";
             // 
-            // label9
             // 
-            label9.AutoSize = true;
-            label9.Location = new Point(306, 22);
-            label9.Name = "label9";
-            label9.Size = new Size(128, 17);
-            label9.TabIndex = 17;
-            label9.Text = "卡片战绩要查询的数量";
             // 
-            // cboCardMatchCount
             // 
-            cboCardMatchCount.DropDownStyle = ComboBoxStyle.DropDownList;
-            cboCardMatchCount.FormattingEnabled = true;
-            cboCardMatchCount.Items.AddRange(new object[] { "10场", "20场", "30场", "50场" });
-            cboCardMatchCount.Location = new Point(443, 18);
-            cboCardMatchCount.Name = "cboCardMatchCount";
-            cboCardMatchCount.Size = new Size(79, 25);
-            cboCardMatchCount.TabIndex = 16;
             // 
-            // cboAutoAcceptDelay
             // 
-            cboAutoAcceptDelay.DropDownStyle = ComboBoxStyle.DropDownList;
-            cboAutoAcceptDelay.FormattingEnabled = true;
-            cboAutoAcceptDelay.Items.AddRange(new object[] { "0秒（立即）", "5秒", "10秒" });
-            cboAutoAcceptDelay.Location = new Point(306, 54);
-            cboAutoAcceptDelay.Name = "cboAutoAcceptDelay";
-            cboAutoAcceptDelay.Size = new Size(79, 25);
-            cboAutoAcceptDelay.TabIndex = 15;
             // 
-            // lblAutoAcceptDelay
             // 
-            lblAutoAcceptDelay.AutoSize = true;
-            lblAutoAcceptDelay.Location = new Point(196, 58);
-            lblAutoAcceptDelay.Name = "lblAutoAcceptDelay";
-            lblAutoAcceptDelay.Size = new Size(104, 17);
-            lblAutoAcceptDelay.TabIndex = 14;
-            lblAutoAcceptDelay.Text = "自动接受等待时间";
             // 
             // checkBoxFilterMode
             // 
@@ -823,23 +791,5 @@ namespace League
         private GroupBox groupBox3;
         private Label lblHotkeyChampSelect;
         private Button btnDodgeNow;
-        private ComboBox cboAutoAcceptDelay;
-        private Label lblAutoAcceptDelay;
-        private Label label9;
-        private ComboBox cboCardMatchCount;
-        private CheckBox chkPickUrf;
-        private CheckBox chkUrf;
-        private LinkLabel labChampionSkinBrowser;
-        private CheckBox chkAutoSkinSelect;
-        private CheckBox chkClassic;
-        private CheckBox chkBot;
-        private GroupBox groupBox4;
-        private TextBox txtHotkeyChampSelect;
-        private TextBox txtHotkeyFullTeam;
-        private Label lblHotkeyFullTeam;
-        private TextBox txtHotkeyMyTeam;
-        private Label lblHotkeyMyTeam;
-        private Panel panelTab1;
-        private Label label8;
     }
 }
