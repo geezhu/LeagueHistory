@@ -54,6 +54,7 @@ namespace League
 
         // 热键注册及按键监听
         private HotkeyManager? _hotkeyManager;
+        private LoadingOverlayManager? _loadingOverlay;
 
         // 热键业务处理管理器
         private GameChatSender? _chatSender;
@@ -97,6 +98,8 @@ namespace League
 
             // 热键管理
             _hotkeyManager = new HotkeyManager(this);
+            _loadingOverlay = new LoadingOverlayManager(this);
+            Disposed+=(_,_)=>_loadingOverlay?.Dispose();
 
             // 新增：业务处理管理器
             _chatSender = new GameChatSender(this, _chatMessageBuilder);
@@ -773,18 +776,8 @@ namespace League
 
             try
             {
-                var configPath = "LeagueConfig.json";
-                if (!File.Exists(configPath))
-                {
-                    //Debug.WriteLine("[自动预选] 未找到 LeagueConfig.json 文件（程序所在目录）");
-                    _preSelectedHeroes = new List<PreliminaryHero>();
-                    return _preSelectedHeroes;
-                }
-
-                // 改为异步读取，避免阻塞UI线程
-                var json = await File.ReadAllTextAsync(configPath);
-
-                var config = JsonConvert.DeserializeObject<LeagueConfig>(json);
+                // Use the same persistent settings as the settings page, regardless of launch directory.
+                var config = await Task.Run(LeagueConfigManager.Load);
                 if (config?.Preliminary == null || config.Preliminary.Heroes == null || config.Preliminary.Heroes.Count == 0)
                 {
                     //Debug.WriteLine("[自动预选] 配置中 Preliminary 或 Heroes 为空");
@@ -1036,6 +1029,8 @@ namespace League
             LcuManager.Instance.Disconnected -= OnLcuDisconnected;
 
             _hotkeyManager?.Dispose();
+            _loadingOverlay?.Dispose();
+
             base.OnFormClosing(e);
             _playerCardManager?.UiLock?.Dispose();
         }

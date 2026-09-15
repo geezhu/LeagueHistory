@@ -10,6 +10,7 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if(args.Contains("--config-checks")){LeagueConfigChecks.Run();return;}
         if (args.Length > 0 && args[0] == "--champion-analysis")
         {
             ChampionAnalysisChecks.Run(args.Length > 1 ? args[1] : Path.Combine(AppContext.BaseDirectory, "ChampionAnalysisReports"));
@@ -21,6 +22,8 @@ internal static class Program
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+        if(args.Contains("--loading-overlay-checks")){GameBarBridgeChecks.Run();LoadingOverlayChecks.Run();return;}
+        if(args.Contains("--settings-checks")){SettingsChecks.Render();return;}
         TierHotkeyChecks.Run();
         Task.Run(ChatSendDiagnosticsChecks.RunAsync).GetAwaiter().GetResult();
         LiveMatchChecks.Run();
