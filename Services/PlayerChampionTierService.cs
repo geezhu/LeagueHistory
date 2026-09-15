@@ -7,6 +7,7 @@ namespace League.Services;
 public sealed record PlayerChampionTier(string Tier,string Rate,string Note,int Queue,string Position)
 {
     public bool ReferencePosition { get; init; }
+    public string PickRate { get; init; } = "—";
     public static int NormalizeQueue(int queue,string mode)
     {
         if(queue==3270 || mode.Equals("KIWI",StringComparison.OrdinalIgnoreCase))return 2400;
@@ -29,7 +30,7 @@ public sealed record PlayerChampionTier(string Tier,string Rate,string Note,int 
         string note=$"OP.GG · {title} · 全球 / 全段位 · {version}\n选用率 {(row?.PickRate is double pick?pick.ToString("P1"):"—")}";
         if(ranked)note+=$"\n{(reference?"参考分路":"玩家分路")}：{lane}";
         if(reference)note+="\n未读取到玩家分路，优先使用该英雄选用率最高的可用分路；不代表玩家实际位置。";
-        return new(row?.Tier is int tier?"T"+tier:"—",rate,note,queue,position){ReferencePosition=reference};
+        return new(row?.Tier is int tier?"T"+tier:"—",rate,note,queue,position){ReferencePosition=reference,PickRate=row?.PickRate is double pickRate?pickRate.ToString("P1"):"—"};
     }
 }
 internal sealed class PlayerChampionTierService : IDisposable
@@ -61,9 +62,9 @@ internal sealed class PlayerChampionTierService : IDisposable
             return JObject.Parse(await client.GetStringAsync("/lol-gameflow/v1/session",timeout.Token));
         }
     }
-    public async Task<PlayerChampionTier> GetAsync(int hero,string puuid)
+    public async Task<PlayerChampionTier> GetAsync(int hero,string puuid)=>await GetAsync(hero,puuid,await Context());
+    public async Task<PlayerChampionTier> GetAsync(int hero,string puuid,JObject context)
     {
-        var context=await Context();
         int queue=(int?)context["gameData"]?["queue"]?["id"]??0;
         string mode=(string?)context["gameData"]?["queue"]?["gameMode"]??(string?)context["gameData"]?["gameMode"]??"";
         queue=PlayerChampionTier.NormalizeQueue(queue,mode);
@@ -74,7 +75,7 @@ internal sealed class PlayerChampionTierService : IDisposable
             {_amTime=DateTime.UtcNow;_amPage=_am.GetAsync(0,false,_life.Token);}
             var page=await _amPage;
             var c=page.Index.Champions.FirstOrDefault(c=>c.Id==hero);
-            return new(c?.Tier??"—",c?.WinRate is double win?$"胜 {win:P1}":"暂无数据",$"arammeta · 海克斯大乱斗 · {page.Index.Patch}\n调整后胜率 · 样本选取率 {(c==null?null:page.Index.PickRate(c)):P1}"+(page.UpdateFailed?"\n更新失败，使用旧缓存":""),2400,"none");
+            return new(c?.Tier??"—",c?.WinRate is double win?$"胜 {win:P1}":"暂无数据",$"arammeta · 海克斯大乱斗 · {page.Index.Patch}\n调整后胜率 · 样本选取率 {(c==null?null:page.Index.PickRate(c)):P1}"+(page.UpdateFailed?"\n更新失败，使用旧缓存":""),2400,"none"){PickRate=c!=null && page.Index.PickRate(c) is double pick?pick.ToString("P1"):"—"};
         }
         string? key=OpggQuery.ModeForQueue(queue);
         if(key==null)return new("—","暂无梯队","当前模式暂无对应统计。",queue,"none");
@@ -82,8 +83,8 @@ internal sealed class PlayerChampionTierService : IDisposable
         if(!_tiers.TryGetValue(key,out var saved) || DateTime.UtcNow-saved.Time>TimeSpan.FromMinutes(saved.Load.IsFaulted?0.5:15))
             _tiers[key]=saved=(DateTime.UtcNow,_opgg.GetTiersAsync(new("global",key,"all",key=="ranked"?"mid":"none",0),false,_life.Token));
         var data=await saved.Load;
-        var players=(_form._cachedMyTeam??new JArray()).Concat(_form._cachedEnemyTeam??new JArray())
-            .Concat(context["gameData"]?["teamOne"] as JArray??new JArray()).Concat(context["gameData"]?["teamTwo"] as JArray??new JArray());
+        var players=(context["gameData"]?["teamOne"] as JArray??new JArray()).Concat(context["gameData"]?["teamTwo"] as JArray??new JArray())
+            .Concat(_form._cachedMyTeam??new JArray()).Concat(_form._cachedEnemyTeam??new JArray());
         var player=players.FirstOrDefault(p=>!string.IsNullOrEmpty(puuid) && (string?)p["puuid"]==puuid && !string.IsNullOrEmpty((string?)p["assignedPosition"]));
         return PlayerChampionTier.FromOpgg(hero,queue,(string?)player?["assignedPosition"]??"",data.Version,data.Rows);
     }
