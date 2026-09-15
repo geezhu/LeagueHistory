@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+ xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+ xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3" IgnorableNamespaces="uap uap3">
+  <Identity Name="LeagueHistory.GameBar" Publisher="CN=LeagueHistory" Version="1.0.0.8" ProcessorArchitecture="x64" />
+  <Properties><DisplayName>League 对局速览</DisplayName><PublisherDisplayName>LeagueHistory</PublisherDisplayName><Logo>Assets\Logo50.png</Logo></Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+    <PackageDependency Name="Microsoft.VCLibs.140.00" MinVersion="14.0.33519.0" Publisher="CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US" />
+  </Dependencies>
+  <Resources><Resource Language="zh-cn" /></Resources>
+  <Applications>
+    <Application Id="App" Executable="LeagueHistory.GameBar.exe" EntryPoint="LeagueHistory.GameBar.App">
+      <uap:VisualElements DisplayName="League 对局速览" Description="英雄、梯队、胜率与缓存战绩" Square150x150Logo="Assets\Logo150.png" Square44x44Logo="Assets\Logo44.png" BackgroundColor="#071E29" />
+      <Extensions>
+        <uap3:Extension Category="windows.appExtension">
+          <uap3:AppExtension Name="microsoft.gameBarUIExtension" Id="Roster" DisplayName="League 对局速览" Description="十人英雄与梯队速览" PublicFolder="GameBar">
+            <uap3:Properties><GameBarWidget Type="Standard">
+              <HomeMenuVisible>true</HomeMenuVisible><PinningSupported>true</PinningSupported>
+              <ActivateAfterInstall>true</ActivateAfterInstall><FavoriteAfterInstall>true</FavoriteAfterInstall>
+              <Window><Size><Width>820</Width><Height>560</Height><MinWidth>640</MinWidth><MinHeight>500</MinHeight><MaxWidth>1100</MaxWidth><MaxHeight>800</MaxHeight></Size><ResizeSupported><Horizontal>true</Horizontal><Vertical>true</Vertical></ResizeSupported></Window>
+            </GameBarWidget></uap3:Properties>
+          </uap3:AppExtension>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+  <Extensions>
+    <Extension Category="windows.activatableClass.inProcessServer"><InProcessServer><Path>Microsoft.Gaming.XboxGameBar.dll</Path><!-- SDK_ACTIVATION --></InProcessServer></Extension>
+    <Extension Category="windows.activatableClass.proxyStub"><ProxyStub ClassId="00000355-0000-0000-C000-000000000046"><Path>Microsoft.Gaming.XboxGameBar.Private.winmd</Path><!-- SDK_INTERFACES --></ProxyStub></Extension>
+  </Extensions>
+</Package>

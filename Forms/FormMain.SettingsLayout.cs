@@ -44,6 +44,28 @@ public partial class FormMain
         var assistant=new CheckBox {Text="选人时自动显示侧边助手",Checked=_appConfig?.EnableChampionSelectAssistant??true};
         assistant.CheckedChanged+=(_,_)=>{if(_appConfig!=null){_appConfig.EnableChampionSelectAssistant=assistant.Checked;SaveAppConfig();}};
         SettingsCard(general,"选人助手",assistant,new Label {Text="贴靠客户端显示英雄推荐，可固定位置或收起；离开选人后自动隐藏。符文仅在点击“应用符文”时修改。"});
+        var overlay=new CheckBox{Text="启用加载界面 / 游戏内十人速览",Checked=_appConfig?.EnableLoadingOverlay??true};
+        var overlayAuto=new CheckBox{Name="AutoShowLoadingOverlay",Text="进入加载界面后自动展示",Checked=_appConfig?.AutoShowLoadingOverlay??true,Enabled=overlay.Checked};
+        var overlayPreview=new Button{Name="PreviewLoadingOverlay",Text="测试桌面显示",Enabled=overlay.Checked};
+        overlayPreview.Click+=(_,_)=>_loadingOverlay?.ShowPreview();
+        var overlayBackend=new ComboBox{Name="LoadingOverlayBackend",DropDownStyle=ComboBoxStyle.DropDownList,Width=240};
+        overlayBackend.Items.AddRange(new object[]{"桌面窗口（窗口 / 无边框）","Game Bar（全屏验证版）"});
+        overlayBackend.SelectedIndex=_appConfig?.LoadingOverlayBackend=="GameBar"?1:0;
+        var gameBarStatus=new Label{Text=_loadingOverlay?.GameBarStatus??"",Visible=overlayBackend.SelectedIndex==1};
+        var overlayStatusTimer=new System.Windows.Forms.Timer{Interval=2000};
+        overlayStatusTimer.Tick+=(_,_)=>{if(gameBarStatus.Visible)gameBarStatus.Text=_loadingOverlay?.GameBarStatus??"";};
+        gameBarStatus.Disposed+=(_,_)=>overlayStatusTimer.Dispose();overlayStatusTimer.Start();
+        void SaveOverlay()
+        {
+            if(_appConfig==null)return;
+            _appConfig.EnableLoadingOverlay=overlay.Checked;_appConfig.AutoShowLoadingOverlay=overlayAuto.Checked;
+            _appConfig.LoadingOverlayBackend=overlayBackend.SelectedIndex==1?"GameBar":"Desktop";
+            gameBarStatus.Visible=overlayBackend.SelectedIndex==1;overlayBackend.Enabled=overlay.Checked;
+            SaveAppConfig();_loadingOverlay?.RefreshDisplaySettings();overlayAuto.Enabled=overlayPreview.Enabled=overlay.Checked;
+        }
+        overlay.CheckedChanged+=(_,_)=>SaveOverlay();overlayAuto.CheckedChanged+=(_,_)=>SaveOverlay();
+        overlayBackend.SelectedIndexChanged+=(_,_)=>SaveOverlay();overlayBackend.Enabled=overlay.Checked;
+        SettingsCard(general,"对局速览",overlay,overlayBackend,overlayAuto,overlayPreview,gameBarStatus,new Label{Text="Game Bar：按 Win＋G，从小组件列表打开「League 对局速览」。需要保留在游戏上方时，点击组件右上角图钉；关闭后可从 Win＋G 重新打开。保持 League 主程序运行以同步对局数据。\n桌面窗口：支持窗口 / 无边框模式，检测到独占全屏时暂停弹窗。测试桌面显示仅检查桌面窗口。"});
         lkbPreliminary.Text="配置预选英雄 →";
         SettingsCard(general,"英雄预选",new Label {Text="分路信息来自英雄联盟攻略中心，可按模式分别启用。"},lkbPreliminary,chkNormal,chkRanked,chkAram,chkNexus);
         label6.Text="大厅、选人或读秒界面卡顿时，可尝试重启客户端界面。";

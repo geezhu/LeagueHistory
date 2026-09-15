@@ -1,10 +1,13 @@
-﻿using League.PrimaryElection;
+using League.PrimaryElection;
 
 namespace League.Models
 {
     public class LeagueConfig
     {
         public bool EnableChampionSelectAssistant { get; set; } = true;
+        public bool EnableLoadingOverlay { get; set; } = true;
+        public bool AutoShowLoadingOverlay { get; set; } = true;
+        public string LoadingOverlayBackend { get; set; } = "Desktop";
         public int AramMetaCacheMinutes { get; set; } = 1440;
         public int AramBalanceCacheMinutes { get; set; } = 1440;
         public int ChampionAnalysisCacheMinutes { get; set; } = 1440;
