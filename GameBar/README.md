@@ -11,6 +11,10 @@
 
 未固定时，退出 Win＋G 会隐藏组件；固定时，退出 Win＋G 后仍可显示在游戏上方。内容区会显示当前固定状态。点 × 可关闭组件，之后在 Win＋G 中重新打开。
 
+点击英雄卡片可在同一组件内查看详情，顶部十个头像可切换双方英雄，「返回」回到速览。技能支持悬浮说明和点击阅读；出装提供多个核心组合、对应的后续装备及两组召唤师技能推荐；普通模式显示符文，海克斯大乱斗显示三种品质的强化推荐。强化是来源推荐，不表示玩家实际已选。
+
+详情需要同时更新主程序和组件。只在选中英雄后加载；arammeta 复用已有落盘缓存和设置中的过期时间，OP.GG 使用 15 分钟内存缓存，图片复用客户端资源缓存。切换或返回会取消旧选择，失败可重试。Game Bar 鼠标穿透开启时需通过 Win＋G 操作按钮。
+
 桌面速览仍可在设置中选择。独占全屏时桌面版本暂停显示，避免把游戏切到桌面。「测试桌面显示」仅检查桌面窗口。
 
 应用设置统一保存到 `%LOCALAPPDATA%/LeagueHistory/LeagueConfig.json`。首次启动会导入 exe 同目录的旧配置，其次检查旧启动目录；原文件保留。之后更换 exe 目录仍读取同一份设置，不会重置 Game Bar 选择。首次使用新版并移到新目录时，需一并带上旧 `LeagueConfig.json` 完成首次导入。
@@ -39,6 +43,8 @@ Get-AppxPackage -Name LeagueHistory.GameBar | Remove-AppxPackage
 ## 数据与生命周期
 
 - 只传本机 JSON，位置为组件的 `%LOCALAPPDATA%/Packages/LeagueHistory.GameBar_*/LocalState/snapshot.json`；不传 LCU 令牌、账户标识或接口地址。
+- 详情使用独立 `detail-request.json` / `detail.json`，只传当前会话、卡片位置、英雄编号和请求标识。主程序核对当前十人名单，组件核对回包的会话与请求；旧对局、旧选择和空缺位置不会触发或覆盖详情。返回速览发送取消请求。没有全局按键或游戏输入。
+- 详情文件仅在加载进展变化时更新，完成后组件停止读取；不会随三秒一次的阵容刷新重复发布推荐和图标。
 - 主程序复用现有统计和图片缓存。48px PNG 每个英雄只编码一次；写入队列容量为一，合并快速更新，通过临时文件替换发布完整快照。
 - 默认约每 3 秒更新数据，组件以 500ms 间隔检查本机快照，单次读取互斥。超过 15 秒未有有效数据即清空旧阵容。没有第二套远程统计请求。
 - 显示命令与数据版本分开：刷新胜率、头像不恢复用户手动收起的组件。程序实例 / 对局切换会重置显示命令。
@@ -58,5 +64,7 @@ dotnet run --project Tests/StatisticsChecks/StatisticsChecks.csproj -c Release -
 自动检查覆盖本机快照原子替换、最新数据优先、双队分组、空缺位置、头像、统计字段、关闭时清空、旧按键配置忽略和显示后端切换。仍需人工检查：Win＋G 组件加载、固定、全屏加载画面中的显示与关闭后重新打开。
 
 原生界面检查：运行 `GameBar/Verify-Preview.ps1`，用当前主程序缓存绘制预览并保存组件自己的 `LocalState/preview-verification.png`。该检查通过应用激活接口传入专用参数，不发送任何游戏输入；正常启动不会保存预览图。检查预览与 Game Bar 使用不同回执文件，避免把桌面预览误判为游戏内连接成功。
+
+详情布局检查：测试项目的 `--overlay-detail-fixture <输出目录> <已有 Assets 目录>` 导出明确标注的样例，复制其中两个 `detail-preview-*.json` 到组件 `LocalState` 后运行 `GameBar/Verify-Preview.ps1 -DetailTab skills`（或 `builds` / `augments`）。截图使用同一渲染代码，样例文件独立于真实快照与请求；默认检查 820×560，也可在样例快照中设置 `width` / `height` 检查最小 640×500。它不代替实际全屏交互验证。
 
 参考：[官方接入说明](https://learn.microsoft.com/en-us/xbox/game-bar/quickstart/introduction)、[组件激活](https://learn.microsoft.com/en-us/xbox/game-bar/guide/app-activation)。

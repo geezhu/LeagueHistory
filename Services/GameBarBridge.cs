@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 namespace League.Services;
 
 /// <summary>One-way, local-only snapshots. No LCU credentials or network endpoints cross the boundary.</summary>
-public sealed class GameBarBridge : IDisposable
+public sealed partial class GameBarBridge : IDisposable
 {
     private readonly Channel<JObject> _pending=Channel.CreateBounded<JObject>(new BoundedChannelOptions(1){FullMode=BoundedChannelFullMode.DropOldest,SingleReader=true});
     private readonly Dictionary<int,string> _images=new();
@@ -18,7 +18,7 @@ public sealed class GameBarBridge : IDisposable
     private bool _disposed;
     public string Status { get; private set; }="请在 Win＋G 中打开并固定「League 对局速览」。";
     public Task Completion { get; }
-    public GameBarBridge(string? directory=null){_testDirectory=directory;Completion=Task.Run(WriteLoop);}
+    public GameBarBridge(string? directory=null){_testDirectory=directory;Completion=Task.WhenAll(Task.Run(WriteLoop),Task.Run(WriteDetailLoop));}
 
     public void Publish(LoadingRoster? roster,IReadOnlyDictionary<string,PlayerChampionTier> ranks,
         IReadOnlyDictionary<int,Image> icons,Func<int,string> champion,Func<LoadingPlayer,string> details,
@@ -44,14 +44,16 @@ public sealed class GameBarBridge : IDisposable
                 }
                 var rank=ranks.GetValueOrDefault(p.Key);
                 rows.Add(new JObject{
-                    ["champion"]=champion(p.ChampionId),["name"]=p.Name+(p.Self?" · 自己":""),
+                    ["championId"]=p.ChampionId,["champion"]=champion(p.ChampionId),["name"]=p.Name+(p.Self?" · 自己":""),
                     ["tier"]=rank?.Tier??"—",["color"]=AramMetaView.TierColor(rank?.Tier??"—").ToArgb()&0xffffff,
                     ["stats"]=rank==null?"统计读取中…":rank.Rate+" · 选用率 "+rank.PickRate,
                     ["details"]=champion(p.ChampionId)+" · "+details(p)+"\n"+(rank?.Note??"英雄统计尚未读取。"),
                     ["icon"]=_images.GetValueOrDefault(p.ChampionId)??""});
             }
         }
+        _detailScope=new(enabled && active?_instance+":"+session:"",rows.Select(r=>(int?)r["championId"]??0).ToArray());
         _pending.Writer.TryWrite(new JObject{
+            ["detailProtocol"]=1,["queue"]=roster?.Queue??0,
             ["protocol"]=1,["revision"]=_instance+":"+(++_revision),["command"]=_instance+":"+_command,
             ["session"]=_instance+":"+session,["updatedAt"]=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             ["enabled"]=enabled,["active"]=active,["show"]=show,
@@ -112,5 +114,5 @@ public sealed class GameBarBridge : IDisposable
         if((bool?)state["active"]==false)return "Game Bar 已连接并固定 · 等待对局 · Win＋G 管理面板。";
         return "Game Bar 已连接并固定 · Win＋G 管理面板。";
     }
-    public void Dispose(){if(_disposed)return;_disposed=true;_pending.Writer.TryComplete();}
+    public void Dispose(){if(_disposed)return;_disposed=true;_pending.Writer.TryComplete();_detailPending.Writer.TryComplete();}
 }

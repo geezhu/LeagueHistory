@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 
 namespace League.Managers;
 
-internal sealed class LoadingOverlayManager : IDisposable
+internal sealed partial class LoadingOverlayManager : IDisposable
 {
     private readonly FormMain _owner;
     private readonly PlayerChampionTierService _tiers;
@@ -37,6 +37,8 @@ internal sealed class LoadingOverlayManager : IDisposable
     public LoadingOverlayManager(FormMain owner)
     {
         _owner=owner;_tiers=new(owner);
+        _championDetails=new(()=>TimeSpan.FromMinutes(Math.Clamp(_owner.GetAppConfig()?.AramMetaCacheMinutes??1440,1,10080)));
+        _detailPoll.Tick+=(_,_)=>_=ReadDetailSelection();_detailPoll.Start();
         _poll.Tick+=(_,_)=>{ConfigureBackend();_=PollAsync();};
         _follow.Tick+=(_,_)=>Follow();
         _paint.Tick+=(_,_)=>{_paint.Stop();PaintSnapshot();};
@@ -48,7 +50,7 @@ internal sealed class LoadingOverlayManager : IDisposable
         if(enabled==_configuredEnabled && UseGameBar==_configuredGameBar)return;
         _configuredEnabled=enabled;
         bool previousGameBar=_configuredGameBar;_configuredGameBar=UseGameBar;
-        if(previousGameBar && !UseGameBar)PublishGameBar(false);
+        if(previousGameBar && !UseGameBar){CancelDetail();PublishGameBar(false);}
         if(!enabled){_display.Reset();ClearMatch();_follow.Stop();return;}
         if(UseGameBar){_window?.Hide();_follow.Stop();SchedulePaint();}
     }
@@ -101,6 +103,7 @@ internal sealed class LoadingOverlayManager : IDisposable
     private void Dismiss(){_display.Dismiss();_follow.Stop();_window?.Hide();ReportVisibility("用户收起对局速览，本局不再自动弹出。");}
     private void ClearMatch()
     {
+        CancelDetail();
         _status=LoadingRoster.WaitingStatus(_phase);
         if(_roster!=null || _match.Length>0){_generation++;_roster=null;_match="";_ranks.Clear();_rankRequests.Clear();_rankRetry.Clear();}
         _gameWindow=IntPtr.Zero;_nextWindowSearch=0;_fullscreen.Reset();
@@ -149,9 +152,9 @@ internal sealed class LoadingOverlayManager : IDisposable
             if(_disposed || timeout.IsCancellationRequested || !(_owner.GetAppConfig()?.EnableLoadingOverlay??true))return;
             string match=roster.GameId.Length>0?roster.GameId:$"{roster.Queue}:"+string.Join("|",roster.Players.Select(p=>p.Key));
             match+="/"+roster.Queue;
-            if(_match!=match){_generation++;_ranks.Clear();_rankRequests.Clear();_rankRetry.Clear();_match=match;}
+            if(_match!=match){CancelDetail();_generation++;_ranks.Clear();_rankRequests.Clear();_rankRetry.Clear();_match=match;}
             _roster=roster;
-            _status=$"{(phase=="ChampSelect"?"准备进入对局":"当前对局")} · 已读取 {roster.Players.Length} 人 · {DateTime.Now:HH:mm:ss} · 点击卡片查看缓存战绩";
+            _status=$"{(phase=="ChampSelect"?"准备进入对局":"当前对局")} · 已读取 {roster.Players.Length} 人 · {DateTime.Now:HH:mm:ss} · 点击卡片查看{(UseGameBar?"英雄详情":"缓存战绩")}";
             foreach(var p in roster.Players.Where(p=>p.ChampionId>0)){_=LoadRank(p,_generation,flow);_=LoadIcon(p.ChampionId);}
             SchedulePaint();
         }
@@ -246,7 +249,7 @@ internal sealed class LoadingOverlayManager : IDisposable
     }
     public void Dispose()
     {
-        if(_disposed)return;if(UseGameBar)PublishGameBar(false);_gameBar.Dispose();_disposed=true;_life.Cancel();_poll.Dispose();_follow.Dispose();_paint.Dispose();_window?.Dispose();_tiers.Dispose();_live.Dispose();
+        if(_disposed)return;CancelDetail();_detailPoll.Dispose();_championDetails.Dispose();if(UseGameBar)PublishGameBar(false);_gameBar.Dispose();_disposed=true;_life.Cancel();_poll.Dispose();_follow.Dispose();_paint.Dispose();_window?.Dispose();_tiers.Dispose();_live.Dispose();
         foreach(var image in _icons.Values)image.Dispose();_icons.Clear();
     }
     private delegate bool EnumWindowProc(IntPtr window,IntPtr parameter);
