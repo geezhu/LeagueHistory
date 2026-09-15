@@ -80,8 +80,10 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         Image icon;
         TextBlock champion, player, tier, stats;
         hstring imageData, details;
+        int hero = 0;
     };
     Grid root;
+    Grid list;
     TextBlock status = MakeText(L"等待 League 主程序连接…", 12, 0x91acbb);
     TextBlock hint = MakeText(L"Win＋G 打开或关闭此小组件，固定后可保留在游戏上方。", 12, 0xdbc47f);
     TextBlock details = MakeText(L"点击玩家卡片查看已缓存的战绩。", 13);
@@ -97,6 +99,8 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     int64_t lastGood = 0, lastHeartbeat = 0;
     bool capturePending = false;
 
+#include "ChampionDetailView.inl"
+
     fire_and_forget CapturePreview()
     {
         auto lifetime = shared_from_this();
@@ -106,7 +110,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             RenderTargetBitmap rendered; co_await rendered.RenderAsync(root);
             auto buffer = co_await rendered.GetPixelsAsync();
             std::vector<uint8_t> pixels(buffer.Length()); DataReader::FromBuffer(buffer).ReadBytes(pixels);
-            auto file = co_await ApplicationData::Current().LocalFolder().CreateFileAsync(L"preview-verification.png", CreationCollisionOption::ReplaceExisting);
+            auto file = co_await ApplicationData::Current().LocalFolder().CreateFileAsync(fixturePreview?L"detail-preview-"+detailTab+L".png":L"preview-verification.png", CreationCollisionOption::ReplaceExisting);
             auto stream = co_await file.OpenAsync(FileAccessMode::ReadWrite);
             auto encoder = co_await BitmapEncoder::CreateAsync(BitmapEncoder::PngEncoderId(), stream);
             encoder.SetPixelData(BitmapPixelFormat::Bgra8, BitmapAlphaMode::Premultiplied, rendered.PixelWidth(), rendered.PixelHeight(), 96, 96, pixels);
@@ -129,7 +133,6 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         status.Margin({0, 0, 0, 6}); root.Children().Append(status);
         hint.TextWrapping(TextWrapping::Wrap); hint.Margin({0, 0, 0, 10});
         Grid::SetRow(hint, 1); root.Children().Append(hint);
-        Grid list;
         for (int col = 0; col < 2; ++col) list.ColumnDefinitions().Append(ColumnDefinition());
         for (int row = 0; row < 6; ++row)
         {
@@ -159,13 +162,14 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             card.player = MakeText(L"空缺位置", 12, 0x91acbb); labels.Children().Append(card.player);
             card.stats = MakeText(L"胜率 —    选用率 —", 12, 0x45c7ce); labels.Children().Append(card.stats);
             body.Children().Append(labels); card.button.Content(body);
-            card.button.Click([this, i](auto&&, auto&&) { selectedCard = i; details.Text(cards[i].details); });
+            card.button.Click([this, i](auto&&, auto&&) { OpenDetails(i); });
             Grid::SetRow(card.button, i % 5 + 1); Grid::SetColumn(card.button, i / 5);
             list.Children().Append(card.button);
         }
         Grid::SetRow(list, 2); root.Children().Append(list);
         details.TextWrapping(TextWrapping::Wrap); details.Margin({0, 6, 0, 0}); details.MinHeight(40);
         Grid::SetRow(details, 3); root.Children().Append(details);
+        InitializeDetails();
     }
     void Start(XboxGameBarWidget const& value)
     {
@@ -183,7 +187,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             });
         }
         timer.Interval(std::chrono::milliseconds(500));
-        timer.Tick([weak = weak_from_this()](auto&&, auto&&) { if (auto self = weak.lock()) self->Read(); });
+        timer.Tick([weak = weak_from_this()](auto&&, auto&&) { if (auto self = weak.lock()) { self->Read(); self->ReadDetails(); } });
         timer.Start(); Read();
         root.Loaded([weak = weak_from_this()](auto&&, auto&&) {
             if (auto self = weak.lock()) Trace(L"view-loaded " + to_hstring(self->root.ActualWidth()) + L"x" + to_hstring(self->root.ActualHeight()));
@@ -200,7 +204,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         if (!error.empty()) { hint.Text(error); return; }
         if (!widget.Pinned())
             hint.Text(L"尚未固定 · 在 Win＋G 中查看；点击右上角图钉可保留在游戏上方。");
-        else hint.Text(L"已固定 · Win＋G 管理显示或关闭 · 点击玩家查看战绩。");
+        else hint.Text(L"已固定 · Win＋G 管理显示或关闭 · 点击卡片查看英雄详情。");
     }
     fire_and_forget SetVisible(bool visible)
     {
@@ -219,16 +223,16 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             if (buffer.Length() > 100000) co_return;
             InMemoryRandomAccessStream stream; co_await stream.WriteAsync(buffer); stream.Seek(0);
             BitmapImage bitmap; bitmap.DecodePixelWidth(48); co_await bitmap.SetSourceAsync(stream);
-            if (!stopped && card.imageData == data) card.icon.Source(bitmap);
+            if (!stopped && card.imageData == data) { card.icon.Source(bitmap); RefreshDetailHeader(); }
         }
         catch (...) { /* Invalid or unavailable artwork leaves a placeholder, never breaks the roster. */ }
     }
     void Clear()
     {
-        selectedCard = -1;
+        CloseDetails(false);
         for (auto& card : cards)
         {
-            card.icon.Source(nullptr); card.imageData = L""; card.details = L"等待当前对局数据。";
+            card.hero=0; card.icon.Source(nullptr); card.imageData = L""; card.details = L"等待当前对局数据。";
             card.champion.Text(L"等待英雄"); card.player.Text(L"空缺位置"); card.tier.Text(L"—");
             card.stats.Text(L"胜率 —    选用率 —"); card.button.IsEnabled(false);
         }
@@ -242,14 +246,15 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         try
         {
             auto folder = ApplicationData::Current().LocalFolder();
-            auto file = co_await folder.GetFileAsync(L"snapshot.json");
+            auto file = co_await folder.GetFileAsync(fixturePreview?L"detail-preview-snapshot.json":L"snapshot.json");
             auto properties = co_await file.GetBasicPropertiesAsync();
             if (properties.Size() > 2000000) throw hresult_invalid_argument();
             auto contents = co_await FileIO::ReadTextAsync(file);
             if (stopped) { busy = false; co_return; }
             auto data = JsonObject::Parse(contents);
+            if(fixturePreview){root.Width(std::clamp(data.GetNamedNumber(L"width",820),640.0,1100.0));root.Height(std::clamp(data.GetNamedNumber(L"height",560),500.0,800.0));}
             readError = L"";
-            double age = Now() - data.GetNamedNumber(L"updatedAt", 0);
+            double age = fixturePreview?0:Now() - data.GetNamedNumber(L"updatedAt", 0);
             if (data.GetNamedNumber(L"protocol", 0) != 1)
             {
                 connectionMessage = L"主程序与组件版本不兼容，请更新对局速览组件。";
@@ -262,8 +267,10 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             }
             bool previouslyActive = active;
             // Re-reading an old file must not extend its connection lifetime.
-            lastGood = static_cast<int64_t>(data.GetNamedNumber(L"updatedAt", 0));
+            lastGood = fixturePreview?Now():static_cast<int64_t>(data.GetNamedNumber(L"updatedAt", 0));
             enabled = data.GetNamedBoolean(L"enabled", false); active = data.GetNamedBoolean(L"active", false);
+            supportsDetails = data.GetNamedNumber(L"detailProtocol",0)==1;
+            detailQueue = static_cast<int>(data.GetNamedNumber(L"queue",0));
             auto next = data.GetNamedString(L"revision", L"");
             if (next != revision)
             {
@@ -280,6 +287,9 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                 {
                     auto row = i < rows.Size() ? rows.GetObjectAt(i) : JsonObject();
                     auto& card = cards[i]; card.champion.Text(row.GetNamedString(L"champion", L"等待英雄"));
+                    int hero=static_cast<int>(row.GetNamedNumber(L"championId",0));
+                    if(selectedCard==static_cast<int>(i) && card.hero!=hero)CloseDetails(false);
+                    card.hero=hero;
                     auto playerName = row.GetNamedString(L"name", L"空缺位置");
                     card.player.Text(playerName.empty() ? L"玩家名称尚未提供" : playerName); card.tier.Text(row.GetNamedString(L"tier", L"—"));
                     card.tier.Foreground(MakeBrush(static_cast<uint32_t>(row.GetNamedNumber(L"color", 0x91acbb))));
@@ -290,8 +300,9 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                     // Image decoding must never block the other nine players or the connection heartbeat.
                     auto image = row.GetNamedString(L"icon", L""); if (card.imageData != image) SetImage(i, image);
                 }
-                if (selectedCard >= 0) details.Text(cards[selectedCard].details);
-                else if (populatedCards > 0) details.Text(L"点击英雄卡片查看缓存战绩与统计来源。");
+                if (selectedCard >= 0) RefreshDetailHeader();
+                else if (populatedCards > 0) details.Text(L"点击英雄卡片查看技能、出装与模式推荐；详情胜率属于英雄统计。");
+                if(fixturePreview && !fixtureOpened && populatedCards>0){fixtureOpened=true;OpenDetails(0);}
                 auto nextCommand = data.GetNamedString(L"command", L"");
                 if (widget && command != nextCommand)
                 {
@@ -336,7 +347,8 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             catch (...) {}
         }
         busy = false;
-        if (capturePending && root.ActualWidth() > 0 && root.ActualHeight() > 0 && populatedCards > 0)
+        if (capturePending && root.ActualWidth() > 0 && root.ActualHeight() > 0 && populatedCards > 0
+            && (!fixturePreview || (!detailRevision.empty() && pendingDetailImages==0)))
         {
             capturePending = false;
             CapturePreview();
@@ -378,13 +390,17 @@ struct WidgetApp : ApplicationT<WidgetApp>
         if (!window.Content())
         {
             auto view = std::make_shared<WidgetView>(); Page page; page.Content(view->root);
-            window.Content(page); view->capturePending = args.Arguments() == L"--capture-preview"; view->Start(nullptr);
+            window.Content(page); view->capturePending = args.Arguments() == L"--capture-preview"; view->ConfigureDetailPreview(args.Arguments()); view->Start(nullptr);
             std::erase_if(views, [](auto const& item) { return item->stopped; }); views.push_back(view);
             window.Closed([weak = std::weak_ptr<WidgetView>(view)](auto&&, auto&&) { if (auto value = weak.lock()) value->Stop(); });
         }
         else if (args.Arguments() == L"--capture-preview")
         {
             for (auto const& view : views) if (!view->widget && !view->stopped) view->CapturePreview();
+        }
+        else
+        {
+            for(auto const& view:views)if(!view->widget && !view->stopped){view->ConfigureDetailPreview(args.Arguments());view->Read();}
         }
         window.Activate();
     }
