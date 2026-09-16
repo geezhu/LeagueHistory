@@ -178,9 +178,11 @@
             auto section=entry.GetObject();if(section.GetNamedString(L"tab",L"")!=detailTab)continue;
             if(detailTab==L"augments" && rarityIndex++!=detailRarity)continue;found=true;
             auto title=MakeText(section.GetNamedString(L"title",L""),15,0xe0c688);title.Margin({0,6,0,6});detailBody.Children().Append(title);
+            auto note=section.GetNamedString(L"note",L"");
+            if(!note.empty()){auto text=MakeText(note,12,0x91acbb);text.TextWrapping(TextWrapping::Wrap);text.Margin({0,0,0,8});detailBody.Children().Append(text);}
             auto rows=section.GetNamedArray(L"rows",JsonArray());
             if(rows.Size()==0){auto empty=MakeText(L"来源暂无这一项数据。",13,0x91acbb);empty.Margin({10,6,0,10});detailBody.Children().Append(empty);}
-            if(detailTab==L"augments" && rows.Size()>0)
+            if((detailTab==L"augments" || section.GetNamedString(L"layout",L"")==L"equipment") && rows.Size()>0)
             {
                 Grid tiles;
                 for(int i=0;i<3;++i)tiles.ColumnDefinitions().Append(ColumnDefinition());
@@ -189,7 +191,7 @@
                 {
                     auto row=rows.GetObjectAt(i);auto icons=row.GetNamedArray(L"icons",JsonArray());if(icons.Size()==0)continue;auto icon=icons.GetObjectAt(0);
                     StackPanel card;card.Padding({8});card.Margin({0,0,6,6});card.Background(MakeBrush(0x112f3c));
-                    auto name=MakeText(icon.GetNamedString(L"name",L"强化"),13);card.Children().Append(name);
+                    auto name=MakeText(icon.GetNamedString(L"name",L"推荐"),13);card.Children().Append(name);
                     StackPanel metrics;metrics.Orientation(Orientation::Horizontal);metrics.Margin({0,6,0,0});Image image;image.Width(40);image.Height(40);image.Margin({0,0,6,0});
                     DecodeDetailImage(image,icon.GetNamedString(L"image",L""),detailRender);metrics.Children().Append(image);
                     StackPanel rates;rates.Children().Append(MakeText(row.GetNamedString(L"winRateText",L"胜率 —"),12,0x65d6d6));rates.Children().Append(MakeText(row.GetNamedString(L"pickRateText",L"选取率 —"),11,0xa4bcc7));metrics.Children().Append(rates);card.Children().Append(metrics);

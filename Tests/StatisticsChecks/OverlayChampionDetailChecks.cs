@@ -22,6 +22,14 @@ internal static class OverlayChampionDetailChecks
             var build=OpggBuild.Parse(raw,new("global",mode,"all",mode=="ranked"?"mid":"none",103));
             var data=OverlayChampionDetailService.FromOpgg(build);
             var sections=(JArray)data["sections"]!;
+            var equipment=sections.Single(s=>(string?)s["layout"]=="equipment");
+            var singles=OpggItemSetService.Options(build.Data,"last_items").Where(r=>OpggItemSetService.Ids(r).Length==1).DistinctBy(r=>OpggItemSetService.Ids(r)[0]).Take(30).ToArray();
+            Check(ReferenceEquals(sections.First,equipment),"The selected hero's individual recommendations appear before combinations");
+            Check(equipment["rows"]!.Select(r=>(int)r["icons"]![0]!["id"]!).SequenceEqual(singles.Select(r=>OpggItemSetService.Ids(r)[0])),"OP.GG individual equipment comes from this hero's single-item statistics");
+            for(int i=0;i<singles.Length;i++)
+                Check((string?)equipment["rows"]![i]!["winRateText"]=="胜率 "+(((double?)singles[i]["win_rate"]??OpggBuild.Ratio(singles[i]["win"],singles[i]["play"]))?.ToString("P1")??"—"),"Single-item win rate must not use a build-combination win rate");
+            var coreOnly=OverlayChampionDetailService.FromOpgg(build with{Data=new JObject{["core_items"]=build.Data["core_items"]?.DeepClone()}});
+            Check(!coreOnly["sections"]![0]!["rows"]!.Any(),"Missing single-item statistics do not get fabricated from combinations");
             Check(sections.All(s=>(string?)s["tab"]!="augments"),"Other modes never show Mayhem recommendations");
             foreach(var row in sections.SelectMany(s=>(JArray)s["rows"]!).Where(r=>r["later"]!=null))
             {
@@ -39,6 +47,11 @@ internal static class OverlayChampionDetailChecks
         Check(((JArray)mayhem["sections"]!).All(s=>(string?)s["tab"]!="runes"),"Mayhem does not present a real rune recommendation");
         Check(((string)mayhem["source"]!).StartsWith("arammeta"),"Full source name remains visible");
         Check(((JArray)mayhem["sections"]!).Any(s=>(string?)s["tab"]=="builds" && s["rows"]!.Any()),"Mayhem includes equipment recommendations");
+        var mayhemEquipment=((JArray)mayhem["sections"]!).First(s=>(string?)s["tab"]=="builds");
+        var mayhemSingles=AramMetaRecommendation.Read(new(index,detail,true,DateTime.UtcNow),103,"singleItems").Where(r=>r.Ids.Length==1).DistinctBy(r=>r.Ids[0]).Take(30).ToArray();
+        Check((string?)mayhemEquipment["layout"]=="equipment" && mayhemEquipment["rows"]!.Select(r=>(int)r["icons"]![0]!["id"]!).SequenceEqual(mayhemSingles.Select(r=>r.Ids[0])),"Mayhem individual recommendations retain the selected hero's source ordering");
+        for(int i=0;i<mayhemSingles.Length;i++)
+            Check((string?)mayhemEquipment["rows"]![i]!["pickRateText"]=="使用率 "+(mayhemSingles[i].PickRate?.ToString("P1")??"—"),"Mayhem individual item usage is retained");
         Check(((JArray)OverlayChampionDetailService.FromAramMeta(new(index,null,true,DateTime.UtcNow),103)["sections"]!).All(s=>(string?)s["tab"]=="augments"),"Missing detail does not discard cached augment recommendations");
         CheckBridge().GetAwaiter().GetResult();
         Console.WriteLine("PASS: hero-detail request isolation, both teams, mode-specific recommendations, spell highlights, later equipment and response channel.");
