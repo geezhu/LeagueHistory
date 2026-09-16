@@ -38,7 +38,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     {
         _owner=owner;_tiers=new(owner);
         _championDetails=new(()=>TimeSpan.FromMinutes(Math.Clamp(_owner.GetAppConfig()?.AramMetaCacheMinutes??1440,1,10080)));
-        _detailPoll.Tick+=(_,_)=>_=ReadDetailSelection();_detailPoll.Start();
+        _detailPoll.Tick+=(_,_)=>{_=ReadDetailSelection();_=ReadChatCommand();};_detailPoll.Start();
         _poll.Tick+=(_,_)=>{ConfigureBackend();_=PollAsync();};
         _follow.Tick+=(_,_)=>Follow();
         _paint.Tick+=(_,_)=>{_paint.Stop();PaintSnapshot();};

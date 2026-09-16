@@ -26,7 +26,7 @@
         std::wstring_view text(argument),prefix=L"--capture-detail-fixture:";
         if(!text.starts_with(prefix))return;
         auto tab=text.substr(prefix.size());
-        if(tab!=L"skills" && tab!=L"builds" && tab!=L"runes" && tab!=L"augments")return;
+        if(tab!=L"skills" && tab!=L"builds" && tab!=L"runes" && tab!=L"augments" && tab!=L"roster")return;
         fixturePreview=true;fixtureOpened=false;Clear();revision=L"";detailTab=hstring(tab);capturePending=true;
     }
 
@@ -66,7 +66,7 @@
         Grid::SetRow(detailTabs,2);detailRoot.Children().Append(detailTabs);
         detailScroll.Content(detailBody); detailScroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
         detailScroll.VerticalScrollBarVisibility(ScrollBarVisibility::Auto); Grid::SetRow(detailScroll,3); detailRoot.Children().Append(detailScroll);
-        Grid::SetRow(detailRoot,2); Grid::SetRowSpan(detailRoot,3); detailRoot.Visibility(Visibility::Collapsed);root.Children().Append(detailRoot);
+        Grid::SetRow(detailRoot,2); Grid::SetRowSpan(detailRoot,2); detailRoot.Visibility(Visibility::Collapsed);root.Children().Append(detailRoot);
     }
     void RefreshDetailHeader()
     {
@@ -93,14 +93,16 @@
         detailArtwork.Source(nullptr);detailSource.Text(L"正在读取英雄详情…");
         if((detailQueue==2400 || detailQueue==3270) && detailTab==L"runes")detailTab=L"augments";
         else if(detailQueue!=2400 && detailQueue!=3270 && detailTab==L"augments")detailTab=L"skills";
-        list.Visibility(Visibility::Collapsed); details.Visibility(Visibility::Collapsed); detailRoot.Visibility(Visibility::Visible);
+        rosterScroll.Visibility(Visibility::Collapsed); details.Visibility(Visibility::Collapsed); detailRoot.Visibility(Visibility::Visible);
         RefreshDetailHeader();RenderDetails(); QueueDetailRequest(index,cards[index].hero,detailRequest);
+        UpdateChatButtons();
     }
     void CloseDetails(bool notify)
     {
         ++detailRender;selectedCard=-1;detailRequest=L"";detailRevision=L"";detailData=JsonObject();detailArtwork.Source(nullptr);
-        detailBody.Children().Clear();detailRoot.Visibility(Visibility::Collapsed);list.Visibility(Visibility::Visible);details.Visibility(Visibility::Visible);
+        detailBody.Children().Clear();detailRoot.Visibility(Visibility::Collapsed);rosterScroll.Visibility(Visibility::Visible);details.Visibility(Visibility::Visible);
         if(notify && supportsDetails)QueueDetailRequest(-1,0,NewDetailId());
+        UpdateChatButtons();
     }
     void QueueDetailRequest(int slot,int hero,hstring id)
     {

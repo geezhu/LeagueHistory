@@ -84,6 +84,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     };
     Grid root;
     Grid list;
+    ScrollViewer rosterScroll;
     TextBlock status = MakeText(L"等待 League 主程序连接…", 12, 0x91acbb);
     TextBlock hint = MakeText(L"Win＋G 打开或关闭此小组件，固定后可保留在游戏上方。", 12, 0xdbc47f);
     TextBlock details = MakeText(L"点击玩家卡片查看已缓存的战绩。", 13);
@@ -100,6 +101,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     bool capturePending = false;
 
 #include "ChampionDetailView.inl"
+#include "TierChatView.inl"
 
     fire_and_forget CapturePreview()
     {
@@ -137,6 +139,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         for (int row = 0; row < 6; ++row)
         {
             RowDefinition def; def.Height({row == 0 ? 30.0 : 1.0, row == 0 ? GridUnitType::Pixel : GridUnitType::Star});
+            if(row>0)def.MinHeight(64);
             list.RowDefinitions().Append(def);
         }
         for (int i = 0; i < 2; ++i) { Grid::SetColumn(teams[i], i); list.Children().Append(teams[i]); }
@@ -166,16 +169,23 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             Grid::SetRow(card.button, i % 5 + 1); Grid::SetColumn(card.button, i / 5);
             list.Children().Append(card.button);
         }
-        Grid::SetRow(list, 2); root.Children().Append(list);
+        rosterScroll.Content(list);rosterScroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
+        rosterScroll.VerticalScrollBarVisibility(ScrollBarVisibility::Auto);Grid::SetRow(rosterScroll,2);root.Children().Append(rosterScroll);
         details.TextWrapping(TextWrapping::Wrap); details.Margin({0, 6, 0, 0}); details.MinHeight(40);
         Grid::SetRow(details, 3); root.Children().Append(details);
         InitializeDetails();
+        InitializeChat();
     }
     void Start(XboxGameBarWidget const& value)
     {
         widget = value;
         if (widget)
         {
+            widget.GameBarDisplayModeChanged([weak=weak_from_this()](auto&&,auto&&){
+                if(auto self=weak.lock())self->root.Dispatcher().RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,[self]{
+                    if(!self->stopped)self->SaveChatRequest();
+                });
+            });
             widget.PinnedChanged([weak = weak_from_this()](auto&&, auto&&) {
                 if (auto self = weak.lock()) self->root.Dispatcher().RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal, [self] {
                     if (self->stopped || !self->widget) return;
@@ -187,7 +197,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             });
         }
         timer.Interval(std::chrono::milliseconds(500));
-        timer.Tick([weak = weak_from_this()](auto&&, auto&&) { if (auto self = weak.lock()) { self->Read(); self->ReadDetails(); } });
+        timer.Tick([weak = weak_from_this()](auto&&, auto&&) { if (auto self = weak.lock()) { self->Read(); self->ReadDetails(); self->ReadChatStatus(); } });
         timer.Start(); Read();
         root.Loaded([weak = weak_from_this()](auto&&, auto&&) {
             if (auto self = weak.lock()) Trace(L"view-loaded " + to_hstring(self->root.ActualWidth()) + L"x" + to_hstring(self->root.ActualHeight()));
@@ -230,6 +240,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     void Clear()
     {
         CloseDetails(false);
+        ResetChat();
         for (auto& card : cards)
         {
             card.hero=0; card.icon.Source(nullptr); card.imageData = L""; card.details = L"等待当前对局数据。";
@@ -270,6 +281,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             lastGood = fixturePreview?Now():static_cast<int64_t>(data.GetNamedNumber(L"updatedAt", 0));
             enabled = data.GetNamedBoolean(L"enabled", false); active = data.GetNamedBoolean(L"active", false);
             supportsDetails = data.GetNamedNumber(L"detailProtocol",0)==1;
+            supportsChat=data.GetNamedNumber(L"chatProtocol",0)==1;chatTeams=data.GetNamedBoolean(L"chatTeams",false);
             detailQueue = static_cast<int>(data.GetNamedNumber(L"queue",0));
             auto next = data.GetNamedString(L"revision", L"");
             if (next != revision)
@@ -302,7 +314,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                 }
                 if (selectedCard >= 0) RefreshDetailHeader();
                 else if (populatedCards > 0) details.Text(L"点击英雄卡片查看技能、出装与模式推荐；详情胜率属于英雄统计。");
-                if(fixturePreview && !fixtureOpened && populatedCards>0){fixtureOpened=true;OpenDetails(0);}
+                if(fixturePreview && !fixtureOpened && populatedCards>0){fixtureOpened=true;if(detailTab!=L"roster")OpenDetails(0);}
                 auto nextCommand = data.GetNamedString(L"command", L"");
                 if (widget && command != nextCommand)
                 {
@@ -347,8 +359,9 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             catch (...) {}
         }
         busy = false;
+        UpdateChatButtons();
         if (capturePending && root.ActualWidth() > 0 && root.ActualHeight() > 0 && populatedCards > 0
-            && (!fixturePreview || (!detailRevision.empty() && pendingDetailImages==0)))
+            && (!fixturePreview || detailTab==L"roster" || (!detailRevision.empty() && pendingDetailImages==0)))
         {
             capturePending = false;
             CapturePreview();

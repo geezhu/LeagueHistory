@@ -59,7 +59,7 @@ namespace League.Services
         [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window,out uint processId);
         [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
-        public static bool ModifiersReleased()=>new[]{0x10,0x11,0x12}.All(key=>(GetAsyncKeyState(key)&0x8000)==0);
+        public static bool ModifiersReleased()=>new[]{0x10,0x11,0x12,0x5B,0x5C}.All(key=>(GetAsyncKeyState(key)&0x8000)==0);
         public static bool IsGameForeground()
             =>GetGameForegroundState().IsGame;
         public static (bool IsGame,string Reason) GetGameForegroundState()
@@ -120,7 +120,7 @@ namespace League.Services
                     if (!HasInputPermission()) { LastFailureReason = "请以管理员身份重新启动 League，再使用游戏内发送"; return false; }
                     var foreground = GetGameForegroundState();
                     if (!foreground.IsGame) { LastFailureReason = foreground.Reason; return false; }
-                    if (!ModifiersReleased()) { LastFailureReason = "请松开 Ctrl、Shift 和 Alt 后再发送"; return false; }
+                    if (!ModifiersReleased()) { LastFailureReason = "请松开 Ctrl、Shift、Alt 和 Win 后再发送"; return false; }
                     return true;
                 }
                 string[] lines = message.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
