@@ -83,8 +83,8 @@ internal sealed partial class ChampionSelectAssistant : Form
     internal static Rectangle Placement(Rectangle client,Rectangle screen,Size size)
     {
         int width=Math.Min(size.Width,screen.Width),height=Math.Min(size.Height,screen.Height);
-        int x=client.Right+6;
-        if(x+width>screen.Right)x=client.Left-width-6;
+        int x=client.Left-width-6;
+        if(x<screen.Left && client.Right+6+width<=screen.Right)x=client.Right+6;
         return new Rectangle(Math.Clamp(x,screen.Left,screen.Right-width),Math.Clamp(client.Top,screen.Top,screen.Bottom-height),width,height);
     }
     private void PositionWindow()
