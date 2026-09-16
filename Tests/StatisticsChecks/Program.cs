@@ -11,6 +11,7 @@ internal static class Program
     private static void Main(string[] args)
     {
         if(args.Contains("--config-checks")){LeagueConfigChecks.Run();return;}
+        if(args.Contains("--assistant-placement-checks")){AssistantChecks.Placement();AssistantVisibilityChecks.Run();return;}
         if(args.Length==3 && args[0]=="--overlay-detail-fixture"){OverlayDetailPreview.Export(args[1],args[2]);return;}
         if (args.Length > 0 && args[0] == "--champion-analysis")
         {
