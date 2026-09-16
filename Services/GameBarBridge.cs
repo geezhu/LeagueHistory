@@ -6,7 +6,7 @@ using Newtonsoft.Json.Linq;
 
 namespace League.Services;
 
-/// <summary>One-way, local-only snapshots. No LCU credentials or network endpoints cross the boundary.</summary>
+/// <summary>Local snapshots and bounded roster commands. No LCU credentials or network endpoints cross the boundary.</summary>
 public sealed partial class GameBarBridge : IDisposable
 {
     private readonly Channel<JObject> _pending=Channel.CreateBounded<JObject>(new BoundedChannelOptions(1){FullMode=BoundedChannelFullMode.DropOldest,SingleReader=true});
@@ -18,7 +18,7 @@ public sealed partial class GameBarBridge : IDisposable
     private bool _disposed;
     public string Status { get; private set; }="请在 Win＋G 中打开并固定「League 对局速览」。";
     public Task Completion { get; }
-    public GameBarBridge(string? directory=null){_testDirectory=directory;Completion=Task.WhenAll(Task.Run(WriteLoop),Task.Run(WriteDetailLoop));}
+    public GameBarBridge(string? directory=null){_testDirectory=directory;Completion=Task.WhenAll(Task.Run(WriteLoop),Task.Run(WriteDetailLoop),Task.Run(WriteChatLoop));}
 
     public void Publish(LoadingRoster? roster,IReadOnlyDictionary<string,PlayerChampionTier> ranks,
         IReadOnlyDictionary<int,Image> icons,Func<int,string> champion,Func<LoadingPlayer,string> details,
@@ -53,7 +53,7 @@ public sealed partial class GameBarBridge : IDisposable
         }
         _detailScope=new(enabled && active?_instance+":"+session:"",rows.Select(r=>(int?)r["championId"]??0).ToArray());
         _pending.Writer.TryWrite(new JObject{
-            ["detailProtocol"]=1,["queue"]=roster?.Queue??0,
+            ["detailProtocol"]=1,["chatProtocol"]=1,["chatTeams"]=roster?.Players.Any(p=>p.Self)??false,["queue"]=roster?.Queue??0,
             ["protocol"]=1,["revision"]=_instance+":"+(++_revision),["command"]=_instance+":"+_command,
             ["session"]=_instance+":"+session,["updatedAt"]=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             ["enabled"]=enabled,["active"]=active,["show"]=show,
@@ -114,5 +114,5 @@ public sealed partial class GameBarBridge : IDisposable
         if((bool?)state["active"]==false)return "Game Bar 已连接并固定 · 等待对局 · Win＋G 管理面板。";
         return "Game Bar 已连接并固定 · Win＋G 管理面板。";
     }
-    public void Dispose(){if(_disposed)return;_disposed=true;_pending.Writer.TryComplete();_detailPending.Writer.TryComplete();}
+    public void Dispose(){if(_disposed)return;_disposed=true;_pending.Writer.TryComplete();_detailPending.Writer.TryComplete();_chatPending.Writer.TryComplete();}
 }

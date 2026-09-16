@@ -24,7 +24,7 @@ internal static class Program
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
-        if(args.Contains("--loading-overlay-checks")){GameBarBridgeChecks.Run();OverlayChampionDetailChecks.Run();LoadingOverlayChecks.Run();return;}
+        if(args.Contains("--loading-overlay-checks")){GameBarBridgeChecks.Run();OverlayChampionDetailChecks.Run();OverlayTierChatChecks.Run();LoadingOverlayChecks.Run();return;}
         if(args.Contains("--settings-checks")){SettingsChecks.Render();return;}
         TierHotkeyChecks.Run();
         Task.Run(ChatSendDiagnosticsChecks.RunAsync).GetAwaiter().GetResult();
