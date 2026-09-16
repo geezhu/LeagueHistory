@@ -125,6 +125,9 @@ namespace League
             _hotkeyManager.OnEnemyTierHotkey+=async ()=>await SendTiers(true);
         }
 
+        internal Task SendOverlayTiersAsync(IReadOnlyList<string> messages,Action<string,string> progress,Func<bool> current,CancellationToken token)
+            =>_chatSender?.HandleTierAsync(_=>Task.FromResult(messages),progress,current,token)??Task.CompletedTask;
+
         public void SaveAppConfig()
         {
             LeagueConfigManager.Save(_appConfig);
