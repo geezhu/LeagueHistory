@@ -2,16 +2,16 @@
 
 internal static class AssistantChecks
 {
-    public static void Run()
+    public static void Placement()
     {
         var type=typeof(League.FormMain).Assembly.GetType("League.ChampionSelectAssistant")!;
         var place=type.GetMethod("Placement",BindingFlags.Static|BindingFlags.NonPublic)!;
         Rectangle Place(Rectangle client,Rectangle screen,Size size)=>(Rectangle)place.Invoke(null,new object[]{client,screen,size})!;
         var screen=new Rectangle(0,0,1920,1080);
         var right=Place(new Rectangle(100,100,1000,700),screen,new Size(320,630));
-        if(right.Left!=1106 || !screen.Contains(right))throw new Exception("Assistant should attach on the right when space permits");
-        var left=Place(new Rectangle(800,100,1000,700),screen,new Size(320,630));
-        if(left.Left!=474 || !screen.Contains(left))throw new Exception("Assistant should fall back to the left");
+        if(right.Left!=1106 || !screen.Contains(right))throw new Exception("Assistant should fall back to the right when the left cannot fit");
+        var left=Place(new Rectangle(500,100,800,700),screen,new Size(320,630));
+        if(left.Left!=174 || !screen.Contains(left))throw new Exception("Assistant should prefer the left when both sides can fit");
         var secondary=new Rectangle(-1280,0,1280,720);
         var center=type.GetMethod("EquipmentEditorBounds",BindingFlags.Static|BindingFlags.NonPublic)!;
         var centered=(Rectangle)center.Invoke(null,new object[]{new Rectangle(400,100,1000,700),screen,new Size(660,620)})!;
@@ -19,7 +19,13 @@ internal static class AssistantChecks
         var fitted=(Rectangle)center.Invoke(null,new object[]{secondary,secondary,new Size(1500,900)})!;
         if(!secondary.Contains(fitted))throw new Exception("Equipment editor must fit a small secondary monitor");
         var clamped=Place(new Rectangle(-1280,0,1280,720),secondary,new Size(320,900));
-        if(!secondary.Contains(clamped))throw new Exception("Assistant must stay inside a smaller secondary monitor");
+        if(clamped.Left!=secondary.Left || !secondary.Contains(clamped))throw new Exception("Assistant must stay on the left inside a smaller secondary monitor when neither side can fit");
+        Console.WriteLine("PASS: assistant prefers left, falls back right, and stays inside monitor bounds.");
+    }
+    public static void Run()
+    {
+        Placement();
+        var type=typeof(League.FormMain).Assembly.GetType("League.ChampionSelectAssistant")!;
         var skills=type.GetMethod("ParseSkills",BindingFlags.Static|BindingFlags.NonPublic)!;
         var spellOptions=Newtonsoft.Json.Linq.JArray.Parse("[{\"ids\":[4,14],\"pick_rate\":0.7,\"play\":100,\"win\":50},{\"ids\":[4,12],\"pick_rate\":0.3,\"play\":20,\"win\":12}]");
         var selectSpells=type.GetMethod("SelectSpellRecommendations",BindingFlags.Static|BindingFlags.NonPublic)!;
@@ -206,7 +212,6 @@ internal static class AssistantChecks
             bitmap.Save(Path.Combine(AppContext.BaseDirectory,"assistant-footer.png"));
         }
         Console.WriteLine("PASS: assistant bottom rates remain visible above fixed actions at normal and short heights.");
-        Console.WriteLine("PASS: assistant placement, left fallback, and monitor bounds.");
     }
     private sealed class ChatHandler(Func<HttpRequestMessage,HttpResponseMessage> send):HttpMessageHandler
     {

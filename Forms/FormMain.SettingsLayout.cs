@@ -43,7 +43,7 @@ public partial class FormMain
         SettingsCard(general,"对局自动化",chkAutoAccept,acceptDelay,chkSkipHonor,chkSkipEndOfGameStats);
         var assistant=new CheckBox {Text="选人时自动显示侧边助手",Checked=_appConfig?.EnableChampionSelectAssistant??true};
         assistant.CheckedChanged+=(_,_)=>{if(_appConfig!=null){_appConfig.EnableChampionSelectAssistant=assistant.Checked;SaveAppConfig();}};
-        SettingsCard(general,"选人助手",assistant,new Label {Text="贴靠客户端显示英雄推荐，可固定位置或收起；离开选人后自动隐藏。符文仅在点击“应用符文”时修改。"});
+        SettingsCard(general,"选人助手",assistant,new Label {Text="默认贴靠客户端左侧显示英雄推荐，空间不足时自动调整；可固定位置或收起，离开选人后自动隐藏。符文仅在点击“应用符文”时修改。"});
         var overlay=new CheckBox{Text="启用加载界面 / 游戏内十人速览",Checked=_appConfig?.EnableLoadingOverlay??true};
         var overlayAuto=new CheckBox{Name="AutoShowLoadingOverlay",Text="进入加载界面后自动展示",Checked=_appConfig?.AutoShowLoadingOverlay??true,Enabled=overlay.Checked};
         var overlayPreview=new Button{Name="PreviewLoadingOverlay",Text="测试桌面显示",Enabled=overlay.Checked};
