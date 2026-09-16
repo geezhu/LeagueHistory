@@ -26,10 +26,26 @@ public sealed class OverlayChampionDetailService : IDisposable
     public static JObject Section(string tab,string title,IEnumerable<JObject> rows)=>new(){["tab"]=tab,["title"]=title,["rows"]=new JArray(rows)};
     private static string Stats(double? win,double? pick,long? games,bool adjusted=false)=>$"{(adjusted?"调整后胜率":"胜率")} {Rate(win)} · 使用率 {Rate(pick)} · {(games.HasValue?$"{games:N0} 场":"样本未知")}";
     private static JObject Option(JObject row,string title,string kind="item")=>Row(title,icons:OpggItemSetService.Ids(row).Select(id=>Icon(kind,id)),stats:Stats((double?)row["win_rate"]??OpggBuild.Ratio(row["win"],row["play"]),(double?)row["pick_rate"],(long?)row["play"]));
+    private static JObject EquipmentRow(int id,double? win,double? pick,long? games,string? name=null)
+    {
+        var icon=Icon("item",id);if(!string.IsNullOrWhiteSpace(name))icon["name"]=name;
+        var row=Row("",icons:[icon],stats:Stats(win,pick,games));
+        row["winRateText"]="胜率 "+Rate(win);row["pickRateText"]="使用率 "+Rate(pick);return row;
+    }
+    private static JObject EquipmentSection(string order,IEnumerable<JObject> rows)
+    {
+        var section=Section("builds","推荐装备 · "+order,rows);
+        section["layout"]="equipment";
+        section["note"]="该英雄在当前模式下的单件装备统计 · 悬浮查看介绍与样本量";
+        return section;
+    }
 
     public static JObject FromOpgg(OpggBuild build)
     {
         var sections=new JArray();
+        sections.Add(EquipmentSection("按使用率排序",OpggItemSetService.Options(build.Data,"last_items")
+            .Where(row=>OpggItemSetService.Ids(row).Length==1).DistinctBy(row=>OpggItemSetService.Ids(row)[0]).Take(30)
+            .Select(row=>EquipmentRow(OpggItemSetService.Ids(row)[0],(double?)row["win_rate"]??OpggBuild.Ratio(row["win"],row["play"]),(double?)row["pick_rate"],(long?)row["play"]))));
         var cores=OpggItemSetService.Options(build.Data,"core_items").Take(5).Select((core,i)=>
         {
             var row=Option(core,$"核心组合 {i+1}");
@@ -64,6 +80,9 @@ public sealed class OverlayChampionDetailService : IDisposable
             })));
         if(page.Detail!=null)
         {
+            sections.Add(EquipmentSection("来源推荐顺序",AramMetaRecommendation.Read(page,hero,"singleItems")
+                .Where(row=>row.Ids.Length==1).DistinctBy(row=>row.Ids[0]).Take(30)
+                .Select(row=>EquipmentRow(row.Ids[0],row.WinRate,row.PickRate,row.Games,row.Name))));
             var build=OpggItemSetService.FromAramMeta(page,hero);
             foreach(var (key,title) in new[]{("items","出装组合"),("boots","鞋子")})
                 sections.Add(Section("builds",title,AramMetaRecommendation.Read(page,hero,key).Take(5).Select((r,i)=>
