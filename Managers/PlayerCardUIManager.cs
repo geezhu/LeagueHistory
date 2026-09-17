@@ -129,7 +129,8 @@ public sealed class PlayerCardUIManager
         else { card.ClearRecentStatistics(); card.ListViewControl.SmallImageList = null; }
         string status = state.Status;
         if (state.Info != null && state.Info.MatchItems.Count == 0 && status.Length == 0)
-            status = player?.GameName?.Contains("隐藏") == true ? "该玩家未公开战绩" : "当前模式暂无战绩";
+            status = state.Player.Value<bool?>("__roomSelectionOnly") == true ? "客户端未提供玩家资料，战绩不可用"
+                : player?.GameName?.Contains("隐藏") == true ? "该玩家未公开战绩" : "当前模式暂无战绩";
         card.SetHistoryLoadStatus(status, state.Info == null && !state.CanRetry, state.CanRetry,
             () => RetryRequested?.Invoke(state.Key, state.Generation));
     }

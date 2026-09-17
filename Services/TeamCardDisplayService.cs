@@ -101,19 +101,23 @@ public sealed class TeamCardDisplayService
                         {
                             string queue = data?["queue"]?.Value<string>("id") ?? "";
                             Globals.CurrGameMod = queue;
-                            var selections = data?["playerChampionSelections"] as JArray ?? new();
-                            var ours = RoomPlayerLoader.WithChampionSelections(inOne ? one : two, selections);
-                            var theirs = RoomPlayerLoader.WithChampionSelections(inOne ? two : one, selections);
-                            // Only use explicit team membership; do not guess teams from vacant slots.
+                            var resolved = RoomPlayerLoader.ResolveGameTeams((JObject)data!);
+                            var ours = inOne ? resolved.One : resolved.Two;
+                            var theirs = inOne ? resolved.Two : resolved.One;
+                            // Known identities must never appear on both sides.
                             var ourIds = ours.Select(p => p.Value<long?>("summonerId") ?? 0).Where(id => id > 0).ToHashSet();
                             var ourPuuids = ours.Select(RoomPlayerLoader.PublicPuuid).Where(p => p.Length > 0).ToHashSet();
                             theirs = new JArray(theirs.Where(p => !ourIds.Contains(p.Value<long?>("summonerId") ?? 0)
                                 && !ourPuuids.Contains(RoomPlayerLoader.PublicPuuid(p))).Select(p => p.DeepClone()));
+                            int supplemented = ours.Concat(theirs).Count(p => p.Value<bool?>("__roomSelectionOnly") == true);
+                            RoomLoadDiagnostics.Shared.Report(generation, "session-roster", detail:
+                                $"one={one.Count} two={two.Count} selections={(data?["playerChampionSelections"] as JArray)?.Count ?? 0} ally={ours.Count} enemy={theirs.Count} supplemented={supplemented}");
                             _form._cachedMyTeam = ours; _form._cachedEnemyTeam = theirs;
                             await _cards.UpdateTeamAsync(ours, true, generation, queue);
                             await _cards.UpdateTeamAsync(theirs, false, generation, queue);
                             hadRoster = true;
-                            if (ours.Count == 5 && theirs.Count == 5) return;
+                            // Allow a later complete team list to replace a provisional hidden profile.
+                            if (ours.Count == 5 && theirs.Count == 5 && supplemented == 0) return;
                         }
                     }
                 }

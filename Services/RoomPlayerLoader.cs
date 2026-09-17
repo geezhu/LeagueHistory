@@ -219,13 +219,47 @@ public sealed class RoomPlayerLoader : IDisposable
         }
         return result;
     }
+    public static (JArray One, JArray Two) ResolveGameTeams(JObject gameData)
+    {
+        var selections = gameData["playerChampionSelections"] as JArray ?? new();
+        var rawOne = gameData["teamOne"] as JArray ?? new();
+        var rawTwo = gameData["teamTwo"] as JArray ?? new();
+        var one = WithChampionSelections(rawOne, selections);
+        var two = WithChampionSelections(rawTwo, selections);
+        // Some private profiles are absent from teamOne/teamTwo but still occur in selections.
+        // Only a complete five-player team plus ten distinct selections proves the complement.
+        // Partial teams, duplicate identities and smaller/custom rosters are not enough evidence.
+        if (gameData["queue"]?.Value<int?>("numPlayersPerTeam") != 5 || selections.Count != 10
+            || selections.OfType<JObject>().Count() != 10 || rawOne.Count > 5 || rawTwo.Count > 5)
+            return (one, two);
+        var selectedIds = selections.Select(PublicPuuid).ToArray();
+        if (selectedIds.Any(string.IsNullOrEmpty) || selectedIds.Distinct(StringComparer.Ordinal).Count() != 10
+            || selections.Any(p => p.Value<int?>("championId") is not > 0)) return (one, two);
+        var oneIds = one.Select(PublicPuuid).ToArray();
+        var twoIds = two.Select(PublicPuuid).ToArray();
+        var knownIds = oneIds.Concat(twoIds).ToArray();
+        if (knownIds.Any(p => !selectedIds.Contains(p, StringComparer.Ordinal))
+            || knownIds.Distinct(StringComparer.Ordinal).Count() != knownIds.Length) return (one, two);
+        JArray? incomplete = one.Count == 5 && two.Count < 5 ? two : two.Count == 5 && one.Count < 5 ? one : null;
+        if (incomplete == null) return (one, two);
+        foreach (var pick in selections.OfType<JObject>().Where(p => !knownIds.Contains(PublicPuuid(p), StringComparer.Ordinal)))
+        {
+            incomplete.Add(new JObject
+            {
+                ["puuid"] = PublicPuuid(pick), ["championId"] = pick.Value<int>("championId"),
+                ["summonerId"] = 0, ["nameVisibilityType"] = "HIDDEN", ["__roomSelectionOnly"] = true
+            });
+        }
+        return (one, two);
+    }
     private static bool SameDisplay(JObject first, JObject second) => new[]
-        { "summonerId", "puuid", "championId", "assignedPosition", "selectedPosition", "nameVisibilityType", "__roomQueue" }
+        { "summonerId", "puuid", "championId", "assignedPosition", "selectedPosition", "nameVisibilityType", "__roomQueue", "__roomSelectionOnly" }
         .All(key => JToken.DeepEquals(first[key], second[key]));
     public static string PublicPuuid(JToken player)
     {
         string value = player.Value<string>("puuid") ?? "";
-        return value.StartsWith("OBFUSCATED_", StringComparison.OrdinalIgnoreCase) || value.StartsWith("HIDDEN_", StringComparison.OrdinalIgnoreCase) ? "" : value;
+        return string.IsNullOrWhiteSpace(value) || value == "00000000-0000-0000-0000-000000000000"
+            || value.StartsWith("OBFUSCATED_", StringComparison.OrdinalIgnoreCase) || value.StartsWith("HIDDEN_", StringComparison.OrdinalIgnoreCase) ? "" : value;
     }
     public static string Identity(JToken player, int column)
     {
