@@ -106,8 +106,10 @@ namespace League.Parsers
             return _factory.CreateFailedPlayerInfo(sid, cid);
         }
 
-        public async Task<PlayerMatchInfo> FetchPlayerMatchInfoAsync(JToken playerData)
+        public async Task<PlayerMatchInfo> FetchPlayerMatchInfoAsync(JToken playerData, CancellationToken cancellationToken = default,
+            string? queueOverride = null, Action<string>? stage = null)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (playerData == null) throw new ArgumentNullException(nameof(playerData));
 
             EnsureFactoryInitialized(); // 确保 Factory 已初始化
@@ -127,21 +129,27 @@ namespace League.Parsers
                 return _factory.CreateHiddenPlayerInfo(summonerId, championId);
 
             // 缓存检查
-            string queueId = await _fetcher.GetCurrentQueueIdAsync();
+            stage?.Invoke("queue");
+            string queueId = queueOverride ?? await _fetcher.GetCurrentQueueIdAsync(cancellationToken);
             int count=_matchHistoryCount;
             string historyFilter = PlayerMatchDataFetcher.GetQueueFilter(queueId)+":"+count;
-            if (summonerId != 0 && _cacheManager.TryGetPlayerMatch(summonerId, historyFilter, out var cached))
+            if (summonerId != 0 && _cacheManager.TryGetPlayerMatch(summonerId, historyFilter, out var cached) && cached.Player.Puuid == puuid)
             {
+                cached = cached.CopyForChampion(championId);
                 cached.Player.ChampionId = championId;
                 cached.Player.ChampionName = Globals.resLoading.GetChampionById(championId)?.Name ?? "Unknown";
-                cached.Player.Avatar = await Globals.resLoading.GetChampionIconAsync(championId);
+                if (queueOverride == null) cached.Player.Avatar = await Globals.resLoading.GetChampionIconAsync(championId).WaitAsync(cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                stage?.Invoke("cache-hit");
                 return cached;
             }
 
             // 正常查询流程...
+            stage?.Invoke("profile");
             var summonerInfo = summonerId != 0
-                ? await _fetcher.GetGameNameBySummonerIdAsync(summonerId.ToString())
+                ? await _fetcher.GetGameNameBySummonerIdAsync(summonerId.ToString(), cancellationToken)
                 : null;
+            if (summonerInfo == null && summonerId != 0) throw new HttpRequestException("Player profile unavailable");
 
             string gameName = summonerInfo?["gameName"]?.ToString() ?? "未知玩家";
             string tagLine = summonerInfo?["tagLine"]?.ToString() ?? "";
@@ -154,12 +162,15 @@ namespace League.Parsers
                 return _factory.CreateHiddenPlayerInfo(0, championId);
             }
 
-            var rankedStats = await _fetcher.GetRankedStatsAsync(puuid);
+            stage?.Invoke("rank");
+            var rankedStats = await _fetcher.GetRankedStatsAsync(puuid, cancellationToken);
             string soloRank = GetFormattedRank(rankedStats, "单双排");
             string flexRank = GetFormattedRank(rankedStats, "灵活组排");
 
-            var matchesJson = await _fetcher.GetPlayerMatchesAsync(puuid, queueId, count);
-            var result = await _parser.ParsePlayerMatchInfo(puuid, matchesJson);
+            stage?.Invoke("history");
+            var matchesJson = await _fetcher.GetPlayerMatchesAsync(puuid, queueId, count, cancellationToken);
+            stage?.Invoke("parse");
+            var result = await _parser.ParsePlayerMatchInfo(puuid, matchesJson, cancellationToken);
 
             result.Player = new PlayerInfo
             {
@@ -167,7 +178,7 @@ namespace League.Parsers
                 SummonerId = summonerId,
                 ChampionId = championId,
                 ChampionName = Globals.resLoading.GetChampionById(championId)?.Name ?? "Unknown",
-                Avatar = await Globals.resLoading.GetChampionIconAsync(championId),
+                Avatar = queueOverride == null ? await Globals.resLoading.GetChampionIconAsync(championId).WaitAsync(cancellationToken) : null!,
                 GameName = string.IsNullOrEmpty(tagLine) ? gameName : gameName,
                 SoloRank = soloRank,
                 FlexRank = flexRank,
@@ -177,6 +188,7 @@ namespace League.Parsers
             // 计算玩家是否压力怪
             CalculatePlayerBehavior(result);
 
+            cancellationToken.ThrowIfCancellationRequested();
             _cacheManager.CachePlayerMatch(summonerId, historyFilter, result);
             return result;
         }

@@ -109,9 +109,9 @@ namespace League.Clients
         /// <summary>
         /// 发送GET请求
         /// </summary>
-        public async Task<HttpResponseMessage> GetAsync(string requestUri)
+        public async Task<HttpResponseMessage> GetAsync(string requestUri, CancellationToken cancellationToken = default)
         {
-            return await _httpClient.GetAsync(requestUri);
+            return await _httpClient.GetAsync(requestUri, cancellationToken);
         }
     }
 }

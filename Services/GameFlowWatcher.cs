@@ -69,6 +69,7 @@ namespace League.Services
 
             _autoPickService.Stop();
             _cleanupService.Cleanup();
+            _cardDisplayService.ClearSnapshots();
         }
 
         // <summary>
@@ -86,6 +87,8 @@ namespace League.Services
             // 清理当前监听
             _phaseMonitor.Stop();
             _autoPickService.Stop();
+
+            _cardDisplayService.ClearSnapshots();
 
             // 通知主窗体重新启动等待连接的轮询
             _form.StartLcuConnectPolling();
@@ -122,11 +125,15 @@ namespace League.Services
                     case "EndOfGame":
                     case "PreEndOfGame":
                     case "WaitingForStats":
+                        _autoPickService.Stop();
+                        _cardDisplayService.ClearSnapshots();
                         Debug.WriteLine($"[GameEnd Trigger] 检测到结束阶段: {phase}, previous={previousPhase}");
                         await HandleGameEnd(previousPhase);  // 即使 previousPhase 为空也尝试处理
                         break;
                     case "Lobby":
                     case "None":
+                        _autoPickService.Stop();
+                        _cardDisplayService.ClearSnapshots();
                         if (_cleanupService.ShouldReturnToLobby())
                         {
                             Debug.WriteLine(
@@ -145,6 +152,8 @@ namespace League.Services
 
         private async Task HandleQueuePhase(string phase)
         {
+            _autoPickService.Stop();
+            _cardDisplayService.ClearSnapshots();
             _uiManager.IsGame = false;
             _cardManager.ClearAllCaches();
             _cardManager.ClearGameState();
@@ -173,6 +182,7 @@ namespace League.Services
 
         private async Task HandleChampSelectStart()
         {
+            _autoPickService.Stop();
             _uiManager.IsGame = true;
             await _cardDisplayService.EnterChampSelectAsync();
 
@@ -180,10 +190,12 @@ namespace League.Services
             _autoPickService.StartChampSelectMonitoring(_cardDisplayService);
         }
 
-        private async Task HandleGameInProgress()
+        private Task HandleGameInProgress()
         {
+            _uiManager.IsGame = true;
             _autoPickService.Stop();
-            await _cardDisplayService.ShowEnemyTeamCardsAsync();
+            _cardDisplayService.StartGameSessionLoad();
+            return Task.CompletedTask;
         }
 
         private async Task HandleGameEnd(string? previousPhase)

@@ -63,14 +63,14 @@ namespace League.Clients
             return !string.IsNullOrEmpty(_puuid) && !string.IsNullOrEmpty(_leagueSessionToken);
         }
 
-        public async Task<bool> LoadEntitlementsTokenAsync()
+        public async Task<bool> LoadEntitlementsTokenAsync(CancellationToken cancellationToken = default)
         {
-            HttpResponseMessage resp = await _lcuClient.GetAsync("entitlements/v1/token");
+            using HttpResponseMessage resp = await _lcuClient.GetAsync("entitlements/v1/token", cancellationToken);
             if (!resp.IsSuccessStatusCode)
             {
                 return false;
             }
-            JObject obj = JObject.Parse(await resp.Content.ReadAsStringAsync());
+            JObject obj = JObject.Parse(await resp.Content.ReadAsStringAsync(cancellationToken));
             _accessToken = obj["accessToken"]?.ToString();
             _entitlementsToken = obj["token"]?.ToString();
             obj["issuer"]?.ToString();
@@ -159,7 +159,7 @@ namespace League.Clients
                         Debug.WriteLine($"SGP 请求地址: {fullUrl} (尝试 {attempt}/3)");
 
                         Stopwatch watch = Stopwatch.StartNew();
-                        HttpResponseMessage response = await client.GetAsync(fullUrl, cts.Token);
+                        using HttpResponseMessage response = await client.GetAsync(fullUrl, cts.Token);
                         watch.Stop();
 
                         Debug.WriteLine($"SGP 查询状态: {response.StatusCode} 耗时: {watch.ElapsedMilliseconds}ms");
@@ -177,6 +177,7 @@ namespace League.Clients
                             Debug.WriteLine($"请求失败: {response.StatusCode} - {errorContent}");
                         }
                     }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                     catch (TaskCanceledException tce)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
@@ -192,7 +193,7 @@ namespace League.Clients
                     }
                 }
 
-                if (!await LoadEntitlementsTokenAsync())
+                if (!await LoadEntitlementsTokenAsync(cancellationToken))
                 {
                     Debug.WriteLine("刷新 Token 失败");
                     return null;

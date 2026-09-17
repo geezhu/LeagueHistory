@@ -1,245 +1,136 @@
 using League.Controls;
 using League.Models;
-using League.UIState;
+using League.Services;
 using Newtonsoft.Json.Linq;
-using System.Diagnostics;
-using static League.FormMain;
 
-namespace League.Managers
+namespace League.Managers;
+
+public sealed class PlayerCardUIManager
 {
-    public class PlayerCardUIManager
+    private readonly Form _form;
+    private readonly TableLayoutPanel _table;
+    private readonly PlayerChampionTierService? _championTiers;
+    private readonly Dictionary<string, (BorderPanel Panel, PlayerCardControl Card, long Revision)> _cards = new();
+    private readonly CancellationTokenSource _closed = new();
+    private readonly int _uiThread = Environment.CurrentManagedThreadId;
+    private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public Action<string, long>? RetryRequested { get; set; }
+
+    public PlayerCardUIManager(FormMain form) : this(form, form.tableLayoutPanel1)
     {
-        private readonly FormMain _form;
-        private readonly League.Services.PlayerChampionTierService _championTiers;
-        public readonly SemaphoreSlim _uiLock = new SemaphoreSlim(1, 1);
+        _championTiers = new(form);
+        form.Disposed += (_, _) => _championTiers.Dispose();
+    }
 
-        public PlayerCardUIManager(FormMain form)
+    // Also accepts an ordinary Form for isolated WinForms regression tests.
+    public PlayerCardUIManager(Form form, TableLayoutPanel table)
+    {
+        _form = form; _table = table;
+        PlayerTeamsLayout.Attach(table);
+        if (form.IsHandleCreated) _ready.TrySetResult();
+        form.HandleCreated += (_, _) => _ready.TrySetResult();
+        form.Disposed += (_, _) => _closed.Cancel();
+    }
+
+    public Task DispatchAsync(Action action)
+    {
+        if (_form.IsDisposed || _closed.IsCancellationRequested) return Task.CompletedTask;
+        if (Environment.CurrentManagedThreadId == _uiThread) { action(); return Task.CompletedTask; }
+        if (!_form.IsHandleCreated) return DispatchWhenReadyAsync(action);
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
         {
-            _form = form;
-            _championTiers=new(form);form.Disposed+=(_,_)=>_championTiers.Dispose();
-            PlayerTeamsLayout.Attach(form.tableLayoutPanel1);
+            _form.BeginInvoke(new Action(() =>
+            {
+                try { if (!_form.IsDisposed) action(); completion.TrySetResult(); }
+                catch (Exception ex) { completion.TrySetException(ex); }
+            }));
         }
+        catch (InvalidOperationException) { return Task.CompletedTask; }
+        return completion.Task.WaitAsync(_closed.Token);
+    }
 
-        public async Task CreateBasicCardsOnly(JArray team, bool isMyTeam, int row,PlayerCardFactory factory, PlayerCardCache cache)
+    private async Task DispatchWhenReadyAsync(Action action)
+    {
+        await _ready.Task.WaitAsync(_closed.Token);
+        await DispatchAsync(action);
+    }
+
+    public void Render(IReadOnlyList<RoomPlayerState> states)
+    {
+        _table.SuspendLayout();
+        try
         {
-            if (team == null || team.Count == 0) return;
-
-            await _uiLock.WaitAsync();
-            try
+            var wanted = states.Select(s => s.Key).ToHashSet();
+            foreach (var pair in _cards.Where(p => !wanted.Contains(p.Key) || p.Value.Card.IsDisposed).ToArray())
             {
-                int col = 0;
-                foreach (var p in team)
+                pair.Value.Panel.Dispose(); _cards.Remove(pair.Key);
+            }
+            var owned = _cards.Values.Select(c => (Control)c.Panel).ToHashSet();
+            foreach (Control control in _table.Controls.Cast<Control>().ToArray())
+                if (!owned.Contains(control)) control.Dispose();
+
+            // Detach moved cards first so swapping slots never overflows the fixed 5x2 grid.
+            foreach (var state in states)
+                if (_cards.TryGetValue(state.Key, out var item) && item.Panel.Parent == _table
+                    && (_table.GetRow(item.Panel) != (state.Ally ? 0 : 1) || _table.GetColumn(item.Panel) != state.Column))
+                    _table.Controls.Remove(item.Panel);
+
+            foreach (var state in states)
+            {
+                bool created = !_cards.TryGetValue(state.Key, out var item);
+                if (created)
                 {
-                    long summonerId = p["summonerId"]?.Value<long>() ?? 0;
-                    int championId = p["championId"]?.Value<int>() ?? 0;
-                    string puuid = p["puuid"]?.ToString() ?? "";
-
-                    // 更新缓存映射（隐藏玩家也需要更新 championId 映射）
-                    cache?.UpdateCurrentChampion(summonerId, championId, col);
-
-                    // === 获取当前位置现有卡片 ===
-                    var existingPanel = _form.tableLayoutPanel1.GetControlFromPosition(col, row) as BorderPanel;
-                    var existingCard = existingPanel?.Controls.OfType<PlayerCardControl>().FirstOrDefault();
-
-                    // 同一玩家仅换英雄：只更新头像
-                    if (existingCard != null && existingCard.CurrentSummonerId == summonerId)
-                    {
-                        if (existingCard.CurrentChampionId != championId)
-                        {
-                            Debug.WriteLine($"[仅换英雄] Row={row} Col={col} summonerId={summonerId} 更新头像");
-                            var newAvatar = await Globals.resLoading.GetChampionIconAsync(championId);
-                            FormUiStateManager.SafeInvoke(existingCard, () =>
-                            {
-                                if (!existingCard.IsDisposed)
-                                {
-                                    existingCard.SetAvatarOnly(newAvatar);
-                                    existingCard.CurrentChampionId = championId;
-                                }
-                            });
-                            existingCard.CurrentPuuId = puuid;
-                        }
-                        col++;
-                        continue;
-                    }
-
-                    // 需要重建卡片
-                    PlayerMatchInfo loadingInfo;
-
-                    if (summonerId == 0)
-                    {
-                        loadingInfo = factory.CreateHiddenPlayerInfo(summonerId, championId);
-                    }
-                    else
-                    {
-                        loadingInfo = factory.CreateLoadingPlayerInfo(p);
-                    }
-
-                    CreateLoadingPlayerMatch(loadingInfo, isMyTeam, row, col,puuid);
-                    col++;
+                    var panel = new BorderPanel { Tag = state.Ally, BorderColor = Color.FromArgb(221,230,240), BorderWidth = 1,
+                        Padding = new Padding(2), Dock = DockStyle.Fill, Margin = new Padding(5) };
+                    var card = new PlayerCardControl { Dock = DockStyle.Fill, Margin = Padding.Empty };
+                    panel.Controls.Add(card);
+                    item = (panel, card, -1);
                 }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[CreateBasicCardsOnly] Row={row} 异常: {ex.Message}");
-            }
-            finally
-            {
-                _uiLock.Release();
-            }
-        }
-
-        public void CreateLoadingPlayerMatch(PlayerMatchInfo matchInfo, bool isMyTeam, int row, int column,string puuid = "")
-        {
-            if (_form.InvokeRequired)
-            {
-                FormUiStateManager.SafeInvokeSync(_form, () => CreateLoadingPlayerMatch(matchInfo,isMyTeam,row,column,puuid));
-                return;
-            }
-            var player = matchInfo.Player;
-            Color borderColor = Color.FromArgb(221,230,240);
-
-            var panel = new BorderPanel
-            {
-                Tag = isMyTeam,
-                BorderColor = borderColor,
-                BorderWidth = 1,
-                Padding = new Padding(2),
-                Dock = DockStyle.Fill,
-                Margin = new Padding(5)
-            };
-
-            var card = new PlayerCardControl { Dock = DockStyle.Fill, Margin = new Padding(0) };
-            card.Tag = player.SummonerId;
-
-            string name = player.GameName ?? "未知";
-            string soloRank = string.IsNullOrEmpty(player.SoloRank) ? "未知" : player.SoloRank;
-            string flexRank = string.IsNullOrEmpty(player.FlexRank) ? "未知" : player.FlexRank;
-
-            // 关键调用
-            card.SetPlayerInfo(name, soloRank, flexRank, player.Avatar, player.IsPublic,
-                matchInfo.MatchItems, player.NameColor, player.SummonerId, player.ChampionId, puuid ?? player.Puuid ?? "");
-            card.SetRecentStatistics(matchInfo);
-
-            // 【修复点】必须设置 SmallImageList
-            if (matchInfo.HeroIcons != null)
-            {
-                card.ListViewControl.SmallImageList = matchInfo.HeroIcons;
-            }
-
-            card.ListViewControl.View = View.Details;
-
-            panel.Controls.Add(card);
-
-            // 注册到缓存
-            _form._playerCardManager?.RegisterCard(player.SummonerId, card);   // 注意：这里需要 FormMain 里有 _playerCardManager
-
-            // 此为异步更新UI方法
-            //FormUiStateManager.SafeInvoke(_form.tableLayoutPanel1, () =>
-            //{
-            //    var oldControl = _form.tableLayoutPanel1.GetControlFromPosition(column, row);
-            //    if (oldControl != null)
-            //    {
-            //        _form.tableLayoutPanel1.Controls.Remove(oldControl);
-            //        oldControl.Dispose();
-            //    }
-            //    _form.tableLayoutPanel1.Controls.Add(panel, column, row);
-            //});
-
-            // 此为同步更新UI方法
-            FormUiStateManager.SafeInvokeSync(_form.tableLayoutPanel1, () =>
-            {
-                var oldControl = _form.tableLayoutPanel1.GetControlFromPosition(column, row);
-                if (oldControl != null)
+                if (item.Revision != state.Revision)
                 {
-                    _form.tableLayoutPanel1.Controls.Remove(oldControl);
-                    oldControl.Dispose();
+                    ApplyState(item.Card, state);
+                    item.Revision = state.Revision;
                 }
-                _form.tableLayoutPanel1.Controls.Add(panel, column, row);
-            });
-            if (card.IsLoading || player.SummonerId == 0) LoadCardAvatar(card,player.ChampionId);
-            card.BindChampionInfo(id=>_championTiers.GetAsync(id,card.CurrentPuuId),(id,tier)=>_form.OpenAssistantGuide(id,tier.Queue,tier.Position));
-            _ = card.LoadSummonerProfileAsync();
-        }
-
-        private static async void LoadCardAvatar(PlayerCardControl card,int championId)
-        {
-            try
-            {
-                var image = await Globals.resLoading.GetChampionIconAsync(championId);
-                if (card.IsDisposed || card.CurrentChampionId != championId) { image?.Dispose(); return; }
-                if (image != null) { card.SetAvatarOnly(image); image.Dispose(); }
-            }
-            catch (Exception ex) { Debug.WriteLine($"Card avatar: {ex.GetType().Name}"); }
-        }
-
-        public void UpdateCardUI(PlayerCardControl card, PlayerMatchInfo matchInfo)
-        {
-            if (card == null || card.IsDisposed || matchInfo?.Player == null) return;
-
-            // 此为异步
-            //FormUiStateManager.SafeInvoke(card, () =>
-
-            // 此为同步
-            FormUiStateManager.SafeInvokeSync(card, () =>
-            {
-                var p = matchInfo.Player;
-                card.SetRecentStatistics(matchInfo);
-                card.lblPlayerName.Text = p.GameName ?? "未知玩家";
-                card.lblSoloRank.Text = p.SoloRank ?? "未知";
-                card.lblFlexRank.Text = p.FlexRank ?? "未知";
-                card.lblPrivacyStatus.Text = p.IsPublic ?? "隐藏";
-
-                if (p.Avatar != null)
-                    card.picHero.Image = p.Avatar;
-
-                // 【重要修复】战绩列表 + 英雄头像
-                if (matchInfo.MatchItems?.Count > 0)
+                if (item.Panel.Parent != _table) _table.Controls.Add(item.Panel, state.Column, state.Ally ? 0 : 1);
+                _cards[state.Key] = item;
+                if (state.Info?.Player is { } player)
                 {
-                    card.ListViewControl.Items.Clear();
-                    foreach (var item in matchInfo.MatchItems)
-                        card.ListViewControl.Items.Add(item);
-
-                    if (matchInfo.HeroIcons != null)
-                        card.ListViewControl.SmallImageList = matchInfo.HeroIcons;
+                    item.Card.lblPlayerName.LinkColor = player.NameColor;
+                    item.Card.lblPlayerName.VisitedLinkColor = player.NameColor;
+                    item.Card.lblPlayerName.ActiveLinkColor = player.NameColor;
                 }
-
-                if (p.NameColor != default)
+                if (created && _form is FormMain main && _championTiers != null)
                 {
-                    card.lblPlayerName.LinkColor = p.NameColor;
-                    card.lblPlayerName.VisitedLinkColor = p.NameColor;
-                    card.lblPlayerName.ActiveLinkColor = p.NameColor;
-                }
-                card.CurrentPuuId = matchInfo.Player.Puuid ?? "";
-            });
-        }
-
-        public void UpdatePlayerNameColor(long summonerId, Color color, PlayerCardCache cache)
-        {
-            if (color == default(Color) || summonerId <= 0)
-                return;
-
-            if (cache.TryGetCard(summonerId, out var card) && card != null && !card.IsDisposed)
-            {
-                // 更安全的 Invoke 方式
-                try
-                {
-                    FormUiStateManager.SafeInvokeSync(card, () => ApplyNameColor(card, color));
-                }
-                catch (Exception ex) when (ex is InvalidOperationException || ex is ObjectDisposedException)
-                {
-                    Debug.WriteLine($"[UpdatePlayerNameColor] 控件尚未准备好或已释放: summonerId={summonerId}");
-                    // 不抛出异常，静默处理
+                    var card = item.Card;
+                    card.BindChampionInfo(id => _championTiers.GetAsync(id, card.CurrentPuuId),
+                        (id, tier) => main.OpenAssistantGuide(id, tier.Queue, tier.Position));
+                    _ = card.LoadSummonerProfileAsync();
                 }
             }
         }
+        finally { _table.ResumeLayout(true); }
+    }
 
-        private void ApplyNameColor(PlayerCardControl card, Color color)
+    private void ApplyState(PlayerCardControl card, RoomPlayerState state)
+    {
+        long sid = state.Player.Value<long?>("summonerId") ?? 0;
+        int champion = state.Player.Value<int?>("championId") ?? 0;
+        string puuid = state.Player.Value<string>("puuid") ?? "";
+        var player = state.Info?.Player;
+        string name = player?.GameName ?? (state.CanRetry ? "战绩读取失败" : "加载中…");
+        card.SetPlayerInfo(name, player?.SoloRank ?? "", player?.FlexRank ?? "", player?.Avatar!, player?.IsPublic ?? "",
+            state.Info?.MatchItems ?? new(), player?.NameColor ?? Color.FromArgb(36,63,98), sid, champion, puuid);
+        if (state.Info != null)
         {
-            if (card == null || card.IsDisposed) return;
-
-            card.lblPlayerName.LinkColor = color;
-            card.lblPlayerName.VisitedLinkColor = color;
-            card.lblPlayerName.ActiveLinkColor = color;
+            card.SetRecentStatistics(state.Info);
+            card.ListViewControl.SmallImageList = state.Info.HeroIcons;
         }
+        else { card.ClearRecentStatistics(); card.ListViewControl.SmallImageList = null; }
+        string status = state.Status;
+        if (state.Info != null && state.Info.MatchItems.Count == 0 && status.Length == 0)
+            status = player?.GameName?.Contains("隐藏") == true ? "该玩家未公开战绩" : "当前模式暂无战绩";
+        card.SetHistoryLoadStatus(status, state.Info == null && !state.CanRetry, state.CanRetry,
+            () => RetryRequested?.Invoke(state.Key, state.Generation));
     }
 }

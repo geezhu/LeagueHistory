@@ -796,7 +796,7 @@ namespace League
 
             base.OnFormClosing(e);
 
-            _playerCardManager?.UiLock?.Dispose();
+            _playerCardManager?.Dispose();
         }
 
         private void lk_GitPro_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)

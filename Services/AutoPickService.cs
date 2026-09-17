@@ -44,7 +44,7 @@ namespace League.Services
                         if (currentPhase != "ChampSelect") break;
 
                         // 我方队伍卡片显示
-                        await _cardDisplayService.ShowMyTeamCards();
+                        await _cardDisplayService.ShowMyTeamCards(token);
 
                         await TryAutoPreliminaryAsync();
 
@@ -54,7 +54,8 @@ namespace League.Services
 
                         await Task.Delay(delay, token);
                     }
-                    catch (TaskCanceledException) { break; }
+                    catch (OperationCanceledException) when (token.IsCancellationRequested) { break; }
+                    catch (OperationCanceledException) { RoomLoadDiagnostics.Shared.Report(0, "selection-timeout"); }
                     catch (Exception ex)
                     {
                         Debug.WriteLine($"[AutoPickService] 异常: {ex.Message}");

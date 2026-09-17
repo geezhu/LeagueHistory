@@ -2,6 +2,7 @@
 {
     public class PlayerInfo
     {
+        internal PlayerInfo Copy() => (PlayerInfo)MemberwiseClone();
         public string FullName { get; set; } // 如 "总有狗喜欢投降#65905"
 
         public Image Avatar { get; set; }
