@@ -16,6 +16,11 @@ internal static class SettingsChecks
         var tabs=(TabControl)Field("tabControl1");
         IEnumerable<Control> All(Control root)=>root.Controls.Cast<Control>().SelectMany(c=>new[]{c}.Concat(All(c)));
         var count=All(tabs).OfType<ComboBox>().Single(c=>c.Name=="CardMatchHistoryCount");
+        foreach(var name in new[]{"ShutdownPlanSummary","ShutdownNextRun","CreateShutdownPlan","DeleteShutdownPlan","ShutdownLog"})
+            if(!All(tabs).Any(c=>c.Name==name))throw new Exception("Missing daily shutdown management control: "+name);
+        var shutdownCard=All(tabs).Single(c=>c.Name=="ShutdownPlanSummary").Parent!;
+        if(!All(shutdownCard).OfType<Button>().Select(c=>c.Name).SequenceEqual(new[]{"CreateShutdownPlan","DeleteShutdownPlan","ShutdownLog"}))
+            throw new Exception("Shutdown settings only expose create, delete and logs");
         if(All(tabs).Any(c=>c.Name=="LoadingOverlayHotkey"))throw new Exception("Removed overlay shortcut must not remain configurable");
         if(!All(tabs).Any(c=>c.Text.Contains("Win＋G")))throw new Exception("Game Bar management instructions remain available");
         if(!All(tabs).OfType<CheckBox>().Single(c=>c.Name=="AutoShowLoadingOverlay").Checked)throw new Exception("Automatic loading overlay defaults on");
@@ -29,6 +34,10 @@ internal static class SettingsChecks
         using var preview=new Form {ClientSize=new Size(1050,800)};
         preview.Controls.Add(tabs);preview.Show();Application.DoEvents();
         Save("settings-general");
+        var shutdown=All(tabs).Single(c=>c.Name=="ShutdownPlanSummary");
+        ((FlowLayoutPanel)shutdown.Parent!.Parent!).AutoScrollPosition=new Point(0,Math.Max(0,shutdown.Parent.Top-16));
+        Application.DoEvents();Save("settings-shutdown");
+        preview.ClientSize=new Size(650,720);Application.DoEvents();Save("settings-shutdown-narrow");preview.ClientSize=new Size(1050,800);
         tabs.SelectedIndex=1;Application.DoEvents();Save("settings-messages");
         tabs.SelectedIndex=2;Application.DoEvents();Save("settings-launcher");
         preview.ClientSize=new Size(650,720);tabs.SelectedIndex=3;Application.DoEvents();Save("settings-cache-narrow");
