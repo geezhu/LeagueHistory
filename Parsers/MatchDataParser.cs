@@ -10,7 +10,7 @@ namespace League.Parsers
     /// </summary>
     public class MatchDataParser
     {
-        public async Task<PlayerMatchInfo> ParsePlayerMatchInfo(string puuid, JArray matches)
+        public async Task<PlayerMatchInfo> ParsePlayerMatchInfo(string puuid, JArray matches, CancellationToken cancellationToken = default)
         {
             var result = new PlayerMatchInfo();
             if (matches == null || matches.Count == 0)
@@ -23,6 +23,7 @@ namespace League.Parsers
             {
                 foreach (JObject match in matches.Cast<JObject>())
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     JObject gameJson = match["json"] as JObject ?? match;
                     if (gameJson == null || gameJson["gameId"]?.Value<long>() == 0)
                         continue;
@@ -30,9 +31,10 @@ namespace League.Parsers
                     var participant = FindParticipant(gameJson, puuid);
                     if (participant == null) continue;
 
-                    await ProcessMatchData(result, gameJson, participant);
+                    await ProcessMatchData(result, gameJson, participant, cancellationToken);
                 }
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 Debug.WriteLine($"解析比赛数据异常: {ex.Message}");
@@ -41,7 +43,7 @@ namespace League.Parsers
             return result;
         }
 
-        private async Task ProcessMatchData(PlayerMatchInfo result, JObject gameJson, JObject participant)
+        private async Task ProcessMatchData(PlayerMatchInfo result, JObject gameJson, JObject participant, CancellationToken cancellationToken)
         {
             long gameId = gameJson["gameId"]?.Value<long>() ?? 0;
             int championId = participant["championId"]?.Value<int>() ?? 0;
@@ -112,7 +114,7 @@ namespace League.Parsers
             result.MatchItems.Add(item);
             result.MatchKeys.Add($"{gameId}_{participant["teamId"]?.Value<int>() ?? -1}");
 
-            await CacheChampionIcon(championName, championId, result.HeroIcons);
+            await CacheChampionIcon(championName, championId, result.HeroIcons, cancellationToken);
         }
 
         private JObject FindParticipant(JObject gameJson, string puuid)
@@ -290,12 +292,12 @@ namespace League.Parsers
             return $"未知({string.Join(",", tagList)})";
         }
 
-        private async Task CacheChampionIcon(string championName, int championId, ImageList heroIcons)
+        private async Task CacheChampionIcon(string championName, int championId, ImageList heroIcons, CancellationToken cancellationToken)
         {
             string cleanName = championName.Replace(" ", "").Replace("'", "");
             if (!MatchQueryProcessor._imageCache.TryGetValue(cleanName, out var image))
             {
-                image = await Globals.resLoading.GetChampionIconAsync(championId);
+                image = await Globals.resLoading.GetChampionIconAsync(championId).WaitAsync(cancellationToken);
                 if (image != null) MatchQueryProcessor._imageCache.TryAdd(cleanName, image);
             }
 

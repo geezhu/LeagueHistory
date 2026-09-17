@@ -158,25 +158,25 @@ namespace League.Clients
         /// <summary>
         /// 根据summonerId查询玩家的名称等信息
         /// </summary>
-        public async Task<JObject> GetGameNameBySummonerId(string summonerId)
+        public async Task<JObject> GetGameNameBySummonerId(string summonerId, CancellationToken cancellationToken = default)
         {
-            return await _summonerService.GetSummonerByIdAsync(summonerId);
+            return await _summonerService.GetSummonerByIdAsync(summonerId, cancellationToken);
         }
 
         /// <summary>
         /// 获取当前登录玩家的等级隐私信息
         /// </summary>
-        public async Task<JObject> GetCurrentSummoner()
+        public async Task<JObject> GetCurrentSummoner(CancellationToken cancellationToken = default)
         {
-            return await _summonerService.GetCurrentSummonerAsync();
+            return await _summonerService.GetCurrentSummonerAsync(cancellationToken);
         }
 
         /// <summary>
         /// 获取当前排位统计数据
         /// </summary>
-        public async Task<JObject> GetCurrentRankedStatsAsync(string puuid)
+        public async Task<JObject> GetCurrentRankedStatsAsync(string puuid, CancellationToken cancellationToken = default)
         {
-            return await _rankedService.GetCurrentRankedStatsAsync(puuid);
+            return await _rankedService.GetCurrentRankedStatsAsync(puuid, cancellationToken);
         }
 
         // ============ 游戏流程相关方法 ============
@@ -197,17 +197,17 @@ namespace League.Clients
         /// <summary>
         /// 获取英雄选择会话信息
         /// </summary>
-        public async Task<JObject> GetChampSelectSession()
+        public async Task<JObject> GetChampSelectSession(CancellationToken cancellationToken = default)
         {
-            return await _gameflowService.GetChampSelectSessionAsync();
+            return await _gameflowService.GetChampSelectSessionAsync(cancellationToken);
         }
 
         /// <summary>
         /// 返回完整的游戏信息，包括 queueId！
         /// </summary>
-        public async Task<JObject> GetGameSession()
+        public async Task<JObject> GetGameSession(CancellationToken cancellationToken = default)
         {
-            return await _gameflowService.GetGameSessionAsync();
+            return await _gameflowService.GetGameSessionAsync(cancellationToken);
         }
 
         /// <summary>

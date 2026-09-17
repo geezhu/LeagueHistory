@@ -63,7 +63,7 @@ namespace League.Controls
             var oldFont = lblPlayerName.Font;
 
             // 重新创建粗体字体
-            lblPlayerName.Font = new Font(
+            if (!oldFont.Bold) lblPlayerName.Font = new Font(
                 oldFont.FontFamily,
                 oldFont.Size,
                 FontStyle.Bold

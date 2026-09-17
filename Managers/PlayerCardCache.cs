@@ -30,6 +30,15 @@ namespace League.Managers
             }
         }
 
+        public void Replace(IEnumerable<PlayerMatchInfo> infos)
+        {
+            lock (_cachedPlayerMatchInfos)
+            {
+                _cachedPlayerMatchInfos.Clear();
+                foreach (var info in infos) _cachedPlayerMatchInfos[info.Player.SummonerId] = info;
+            }
+        }
+
         public bool TryGetCard(long summonerId, out PlayerCardControl card)
         {
             return _cardBySummonerId.TryGetValue(summonerId, out card);
@@ -57,7 +66,7 @@ namespace League.Managers
         {
             playerMatchCache.Clear();
             playerCache.Clear();
-            _cachedPlayerMatchInfos.Clear();
+            lock (_cachedPlayerMatchInfos) _cachedPlayerMatchInfos.Clear();
             _currentChampBySummoner.Clear();
             _summonerToColMap.Clear();
             _cardBySummonerId.Clear();
@@ -67,7 +76,7 @@ namespace League.Managers
         {
             _currentChampBySummoner.Clear();
             _summonerToColMap.Clear();
-            _cachedPlayerMatchInfos.Clear();
+            lock (_cachedPlayerMatchInfos) _cachedPlayerMatchInfos.Clear();
             playerMatchCache.Clear();
             _cardBySummonerId.Clear();
         }

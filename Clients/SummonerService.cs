@@ -49,8 +49,9 @@ namespace League.Clients
         /// <summary>
         /// 根据召唤师ID查询召唤师信息
         /// </summary>
-        public async Task<JObject> GetSummonerByIdAsync(string summonerId)
+        public async Task<JObject> GetSummonerByIdAsync(string summonerId, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrEmpty(summonerId))
             {
                 return null;
@@ -64,14 +65,15 @@ namespace League.Clients
 
             try
             {
-                var response = await _client.GetAsync($"/lol-summoner/v1/summoners/{summonerId}");
+                using var response = await _client.GetAsync($"/lol-summoner/v1/summoners/{summonerId}", cancellationToken);
 
                 if (!response.IsSuccessStatusCode)
                 {
                     return null;
                 }
 
-                var content = await response.Content.ReadAsStringAsync();
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 var summonerData = JObject.Parse(content);
 
                 // 更新缓存
@@ -79,6 +81,7 @@ namespace League.Clients
 
                 return summonerData;
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (TaskCanceledException ex)
             {
                 Debug.WriteLine($"[LCU] 请求超时: {ex.Message}");
@@ -94,11 +97,11 @@ namespace League.Clients
         /// <summary>
         /// 获取当前登录召唤师信息
         /// </summary>
-        public async Task<JObject> GetCurrentSummonerAsync()
+        public async Task<JObject> GetCurrentSummonerAsync(CancellationToken cancellationToken = default)
         {
             try
             {
-                var response = await _client.GetAsync("/lol-summoner/v1/current-summoner");
+                using var response = await _client.GetAsync("/lol-summoner/v1/current-summoner", cancellationToken);
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -106,19 +109,10 @@ namespace League.Clients
                     return null;
                 }
 
-                var content = await response.Content.ReadAsStringAsync();
-                if (string.IsNullOrWhiteSpace(content))
-                    return null;
-
-                var obj = JObject.Parse(content);
-                // 必须有 puuid 才算真正登录完成
-                if (string.IsNullOrEmpty(obj["puuid"]?.ToString()))
-                {
-                    Debug.WriteLine("[LCU] current-summoner 无 puuid，视为未就绪");
-                    return null;
-                }
-                return obj;
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                return JObject.Parse(content);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (TaskCanceledException ex)
             {
                 Debug.WriteLine($"[LCU] 请求超时: {ex.Message}");

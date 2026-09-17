@@ -55,6 +55,7 @@ namespace League.Services
         {
             _autoPickService.Stop();
             _cleanupService.Cleanup();
+            _cardDisplayService.ClearSnapshots();
         }
 
         private void HandleLcuDisconnected()
@@ -74,8 +75,11 @@ namespace League.Services
             _uiManager.SetLcuUiState(false, false);
 
             _autoPickService.Stop();
-            // 只清快照，不清空已画好的卡片 UI，重连后可直接补敌方
+
             _cardDisplayService.ClearSnapshots();
+
+            // 通知主窗体重新启动等待连接的轮询
+            _form.StartLcuConnectPolling();
         }
         #endregion
 
@@ -111,14 +115,16 @@ namespace League.Services
                     case "EndOfGame":
                     case "PreEndOfGame":
                     case "WaitingForStats":
-                        _wasInGameBeforeDisconnect = false;
+                        _autoPickService.Stop();
+                        _cardDisplayService.ClearSnapshots();
                         Debug.WriteLine($"[GameEnd Trigger] 检测到结束阶段: {phase}, previous={previousPhase}");
                         await HandleGameEnd(previousPhase);
                         break;
 
                     case "Lobby":
                     case "None":
-                        _wasInGameBeforeDisconnect = false;
+                        _autoPickService.Stop();
+                        _cardDisplayService.ClearSnapshots();
                         if (_cleanupService.ShouldReturnToLobby())
                         {
                             Debug.WriteLine($"[Lobby] 检测到刚结束游戏，开始返回模式 {Globals.CurrGameMod}");
@@ -135,6 +141,8 @@ namespace League.Services
 
         private async Task HandleQueuePhase(string phase)
         {
+            _autoPickService.Stop();
+            _cardDisplayService.ClearSnapshots();
             _uiManager.IsGame = false;
             _cardManager.ClearAllCaches();
             _cardManager.ClearGameState();
@@ -159,44 +167,18 @@ namespace League.Services
 
         private async Task HandleChampSelectStart()
         {
+            _autoPickService.Stop();
             _uiManager.IsGame = true;
             await _cardDisplayService.EnterChampSelectAsync();
             _autoPickService.StartChampSelectMonitoring(_cardDisplayService);
         }
 
-        private async Task HandleGameInProgress(string? previousPhase)
+        private Task HandleGameInProgress()
         {
-            _autoPickService.Stop();
             _uiManager.IsGame = true;
-
-            bool fromNormalFlow =
-                previousPhase == "ChampSelect"
-                || previousPhase == "GameStart"
-                || (_form._cachedMyTeam != null && _form._cachedMyTeam.Count > 0);
-
-            bool needFullReload =
-                _wasInGameBeforeDisconnect
-                && (_form._cachedEnemyTeam == null || _form._cachedEnemyTeam.Count == 0
-                    || _cardManager.CountCardsInRow(0) + _cardManager.CountCardsInRow(1) < 6);
-
-            if (fromNormalFlow && !needFullReload)
-            {
-                Debug.WriteLine("[GameFlowWatcher] InProgress（正常流程）：仅加载敌方卡片");
-                await _cardDisplayService.ShowEnemyTeamCardsAsync();
-            }
-            else
-            {
-                Debug.WriteLine("[GameFlowWatcher] InProgress（中途打开/重连补全）：准备面板并加载双方");
-                await _cardDisplayService.EnterChampSelectAsync();
-                await _cardDisplayService.ShowBothTeamsFromGameSessionAsync();
-            }
-
-            FormUiStateManager.SafeInvoke(_form, () =>
-            {
-                _uiManager.SetLcuUiState(true, true);
-                if (_form.imageTabControl1.TabPages.Count > 1)
-                    _form.imageTabControl1.SelectedIndex = 1;
-            });
+            _autoPickService.Stop();
+            _cardDisplayService.StartGameSessionLoad();
+            return Task.CompletedTask;
         }
 
         private async Task HandleGameEnd(string? previousPhase)

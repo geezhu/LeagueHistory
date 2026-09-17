@@ -10,6 +10,7 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if(args.Contains("--room-player-checks")){RoomPlayerChecks.Run();return;}
         if(args.Contains("--config-checks")){LeagueConfigChecks.Run();return;}
         if(args.Contains("--shutdown-checks")){ShutdownSettingsChecks.Run();return;}
         if(args.Contains("--shutdown-validate")){ShutdownSettingsChecks.ValidateWindows();return;}
@@ -28,6 +29,7 @@ internal static class Program
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
         if(args.Contains("--loading-overlay-checks")){GameBarBridgeChecks.Run();OverlayChampionDetailChecks.Run();OverlayTierChatChecks.Run();LoadingOverlayChecks.Run();return;}
         if(args.Contains("--settings-checks")){SettingsChecks.Render();return;}
+        RoomPlayerChecks.Run();
         TierHotkeyChecks.Run();
         Task.Run(ChatSendDiagnosticsChecks.RunAsync).GetAwaiter().GetResult();
         LiveMatchChecks.Run();
