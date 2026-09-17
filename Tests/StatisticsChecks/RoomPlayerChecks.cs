@@ -83,6 +83,7 @@ internal static class RoomPlayerChecks
         Check(RoomPlayerLoader.Normalize(hidden).Count == 5, "Hidden players with zero IDs remain five distinct slots");
         var selected = RoomPlayerLoader.WithChampionSelections(new JArray(Player(1)),new JArray(Player(1,99),Player(2,25)));
         Check(selected.Count==1 && selected[0].Value<int>("championId")==99, "Selection data enriches known members without inventing team membership");
+        await HiddenRosterChecks(log);
 
         int modeCalls=0; RoomPlayerState[] modeStates=Array.Empty<RoomPlayerState>();
         using var modes=new RoomPlayerLoader((p,t)=>{Interlocked.Increment(ref modeCalls);return Task.FromResult(Info(10));},
@@ -165,6 +166,66 @@ internal static class RoomPlayerChecks
         { await Task.Delay(Timeout.Infinite, token); throw new InvalidOperationException(); }
     }
 
+    private static JObject HiddenRosterFixture() => new()
+    {
+        ["queue"] = new JObject { ["id"] = 2400, ["numPlayersPerTeam"] = 5 },
+        ["teamOne"] = new JArray(Enumerable.Range(1,5).Select(id => Player(id,100+id))),
+        ["teamTwo"] = new JArray(new[] { 6,8,9 }.Select(id => Player(id,100+id))),
+        ["playerChampionSelections"] = new JArray(Enumerable.Range(1,10).Select(id => new JObject { ["puuid"] = "test-player-"+id, ["championId"] = 100+id }))
+    };
+
+    private static PlayerMatchInfo HiddenInfo(int hero) => new()
+    {
+        Player = new PlayerInfo { GameName="隐藏玩家", ChampionId=hero, SoloRank="隐藏", FlexRank="隐藏", IsPublic="隐藏", NameColor=Color.Gray }
+    };
+
+    private static async Task HiddenRosterChecks(RoomLoadDiagnostics log)
+    {
+        var data = HiddenRosterFixture();
+        var teams = RoomPlayerLoader.ResolveGameTeams(data);
+        Check(teams.One.Count==5 && teams.Two.Count==5 && ((JArray)data["teamTwo"]!).Count==3,
+            "Five known allies plus ten selections restore two missing opponents without mutating LCU input");
+        var added = teams.Two.Where(p=>p.Value<bool?>("__roomSelectionOnly")==true).ToArray();
+        Check(added.Select(p=>p.Value<int>("championId")).SequenceEqual(new[]{107,110})
+            && added.All(p=>p.Value<long>("summonerId")==0 && p.Value<string>("nameVisibilityType")=="HIDDEN"),
+            "Missing profiles retain selected heroes but cannot request account histories");
+
+        var reverse = HiddenRosterFixture();
+        reverse["teamOne"] = data["teamTwo"]!.DeepClone(); reverse["teamTwo"] = data["teamOne"]!.DeepClone();
+        Check(RoomPlayerLoader.ResolveGameTeams(reverse).One.Count==5,"Completion works for either team color");
+        var partial = HiddenRosterFixture(); ((JArray)partial["teamOne"]!).RemoveAt(4);
+        Check(RoomPlayerLoader.ResolveGameTeams(partial).Two.Count==3,"Two incomplete teams must not assign unknown selections by vacant slots");
+        var custom = HiddenRosterFixture(); custom["queue"]!["numPlayersPerTeam"]=2;
+        Check(RoomPlayerLoader.ResolveGameTeams(custom).Two.Count==3,"Non-five-player modes cannot use the complement rule");
+        var missing = HiddenRosterFixture(); ((JArray)missing["playerChampionSelections"]!).RemoveAt(9);
+        Check(RoomPlayerLoader.ResolveGameTeams(missing).Two.Count==3,"Incomplete selections cannot prove team membership");
+        var duplicates = HiddenRosterFixture(); duplicates["playerChampionSelections"]![9]!["puuid"]="test-player-1";
+        Check(RoomPlayerLoader.ResolveGameTeams(duplicates).Two.Count==3,"Duplicate selections must not be counted as ten players");
+        var conflict = HiddenRosterFixture(); conflict["teamTwo"]![0]!["puuid"]="test-player-1";
+        Check(RoomPlayerLoader.ResolveGameTeams(conflict).Two.Count==3,"Conflicting team identities block completion");
+        var stale = HiddenRosterFixture(); stale["teamOne"]![0]!["puuid"]="old-player";
+        Check(RoomPlayerLoader.ResolveGameTeams(stale).Two.Count==3,"Selection identities must agree with every known member");
+        var zeros = new JArray(Enumerable.Range(0,5).Select(i=>new JObject { ["summonerId"]=0, ["puuid"]="00000000-0000-0000-0000-000000000000", ["cellId"]=i }));
+        Check(RoomPlayerLoader.Normalize(zeros).Count==5,"Zero UUID is a hidden placeholder, not a shared public identity");
+
+        RoomPlayerState[] states=[]; int calls=0;
+        using var loader=new RoomPlayerLoader((p,t)=>
+        {
+            Interlocked.Increment(ref calls);
+            return Task.FromResult(p.Value<string>("nameVisibilityType")=="HIDDEN" ? HiddenInfo(p.Value<int>("championId")) : Info(p.Value<int>("summonerId")));
+        },a=>{a();return Task.CompletedTask;},s=>Volatile.Write(ref states,s.ToArray()),log);
+        long generation=loader.Reset();
+        await loader.UpdateTeamAsync(teams.Two,false,generation);
+        await Eventually(()=>states.Length==5 && states.All(s=>s.Info!=null),"Supplemented opponents become real hidden-player cards");
+        Check(states.Count(s=>s.Info?.Player.GameName=="隐藏玩家")==2 && states.All(s=>!s.CanRetry),"Hidden profiles are terminal states, not failures");
+        await loader.UpdateTeamAsync(RoomPlayerLoader.ResolveGameTeams(data).Two,false,generation);
+        Check(calls==5,"Repeated incomplete snapshots reuse hidden cards without history reloads");
+        data["teamTwo"] = new JArray(Enumerable.Range(6,5).Select(id=>Player(id,100+id)));
+        await loader.UpdateTeamAsync(RoomPlayerLoader.ResolveGameTeams(data).Two,false,generation);
+        await Eventually(()=>states.Length==5 && states.All(s=>s.Info?.Player.SummonerId>0),"Later explicit identities replace hidden profiles in place");
+        Check(calls==7 && states.Select(s=>s.Key).Distinct().Count()==5,"Only the two newly disclosed profiles reload, without duplicate cards");
+    }
+
     private static void RenderChecks()
     {
         using var form = new QuietForm { ClientSize = new Size(1400,800), Location = new Point(-16000,-16000), StartPosition = FormStartPosition.Manual, ShowInTaskbar = false };
@@ -198,6 +259,22 @@ internal static class RoomPlayerChecks
         using (var bitmap = new Bitmap(form.Width,form.Height)) { form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size)); bitmap.Save(image); }
         ui.Render(states.Skip(1).ToArray());
         Check(table.Controls.Count==9 && original.IsDisposed, "Departed player's complete card is disposed");
+        var hiddenTeams=RoomPlayerLoader.ResolveGameTeams(HiddenRosterFixture());
+        var hiddenStates=hiddenTeams.One.Select((p,i)=>new RoomPlayerState(2,"ally/"+RoomPlayerLoader.Identity(p,i),true,i,(JObject)p,Info(p.Value<int>("summonerId")),"",false,10))
+            .Concat(hiddenTeams.Two.Select((p,i)=>new RoomPlayerState(2,"enemy/"+RoomPlayerLoader.Identity(p,i),false,i,(JObject)p,
+                p.Value<bool?>("__roomSelectionOnly")==true?HiddenInfo(p.Value<int>("championId")):Info(p.Value<int>("summonerId")),"",false,10))).ToArray();
+        ui.Render(hiddenStates); Application.DoEvents();
+        Check(table.Controls.Count==10,"Incomplete LCU team still renders ten occupied slots when membership is proven");
+        foreach(int col in new[]{3,4})
+        {
+            var hiddenCard=Card(col,1);
+            hiddenCard.BindChampionInfo(_=>Task.FromResult(new PlayerChampionTier("T2","胜 52.0%","test",2400,"none")),(_,_)=>{});
+            Check(!hiddenCard.IsLoading && hiddenCard.lblPlayerName.Text=="隐藏玩家" && hiddenCard.CurrentChampionId>0
+                && hiddenCard.ListViewControl.Items.Count==0 && Descendants(hiddenCard).OfType<Label>().Any(l=>l.Text.Contains("客户端未提供玩家资料")),
+                "Hidden cards keep hero and tier while explicitly marking unavailable player history");
+            Check(Descendants(hiddenCard).OfType<Label>().Any(l=>l.Text=="T2 · 胜 52.0%"),"Hidden identities must not suppress champion tiers");
+        }
+        using(var bitmap=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));bitmap.Save(Path.Combine(Path.GetDirectoryName(image)!,"hidden-cards.png"));}
         ui.Render(Array.Empty<RoomPlayerState>()); Check(table.Controls.Count==0,"New session clears every card");
         form.Close();
     }
