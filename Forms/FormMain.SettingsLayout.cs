@@ -15,7 +15,7 @@ public partial class FormMain
             TextRenderer.DrawText(e.Graphics,tabControl1.TabPages[e.Index].Text,tabControl1.Font,e.Bounds,selected?Color.FromArgb(0,143,153):Color.FromArgb(95,113,130),TextFormatFlags.VerticalCenter|TextFormatFlags.HorizontalCenter);
             if(selected){using var line=new SolidBrush(Color.FromArgb(0,153,163));e.Graphics.FillRectangle(line,e.Bounds.X+18,e.Bounds.Bottom-3,e.Bounds.Width-36,3);}
         };
-        var general=SettingsPage(tabPage4,"功能辅助","配置对局流程、英雄预选和客户端维护。开关修改后自动保存。");
+        var general=SettingsPage(tabPage4,"功能辅助","配置对局流程、英雄预选和客户端维护。多数选项自动保存，定时关机计划单独管理。");
         chkAutoAccept.Text="自动接受对局";
         var historyCount=new ComboBox {Name="CardMatchHistoryCount",DropDownStyle=ComboBoxStyle.DropDownList,Width=180};
         historyCount.Items.AddRange(new object[]{10,20,30,50});
@@ -41,6 +41,7 @@ public partial class FormMain
         checkBoxFilterMode.Text="按当前模式查询近期战绩，其他模式查询全模式战绩。";
         SettingsCard(general,"选人战绩",checkBoxFilterMode,new Label {Text="每位玩家查询场数"},historyCount);
         SettingsCard(general,"对局自动化",chkAutoAccept,acceptDelay,chkSkipHonor,chkSkipEndOfGameStats);
+        ConfigureShutdownSettings(general);
         var assistant=new CheckBox {Text="选人时自动显示侧边助手",Checked=_appConfig?.EnableChampionSelectAssistant??true};
         assistant.CheckedChanged+=(_,_)=>{if(_appConfig!=null){_appConfig.EnableChampionSelectAssistant=assistant.Checked;SaveAppConfig();}};
         SettingsCard(general,"选人助手",assistant,new Label {Text="默认贴靠客户端左侧显示英雄推荐，空间不足时自动调整；可固定位置或收起，离开选人后自动隐藏。符文仅在点击“应用符文”时修改。"});
