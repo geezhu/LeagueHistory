@@ -52,20 +52,21 @@ namespace League.Clients
         /// <summary>
         /// 获取英雄选择会话信息
         /// </summary>
-        public async Task<JObject> GetChampSelectSessionAsync()
+        public async Task<JObject> GetChampSelectSessionAsync(CancellationToken cancellationToken = default)
         {
             try
             {
-                var response = await _client.GetAsync("/lol-champ-select/v1/session");
+                using var response = await _client.GetAsync("/lol-champ-select/v1/session", cancellationToken);
 
                 if (!response.IsSuccessStatusCode)
                 {
                     return null;
                 }
 
-                var content = await response.Content.ReadAsStringAsync();
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
                 return JObject.Parse(content);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (TaskCanceledException ex)
             {
                 Debug.WriteLine($"[LCU] 请求超时: {ex.Message}");
@@ -81,20 +82,21 @@ namespace League.Clients
         /// <summary>
         /// 获取完整游戏会话信息
         /// </summary>
-        public async Task<JObject> GetGameSessionAsync()
+        public async Task<JObject> GetGameSessionAsync(CancellationToken cancellationToken = default)
         {
             try
             {
-                var response = await _client.GetAsync("/lol-gameflow/v1/session");
+                using var response = await _client.GetAsync("/lol-gameflow/v1/session", cancellationToken);
 
                 if (!response.IsSuccessStatusCode)
                 {
                     return null;
                 }
 
-                var content = await response.Content.ReadAsStringAsync();
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
                 return JObject.Parse(content);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (TaskCanceledException ex)
             {
                 Debug.WriteLine($"[LCU] 请求超时: {ex.Message}");

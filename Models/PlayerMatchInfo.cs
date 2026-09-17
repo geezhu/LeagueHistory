@@ -2,6 +2,13 @@
 {
     public class PlayerMatchInfo
     {
+        public PlayerMatchInfo CopyForChampion(int championId)
+        {
+            var copy = (PlayerMatchInfo)MemberwiseClone();
+            copy.Player = Player.Copy();
+            copy.Player.ChampionId = championId;
+            return copy;
+        }
         public PlayerInfo Player { get; set; }
         public List<ListViewItem> MatchItems { get; set; } = new List<ListViewItem>();  
         public ImageList HeroIcons { get; set; } = new ImageList { ImageSize = new Size(20, 20) };

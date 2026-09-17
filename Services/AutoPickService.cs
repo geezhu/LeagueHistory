@@ -46,7 +46,10 @@ namespace League.Services
                         var currentPhase = await Globals.lcuClient.GetGameflowPhase();
                         if (currentPhase != "ChampSelect") break;
 
-                        // 1) 先预选（不依赖战绩）
+                        // 我方队伍卡片显示
+                        await _cardDisplayService.ShowMyTeamCards(token);
+
+                        // 自动预选抢英雄
                         await TryAutoPreliminaryAsync();
 
                         // 2) 皮肤（可选，很快）
@@ -75,7 +78,8 @@ namespace League.Services
 
                         await Task.Delay(delay, token);
                     }
-                    catch (TaskCanceledException) { break; }
+                    catch (OperationCanceledException) when (token.IsCancellationRequested) { break; }
+                    catch (OperationCanceledException) { RoomLoadDiagnostics.Shared.Report(0, "selection-timeout"); }
                     catch (Exception ex)
                     {
                         Debug.WriteLine($"[AutoPickService] 异常: {ex.Message}");

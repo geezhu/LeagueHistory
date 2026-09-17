@@ -8,6 +8,12 @@ public partial class PlayerCardControl
     private readonly Label _recentWinRate = new() { Text = "胜率  —", AutoEllipsis = true };
     private ToolTip? _statisticsTips;
 
+    public void ClearRecentStatistics()
+    {
+        _recentKda.Text = "KDA  —"; _recentWinRate.Text = "胜率  —";
+        _statisticsTips?.SetToolTip(_recentKda, ""); _statisticsTips?.SetToolTip(_recentWinRate, "");
+    }
+
     public void SetRecentStatistics(PlayerMatchInfo info)
     {
         var statistics = RoomRecentStatistics.From(info);

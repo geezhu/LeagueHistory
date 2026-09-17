@@ -18,14 +18,15 @@ namespace League.Clients
         /// <summary>
         /// 获取排位统计数据
         /// </summary>
-        public async Task<JObject> GetCurrentRankedStatsAsync(string puuid)
+        public async Task<JObject> GetCurrentRankedStatsAsync(string puuid, CancellationToken cancellationToken = default)
         {
             try
             {
-                var response = await _client.GetAsync($"/lol-ranked/v1/ranked-stats/{puuid}");
-                var content = await response.Content.ReadAsStringAsync();
+                using var response = await _client.GetAsync($"/lol-ranked/v1/ranked-stats/{puuid}", cancellationToken);
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
                 return JObject.Parse(content);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (TaskCanceledException ex)
             {
                 Debug.WriteLine($"[LCU] 请求超时: {ex.Message}");
