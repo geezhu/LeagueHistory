@@ -10,6 +10,8 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if(args.Contains("--mastery-live-diagnostics")){Task.Run(MasteryLiveDiagnostics.Run).GetAwaiter().GetResult();return;}
+        if(args.Contains("--roster-identity-checks")){Task.Run(LoadingRosterIdentityChecks.Run).GetAwaiter().GetResult();return;}
         if(args.Contains("--room-player-checks")){RoomPlayerChecks.Run();return;}
         if(args.Contains("--config-checks")){LeagueConfigChecks.Run();return;}
         if(args.Contains("--shutdown-checks")){ShutdownSettingsChecks.Run();return;}
@@ -33,6 +35,7 @@ internal static class Program
             using var context=new WindowsFormsSynchronizationContext();
             SynchronizationContext.SetSynchronizationContext(context);
             Task.Run(ChampionMasteryChecks.RunAsync).GetAwaiter().GetResult();
+            Task.Run(LoadingRosterIdentityChecks.Run).GetAwaiter().GetResult();
             ChampionMasteryChecks.Render();SynchronizationContext.SetSynchronizationContext(context);
             GameBarBridgeChecks.Run();MayhemAssistantChecks.Run();SynchronizationContext.SetSynchronizationContext(context);
             RosterChecks.Run();SynchronizationContext.SetSynchronizationContext(context);SettingsChecks.Render();
