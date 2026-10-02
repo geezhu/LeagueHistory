@@ -4,6 +4,7 @@
     ScrollViewer detailScroll;
     TextBlock detailTitle = MakeText(L"英雄详情", 22, 0xe9d8a6);
     TextBlock detailStats = MakeText(L"", 13, 0x65d6d6);
+    TextBlock detailMastery = MakeText(L"", 12, 0xdbc47f);
     TextBlock detailSource = MakeText(L"", 12, 0xa4bcc7);
     Image detailArtwork;
     std::array<Button, 10> heroButtons;
@@ -49,10 +50,11 @@
         }
         auto retry=DetailButton(L"重试"); retry.Margin({6,0,0,0}); retry.Click([this](auto&&,auto&&){ if(selectedCard>=0)OpenDetails(selectedCard); });
         navigation.Children().Append(retry); detailRoot.Children().Append(navigation);
-        Grid banner; banner.Height(108); banner.Background(MakeBrush(0x102f3c));
+        Grid banner; banner.Height(128); banner.Background(MakeBrush(0x102f3c));
         detailArtwork.Stretch(Stretch::UniformToFill); detailArtwork.Opacity(.36); banner.Children().Append(detailArtwork);
         StackPanel summary; summary.Margin({14,8,14,8});
         summary.Children().Append(detailTitle); detailStats.Margin({0,3,0,3}); summary.Children().Append(detailStats);
+        summary.Children().Append(detailMastery);
         detailSource.TextWrapping(TextWrapping::Wrap); summary.Children().Append(detailSource); banner.Children().Append(summary);
         Grid::SetRow(banner,1); detailRoot.Children().Append(banner);
         detailTabs.Orientation(Orientation::Horizontal); detailTabs.Margin({0,8,0,8});
@@ -79,6 +81,8 @@
         if(selectedCard<0)return;
         detailTitle.Text(cards[selectedCard].champion.Text()+L"  "+cards[selectedCard].tier.Text());
         detailStats.Text(cards[selectedCard].stats.Text());
+        detailMastery.Text(cards[selectedCard].player.Text()+L" · "+cards[selectedCard].mastery.Text());
+        ToolTipService::SetToolTip(detailMastery,box_value(cards[selectedCard].masteryDetails));
         ToolTipService::SetToolTip(detailStats,box_value(cards[selectedCard].details));
         bool mayhem=detailQueue==2400 || detailQueue==3270;
         tabButtons[2].Visibility(mayhem?Visibility::Collapsed:Visibility::Visible);

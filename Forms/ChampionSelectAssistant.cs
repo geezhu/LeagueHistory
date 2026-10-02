@@ -137,6 +137,8 @@ internal sealed partial class ChampionSelectAssistant : Form
             int queue=(int?)flow["gameData"]?["queue"]?["id"]??0;
             _queue=queue;UpdateRoster(session,queue);
             var own=(session["myTeam"] as JArray)?.OfType<JObject>().FirstOrDefault(p=>(int?)p["cellId"]==(int?)session["localPlayerCellId"]);
+            _masteryPuuid=(string?)own?["puuid"]??"";
+            if(string.IsNullOrWhiteSpace(_masteryPuuid) || _masteryPuuid==Guid.Empty.ToString())_masteryPuuid=_owner.GetCurrentPuuid()??"";
             int hero=(int?)own?["championId"]??0;
             if(hero<=0)hero=(session["actions"] as JArray??new()).OfType<JArray>().SelectMany(a=>a.OfType<JObject>())
                 .Where(a=>(int?)a["actorCellId"]==(int?)session["localPlayerCellId"] && (string?)a["type"]=="pick")
@@ -147,13 +149,14 @@ internal sealed partial class ChampionSelectAssistant : Form
                 _status.Text="等待选择英雄…";PositionWindow();return;
             }
             string? lane=((string?)own?["assignedPosition"])?.ToLowerInvariant() switch {"middle"=>"mid","bottom"=>"adc","utility"=>"support","top"=>"top","jungle"=>"jungle",_=>null};
-            string key=$"{hero}:{queue}:{lane}";
+            string key=$"{_masteryPuuid}:{hero}:{queue}:{lane}";
             if(key!=_key)
             {
                 bool differentHero=hero!=_hero;_hero=hero;_queue=queue;_position=lane;_key=key;
                 if(differentHero){_syncing=true;_lane.SelectedIndex=0;_syncing=false;}
                 _ = LoadHeroAsync();
             }
+            _ = RefreshMastery();
             PositionWindow();
         }
         catch(Exception ex)
@@ -166,6 +169,8 @@ internal sealed partial class ChampionSelectAssistant : Form
     private void Reset(){_selecting=false;_key="";_hero=0;_load?.Cancel();_runes=null;_apply.Enabled=false;ClearRoster();if(Visible)Hide();_windowLayer.Detach();}
     private void ClearBody()
     {
+        _masteryLabel=null;
+        _masteryRow=null;_sendMastery=null;_mastery=null;
         foreach(Control control in _body.Controls.Cast<Control>().ToArray())control.Dispose();
     }
     private void Line(string text,bool heading=false)=>_body.Controls.Add(new Label{Text=text,AutoSize=true,MaximumSize=new Size(282,0),Margin=new Padding(0,2,0,2),ForeColor=heading?Color.FromArgb(208,185,130):Color.FromArgb(195,213,219)});
@@ -180,6 +185,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         try
         {
             _ = LoadSkillsAsync(hero,token);
+            AddMasterySummary();
             if(mode=="mayhem")
             {
                 var page=await _am.GetAsync(0,false,token);token.ThrowIfCancellationRequested();
@@ -199,8 +205,8 @@ internal sealed partial class ChampionSelectAssistant : Form
                 _position=query.Position;_runes=build.Runes.FirstOrDefault();
                 string laneName=query.Position switch {"top"=>"上路","jungle"=>"打野","mid"=>"中路","adc"=>"下路","support"=>"辅助",_=>""};
                 var tier=(int?)(build.Stats["tier_data"]?["tier"]??build.Stats["tier"]);
-                AddTierSummary(tier.HasValue?"T"+tier:"—",$"胜率 {((double?)build.Stats["win_rate"]??OpggBuild.Ratio(build.Stats["win"],build.Stats["play"])):P2} · {laneName}");
-                if(mode=="aram")AddBalanceHint((FlowLayoutPanel)_body.Controls[^1],hero,token);
+                var summary=AddTierSummary(tier.HasValue?"T"+tier:"—",$"胜率 {((double?)build.Stats["win_rate"]??OpggBuild.Ratio(build.Stats["win"],build.Stats["play"])):P2} · {laneName}");
+                if(mode=="aram")AddBalanceHint(summary,hero,token);
                 if(_runes!=null)
                 {
                     Line("推荐符文",true);

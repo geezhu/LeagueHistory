@@ -8,11 +8,11 @@ internal sealed partial class ChampionSelectAssistant
     {
         var champion=page.Index.Champions.FirstOrDefault(c=>c.Id==hero)??throw new InvalidDataException("该英雄暂无海克斯推荐。");
         _apply.Text="应用符文";_apply.Enabled=!_applying;
-        AddTierSummary(champion.Tier,$"调整后胜率 {champion.WinRate:P1}");
-        _tips.SetToolTip(_body.Controls[^1],$"原始胜率 {champion.RawWinRate:P1}\n样本选取率 {page.Index.PickRate(champion):P1}\n来源样本 {champion.Games:N0} 场");
+        var summary=AddTierSummary(champion.Tier,$"调整后胜率 {champion.WinRate:P1}");
+        _tips.SetToolTip(summary,$"原始胜率 {champion.RawWinRate:P1}\n样本选取率 {page.Index.PickRate(champion):P1}\n来源样本 {champion.Games:N0} 场");
         var host=new FlowLayoutPanel{AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,FlowDirection=FlowDirection.TopDown,WrapContents=false,MaximumSize=new Size(282,0),Margin=Padding.Empty};_body.Controls.Add(host);
         Button Link(string text,int width)=>new(){Text=text,Width=width,Height=21,FlatStyle=FlatStyle.Flat,BackColor=Color.FromArgb(16,45,57),ForeColor=Color.FromArgb(208,185,130),Margin=new Padding(0,1,0,1)};
-        Label Heading(string text)=>new(){Text=text+"  ›",Size=new Size(276,20),TextAlign=ContentAlignment.MiddleLeft,ForeColor=Color.FromArgb(208,185,130),Margin=new Padding(0,1,0,1),Cursor=Cursors.Hand};
+        Label Heading(string text)=>new(){Text=text+"  ›",Size=new Size(276,18),TextAlign=ContentAlignment.MiddleLeft,ForeColor=Color.FromArgb(208,185,130),Margin=Padding.Empty,Cursor=Cursors.Hand};
         void Browse(int tab,int rarity=0)
         {
             if(token.IsCancellationRequested)return;

@@ -85,7 +85,7 @@ internal sealed class RecentActivityView : Control
             if (_sample == 0) { _status = "暂无可统计的近期对局。"; Invalidate(); return; }
             _status = $"最近 {_sample} 场对局" + (partial ? " · 部分记录暂不可用" : ""); Invalidate();
             var catalogTask = service.GetAsync("/lol-game-data/assets/v1/champion-summary.json", request.Token);
-            var masteryTask = service.GetAsync($"/lol-champion-mastery/v1/{Uri.EscapeDataString(puuid)}/champion-mastery", request.Token);
+            var masteryTask = ChampionMasteryService.Shared.GetAsync(puuid, request.Token);
             await Task.WhenAll(catalogTask, masteryTask);
             if (IsDisposed || request.IsCancellationRequested) return;
             _weights = CountRoles(games, catalogTask.Result.Data as JArray ?? new JArray(), out _classified);

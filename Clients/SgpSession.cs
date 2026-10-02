@@ -18,6 +18,10 @@ namespace League.Clients
         private string _puuid;
         private string _summonerId;
         private string _sgpUrl;
+
+        // Public service address only; used to separate local caches across platforms.
+        public string DataScope => _sgpUrl ?? "";
+
         private string _leagueSessionToken;
 
         // 全局复用一个 SGP HttpClient（线程安全）

@@ -36,6 +36,8 @@ internal static class MayhemAssistantChecks
         }
         foreach(Control child in body.Controls.Cast<Control>().ToArray())child.Dispose();
         body.Controls.Add(new Panel{Size=new Size(282,84),Margin=new Padding(0,0,0,4)});
+        type.GetField("_hero",flags)!.SetValue(assistant,103);
+        type.GetMethod("AddMasterySummary",flags)!.Invoke(assistant,null);
         type.GetMethod("AddMayhemRecommendations",flags)!.Invoke(assistant,new object[]{new AramMetaPage(index,detail,true,DateTime.UtcNow),103,CancellationToken.None});
         Application.DoEvents();
         bool ContainsConfigure(Control c)=>c is Button b && b.Text=="配置出装" || c.Controls.Cast<Control>().Any(ContainsConfigure);

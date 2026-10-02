@@ -48,7 +48,7 @@ internal sealed class ProfileBackgroundPanel : Panel
             int skinId = SelectSkin(profile.Data, null);
             if (skinId == 0)
             {
-                var mastery = await service.GetAsync($"/lol-champion-mastery/v1/{Uri.EscapeDataString(puuid)}/champion-mastery", request.Token);
+                var mastery = await ChampionMasteryService.Shared.GetAsync(puuid, request.Token);
                 if (IsDisposed || request.IsCancellationRequested) return;
                 skinId = SelectSkin(profile.Data, mastery.Data);
             }

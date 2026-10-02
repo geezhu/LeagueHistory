@@ -4,6 +4,14 @@ internal static class SettingsChecks
 {
     public static void Render()
     {
+        var previous=SynchronizationContext.Current;
+        using var context=new WindowsFormsSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(context);
+        try{RenderCore();}
+        finally{SynchronizationContext.SetSynchronizationContext(previous);}
+    }
+    private static void RenderCore()
+    {
         using var owner=new League.FormMain();
         var flags=BindingFlags.NonPublic|BindingFlags.Instance;
         var type=owner.GetType();
@@ -15,6 +23,7 @@ internal static class SettingsChecks
         if(Field("rbModeMatch").Parent!=Field("rbModeCustom").Parent)throw new Exception("Send modes must remain mutually exclusive");
         var tabs=(TabControl)Field("tabControl1");
         IEnumerable<Control> All(Control root)=>root.Controls.Cast<Control>().SelectMany(c=>new[]{c}.Concat(All(c)));
+        if(All(tabs).OfType<NumericUpDown>().Single(c=>c.Name=="ChampionMasteryCacheMinutes").Value<1)throw new Exception("Mastery cache lifetime is configurable and initialized");
         var count=All(tabs).OfType<ComboBox>().Single(c=>c.Name=="CardMatchHistoryCount");
         foreach(var name in new[]{"ShutdownPlanSummary","ShutdownNextRun","CreateShutdownPlan","DeleteShutdownPlan","ShutdownLog"})
             if(!All(tabs).Any(c=>c.Name==name))throw new Exception("Missing daily shutdown management control: "+name);
@@ -41,6 +50,9 @@ internal static class SettingsChecks
         tabs.SelectedIndex=1;Application.DoEvents();Save("settings-messages");
         tabs.SelectedIndex=2;Application.DoEvents();Save("settings-launcher");
         preview.ClientSize=new Size(650,720);tabs.SelectedIndex=3;Application.DoEvents();Save("settings-cache-narrow");
+        // The task-scheduler query is asynchronous. Keep its UI context alive until the initial read finishes.
+        var deadline=DateTime.UtcNow.AddSeconds(25);
+        while(shutdown.Text=="正在读取每日关机计划…" && DateTime.UtcNow<deadline){Application.DoEvents();Thread.Sleep(5);}
         void Save(string name)
         {
             using var bitmap=new Bitmap(preview.Width,preview.Height);preview.DrawToBitmap(bitmap,preview.ClientRectangle);

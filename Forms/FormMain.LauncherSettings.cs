@@ -23,6 +23,12 @@ public partial class FormMain
         layout.Controls.Add(analysisMinutes);
         layout.Controls.Add(new Label{Text="单位：分钟，默认 1440（1 天）。按英雄保存到磁盘；过期时检查更新，失败时保留旧数据。",AutoSize=true,Margin=new Padding(0,10,0,0)});
         analysisMinutes.ValueChanged+=(_,_)=>{if(_appConfig!=null){_appConfig.ChampionAnalysisCacheMinutes=(int)analysisMinutes.Value;SaveAppConfig();}};
+        layout.Controls.Add(new Label{Text="玩家英雄成就缓存有效期 · 英雄联盟客户端",AutoSize=true,Margin=new Padding(0,18,0,10)});
+        var masteryMinutes=new NumericUpDown{Name="ChampionMasteryCacheMinutes",Minimum=1,Maximum=10080,Increment=10,Width=150,Value=Math.Clamp(_appConfig?.ChampionMasteryCacheMinutes??30,1,10080)};
+        layout.Controls.Add(masteryMinutes);
+        Clients.ChampionMasteryService.Shared.CacheLifetime=TimeSpan.FromMinutes((int)masteryMinutes.Value);
+        layout.Controls.Add(new Label{Text="单位：分钟，默认 30。助手、个人资料和对局速览共用本地缓存。\n过期后后台更新，失败时保留旧数据；自己的对局结束后自动检查更新。",AutoSize=true,Margin=new Padding(0,10,0,0)});
+        masteryMinutes.ValueChanged+=(_,_)=>{if(_appConfig!=null){_appConfig.ChampionMasteryCacheMinutes=(int)masteryMinutes.Value;Clients.ChampionMasteryService.Shared.CacheLifetime=TimeSpan.FromMinutes((int)masteryMinutes.Value);SaveAppConfig();}};
         page.Controls.Add(layout);tabControl1.TabPages.Add(page);
     }
     private void ConfigureLauncherSettings()

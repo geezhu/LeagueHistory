@@ -39,7 +39,8 @@ internal sealed partial class LoadingOverlayManager
             if(_phase!="InProgress"){state="phase";message="进入游戏后才能发送；加载界面只提供查看。";return;}
             if(!GameInputService.HasInputPermission()){state="permission";message="未发送：请以管理员身份启动 League.exe。";return;}
             if(!Current())return;
-            var messages=OverlayTierChatMessage.Build(roster!,request,_ranks,Champion);
+            var messages=request.Kind=="mastery" ? OverlayMasteryChatMessage.Build(roster!,request,_masteries,Champion)
+                : OverlayTierChatMessage.Build(roster!,request,_ranks,Champion);
             Report("waiting","请在 20 秒内按 Win＋G 返回游戏，保持聊天输入框关闭；返回后发送到游戏聊天。");
             var gate=new OverlayChatReady(request);
             var readiness=OverlayChatReadiness.Waiting;

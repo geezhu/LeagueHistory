@@ -23,7 +23,7 @@ internal sealed partial class ChampionSelectAssistant
         finally{_applying=false;if(!IsDisposed)_apply.Enabled=_selecting && (SelectedMode=="mayhem" || _runes!=null);}
     }
 
-    private async Task<bool> AnnounceRunesAsync(HttpClient client,string message,CancellationToken token)
+    private async Task<bool> AnnounceRunesAsync(HttpClient client,string message,CancellationToken token,Func<bool>? current=null,bool deduplicate=true)
     {
         var phase=(await client.GetStringAsync("/lol-gameflow/v1/gameflow-phase",token)).Trim('"');
         if(phase!="ChampSelect")return false;
@@ -33,12 +33,14 @@ internal sealed partial class ChampionSelectAssistant
             string.Equals((string?)r["type"],"champSelect",StringComparison.OrdinalIgnoreCase));
         var id=(string?)room?["id"];
         if(string.IsNullOrWhiteSpace(id))return false;
+        token.ThrowIfCancellationRequested();
+        if(current!=null && !current())return false;
         string key=id+"\n"+message;
-        if(_lastRuneNotice==key)return true;
+        if(deduplicate && _lastRuneNotice==key)return true;
         using var content=new StringContent(new JObject{["body"]=message}.ToString(),Encoding.UTF8,"application/json");
         using var response=await client.PostAsync($"/lol-chat/v1/conversations/{Uri.EscapeDataString(id)}/messages",content,token);
         if(!response.IsSuccessStatusCode)return false;
-        _lastRuneNotice=key;
+        if(deduplicate)_lastRuneNotice=key;
         return true;
     }
 }
