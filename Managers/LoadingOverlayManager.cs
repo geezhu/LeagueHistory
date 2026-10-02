@@ -12,6 +12,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     private readonly FormMain _owner;
     private readonly PlayerChampionTierService _tiers;
     private readonly LiveMatchClient _live=new();
+    private readonly LoadingRosterIdentityService _rosterIdentity=new(()=>FormMain.Globals.lcuClient?.Client);
     private readonly GameBarBridge _gameBar=new();
     private readonly System.Windows.Forms.Timer _poll=new(){Interval=3000},_follow=new(){Interval=300},_paint=new(){Interval=100};
     private readonly CancellationTokenSource _life=new();
@@ -32,6 +33,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     private bool _wanted=>_display.Requested;
     private long _lastPhaseRead,_nextWindowSearch;
     private string _visibilityReason="";
+    private string _identitySummary="";
     private int _generation;
     private IntPtr _gameWindow;
     public LoadingOverlayManager(FormMain owner)
@@ -106,6 +108,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
         CancelDetail();
         _status=LoadingRoster.WaitingStatus(_phase);
         _masteries.Clear();
+        _identitySummary="";
         if(_roster!=null || _match.Length>0){_generation++;_roster=null;_match="";_ranks.Clear();_rankRequests.Clear();_rankRetry.Clear();}
         _gameWindow=IntPtr.Zero;_nextWindowSearch=0;_fullscreen.Reset();
         if(!_display.Preview){_display.Reset();_follow.Stop();_window?.Hide();}
@@ -133,14 +136,16 @@ internal sealed partial class LoadingOverlayManager : IDisposable
                 try{_own=(string?)JObject.Parse(await client.GetStringAsync("/lol-summoner/v1/current-summoner",timeout.Token))["puuid"]??"";}catch{ }
             }
             var roster=LoadingRoster.Parse(flow,_own);
+            int clientPlayers=roster.Players.Length,livePlayers=0;
             if(roster.Players.Length<10 && LoadingRoster.CanDisplay(phase))
             {
                 try
                 {
                     var live=await _live.GetAsync(timeout.Token);
+                    livePlayers=live.Players.Length;
                     if(live.Players.Length>=roster.Players.Length)
                     {
-                        roster=roster.FromLive(live,alias=>FormMain.Globals.resLoading?.Champions.Champions.FirstOrDefault(c=>c.Alias.Equals(alias,StringComparison.OrdinalIgnoreCase))?.Id??0);
+                        roster=await _rosterIdentity.MergeAsync(roster,flow,_own,live,alias=>FormMain.Globals.resLoading?.Champions.Champions.FirstOrDefault(c=>c.Alias.Equals(alias,StringComparison.OrdinalIgnoreCase))?.Id??0,timeout.Token);
                         int normalized=PlayerChampionTier.NormalizeQueue(roster.Queue,live.Mode);
                         roster=roster with {Queue=normalized};
                         if(flow["gameData"] is not JObject)flow["gameData"]=new JObject();
@@ -155,6 +160,8 @@ internal sealed partial class LoadingOverlayManager : IDisposable
             match+="/"+roster.Queue;
             if(_match!=match){CancelDetail();_generation++;_ranks.Clear();_rankRequests.Clear();_rankRetry.Clear();_masteries.Clear();_match=match;}
             _roster=roster;
+            string identitySummary=$"lcu={clientPlayers} live={livePlayers} roster={roster.Players.Length} confirmed={roster.Players.Count(p=>LoadingRosterIdentityService.HasPuuid(p.Puuid))} hidden={roster.Players.Count(p=>p.IdentityHidden)}";
+            if(identitySummary!=_identitySummary){_identitySummary=identitySummary;RoomLoadDiagnostics.Shared.Report(_generation,"overlay-identities",detail:identitySummary);}
             _status=$"{(phase=="ChampSelect"?"准备进入对局":"当前对局")} · 已读取 {roster.Players.Length} 人 · {DateTime.Now:HH:mm:ss} · 点击卡片查看{(UseGameBar?"英雄详情":"缓存战绩")}";
             foreach(var p in roster.Players.Where(p=>p.ChampionId>0)){_=LoadRank(p,_generation,flow);_=LoadIcon(p.ChampionId);_=LoadMastery(p,_generation);}
             SchedulePaint();

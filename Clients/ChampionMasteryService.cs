@@ -40,7 +40,7 @@ public sealed class ChampionMasteryService
     public async Task<ChampionMasteryPage> GetAsync(string puuid, CancellationToken token, bool refresh = false)
     {
         token.ThrowIfCancellationRequested();
-        if (!PublicIdentity(puuid)) return new(null, null, "玩家身份未公开，无法查询英雄成就。");
+        if (!PublicIdentity(puuid)) return new(null, null, "尚未取得玩家身份，等待对局名单匹配；不代表玩家隐藏了成就。");
         string key = Key(puuid); Entry entry; Task disk;
         lock (_gate)
         {

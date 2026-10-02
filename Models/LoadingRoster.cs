@@ -2,7 +2,7 @@ using Newtonsoft.Json.Linq;
 
 namespace League.Models;
 
-public sealed record LoadingPlayer(string Key,string Name,string Puuid,long SummonerId,int ChampionId,int Team,bool Self);
+public sealed record LoadingPlayer(string Key,string Name,string Puuid,long SummonerId,int ChampionId,int Team,bool Self,bool IdentityHidden=false);
 public sealed record LoadingRoster(string GameId,int Queue,string Mode,LoadingPlayer[] Players)
 {
     public static bool CanDisplay(string phase)=>phase is "GameStart" or "InProgress" or "Reconnect";
@@ -22,9 +22,11 @@ public sealed record LoadingRoster(string GameId,int Queue,string Mode,LoadingPl
         foreach(var row in (data[field] as JArray??new()).OfType<JObject>())
         {
             string puuid=(string?)row["puuid"]??"";long id=(long?)row["summonerId"]??0;
+            if(!Clients.LoadingRosterIdentityService.HasPuuid(puuid))puuid="";
             var pick=selections.FirstOrDefault(s=>puuid.Length>0 && (string?)s["puuid"]==puuid || id>0 && (long?)s["summonerId"]==id);
             int hero=(int?)row["championId"]??0;if(hero<=0)hero=(int?)pick?["championId"]??0;
-            string name=(string?)row["gameName"]??(string?)row["summonerName"]??"";
+            if(puuid.Length==0 && Clients.LoadingRosterIdentityService.HasPuuid((string?)pick?["puuid"]??""))puuid=(string)pick!["puuid"]!;
+            string name=(string?)row["gameName"]??"";if(name.Length==0)name=(string?)row["summonerName"]??"";
             string tag=(string?)row["tagLine"]??"";if(tag.Length>0 && name.Length>0)name+="#"+tag;
             players.Add(new(puuid.Length>0?puuid:id>0?id.ToString():$"{team}:{players.Count}",name,puuid,id,hero,team,puuid.Length>0 && puuid==ownPuuid));
         }
@@ -37,7 +39,8 @@ public sealed record LoadingRoster(string GameId,int Queue,string Mode,LoadingPl
             // Keep account identity only for an unambiguous full-name match; never infer it from champion alone.
             var matches=Players.Where(old=>old.Name.Length>0 && old.Name==p.Name).ToArray();
             var known=matches.Length==1?matches[0]:null;
-            return new LoadingPlayer(known?.Key??p.Key,p.Name,known?.Puuid??"",known?.SummonerId??0,championId(p.ChampionAlias),p.Team=="ORDER"?100:p.Team=="CHAOS"?200:0,p.Self);
+            bool hidden=p.Name.Trim()=="#";
+            return new LoadingPlayer(known?.Key??p.Key,hidden?"隐藏玩家":p.Name,hidden?"":known?.Puuid??"",hidden?0:known?.SummonerId??0,championId(p.ChampionAlias),p.Team=="ORDER"?100:p.Team=="CHAOS"?200:0,p.Self,hidden);
         }).ToArray()
     };
     public string TeamLabel(int team)
