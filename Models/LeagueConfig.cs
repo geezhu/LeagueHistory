@@ -11,6 +11,7 @@ namespace League.Models
         public int AramMetaCacheMinutes { get; set; } = 1440;
         public int AramBalanceCacheMinutes { get; set; } = 1440;
         public int ChampionAnalysisCacheMinutes { get; set; } = 1440;
+        public int ChampionMasteryCacheMinutes { get; set; } = 30;
         /// <summary>
         /// 游戏结束后自动退出并返回客户端
         /// </summary>

@@ -7,6 +7,7 @@ namespace League.Controls;
 public sealed class ProfileMasteryView : UserControl
 {
     private readonly PlayerStatisticsService _service;
+    private readonly bool _sharedMastery;
     private readonly Func<int,Task<(Image? image,string name,string description)>> _champion;
     private readonly TableLayoutPanel _cards = new() { Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 1 };
     private readonly Label _heading = new() { Text = "英雄成就", Dock = DockStyle.Fill, Font = new Font("Microsoft YaHei UI",11f,FontStyle.Bold), AutoEllipsis = true };
@@ -31,11 +32,12 @@ public sealed class ProfileMasteryView : UserControl
     public ProfileMasteryView(PlayerStatisticsService? service = null, Func<int,Task<(Image? image,string name,string description)>>? champion = null)
     {
         _service = service ?? new(() => FormMain.Globals.lcuClient.Client);
+        _sharedMastery = service == null;
         _champion = champion ?? FormMain.Globals.resLoading.GetChampionInfoAsync;
         BackColor = Color.White; ForeColor = Color.FromArgb(36,63,98); Height = 100; Padding = new Padding(16);
         var header = new Panel { Dock = DockStyle.Top, Height = 32 };
         header.Controls.Add(_heading);
-        header.Controls.Add(_refresh); _refresh.Click += (_, _) => LoadPlayer(_puuid);
+        header.Controls.Add(_refresh); _refresh.Click += (_, _) => LoadPlayer(_puuid, true);
         header.Controls.Add(_all);
         _all.FlatAppearance.BorderSize = 0;
         _all.Click += (_, _) => AllRequested?.Invoke(_records);
@@ -57,7 +59,7 @@ public sealed class ProfileMasteryView : UserControl
             .GroupBy(p => (int)p["championId"]!).Select(g => g.OrderByDescending(p => (long)p["championPoints"]!).First())
             .OrderByDescending(p => (long)p["championPoints"]!).ThenBy(p => (int)p["championId"]!).ToArray() : Array.Empty<JObject>();
 
-    public async void LoadPlayer(string puuid)
+    public async void LoadPlayer(string puuid, bool refresh = false)
     {
         if (string.IsNullOrWhiteSpace(puuid) || IsDisposed) return;
         _puuid = puuid; _request?.Cancel(); _request?.Dispose(); var request = _request = new CancellationTokenSource();
@@ -67,13 +69,20 @@ public sealed class ProfileMasteryView : UserControl
         _ = LoadProfileAsync(puuid, request.Token);
         try
         {
-            var response = await _service.GetAsync($"/lol-champion-mastery/v1/{Uri.EscapeDataString(puuid)}/champion-mastery",request.Token);
+            StatisticsResponse response;
+            bool stale=false;
+            if(_sharedMastery)
+            {
+                var page=await ChampionMasteryService.Shared.GetAsync(puuid,request.Token,refresh);
+                response=new(page.Data,page.Message);stale=page.Stale;
+            }
+            else response=await _service.GetAsync($"/lol-champion-mastery/v1/{Uri.EscapeDataString(puuid)}/champion-mastery",request.Token);
             if (IsDisposed || request.IsCancellationRequested) return;
             _records = SelectAll(response.Data); _all.Enabled = _records.Length > 0;
             _masteryAvailable = response.Data is JArray; UpdateCountHeading();
             var top = SelectTop(response.Data);
             if (top.Length == 0) { _status.Text = response.Data is JArray ? "暂无英雄成就记录。" : string.IsNullOrEmpty(response.Message) ? "暂时无法获取英雄成就。" : response.Message; return; }
-            _status.Text = ""; _status.Visible = false; Height = 360;
+            _status.Text = stale?"当前显示旧成就缓存，后台检查更新；点击刷新可等待最新结果。":""; _status.Visible = stale; Height = 360;
             int column = 0;
             foreach (var mastery in top)
             {

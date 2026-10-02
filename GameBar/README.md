@@ -46,6 +46,10 @@ Get-AppxPackage -Name LeagueHistory.GameBar | Remove-AppxPackage
 
 ## 数据与生命周期
 
+玩家卡片与英雄详情显示该玩家使用当前英雄的成就等级、点数；悬浮可查看精确点数、最近使用时间（接口提供时）与缓存更新时间。成就属于玩家长期积累，独立于英雄的梯队、胜率和选用率。
+
+助手、个人资料与速览共用客户端成就查询和本地缓存，默认有效期 30 分钟，可在「设置 → 数据缓存 → 玩家英雄成就」修改。缓存位于 `%LOCALAPPDATA%/League/Cache/mastery`，按平台、当前账号及目标玩家分隔，文件名使用散列；仅保存成就字段，不保存令牌。过期时先显示旧值、后台更新；失败退避一分钟，身份隐藏、权限拒绝与无成就记录分别显示。自己的对局结束后失效。Game Bar 只接收展示文本，不直接访问客户端或获取账户标识。
+
 - 只传本机 JSON，位置为组件的 `%LOCALAPPDATA%/Packages/LeagueHistory.GameBar_*/LocalState/snapshot.json`；不传 LCU 令牌、账户标识或接口地址。
 - 详情使用独立 `detail-request.json` / `detail.json`，只传当前会话、卡片位置、英雄编号和请求标识。主程序核对当前十人名单，组件核对回包的会话与请求；旧对局、旧选择和空缺位置不会触发或覆盖详情。返回速览发送取消请求。
 - 聊天使用独立 `chat-request.json` / `chat-status.json`，仅接受我方、敌方或当前卡片的显式请求，不接受任意消息文本。主程序按会话和请求编号去重，核对名单、游戏阶段、超时与管理员权限。组件通过 [GameBarDisplayMode](https://learn.microsoft.com/en-us/gaming/game-bar/api/enum-xgb-displaymode) 报告已退出 Win＋G，主程序还须确认游戏稳定处于前台且修饰键均已松开；对局变化、取消或重新打开 Game Bar 都会停止待发送输入。输入完成不代表服务器已确认收到。
@@ -61,6 +65,8 @@ Get-AppxPackage -Name LeagueHistory.GameBar | Remove-AppxPackage
 - 从开始菜单打开组件时，显示使用同一套渲染代码的桌面预览。头像独立解码，不阻塞其他玩家或连接回执。
 
 ## 验证
+
+熟练度发送：选人助手的成就行可发送自己当前英雄的等级与点数；Game Bar 底部的“发送熟练度”菜单可选择我方、敌方或当前英雄。Game Bar 沿用游戏聊天发送流程，主程序需要管理员权限，点击后须在 20 秒内按 Win＋G 返回游戏并保持聊天框关闭。过期缓存与未公开身份会标注，全部数据不可用时拒绝发送。组件只提交发送类型和当前对局的英雄位置，由主程序生成文本；没有新增快捷键。
 
 ```powershell
 dotnet run --project Tests/StatisticsChecks/StatisticsChecks.csproj -c Release -- --loading-overlay-checks

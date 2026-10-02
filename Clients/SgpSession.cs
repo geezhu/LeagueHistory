@@ -21,6 +21,9 @@ namespace League.Clients
 
         private string _sgpUrl;
 
+        // Public service address only; used to separate local caches across platforms.
+        public string DataScope => _sgpUrl ?? "";
+
         private string _leagueSessionToken;
 
         public async Task<bool> InitSgpAsync(HttpClient lcu)

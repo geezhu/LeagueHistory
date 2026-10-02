@@ -34,8 +34,9 @@ internal static class GameBarBridgeChecks
                 new("self-key","Self","secret-puuid",456,2,200,true)]);
             var ranks=new Dictionary<string,PlayerChampionTier>{["self-key"]=new("T4","胜 48.5%","arammeta · 调整后胜率",2400,"none"){PickRate="7.1%"}};
             var icons=new Dictionary<int,Image>{[2]=icon};
+            var mastery=new Dictionary<string,PlayerChampionMastery>{["self-key"]=new(2,12,186321,null,true),["enemy-key"]=new(1,5,2000,null,true)};
             var bridge=new GameBarBridge(folder);
-            void Publish(bool enabled=true,bool active=true)=>bridge.Publish(roster,ranks,icons,id=>"英雄 "+id,_=>"近期 20 场，12 胜","match-1","当前对局",enabled,active,true);
+            void Publish(bool enabled=true,bool active=true)=>bridge.Publish(roster,ranks,icons,id=>"英雄 "+id,_=>"近期 20 场，12 胜","match-1","当前对局",enabled,active,true,mastery);
             Publish();
             string file=Path.Combine(folder,"snapshot.json");
             Check(SpinWait.SpinUntil(()=>File.Exists(file),5000),"Game Bar snapshot is written asynchronously");
@@ -49,6 +50,7 @@ internal static class GameBarBridgeChecks
             Check((string?)latest["teams"]![0]=="我方" && (string?)latest["players"]![0]!["name"]=="Self · 自己","Own red team is placed first");
             Check(latest["players"]!.Count()==10 && !latest["players"]![1]!.HasValues,"Missing slots stay on the correct team");
             Check((string?)latest["players"]![5]!["name"]=="Enemy","Enemy remains in the other column");
+            Check(((string?)latest["players"]![0]!["mastery"])?.Contains("12级")==true && ((string?)latest["players"]![5]!["mastery"])?.Contains("5级")==true,"Player mastery is independent on both teams");
             Check((string?)latest["players"]![0]!["tier"]=="T4" && ((string)latest["players"]![0]!["stats"]!).Contains("7.1%"),"Tier, win rate and pick rate cross the bridge");
             using var imageBytes=new MemoryStream(Convert.FromBase64String((string)latest["players"]![0]!["icon"]!));
             using var decoded=Image.FromStream(imageBytes);

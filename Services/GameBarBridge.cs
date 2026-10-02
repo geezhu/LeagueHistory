@@ -22,7 +22,7 @@ public sealed partial class GameBarBridge : IDisposable
 
     public void Publish(LoadingRoster? roster,IReadOnlyDictionary<string,PlayerChampionTier> ranks,
         IReadOnlyDictionary<int,Image> icons,Func<int,string> champion,Func<LoadingPlayer,string> details,
-        string session,string status,bool enabled,bool active,bool show)
+        string session,string status,bool enabled,bool active,bool show,IReadOnlyDictionary<string,PlayerChampionMastery>? masteries=null)
     {
         if(_disposed)return;
         string identity=$"{session}|{enabled}|{active}|{show}";
@@ -43,17 +43,20 @@ public sealed partial class GameBarBridge : IDisposable
                     small.Save(buffer,ImageFormat.Png);_images[p.ChampionId]=Convert.ToBase64String(buffer.ToArray());
                 }
                 var rank=ranks.GetValueOrDefault(p.Key);
+                var mastery=masteries?.GetValueOrDefault(p.Key);
+                if(mastery?.ChampionId!=p.ChampionId)mastery=null;
                 rows.Add(new JObject{
                     ["championId"]=p.ChampionId,["champion"]=champion(p.ChampionId),["name"]=p.Name+(p.Self?" · 自己":""),
                     ["tier"]=rank?.Tier??"—",["color"]=AramMetaView.TierColor(rank?.Tier??"—").ToArgb()&0xffffff,
                     ["stats"]=rank==null?"统计读取中…":rank.Rate+" · 选用率 "+rank.PickRate,
+                    ["mastery"]=p.ChampionId>0?mastery?.Text??"成就读取中…":"等待英雄确认",["masteryDetails"]=mastery?.Description??"正在读取该玩家使用此英雄的成就。",
                     ["details"]=champion(p.ChampionId)+" · "+details(p)+"\n"+(rank?.Note??"英雄统计尚未读取。"),
                     ["icon"]=_images.GetValueOrDefault(p.ChampionId)??""});
             }
         }
         _detailScope=new(enabled && active?_instance+":"+session:"",rows.Select(r=>(int?)r["championId"]??0).ToArray());
         _pending.Writer.TryWrite(new JObject{
-            ["detailProtocol"]=1,["chatProtocol"]=1,["chatTeams"]=roster?.Players.Any(p=>p.Self)??false,["queue"]=roster?.Queue??0,
+            ["detailProtocol"]=1,["chatProtocol"]=1,["chatMastery"]=true,["chatTeams"]=roster?.Players.Any(p=>p.Self)??false,["queue"]=roster?.Queue??0,
             ["protocol"]=1,["revision"]=_instance+":"+(++_revision),["command"]=_instance+":"+_command,
             ["session"]=_instance+":"+session,["updatedAt"]=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             ["enabled"]=enabled,["active"]=active,["show"]=show,

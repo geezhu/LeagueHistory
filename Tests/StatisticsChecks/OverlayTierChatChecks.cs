@@ -12,13 +12,16 @@ internal static class OverlayTierChatChecks
         var data=new JObject{["protocol"]=1,["id"]=Guid.NewGuid().ToString(),["session"]="match",
             ["target"]="own",["slot"]=-1,["championId"]=0,["updatedAt"]=now,["dismissed"]=false,["cancelled"]=false};
         var request=OverlayChatRequest.Parse(data,"match",slots,now)??throw new Exception("Explicit current-match command rejected");
+        Check(request.Kind=="tier","Old commands retain tier semantics");
         foreach(var change in new (string Key,JToken Value)[]{("target","all"),("slot",0),("session","old"),("id","bad"),
-            ("protocol",2),("updatedAt",now-30001),("updatedAt",now+1),("dismissed","true"),("championId",99)})
+            ("protocol",2),("updatedAt",now-30001),("updatedAt",now+1),("dismissed","true"),("championId",99),("kind","custom"),("kind",1),("kind",JValue.CreateNull())})
         {
             var bad=(JObject)data.DeepClone();bad[change.Key]=change.Value;
             Check(OverlayChatRequest.Parse(bad,"match",slots,now)==null,"Malformed/stale commands rejected: "+change.Key);
         }
         var single=(JObject)data.DeepClone();single["target"]="single";single["slot"]=5;single["championId"]=103;
+        single["kind"]="mastery";
+        Check(OverlayChatRequest.Parse(single,"match",slots,now)?.Kind=="mastery","Mastery uses the validated current roster command");
         Check(OverlayChatRequest.Parse(single,"match",slots,now)?.ChampionId==103,"Enemy single selection accepted");
         single["slot"]=2;Check(OverlayChatRequest.Parse(single,"match",slots,now)==null,"Empty slot cannot send");
         var seen=new OverlayChatRequests();
@@ -32,6 +35,7 @@ internal static class OverlayTierChatChecks
         Check(gate.Observe(request,now+610,true)==OverlayChatReadiness.Waiting && gate.Observe(ready,now+800,true)==OverlayChatReadiness.Waiting,"Reopening Game Bar resets readiness");
         Check(gate.Observe(ready with{Cancelled=true},now+900,true)==OverlayChatReadiness.Cancelled,"Explicit cancellation suppresses input");
         Check(gate.Observe(other,now+900,true)==OverlayChatReadiness.Cancelled && gate.Observe(ready with{Target="enemy"},now+900,true)==OverlayChatReadiness.Cancelled,"Changed request or scope cannot repurpose a pending send");
+        Check(gate.Observe(ready with{Kind="mastery"},now+900,true)==OverlayChatReadiness.Cancelled,"Changing tier to mastery cancels the pending command");
         Check(gate.Observe(ready,now+20000,true)==OverlayChatReadiness.TimedOut,"A late return to the game never sends stale text");
 
         var roster=new LoadingRoster("game",2400,"KIWI",[
@@ -55,8 +59,33 @@ internal static class OverlayTierChatChecks
         ranks.Clear();bool rejected=false;
         try{_=Own();}catch(InvalidOperationException){rejected=true;}
         Check(rejected,"Unloaded statistics do not send empty placeholder messages");
+        CheckMastery(roster,request,Hero);
         Task.Run(CheckBridge).GetAwaiter().GetResult();
         Console.WriteLine("PASS: Game Bar team/single chat, rates, request validation, replay prevention, cancellation, foreground/dismissal gate and timeout. No game input sent.");
+    }
+    private static void CheckMastery(LoadingRoster roster,OverlayChatRequest request,Func<int,string> hero)
+    {
+        var masteries=new Dictionary<string,PlayerChampionMastery>{
+            ["self"]=new(99,12,186321,null,true),
+            ["ally"]=PlayerChampionMastery.Unavailable(25),
+            ["enemy"]=new(103,123,3000000000,null,true,true)};
+        string Message(OverlayChatRequest command)=>string.Join("\n",OverlayMasteryChatMessage.Build(roster,command,masteries,hero));
+        string own=Message(request with{Kind="mastery"});
+        Check(own.Contains("我方") && own.Contains("12级 / 186,321点") && own.Contains("莫甘娜 身份未公开") && !own.Contains("阿狸") && !own.Contains("secret"),"Mastery follows players and sides, excluding identities and invented zero values");
+        string enemy=Message(request with{Kind="mastery",Target="enemy"});
+        Check(enemy.Contains("123级 / 3,000,000,000点（缓存）") && !enemy.Contains("拉克丝"),"Enemy mastery preserves 64-bit points, uncapped levels and stale marker");
+        var single=request with{Kind="mastery",Target="single",Slot=5,ChampionId=103};
+        Check(Message(single).Contains("阿狸") && !Message(single).Contains("莫甘娜"),"Single mastery sends only the clicked player");
+        void Rejected(Action build,string note){bool rejected=false;try{build();}catch(InvalidOperationException){rejected=true;}Check(rejected,note);}
+        masteries["enemy"]=masteries["enemy"] with{ChampionId=99};
+        Rejected(()=>Message(single),"A previous champion's mastery cannot be sent");
+        masteries["enemy"]=new(103,null,null,null,true);
+        Check(Message(single).Contains("暂无成就记录") && !Message(single).Contains("0点"),"An absent record is not interpreted as zero points");
+        masteries["enemy"]=new(103,0,0,null,true);
+        Check(Message(single).Contains("0级 / 0点"),"Confirmed zero remains sendable");
+        masteries.Clear();Rejected(()=>Message(request),"Unloaded or unavailable mastery does not send placeholder-only messages");
+        var lines=ChampionMasteryChatMessage.Build("海克斯大乱斗","我方",Enumerable.Range(0,5).Select(i=>new ChampionMasteryChatEntry(new string('英',24)+i,new(1,123,3000000000,null,true))));
+        Check(lines.Count>1 && lines.All(l=>l.Length<=180) && lines.All(l=>l.StartsWith("【海克斯大乱斗·我方】")),"Long team messages split with context before the game chat limit");
     }
     private static async Task CheckBridge()
     {
@@ -69,11 +98,11 @@ internal static class OverlayTierChatChecks
             Publish("one");string snapshot=Path.Combine(folder,"snapshot.json");
             Check(SpinWait.SpinUntil(()=>File.Exists(snapshot),5000),"Snapshot written");
             var source=JObject.Parse(await File.ReadAllTextAsync(snapshot));
-            Check((int?)source["chatProtocol"]==1 && (bool?)source["chatTeams"]==true,"Send capability and side identity advertised");
+            Check((int?)source["chatProtocol"]==1 && (bool?)source["chatTeams"]==true && (bool?)source["chatMastery"]==true,"Send capability, mastery extension and side identity advertised");
             var data=new JObject{["protocol"]=1,["id"]=Guid.NewGuid().ToString("N"),["session"]=source["session"],
-                ["target"]="single",["slot"]=0,["championId"]=99,["updatedAt"]=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),["dismissed"]=false,["cancelled"]=false};
+                ["target"]="single",["kind"]="mastery",["slot"]=0,["championId"]=99,["updatedAt"]=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),["dismissed"]=false,["cancelled"]=false};
             string file=Path.Combine(folder,"chat-request.json");await File.WriteAllTextAsync(file,data.ToString());
-            var request=await bridge.ReadChatRequestAsync();Check(request!=null && !request.Dismissed,"Click reaches main process before dismissal");
+            var request=await bridge.ReadChatRequestAsync();Check(request!=null && !request.Dismissed && request.Kind=="mastery","Mastery click reaches main process before dismissal");
             data["dismissed"]=true;await File.WriteAllTextAsync(file,data.ToString());
             var ready=await bridge.ReadChatRequestAsync();Check(ready!.Dismissed && ready.SameCommand(request!),"Closing Game Bar updates the same command without a new send");
             bridge.PublishChatStatus(request!,"permission","请以管理员身份启动 League.exe。",true);

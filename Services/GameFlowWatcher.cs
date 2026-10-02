@@ -100,6 +100,8 @@ namespace League.Services
         /// </summary>
         public async Task OnGameflowPhaseChanged(string phase, string? previousPhase)
         {
+            if((phase is "EndOfGame" or "PreEndOfGame" or "WaitingForStats") && (previousPhase is "GameStart" or "InProgress" or "Reconnect"))
+                Clients.ChampionMasteryService.Shared.Invalidate(_form.GetCurrentPuuid()??"");
             if(phase!="ReadyCheck")_autoAccepter.Reset();
             try
             {

@@ -8,6 +8,8 @@ internal static class LeagueConfigChecks
 
     public static void Run()
     {
+        Check(new LeagueConfig().ChampionMasteryCacheMinutes==30,"Old configurations default to a 30-minute mastery cache");
+        Check(JsonConvert.DeserializeObject<LeagueConfig>("{\"ChampionMasteryCacheMinutes\":120}")!.ChampionMasteryCacheMinutes==120,"Mastery expiry persists with user settings");
         string root = Path.Combine(Path.GetTempPath(), "League-Settings-" + Guid.NewGuid().ToString("N"));
         string shared = Path.Combine(root, "user"), oldExe = Path.Combine(root, "old"), newExe = Path.Combine(root, "new"), cwd = Path.Combine(root, "launch");
         try
