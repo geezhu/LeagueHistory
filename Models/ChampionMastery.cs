@@ -18,7 +18,7 @@ public sealed record PlayerChampionMastery(int ChampionId, int? Level, long? Poi
     bool Available, bool Stale = false, DateTimeOffset? FetchedAt = null, string Message = "")
 {
     public static PlayerChampionMastery Unavailable(int hero) => new(hero, null, null, null, false, Message: "玩家身份未公开，无法查询英雄成就。");
-    public string Text => !Available ? Message.Contains("未公开") ? "成就未公开" : "成就暂不可用"
+    public string Text => !Available ? Message.Contains("未公开") ? "成就未公开" : Message.Contains("身份") ? "成就待确认" : "成就暂不可用"
         : Points == null ? "暂无成就记录"
         : "成就 " + (Level.HasValue ? $"{Level}级 · " : "") + Compact(Points.Value) + (Stale ? " · 缓存" : "");
     public string Description

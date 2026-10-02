@@ -68,6 +68,8 @@ Get-AppxPackage -Name LeagueHistory.GameBar | Remove-AppxPackage
 
 熟练度发送：选人助手的成就行可发送自己当前英雄的等级与点数；Game Bar 底部的“发送熟练度”菜单可选择我方、敌方或当前英雄。Game Bar 沿用游戏聊天发送流程，主程序需要管理员权限，点击后须在 20 秒内按 Win＋G 返回游戏并保持聊天框关闭。过期缓存与未公开身份会标注，全部数据不可用时拒绝发送。组件只提交发送类型和当前对局的英雄位置，由主程序生成文本；没有新增快捷键。
 
+LCU 因隐藏玩家只返回部分名单时，先查询已公开召唤师的完整 Riot ID，再与 Live Client 十人名单合并，保留其 PUUID。隐藏位置不按英雄猜账号；无法匹配的公开身份显示“成就待确认”。身份资料按对局与连接缓存，失败退避一分钟；`room-players.log` 的 `overlay-identities` 行记录名单和已确认 / 隐藏人数，不写账号或名称。
+
 ```powershell
 dotnet run --project Tests/StatisticsChecks/StatisticsChecks.csproj -c Release -- --loading-overlay-checks
 ```

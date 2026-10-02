@@ -15,9 +15,9 @@ internal sealed partial class LoadingOverlayManager
         if(player.Self && (string.IsNullOrWhiteSpace(puuid) || puuid==Guid.Empty.ToString()))puuid=_own;
         try
         {
-            var page=await ChampionMasteryService.Shared.GetAsync(puuid,_life.Token);
+            var page=player.IdentityHidden && !player.Self ? null : await ChampionMasteryService.Shared.GetAsync(puuid,_life.Token);
             if(_disposed || generation!=_generation || _roster?.Players.Any(p=>p.Key==player.Key && p.ChampionId==player.ChampionId)!=true)return;
-            var mastery=page.ForChampion(player.ChampionId);
+            var mastery=page?.ForChampion(player.ChampionId)??PlayerChampionMastery.Unavailable(player.ChampionId);
             if(_masteries.GetValueOrDefault(player.Key)!=mastery){_masteries[player.Key]=mastery;SchedulePaint();}
         }
         catch(OperationCanceledException){}
