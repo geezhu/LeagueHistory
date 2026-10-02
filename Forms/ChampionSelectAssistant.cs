@@ -10,6 +10,7 @@ namespace League;
 internal sealed partial class ChampionSelectAssistant : Form
 {
     private readonly FormMain _owner;
+    private readonly AssistantWindowLayer _windowLayer;
     private readonly System.Windows.Forms.Timer _timer=new(){Interval=750};
     private readonly OpggClient _opgg=new();
     private readonly AramMetaClient _am;
@@ -37,7 +38,7 @@ internal sealed partial class ChampionSelectAssistant : Form
     protected override bool ShowWithoutActivation=>true;
     public ChampionSelectAssistant(FormMain owner)
     {
-        _owner=owner;_am=new(cacheLifetime:()=>TimeSpan.FromMinutes(Math.Clamp(owner.GetAppConfig()?.AramMetaCacheMinutes??1440,1,10080)));
+        _owner=owner;_windowLayer=new(this);_am=new(cacheLifetime:()=>TimeSpan.FromMinutes(Math.Clamp(owner.GetAppConfig()?.AramMetaCacheMinutes??1440,1,10080)));
         Text="选人助手";ShowInTaskbar=false;StartPosition=FormStartPosition.Manual;FormBorderStyle=FormBorderStyle.FixedToolWindow;
         DoubleBuffered=true;
         BackColor=Color.FromArgb(8,29,40);ForeColor=Color.FromArgb(215,225,226);Font=new Font("Microsoft YaHei UI",9);ClientSize=new Size(320,590);
@@ -104,7 +105,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         GetWindowThreadProcessId(foreground,out uint foregroundProcess);
         bool clientFocused=handle!=IntPtr.Zero && clientProcess!=0 && clientProcess==foregroundProcess;
         bool editorFocused=OwnedForms.Any(form=>form.ContainsFocus || form.Handle==foreground);
-        bool focused=clientFocused || foreground==Handle || ContainsFocus || editorFocused || _owner.ContainsFocus;
+        bool focused=clientFocused || foreground==Handle || ContainsFocus || editorFocused;
         bool show=_visibility.ShouldShow(_selecting,handle!=IntPtr.Zero && IsIconic(handle),handle!=IntPtr.Zero,focused,_moving,Environment.TickCount64);
         if(!show){if(Visible)Hide();return;}
         // Grace preserves an existing panel; it must not open one over an unrelated app.
@@ -114,8 +115,8 @@ internal sealed partial class ChampionSelectAssistant : Form
             var target=Placement(Rectangle.FromLTRB(rect.Left,rect.Top,rect.Right,rect.Bottom),Screen.FromHandle(handle).WorkingArea,new Size(Width,_collapsed?84:630));
             if(Bounds!=target)Bounds=target;
         }
-        if(!TopMost)TopMost=true;
-        if(!Visible)Show();
+        if(handle!=IntPtr.Zero && !_windowLayer.Attach(handle))return;
+        if(!Visible){Show();_windowLayer.Attach(handle);}
     }
     private async Task TickAsync()
     {
@@ -162,7 +163,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         }
         finally{_busy=false;}
     }
-    private void Reset(){_selecting=false;_key="";_hero=0;_load?.Cancel();_runes=null;_apply.Enabled=false;ClearRoster();if(Visible)Hide();}
+    private void Reset(){_selecting=false;_key="";_hero=0;_load?.Cancel();_runes=null;_apply.Enabled=false;ClearRoster();if(Visible)Hide();_windowLayer.Detach();}
     private void ClearBody()
     {
         foreach(Control control in _body.Controls.Cast<Control>().ToArray())control.Dispose();
@@ -286,7 +287,7 @@ internal sealed partial class ChampionSelectAssistant : Form
     }
     protected override void Dispose(bool disposing)
     {
-        if(disposing){_timer.Stop();_timer.Dispose();_load?.Cancel();_poll?.Cancel();_opgg.Dispose();_am.Dispose();_tips.Dispose();}
+        if(disposing){_timer.Stop();_timer.Dispose();_load?.Cancel();_poll?.Cancel();_windowLayer.Dispose();_opgg.Dispose();_am.Dispose();_tips.Dispose();}
         base.Dispose(disposing);
     }
     [StructLayout(LayoutKind.Sequential)]private struct RECT{public int Left,Top,Right,Bottom;}

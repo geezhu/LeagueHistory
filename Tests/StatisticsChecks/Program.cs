@@ -15,6 +15,7 @@ internal static class Program
         if(args.Contains("--shutdown-checks")){ShutdownSettingsChecks.Run();return;}
         if(args.Contains("--shutdown-validate")){ShutdownSettingsChecks.ValidateWindows();return;}
         if(args.Contains("--assistant-placement-checks")){AssistantChecks.Placement();AssistantVisibilityChecks.Run();return;}
+        if(args.Contains("--assistant-window-checks")){AssistantVisibilityChecks.Run();AssistantWindowChecks.Run();return;}
         if(args.Length==3 && args[0]=="--overlay-detail-fixture"){OverlayDetailPreview.Export(args[1],args[2]);return;}
         if (args.Length > 0 && args[0] == "--champion-analysis")
         {
@@ -27,6 +28,7 @@ internal static class Program
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+        AssistantWindowChecks.Run();
         if(args.Contains("--loading-overlay-checks")){GameBarBridgeChecks.Run();OverlayChampionDetailChecks.Run();OverlayTierChatChecks.Run();LoadingOverlayChecks.Run();return;}
         if(args.Contains("--settings-checks")){SettingsChecks.Render();return;}
         RoomPlayerChecks.Run();
