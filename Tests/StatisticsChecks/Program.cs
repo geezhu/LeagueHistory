@@ -28,6 +28,18 @@ internal static class Program
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+        if(args.Contains("--mastery-checks"))
+        {
+            using var context=new WindowsFormsSynchronizationContext();
+            SynchronizationContext.SetSynchronizationContext(context);
+            Task.Run(ChampionMasteryChecks.RunAsync).GetAwaiter().GetResult();
+            ChampionMasteryChecks.Render();SynchronizationContext.SetSynchronizationContext(context);
+            GameBarBridgeChecks.Run();MayhemAssistantChecks.Run();SynchronizationContext.SetSynchronizationContext(context);
+            RosterChecks.Run();SynchronizationContext.SetSynchronizationContext(context);SettingsChecks.Render();
+            // Drain UI continuations from the disposed fixture windows before process exit.
+            var until=DateTime.UtcNow.AddMilliseconds(500);while(DateTime.UtcNow<until){Application.DoEvents();Thread.Sleep(5);}
+            return;
+        }
         AssistantWindowChecks.Run();
         if(args.Contains("--loading-overlay-checks")){GameBarBridgeChecks.Run();OverlayChampionDetailChecks.Run();OverlayTierChatChecks.Run();LoadingOverlayChecks.Run();return;}
         if(args.Contains("--settings-checks")){SettingsChecks.Render();return;}

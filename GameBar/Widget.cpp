@@ -78,8 +78,8 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     {
         Button button;
         Image icon;
-        TextBlock champion, player, tier, stats;
-        hstring imageData, details;
+        TextBlock champion, player, tier, stats, mastery;
+        hstring imageData, details, masteryDetails;
         int hero = 0;
     };
     Grid root;
@@ -162,7 +162,12 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             card.champion = MakeText(L"等待英雄", 15);
             heading.Children().Append(card.tier); heading.Children().Append(card.champion);
             labels.Children().Append(heading);
-            card.player = MakeText(L"空缺位置", 12, 0x91acbb); labels.Children().Append(card.player);
+            Grid account;
+            account.ColumnDefinitions().Append(ColumnDefinition());
+            ColumnDefinition masteryColumn;masteryColumn.Width({1,GridUnitType::Auto});account.ColumnDefinitions().Append(masteryColumn);
+            card.player = MakeText(L"空缺位置", 12, 0x91acbb); account.Children().Append(card.player);
+            card.mastery = MakeText(L"", 12, 0xdbc47f);card.mastery.Margin({8,0,0,0});Grid::SetColumn(card.mastery,1);account.Children().Append(card.mastery);
+            labels.Children().Append(account);
             card.stats = MakeText(L"胜率 —    选用率 —", 12, 0x45c7ce); labels.Children().Append(card.stats);
             body.Children().Append(labels); card.button.Content(body);
             card.button.Click([this, i](auto&&, auto&&) { OpenDetails(i); });
@@ -246,6 +251,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             card.hero=0; card.icon.Source(nullptr); card.imageData = L""; card.details = L"等待当前对局数据。";
             card.champion.Text(L"等待英雄"); card.player.Text(L"空缺位置"); card.tier.Text(L"—");
             card.stats.Text(L"胜率 —    选用率 —"); card.button.IsEnabled(false);
+            card.mastery.Text(L""); card.masteryDetails=L"";
         }
         details.Text(L"等待当前对局数据。");
     }
@@ -281,7 +287,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             lastGood = fixturePreview?Now():static_cast<int64_t>(data.GetNamedNumber(L"updatedAt", 0));
             enabled = data.GetNamedBoolean(L"enabled", false); active = data.GetNamedBoolean(L"active", false);
             supportsDetails = data.GetNamedNumber(L"detailProtocol",0)==1;
-            supportsChat=data.GetNamedNumber(L"chatProtocol",0)==1;chatTeams=data.GetNamedBoolean(L"chatTeams",false);
+            supportsChat=data.GetNamedNumber(L"chatProtocol",0)==1;supportsMasteryChat=data.GetNamedBoolean(L"chatMastery",false);chatTeams=data.GetNamedBoolean(L"chatTeams",false);
             detailQueue = static_cast<int>(data.GetNamedNumber(L"queue",0));
             auto next = data.GetNamedString(L"revision", L"");
             if (next != revision)
@@ -304,8 +310,12 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                     card.hero=hero;
                     auto playerName = row.GetNamedString(L"name", L"空缺位置");
                     card.player.Text(playerName.empty() ? L"玩家名称尚未提供" : playerName); card.tier.Text(row.GetNamedString(L"tier", L"—"));
+                    ToolTipService::SetToolTip(card.player,box_value(playerName));
                     card.tier.Foreground(MakeBrush(static_cast<uint32_t>(row.GetNamedNumber(L"color", 0x91acbb))));
                     card.stats.Text(row.GetNamedString(L"stats", L"胜率 —    选用率 —"));
+                    card.mastery.Text(row.GetNamedString(L"mastery", L""));
+                    card.masteryDetails=row.GetNamedString(L"masteryDetails", L"");
+                    ToolTipService::SetToolTip(card.mastery,box_value(card.masteryDetails));
                     card.details = row.GetNamedString(L"details", L"等待当前对局数据。");
                     card.button.IsEnabled(row.HasKey(L"name"));
                     if (row.HasKey(L"name")) ++populatedCards;

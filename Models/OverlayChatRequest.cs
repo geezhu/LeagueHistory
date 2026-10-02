@@ -3,7 +3,7 @@ using Newtonsoft.Json.Linq;
 namespace League.Models;
 
 // Commands select existing roster entries; the widget cannot supply chat text.
-public sealed record OverlayChatRequest(string Id,string Session,string Target,int Slot,int ChampionId,long CreatedAt,bool Dismissed,bool Cancelled)
+public sealed record OverlayChatRequest(string Id,string Session,string Target,int Slot,int ChampionId,long CreatedAt,bool Dismissed,bool Cancelled,string Kind="tier")
 {
     public static OverlayChatRequest? Parse(JObject value,string session,int[] heroes,long now)
     {
@@ -16,12 +16,14 @@ public sealed record OverlayChatRequest(string Id,string Session,string Target,i
         if(!long.TryParse(value["updatedAt"]!.ToString(),out long stamp) || stamp<0 || stamp>now || now-stamp>30000 ||
            !int.TryParse(value["slot"]!.ToString(),out int slot) || !int.TryParse(value["championId"]!.ToString(),out int hero))return null;
         string target=(string)value["target"]!;
+        if(value["kind"]!=null && (value["kind"]!.Type!=JTokenType.String || (string?)value["kind"] is not ("tier" or "mastery")))return null;
+        string kind=(string?)value["kind"]??"tier";
         if(target=="single" ? slot<0 || slot>=heroes.Length || hero<=0 || heroes[slot]!=hero :
            target is not ("own" or "enemy") || slot!=-1 || hero!=0)return null;
-        return new(id.ToString("N"),session,target,slot,hero,stamp,(bool)value["dismissed"]!,(bool)value["cancelled"]!);
+        return new(id.ToString("N"),session,target,slot,hero,stamp,(bool)value["dismissed"]!,(bool)value["cancelled"]!,kind);
     }
     public bool SameCommand(OverlayChatRequest other)=>Id==other.Id && Session==other.Session && Target==other.Target &&
-        Slot==other.Slot && ChampionId==other.ChampionId && CreatedAt==other.CreatedAt;
+        Slot==other.Slot && ChampionId==other.ChampionId && CreatedAt==other.CreatedAt && Kind==other.Kind;
 }
 
 // One click, at most one send. IDs stay consumed for the whole match, including failures.

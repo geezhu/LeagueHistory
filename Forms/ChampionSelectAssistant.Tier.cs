@@ -34,7 +34,7 @@ internal sealed partial class ChampionSelectAssistant
         hint.MouseEnter+=(_,_)=>_=Load();hint.Click+=(_,_)=>_=Load();
         _=Load();
     }
-    private void AddTierSummary(string tier,string statistics)
+    private FlowLayoutPanel AddTierSummary(string tier,string statistics)
     {
         var row=new FlowLayoutPanel{AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,WrapContents=false,MaximumSize=new Size(282,0),Margin=new Padding(0,2,0,2)};
         var color=League.Controls.AramMetaView.TierColor(tier);
@@ -44,5 +44,7 @@ internal sealed partial class ChampionSelectAssistant
         row.Controls.Add(badge);
         row.Controls.Add(new Label{Text=statistics,AutoSize=true,MaximumSize=new Size(230,0),ForeColor=Color.FromArgb(208,185,130),Margin=new Padding(0,3,0,0)});
         _body.Controls.Add(row);
+        if(_masteryRow is {IsDisposed:false})_body.Controls.SetChildIndex(_masteryRow,_body.Controls.GetChildIndex(row)+1);
+        return row;
     }
 }

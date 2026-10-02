@@ -105,7 +105,9 @@ public partial class FormMain
                 foreach(var child in children)original.Controls.Remove(child);
                 var layout=SettingsPage(page,"数据缓存","复用本地统计数据，减少重复请求与加载等待。");
                 SettingsCard(layout,"arammeta · 海克斯大乱斗",children.Take(3).ToArray());
-                SettingsCard(layout,"aramonly · 普通大乱斗平衡",children.Skip(3).ToArray());original.Dispose();
+                SettingsCard(layout,"aramonly · 普通大乱斗平衡",children.Skip(3).Take(3).ToArray());
+                SettingsCard(layout,"CommunityDragon · 阵容分析",children.Skip(6).Take(3).ToArray());
+                SettingsCard(layout,"英雄联盟客户端 · 玩家英雄成就",children.Skip(9).ToArray());original.Dispose();
             }
         }
     }

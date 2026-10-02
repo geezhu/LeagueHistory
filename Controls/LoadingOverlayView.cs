@@ -8,7 +8,8 @@ public sealed class LoadingOverlayView : UserControl
     private readonly Label _status=new(){Dock=DockStyle.Top,Height=32,Padding=new Padding(12,5,12,0)};
     private readonly TableLayoutPanel _teams=new(){Dock=DockStyle.Fill,ColumnCount=2,RowCount=6,Padding=new Padding(10,0,10,0)};
     private readonly Label _details=new(){Dock=DockStyle.Bottom,Height=104,Padding=new Padding(16,10,16,8),BackColor=Color.FromArgb(12,37,48)};
-    private readonly List<(Panel Card,PictureBox Icon,Label Name,Label Champion,Label Rank,Label Rates)> _rows=new();
+    private readonly List<(Panel Card,PictureBox Icon,Label Name,Label Champion,Label Rank,Label Rates,Label Mastery)> _rows=new();
+    private readonly ToolTip _masteryTips=new(){ShowAlways=true};
     private readonly Func<int,string> _champion;
     private readonly Func<LoadingPlayer,string> _playerDetails;
     private LoadingRoster? _roster;
@@ -32,17 +33,18 @@ public sealed class LoadingOverlayView : UserControl
                 var name=new Label{Dock=DockStyle.Top,Height=20,AutoEllipsis=true};
                 var hero=new Label{Dock=DockStyle.Top,Height=20,AutoEllipsis=true,ForeColor=Color.FromArgb(232,199,121)};
                 var rates=new Label{Dock=DockStyle.Fill,AutoEllipsis=true,ForeColor=Color.FromArgb(83,202,201)};
-                text.Controls.Add(rates);text.Controls.Add(hero);text.Controls.Add(name);
+                var mastery=new Label{Dock=DockStyle.Bottom,Height=18,AutoEllipsis=true,ForeColor=Color.FromArgb(208,185,130)};
+                text.Controls.Add(rates);text.Controls.Add(mastery);text.Controls.Add(hero);text.Controls.Add(name);
                 panel.Controls.Add(text);panel.Controls.Add(rank);panel.Controls.Add(icon);
                 void Select(object? s,EventArgs e){if(panel.Tag is LoadingPlayer p){_selected=p.Key;ShowDetails(p);}}
-                foreach(Control c in new Control[]{panel,icon,rank,text,name,hero,rates})c.Click+=Select;
-                _teams.Controls.Add(panel,side,row+1);_rows.Add((panel,icon,name,hero,rank,rates));
+                foreach(Control c in new Control[]{panel,icon,rank,text,name,hero,rates,mastery})c.Click+=Select;
+                _teams.Controls.Add(panel,side,row+1);_rows.Add((panel,icon,name,hero,rank,rates,mastery));
             }
         }
         Controls.Add(_teams);Controls.Add(_details);Controls.Add(_status);
         _details.Text="点击玩家卡片，查看已有的段位、近期战绩与统计来源。";
     }
-    public void UpdateRoster(LoadingRoster? roster,IReadOnlyDictionary<string,PlayerChampionTier> ranks,IReadOnlyDictionary<int,Image> icons,string status)
+    public void UpdateRoster(LoadingRoster? roster,IReadOnlyDictionary<string,PlayerChampionTier> ranks,IReadOnlyDictionary<int,Image> icons,string status,IReadOnlyDictionary<string,PlayerChampionMastery>? masteries=null)
     {
         _roster=roster;_ranks=ranks;_status.Text=status;SuspendLayout();
         int own=roster?.Players.FirstOrDefault(p=>p.Self)?.Team??100;
@@ -61,6 +63,10 @@ public sealed class LoadingOverlayView : UserControl
                 ui.Rank.Text=rank?.Tier??"—";ui.Rank.ForeColor=AramMetaView.TierColor(rank?.Tier??"—");
                 ui.Rates.Text=rank==null?"统计读取中…":rank.Rate+" · 选 "+rank.PickRate;
                 if(p==null)ui.Rates.Text="";
+                var achievement=p!=null?masteries?.GetValueOrDefault(p.Key):null;
+                if(achievement?.ChampionId!=p?.ChampionId)achievement=null;
+                ui.Mastery.Text=p?.ChampionId>0?achievement?.Text??"成就读取中…":"";
+                _masteryTips.SetToolTip(ui.Mastery,achievement?.Description??"");
             }
         }
         var selected=roster?.Players.FirstOrDefault(p=>p.Key==_selected);
@@ -77,5 +83,10 @@ public sealed class LoadingOverlayView : UserControl
     {
         string source=_ranks.GetValueOrDefault(p.Key)?.Note??"英雄统计尚未读取。";
         _details.Text=(string.IsNullOrWhiteSpace(p.Name)?_champion(p.ChampionId):p.Name)+" · "+_champion(p.ChampionId)+"\n"+_playerDetails(p)+"\n"+source.Replace("\n"," · ");
+    }
+    protected override void Dispose(bool disposing)
+    {
+        if(disposing)_masteryTips.Dispose();
+        base.Dispose(disposing);
     }
 }

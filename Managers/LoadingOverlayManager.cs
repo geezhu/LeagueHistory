@@ -105,6 +105,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     {
         CancelDetail();
         _status=LoadingRoster.WaitingStatus(_phase);
+        _masteries.Clear();
         if(_roster!=null || _match.Length>0){_generation++;_roster=null;_match="";_ranks.Clear();_rankRequests.Clear();_rankRetry.Clear();}
         _gameWindow=IntPtr.Zero;_nextWindowSearch=0;_fullscreen.Reset();
         if(!_display.Preview){_display.Reset();_follow.Stop();_window?.Hide();}
@@ -152,10 +153,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
             if(_disposed || timeout.IsCancellationRequested || !(_owner.GetAppConfig()?.EnableLoadingOverlay??true))return;
             string match=roster.GameId.Length>0?roster.GameId:$"{roster.Queue}:"+string.Join("|",roster.Players.Select(p=>p.Key));
             match+="/"+roster.Queue;
-            if(_match!=match){CancelDetail();_generation++;_ranks.Clear();_rankRequests.Clear();_rankRetry.Clear();_match=match;}
+            if(_match!=match){CancelDetail();_generation++;_ranks.Clear();_rankRequests.Clear();_rankRetry.Clear();_masteries.Clear();_match=match;}
             _roster=roster;
             _status=$"{(phase=="ChampSelect"?"准备进入对局":"当前对局")} · 已读取 {roster.Players.Length} 人 · {DateTime.Now:HH:mm:ss} · 点击卡片查看{(UseGameBar?"英雄详情":"缓存战绩")}";
-            foreach(var p in roster.Players.Where(p=>p.ChampionId>0)){_=LoadRank(p,_generation,flow);_=LoadIcon(p.ChampionId);}
+            foreach(var p in roster.Players.Where(p=>p.ChampionId>0)){_=LoadRank(p,_generation,flow);_=LoadIcon(p.ChampionId);_=LoadMastery(p,_generation);}
             SchedulePaint();
         }
         catch(OperationCanceledException)when(_life.IsCancellationRequested){}
@@ -199,12 +200,12 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     private void PublishGameBar(bool? enabled=null)=>_gameBar.Publish(_roster,_ranks,_icons,Champion,Details,_match,
         enabled==false?"对局速览已停止同步。":LoadingRoster.CanDisplay(_phase)?_status:LoadingRoster.WaitingStatus(_phase),
         enabled??(UseGameBar && (_owner.GetAppConfig()?.EnableLoadingOverlay??true)),
-        LoadingRoster.CanDisplay(_phase) && Environment.TickCount64-_lastPhaseRead<=15000,_wanted && !_display.Preview);
+        LoadingRoster.CanDisplay(_phase) && Environment.TickCount64-_lastPhaseRead<=15000,_wanted && !_display.Preview,_masteries);
     private void PaintSnapshot()
     {
         if(_disposed)return;
         if(UseGameBar)PublishGameBar();
-        if(_window!=null)_window.View.UpdateRoster(_roster,_ranks,_icons,_display.Preview?"显示测试 · 此窗口可正常绘制；游戏内覆盖效果需在加载画面确认。":_status);
+        if(_window!=null)_window.View.UpdateRoster(_roster,_ranks,_icons,_display.Preview?"显示测试 · 此窗口可正常绘制；游戏内覆盖效果需在加载画面确认。":_status,_masteries);
     }
     private bool GameFocused()
     {

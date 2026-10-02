@@ -32,6 +32,10 @@ internal sealed partial class ChampionSelectAssistant
         var query=(SelectedQuery with{Mode="aram",ChampionId=0}).Normalize();
         var window=new Form{Text="当前可选英雄 · "+(mayhem?"海克斯大乱斗":"大乱斗"),ClientSize=new Size(760,550),BackColor=BackColor,ForeColor=ForeColor,Font=Font,StartPosition=FormStartPosition.Manual,ShowInTaskbar=false};_rosterWindow=window;
         var lifetime=new CancellationTokenSource();CancellationTokenSource? painting=null;
+        var masteryRefresh=new List<Func<Task>>();
+        var masteryTimer=new System.Windows.Forms.Timer{Interval=10000};
+        masteryTimer.Tick+=(_,_)=>{foreach(var update in masteryRefresh.ToArray())_=update();};masteryTimer.Start();
+        window.Disposed+=(_,_)=>masteryTimer.Dispose();
         var toolbar=new FlowLayoutPanel{Dock=DockStyle.Top,Height=42,AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,MinimumSize=new Size(0,42),Padding=new Padding(10,5,10,5)};
         var sort=new Controls.DarkFilterComboBox{Width=125};sort.Items.AddRange(new object[]{"梯队优先","胜率优先"});sort.SelectedIndex=0;
         var retry=new Button{Text="重试数据",AutoSize=true,FlatStyle=FlatStyle.Flat};toolbar.Controls.AddRange(new Control[]{sort,retry});
@@ -89,6 +93,7 @@ internal sealed partial class ChampionSelectAssistant
             if(window.IsDisposed || _roster==null)return;
             if(queue!=_queue){window.Close();return;}
             painting?.Cancel();painting?.Dispose();painting=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);var token=painting.Token;
+            masteryRefresh.Clear();
             content.SuspendLayout();foreach(Control c in content.Controls.Cast<Control>().ToArray())c.Dispose();
             void Group(string title,IEnumerable<ChampionSelectRosterEntry> entries,string empty)
             {
@@ -97,7 +102,7 @@ internal sealed partial class ChampionSelectAssistant
                 var ordered=sort.SelectedIndex==0?entries.OrderBy(e=>Rank(ranks.GetValueOrDefault(e.ChampionId).Tier??"—")).ThenByDescending(e=>ranks.GetValueOrDefault(e.ChampionId).Win):entries.OrderByDescending(e=>ranks.GetValueOrDefault(e.ChampionId).Win).ThenBy(e=>Rank(ranks.GetValueOrDefault(e.ChampionId).Tier??"—"));
                 foreach(var entry in ordered)
                 {
-                    var card=new Panel{Size=new Size(132,114),Margin=new Padding(0,0,6,6),BackColor=Color.FromArgb(16,45,57)};grid.Controls.Add(card);
+                    var card=new Panel{Size=new Size(132,136),Margin=new Padding(0,0,6,6),BackColor=Color.FromArgb(16,45,57)};grid.Controls.Add(card);
                     int id=entry.ChampionId;var rank=ranks.GetValueOrDefault(id);string tier=rank.Tier??"—";
                     var icon=new PictureBox{Location=new Point(7,7),Size=new Size(40,40),SizeMode=PictureBoxSizeMode.Zoom};card.Controls.Add(icon);icon.Disposed+=(_,_)=>icon.Image?.Dispose();
                     card.Controls.Add(new Label{Text=tier,Location=new Point(56,9),Size=new Size(66,22),ForeColor=League.Controls.AramMetaView.TierColor(tier)});
@@ -106,6 +111,27 @@ internal sealed partial class ChampionSelectAssistant
                     card.Controls.Add(new Label{Text=entry.CellId<0?"交换池":(entry.IsSelf?"自己":"队友 "+(entry.CellId+1))+(entry.Preview?" · 预选":""),Location=new Point(7,84),Size=new Size(118,22),ForeColor=Color.FromArgb(135,162,173)});
                     if(id>0)
                     {
+                        var achievement=new Label{Text="成就读取中…",AutoEllipsis=true,Location=new Point(7,107),Size=new Size(118,22),ForeColor=Color.FromArgb(164,188,199)};card.Controls.Add(achievement);
+                        string puuid=entry.CellId<0 ? _owner.GetCurrentPuuid()??"" : entry.Puuid;
+                        if(entry.IsSelf && (string.IsNullOrWhiteSpace(puuid) || puuid==Guid.Empty.ToString()))puuid=_owner.GetCurrentPuuid()??"";
+                        bool masteryBusy=false;
+                        async Task Mastery()
+                        {
+                            if(masteryBusy || achievement.IsDisposed || token.IsCancellationRequested)return;
+                            masteryBusy=true;
+                            try
+                            {
+                                var page=await _masteryService.GetAsync(puuid,token);
+                                if(achievement.IsDisposed || token.IsCancellationRequested)return;
+                                var value=page.ForChampion(id);achievement.Text=value.Text;
+                                _tips.SetToolTip(achievement,(entry.CellId<0?"自己使用此英雄的成就\n":"")+value.Description);
+                            }
+                            catch(OperationCanceledException){}
+                            catch(Exception){if(!achievement.IsDisposed && !token.IsCancellationRequested)achievement.Text="成就暂不可用";}
+                            finally{masteryBusy=false;}
+                        }
+                        masteryRefresh.Add(Mastery);
+                        _=Mastery();
                         async Task Image(){try{var image=await FormMain.Globals.resLoading.GetChampionIconAsync(id);if(icon.IsDisposed || token.IsCancellationRequested){image?.Dispose();return;}icon.Image=image;}catch{}}
                         _=Image();
                         void Clickable(Control c){c.Cursor=Cursors.Hand;c.Click+=(_,_)=>{if(token.IsCancellationRequested)return;_owner.OpenAssistantGuide(id,mayhem?2400:0,"none",mayhem?null:query with{ChampionId=id});};foreach(Control child in c.Controls)Clickable(child);}Clickable(card);
