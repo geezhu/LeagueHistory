@@ -78,8 +78,8 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     {
         Button button;
         Image icon;
-        TextBlock champion, player, tier, stats, mastery;
-        hstring imageData, details, masteryDetails;
+        TextBlock champion, player, tier, stats, mastery, deathStreak;
+        hstring imageData, details, masteryDetails, deathStreakDetails;
         int hero = 0;
     };
     Grid root;
@@ -157,10 +157,14 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             body.Children().Append(card.icon);
             StackPanel labels;
             Grid::SetColumn(labels, 1);
-            StackPanel heading; heading.Orientation(Orientation::Horizontal);
+            Grid heading;
+            ColumnDefinition tierColumn;tierColumn.Width({34,GridUnitType::Pixel});heading.ColumnDefinitions().Append(tierColumn);
+            heading.ColumnDefinitions().Append(ColumnDefinition());
+            ColumnDefinition streakColumn;streakColumn.Width({1,GridUnitType::Auto});heading.ColumnDefinitions().Append(streakColumn);
             card.tier = MakeText(L"—", 14, 0x91acbb); card.tier.Width(34);
             card.champion = MakeText(L"等待英雄", 15);
-            heading.Children().Append(card.tier); heading.Children().Append(card.champion);
+            heading.Children().Append(card.tier);Grid::SetColumn(card.champion,1);heading.Children().Append(card.champion);
+            card.deathStreak=MakeText(L"",11,0xf3b37e);card.deathStreak.Margin({6,3,0,0});Grid::SetColumn(card.deathStreak,2);heading.Children().Append(card.deathStreak);
             labels.Children().Append(heading);
             Grid account;
             account.ColumnDefinitions().Append(ColumnDefinition());
@@ -251,7 +255,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             card.hero=0; card.icon.Source(nullptr); card.imageData = L""; card.details = L"等待当前对局数据。";
             card.champion.Text(L"等待英雄"); card.player.Text(L"空缺位置"); card.tier.Text(L"—");
             card.stats.Text(L"胜率 —    选用率 —"); card.button.IsEnabled(false);
-            card.mastery.Text(L""); card.masteryDetails=L"";
+            card.mastery.Text(L""); card.masteryDetails=L"";card.deathStreak.Text(L"");card.deathStreakDetails=L"";
         }
         details.Text(L"等待当前对局数据。");
     }
@@ -287,7 +291,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             lastGood = fixturePreview?Now():static_cast<int64_t>(data.GetNamedNumber(L"updatedAt", 0));
             enabled = data.GetNamedBoolean(L"enabled", false); active = data.GetNamedBoolean(L"active", false);
             supportsDetails = data.GetNamedNumber(L"detailProtocol",0)==1;
-            supportsChat=data.GetNamedNumber(L"chatProtocol",0)==1;supportsMasteryChat=data.GetNamedBoolean(L"chatMastery",false);chatTeams=data.GetNamedBoolean(L"chatTeams",false);
+            supportsChat=data.GetNamedNumber(L"chatProtocol",0)==1;supportsMasteryChat=data.GetNamedBoolean(L"chatMastery",false);supportsDeathStreakChat=data.GetNamedBoolean(L"chatDeathStreak",false);chatTeams=data.GetNamedBoolean(L"chatTeams",false);
             detailQueue = static_cast<int>(data.GetNamedNumber(L"queue",0));
             auto next = data.GetNamedString(L"revision", L"");
             if (next != revision)
@@ -316,6 +320,8 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                     card.mastery.Text(row.GetNamedString(L"mastery", L""));
                     card.masteryDetails=row.GetNamedString(L"masteryDetails", L"");
                     ToolTipService::SetToolTip(card.mastery,box_value(card.masteryDetails));
+                    card.deathStreak.Text(row.GetNamedString(L"deathStreak",L""));card.deathStreakDetails=row.GetNamedString(L"deathStreakDetails",L"");
+                    ToolTipService::SetToolTip(card.deathStreak,box_value(card.deathStreakDetails));
                     card.details = row.GetNamedString(L"details", L"等待当前对局数据。");
                     card.button.IsEnabled(row.HasKey(L"name"));
                     if (row.HasKey(L"name")) ++populatedCards;

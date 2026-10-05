@@ -19,6 +19,7 @@ public sealed partial class LiveMatchView
     private Label TextLabel(string text,Color? color=null)=>new(){Text=text,AutoSize=true,MaximumSize=new Size(Math.Max(180,_equipment.Width-24),0),ForeColor=color??ForeColor,Margin=new Padding(2,4,2,6)};
     private void SetMessage(FlowLayoutPanel host,string text){Clear(host);host.Controls.Add(TextLabel(text,Muted));}
     private static string ItemsKey(LiveMatchPlayer? p)=>p==null?"":p.Items==null?"unknown":string.Join(",",p.Items.Select(i=>$"{i.Id}:{i.Count}"));
+    private LiveDeathStreak Streak(LiveMatchPlayer p)=>_snapshot?.DeathStreaks.GetValueOrDefault(p.Key)??LiveDeathStreak.Unavailable();
     private void Render()
     {
         if(_snapshot==null)return;
@@ -35,7 +36,7 @@ public sealed partial class LiveMatchView
     private void RenderCards()
     {
         if(_snapshot==null || _rendering)return;
-        string signature=_selectedKey+"|"+_players.Width+"|"+string.Join(";",_snapshot.Players.Select(p=>$"{p.Key}:{p.Level}:{ChampionId(p)}:{ItemsKey(p)}:{_ranks.GetValueOrDefault(ChampionId(p))}"));
+        string signature=_selectedKey+"|"+_players.Width+"|"+string.Join(";",_snapshot.Players.Select(p=>$"{p.Key}:{p.Level}:{ChampionId(p)}:{ItemsKey(p)}:{_ranks.GetValueOrDefault(ChampionId(p))}:{Streak(p)}"));
         if(signature==_cardsSignature)return;_cardsSignature=signature;
         _rendering=true;_players.SuspendLayout();var scroll=_players.AutoScrollPosition;
         foreach(var cached in _playerCards.Values)if(!cached.Card.IsDisposed)cached.Card.Parent?.Controls.Remove(cached.Card);
@@ -48,21 +49,22 @@ public sealed partial class LiveMatchView
             foreach(var p in team)
             {
                 int id=ChampionId(p);var rank=_ranks.GetValueOrDefault(id);bool selected=p.Key==_selectedKey;
-                string cardSignature=$"{width}|{id}|{p.Level}|{ItemsKey(p)}|{rank}|{selected}";
+                string cardSignature=$"{width}|{id}|{p.Level}|{ItemsKey(p)}|{rank}|{selected}|{Streak(p)}";
                 active.Add(p.Key);
                 if(_playerCards.TryGetValue(p.Key,out var retained))
                 {
                     if(retained.Signature==cardSignature && !retained.Card.IsDisposed){column.Controls.Add(retained.Card);continue;}
                     retained.Card.Dispose();
                 }
-                var card=new Panel{Size=new Size(width,112),BackColor=selected?Color.FromArgb(23,76,89):Surface,Margin=new Padding(0,0,0,7),Tag=p.Key,AccessibleName=ChampionName(p)};
+                var card=new Panel{Size=new Size(width,132),BackColor=selected?Color.FromArgb(23,76,89):Surface,Margin=new Padding(0,0,0,7),Tag=p.Key,AccessibleName=ChampionName(p)};
                 _playerCards[p.Key]=(cardSignature,card);column.Controls.Add(card);
                 var portrait=Icon("champion",id,40,ChampionName(p));portrait.Location=new Point(6,7);card.Controls.Add(portrait);
                 var name=new Label{Text=ChampionName(p),Location=new Point(52,6),Size=new Size(width-58,22),AutoEllipsis=true,ForeColor=Color.White};card.Controls.Add(name);
                 var badge=new Label{Text=rank.Tier??"—",Location=new Point(52,31),Size=new Size(34,19),ForeColor=AramMetaView.TierColor(rank.Tier??"—"),BackColor=Color.FromArgb(9,32,44),TextAlign=ContentAlignment.MiddleCenter};card.Controls.Add(badge);
                 card.Controls.Add(new Label{Text=$"Lv.{p.Level}"+(p.Self?" · 自己":""),Location=new Point(88,31),Size=new Size(width-92,19),ForeColor=Muted});
                 var stats=new Label{Text=$"胜 {Rate(rank.Win)} · 选 {Rate(rank.Pick)}",Location=new Point(6,55),Size=new Size(width-10,18),ForeColor=Color.FromArgb(90,206,212)};card.Controls.Add(stats);_tips.SetToolTip(stats,_rankStatus);
-                var items=new FlowLayoutPanel{Location=new Point(5,80),Size=new Size(width-10,27),WrapContents=false,Margin=Padding.Empty};card.Controls.Add(items);
+                var streak=new Label{Text=Streak(p).Text,Location=new Point(6,75),Size=new Size(width-10,18),ForeColor=Gold,AutoEllipsis=true};card.Controls.Add(streak);_tips.SetToolTip(streak,Streak(p).Rule);
+                var items=new FlowLayoutPanel{Location=new Point(5,100),Size=new Size(width-10,27),WrapContents=false,Margin=Padding.Empty};card.Controls.Add(items);
                 if(p.Items==null)items.Controls.Add(new Label{Text="装备暂不可用",AutoSize=true,ForeColor=Muted});
                 else if(p.Items.Length==0)items.Controls.Add(new Label{Text="暂无装备",AutoSize=true,ForeColor=Muted});
                 else foreach(var item in p.Items.Take(7))items.Controls.Add(Icon("item",item.Id,22,ItemName(item.Id,item.Name),count:item.Count));
@@ -76,14 +78,15 @@ public sealed partial class LiveMatchView
     {
         var p=Selected();if(p==null)return;
         int id=ChampionId(p);var rank=_ranks.GetValueOrDefault(id);
-        string signature=$"{p.Key}|{id}|{p.Level}|{ItemsKey(p)}|{rank}|{_currentQueue}|"+string.Join(",",_manualAugments.GetValueOrDefault(p.Key)??new());
+        string signature=$"{p.Key}|{id}|{p.Level}|{ItemsKey(p)}|{rank}|{_currentQueue}|{Streak(p)}|"+string.Join(",",_manualAugments.GetValueOrDefault(p.Key)??new());
         if(signature==_equipmentSignature)return;_equipmentSignature=signature;
         _equipment.SuspendLayout();Clear(_equipment);
-        var hero=new ProfileBackgroundPanel{Size=new Size(Math.Max(220,_equipment.Width-12),94),Margin=new Padding(0,0,0,10),BackColor=Surface};_equipment.Controls.Add(hero);
+        var hero=new ProfileBackgroundPanel{Size=new Size(Math.Max(220,_equipment.Width-12),114),Margin=new Padding(0,0,0,10),BackColor=Surface};_equipment.Controls.Add(hero);
         var portrait=Icon("champion",id,62,ChampionName(p));portrait.Location=new Point(12,16);hero.Controls.Add(portrait);
         var title=new Label{Text=ChampionName(p),BackColor=Color.Transparent,ForeColor=Color.White,Location=new Point(87,13),AutoSize=true};
         var titleFont=new Font(Font.FontFamily,14,FontStyle.Bold);title.Font=titleFont;title.Disposed+=(_,_)=>titleFont.Dispose();hero.Controls.Add(title);
         var badge=new Label{Text=rank.Tier??"—",Location=new Point(87,50),Size=new Size(38,23),TextAlign=ContentAlignment.MiddleCenter,BackColor=Color.FromArgb(9,32,44),ForeColor=AramMetaView.TierColor(rank.Tier??"—")};hero.Controls.Add(badge);
+        var streak=new Label{Text=Streak(p).Text,Location=new Point(87,80),Size=new Size(hero.Width-94,22),AutoEllipsis=true,BackColor=Color.Transparent,ForeColor=Gold};hero.Controls.Add(streak);_tips.SetToolTip(streak,Streak(p).Rule);
         hero.Controls.Add(new Label{Text=$"Lv.{p.Level} · 胜率 {Rate(rank.Win)} · 选用率 {Rate(rank.Pick)}",BackColor=Color.Transparent,ForeColor=Gold,Location=new Point(132,53),AutoSize=true});
         _tips.SetToolTip(hero,_rankStatus);_=LoadArtworkAsync(hero,id);
         _equipment.Controls.Add(TextLabel("当前装备",Gold));
