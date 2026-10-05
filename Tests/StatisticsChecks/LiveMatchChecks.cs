@@ -9,10 +9,14 @@ internal static class LiveMatchChecks
 {
     private const string Sample="""
     {"activePlayer":{"riotId":"Self#CN"},"gameData":{"gameMode":"ARAM","mapNumber":12,"gameTime":125},"allPlayers":[
-    {"riotId":"Enemy#CN","rawChampionName":"game_character_displayname_Lux","championName":"拉克丝","team":"ORDER","level":8,"items":[{"itemID":3089,"displayName":"灭世者的死亡之帽","count":1}]},
-    {"riotId":"Self#CN","rawChampionName":"game_character_displayname_Morgana","championName":"莫甘娜","team":"CHAOS","level":9,"items":[],"runes":{"keystone":{"id":8112}}},
-    {"riotId":"Ally#CN","rawChampionName":"game_character_displayname_Lux","championName":"拉克丝","team":"CHAOS","level":8}
-    ]}
+    {"riotId":"Enemy#CN","rawChampionName":"game_character_displayname_Lux","championName":"拉克丝","team":"ORDER","level":8,"scores":{"kills":3,"deaths":1},"items":[{"itemID":3089,"displayName":"灭世者的死亡之帽","count":1}]},
+    {"riotId":"Self#CN","rawChampionName":"game_character_displayname_Morgana","championName":"莫甘娜","team":"CHAOS","level":9,"scores":{"kills":1,"deaths":3},"items":[],"runes":{"keystone":{"id":8112}}},
+    {"riotId":"Ally#CN","rawChampionName":"game_character_displayname_Lux","championName":"拉克丝","team":"CHAOS","level":8,"scores":{"kills":0,"deaths":0}}
+    ],"events":{"Events":[{"EventID":0,"EventName":"GameStart","EventTime":0},
+    {"EventID":1,"EventName":"ChampionKill","EventTime":10,"KillerName":"Enemy#CN","VictimName":"Self#CN"},
+    {"EventID":2,"EventName":"ChampionKill","EventTime":20,"KillerName":"Enemy#CN","VictimName":"Self#CN"},
+    {"EventID":3,"EventName":"ChampionKill","EventTime":30,"KillerName":"Self#CN","VictimName":"Enemy#CN"},
+    {"EventID":4,"EventName":"ChampionKill","EventTime":40,"KillerName":"Enemy#CN","VictimName":"Self#CN"}]}}
     """;
     private static void Check(bool condition,string message){if(!condition)throw new Exception(message);}
     private sealed class Handler:HttpMessageHandler
@@ -34,6 +38,7 @@ internal static class LiveMatchChecks
         Check(snapshot.Players[0].ChampionAlias=="Lux" && snapshot.Players[0].Items![0].Id==3089,"Raw champion alias and current item IDs");
         Check(snapshot.Players[1].Items is {Length:0} && snapshot.Players[2].Items==null,"Empty equipment differs from unavailable");
         Check(snapshot.Players.Length==3 && snapshot.Players[0].Key!=snapshot.Players[2].Key,"Duplicate champions remain independent players");
+        Check(snapshot.DeathStreaks[snapshot.Players[1].Key] is{Current:1,Highest:2,Complete:true},"Current and highest death streak reconstruct from a midgame snapshot");
         var unknown=JObject.Parse(Sample);unknown.Remove("activePlayer");
         var neutral=LiveMatchSnapshot.Parse(unknown);
         Check(neutral.Players.All(p=>!p.Self) && neutral.TeamLabel(neutral.Players[0])=="ORDER","Unknown self must not assign friend/enemy");
@@ -51,6 +56,7 @@ internal static class LiveMatchChecks
         IEnumerable<Control> All(Control root)=>root.Controls.Cast<Control>().SelectMany(c=>new[]{c}.Concat(All(c)));
         var cards=All(view).OfType<Panel>().Where(c=>c.Tag is string).ToArray();
         Check(cards.Length==3 && handler.Calls>=1,"Live page loads participant cards");
+        Check(All(view).OfType<Label>().Any(l=>l.Text=="连死 1 · 最高 2"),"Live page and selected hero details show the reconstructed death streak");
         Check(All(view).OfType<Button>().Any(b=>b.AccessibleName?.Contains("死亡之帽")==true && b.BackgroundImage!=null),"Current equipment uses loaded icons");
         var type=typeof(LiveMatchView);
         type.GetField("_currentQueue",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(view,450);

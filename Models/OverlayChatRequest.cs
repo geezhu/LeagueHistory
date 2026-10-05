@@ -16,7 +16,7 @@ public sealed record OverlayChatRequest(string Id,string Session,string Target,i
         if(!long.TryParse(value["updatedAt"]!.ToString(),out long stamp) || stamp<0 || stamp>now || now-stamp>30000 ||
            !int.TryParse(value["slot"]!.ToString(),out int slot) || !int.TryParse(value["championId"]!.ToString(),out int hero))return null;
         string target=(string)value["target"]!;
-        if(value["kind"]!=null && (value["kind"]!.Type!=JTokenType.String || (string?)value["kind"] is not ("tier" or "mastery")))return null;
+        if(value["kind"]!=null && (value["kind"]!.Type!=JTokenType.String || (string?)value["kind"] is not ("tier" or "mastery" or "deathStreak")))return null;
         string kind=(string?)value["kind"]??"tier";
         if(target=="single" ? slot<0 || slot>=heroes.Length || hero<=0 || heroes[slot]!=hero :
            target is not ("own" or "enemy") || slot!=-1 || hero!=0)return null;

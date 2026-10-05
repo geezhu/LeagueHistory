@@ -1,9 +1,9 @@
 // Included inside WidgetView. Only explicit clicks create bounded roster commands.
     StackPanel chatFooter;
-    Button sendTier,sendMastery,cancelChat;
-    std::array<MenuFlyoutItem,3> tierTargets,masteryTargets;
+    Button sendTier,sendMastery,sendDeathStreak,cancelChat;
+    std::array<MenuFlyoutItem,3> tierTargets,masteryTargets,deathStreakTargets;
     TextBlock chatStatus=MakeText(L"发送到游戏聊天 · 需以管理员身份运行 League · 点击后按 Win＋G 返回游戏。",12,0x91acbb);
-    bool supportsChat=false,supportsMasteryChat=false,chatTeams=false,chatPending=false,chatWriting=false,chatReading=false,chatDismissed=false,chatCancelled=false;
+    bool supportsChat=false,supportsMasteryChat=false,supportsDeathStreakChat=false,chatTeams=false,chatPending=false,chatWriting=false,chatReading=false,chatDismissed=false,chatCancelled=false;
     hstring chatId,chatSession,chatTarget,chatKind,pendingChatWrite;
     int chatSlot=-1,chatHero=0;
     int64_t chatCreated=0;
@@ -11,8 +11,8 @@
     void InitializeChat()
     {
         StackPanel actions;actions.Orientation(Orientation::Horizontal);
-        sendTier=DetailButton(L"发送 Tier ▾");sendMastery=DetailButton(L"发送熟练度 ▾");cancelChat=DetailButton(L"取消发送");
-        for(auto b:{sendTier,sendMastery,cancelChat}){b.Margin({0,0,6,0});actions.Children().Append(b);}
+        sendTier=DetailButton(L"发送 Tier ▾");sendMastery=DetailButton(L"发送熟练度 ▾");sendDeathStreak=DetailButton(L"发送连死 ▾");cancelChat=DetailButton(L"取消发送");
+        for(auto b:{sendTier,sendMastery,sendDeathStreak,cancelChat}){b.Margin({0,0,6,0});actions.Children().Append(b);}
         auto menu=[this](Button button,std::array<MenuFlyoutItem,3>& items,hstring kind)
         {
             MenuFlyout flyout;
@@ -21,12 +21,13 @@
             for(int i=0;i<3;++i){items[i].Text(names[i]);items[i].Click([this,kind,target=targets[i]](auto&&,auto&&){QueueChat(target,kind);});flyout.Items().Append(items[i]);}
             button.Flyout(flyout);
         };
-        menu(sendTier,tierTargets,L"tier");menu(sendMastery,masteryTargets,L"mastery");
+        menu(sendTier,tierTargets,L"tier");menu(sendMastery,masteryTargets,L"mastery");menu(sendDeathStreak,deathStreakTargets,L"deathStreak");
         cancelChat.Click([this](auto&&,auto&&){if(chatPending){chatCancelled=true;chatStatus.Text(L"正在取消发送…");SaveChatRequest();UpdateChatButtons();}});
         chatFooter.Margin({0,8,0,0});chatFooter.Children().Append(actions);
         chatStatus.TextWrapping(TextWrapping::Wrap);chatStatus.Margin({0,5,0,0});chatFooter.Children().Append(chatStatus);
         Grid::SetRow(chatFooter,4);root.Children().Append(chatFooter);UpdateChatButtons();
         ToolTipService::SetToolTip(sendTier,box_value(L"选择我方、敌方或当前选中英雄，发送梯队、胜率和选用率。"));
+        ToolTipService::SetToolTip(sendDeathStreak,box_value(L"发送当前连死和本局最高次数。死亡加一，击杀清零，助攻不清零；不完整历史标注已记录，无法匹配的玩家显示未知。"));
         ToolTipService::SetToolTip(sendMastery,box_value(L"选择我方、敌方或当前选中英雄，发送该玩家的英雄成就等级和点数。发送到当前游戏聊天频道；缓存和不可用数据会标注。"));
     }
     void UpdateChatButtons()
@@ -35,7 +36,9 @@
         bool single=selectedCard>=0 && cards[selectedCard].hero>0;
         sendTier.IsEnabled(available && (chatTeams || single));sendMastery.IsEnabled(available && supportsMasteryChat && (chatTeams || single));
         sendMastery.Visibility(supportsMasteryChat?Visibility::Visible:Visibility::Collapsed);
-        for(int i=0;i<3;++i){bool scope=i==2?single:chatTeams;tierTargets[i].IsEnabled(available && scope);masteryTargets[i].IsEnabled(available && supportsMasteryChat && scope);}
+        sendDeathStreak.IsEnabled(available && supportsDeathStreakChat && (chatTeams || single));
+        sendDeathStreak.Visibility(supportsDeathStreakChat?Visibility::Visible:Visibility::Collapsed);
+        for(int i=0;i<3;++i){bool scope=i==2?single:chatTeams;tierTargets[i].IsEnabled(available && scope);masteryTargets[i].IsEnabled(available && supportsMasteryChat && scope);deathStreakTargets[i].IsEnabled(available && supportsDeathStreakChat && scope);}
         cancelChat.Visibility(chatPending?Visibility::Visible:Visibility::Collapsed);cancelChat.IsEnabled(!chatCancelled);
     }
     void ResetChat()
@@ -46,14 +49,15 @@
     void QueueChat(hstring const& target,hstring const& kind)
     {
         if(!widget || fixturePreview || !supportsChat || chatPending || !enabled || !active || Now()-lastGood>15000)return;
-        if((kind!=L"tier" && kind!=L"mastery") || (kind==L"mastery" && !supportsMasteryChat))return;
+        if((kind!=L"tier" && kind!=L"mastery" && kind!=L"deathStreak") || (kind==L"mastery" && !supportsMasteryChat) || (kind==L"deathStreak" && !supportsDeathStreakChat))return;
         if(target==L"single" && (selectedCard<0 || cards[selectedCard].hero<=0))return;
         if(target!=L"single" && !chatTeams)return;
         std::wstring id;for(wchar_t c:NewDetailId())if(c!=L'{' && c!=L'}' && c!=L'-')id.push_back(c>=L'A' && c<=L'F'?c+32:c);
         chatId=hstring(id);chatSession=session;chatTarget=target;chatKind=kind;chatCreated=Now();chatCancelled=false;chatPending=true;
         chatSlot=target==L"single"?selectedCard:-1;chatHero=chatSlot>=0?cards[chatSlot].hero:0;
         auto name=target==L"own"?L"我方英雄":target==L"enemy"?L"敌方英雄":cards[chatSlot].champion.Text();
-        chatStatus.Text(L"待发送："+hstring(name)+(kind==L"mastery"?L"熟练度":L"梯队")+L"。请按 Win＋G 返回游戏，保持聊天输入框关闭（20 秒内）。");
+        auto metric=kind==L"mastery"?L"熟练度":kind==L"deathStreak"?L"连死次数":L"梯队";
+        chatStatus.Text(L"待发送："+hstring(name)+metric+L"。请按 Win＋G 返回游戏，保持聊天输入框关闭（20 秒内）。");
         SaveChatRequest();UpdateChatButtons();
     }
     void SaveChatRequest()

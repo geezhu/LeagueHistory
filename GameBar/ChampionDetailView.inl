@@ -80,10 +80,10 @@
         }
         if(selectedCard<0)return;
         detailTitle.Text(cards[selectedCard].champion.Text()+L"  "+cards[selectedCard].tier.Text());
-        detailStats.Text(cards[selectedCard].stats.Text());
+        detailStats.Text(cards[selectedCard].stats.Text()+(cards[selectedCard].deathStreak.Text().empty()?L"":L" · "+cards[selectedCard].deathStreak.Text()));
         detailMastery.Text(cards[selectedCard].player.Text()+L" · "+cards[selectedCard].mastery.Text());
         ToolTipService::SetToolTip(detailMastery,box_value(cards[selectedCard].masteryDetails));
-        ToolTipService::SetToolTip(detailStats,box_value(cards[selectedCard].details));
+        ToolTipService::SetToolTip(detailStats,box_value(cards[selectedCard].details+L"\n"+cards[selectedCard].deathStreakDetails));
         bool mayhem=detailQueue==2400 || detailQueue==3270;
         tabButtons[2].Visibility(mayhem?Visibility::Collapsed:Visibility::Visible);
         tabButtons[3].Visibility(mayhem?Visibility::Visible:Visibility::Collapsed);

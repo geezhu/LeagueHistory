@@ -17,6 +17,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     private readonly System.Windows.Forms.Timer _poll=new(){Interval=3000},_follow=new(){Interval=300},_paint=new(){Interval=100};
     private readonly CancellationTokenSource _life=new();
     private readonly Dictionary<string,PlayerChampionTier> _ranks=new();
+    private IReadOnlyDictionary<string,LiveDeathStreak> _deathStreaks=new Dictionary<string,LiveDeathStreak>();
     private readonly HashSet<string> _rankRequests=new();
     private readonly Dictionary<string,long> _rankRetry=new();
     private readonly Dictionary<int,Image> _icons=new();
@@ -31,7 +32,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     private readonly LoadingOverlayDisplayState _display=new();
     private readonly OverlayFullscreenGuard _fullscreen=new();
     private bool _wanted=>_display.Requested;
-    private long _lastPhaseRead,_nextWindowSearch;
+    private long _lastPhaseRead,_lastDeathStreakRead,_nextWindowSearch;
     private string _visibilityReason="";
     private string _identitySummary="";
     private int _generation;
@@ -108,6 +109,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
         CancelDetail();
         _status=LoadingRoster.WaitingStatus(_phase);
         _masteries.Clear();
+        _deathStreaks=new Dictionary<string,LiveDeathStreak>();_lastDeathStreakRead=0;
         _identitySummary="";
         if(_roster!=null || _match.Length>0){_generation++;_roster=null;_match="";_ranks.Clear();_rankRequests.Clear();_rankRetry.Clear();}
         _gameWindow=IntPtr.Zero;_nextWindowSearch=0;_fullscreen.Reset();
@@ -137,11 +139,13 @@ internal sealed partial class LoadingOverlayManager : IDisposable
             }
             var roster=LoadingRoster.Parse(flow,_own);
             int clientPlayers=roster.Players.Length,livePlayers=0;
-            if(roster.Players.Length<10 && LoadingRoster.CanDisplay(phase))
+            LiveMatchSnapshot? liveSnapshot=null;
+            if(LoadingRoster.CanDisplay(phase))
             {
                 try
                 {
                     var live=await _live.GetAsync(timeout.Token);
+                    liveSnapshot=live;
                     livePlayers=live.Players.Length;
                     if(live.Players.Length>=roster.Players.Length)
                     {
@@ -160,6 +164,8 @@ internal sealed partial class LoadingOverlayManager : IDisposable
             match+="/"+roster.Queue;
             if(_match!=match){CancelDetail();_generation++;_ranks.Clear();_rankRequests.Clear();_rankRetry.Clear();_masteries.Clear();_match=match;}
             _roster=roster;
+            _deathStreaks=LiveDeathStreakAnalysis.ForRoster(roster,liveSnapshot);
+            _lastDeathStreakRead=liveSnapshot!=null?Environment.TickCount64:0;
             string identitySummary=$"lcu={clientPlayers} live={livePlayers} roster={roster.Players.Length} confirmed={roster.Players.Count(p=>LoadingRosterIdentityService.HasPuuid(p.Puuid))} hidden={roster.Players.Count(p=>p.IdentityHidden)}";
             if(identitySummary!=_identitySummary){_identitySummary=identitySummary;RoomLoadDiagnostics.Shared.Report(_generation,"overlay-identities",detail:identitySummary);}
             _status=$"{(phase=="ChampSelect"?"准备进入对局":"当前对局")} · 已读取 {roster.Players.Length} 人 · {DateTime.Now:HH:mm:ss} · 点击卡片查看{(UseGameBar?"英雄详情":"缓存战绩")}";
@@ -207,7 +213,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     private void PublishGameBar(bool? enabled=null)=>_gameBar.Publish(_roster,_ranks,_icons,Champion,Details,_match,
         enabled==false?"对局速览已停止同步。":LoadingRoster.CanDisplay(_phase)?_status:LoadingRoster.WaitingStatus(_phase),
         enabled??(UseGameBar && (_owner.GetAppConfig()?.EnableLoadingOverlay??true)),
-        LoadingRoster.CanDisplay(_phase) && Environment.TickCount64-_lastPhaseRead<=15000,_wanted && !_display.Preview,_masteries);
+        LoadingRoster.CanDisplay(_phase) && Environment.TickCount64-_lastPhaseRead<=15000,_wanted && !_display.Preview,_masteries,_deathStreaks);
     private void PaintSnapshot()
     {
         if(_disposed)return;
