@@ -22,6 +22,8 @@ internal static class OverlayTierChatChecks
         var single=(JObject)data.DeepClone();single["target"]="single";single["slot"]=5;single["championId"]=103;
         single["kind"]="mastery";
         Check(OverlayChatRequest.Parse(single,"match",slots,now)?.Kind=="mastery","Mastery uses the validated current roster command");
+        single["kind"]="deathStreak";
+        Check(OverlayChatRequest.Parse(single,"match",slots,now)?.Kind=="deathStreak","Death streak uses the validated current roster command");
         Check(OverlayChatRequest.Parse(single,"match",slots,now)?.ChampionId==103,"Enemy single selection accepted");
         single["slot"]=2;Check(OverlayChatRequest.Parse(single,"match",slots,now)==null,"Empty slot cannot send");
         var seen=new OverlayChatRequests();
@@ -36,6 +38,7 @@ internal static class OverlayTierChatChecks
         Check(gate.Observe(ready with{Cancelled=true},now+900,true)==OverlayChatReadiness.Cancelled,"Explicit cancellation suppresses input");
         Check(gate.Observe(other,now+900,true)==OverlayChatReadiness.Cancelled && gate.Observe(ready with{Target="enemy"},now+900,true)==OverlayChatReadiness.Cancelled,"Changed request or scope cannot repurpose a pending send");
         Check(gate.Observe(ready with{Kind="mastery"},now+900,true)==OverlayChatReadiness.Cancelled,"Changing tier to mastery cancels the pending command");
+        Check(gate.Observe(ready with{Kind="deathStreak"},now+900,true)==OverlayChatReadiness.Cancelled,"Changing the metric to death streak cancels the pending command");
         Check(gate.Observe(ready,now+20000,true)==OverlayChatReadiness.TimedOut,"A late return to the game never sends stale text");
 
         var roster=new LoadingRoster("game",2400,"KIWI",[
@@ -60,8 +63,9 @@ internal static class OverlayTierChatChecks
         try{_=Own();}catch(InvalidOperationException){rejected=true;}
         Check(rejected,"Unloaded statistics do not send empty placeholder messages");
         CheckMastery(roster,request,Hero);
+        CheckDeathStreak(roster,request,Hero);
         Task.Run(CheckBridge).GetAwaiter().GetResult();
-        Console.WriteLine("PASS: Game Bar team/single chat, rates, request validation, replay prevention, cancellation, foreground/dismissal gate and timeout. No game input sent.");
+        Console.WriteLine("PASS: Game Bar team/single chat, rates, mastery, death streaks, request validation, replay prevention, cancellation, foreground/dismissal gate and timeout. No game input sent.");
     }
     private static void CheckMastery(LoadingRoster roster,OverlayChatRequest request,Func<int,string> hero)
     {
@@ -87,6 +91,36 @@ internal static class OverlayTierChatChecks
         var lines=ChampionMasteryChatMessage.Build("海克斯大乱斗","我方",Enumerable.Range(0,5).Select(i=>new ChampionMasteryChatEntry(new string('英',24)+i,new(1,123,3000000000,null,true))));
         Check(lines.Count>1 && lines.All(l=>l.Length<=180) && lines.All(l=>l.StartsWith("【海克斯大乱斗·我方】")),"Long team messages split with context before the game chat limit");
     }
+    private static void CheckDeathStreak(LoadingRoster roster,OverlayChatRequest request,Func<int,string> hero)
+    {
+        request=request with{Kind="deathStreak"};
+        var streaks=new Dictionary<string,LiveDeathStreak>{["self"]=new(3,5,true,"complete"),["ally"]=new(0,2,true,"complete"),["enemy"]=new(2,4,false,"partial")};
+        string Message(OverlayChatRequest command,LoadingRoster? source=null,Func<int,string>? names=null)=>string.Join("\n",OverlayDeathStreakChatMessage.Build(source??roster,command,streaks,names??hero));
+        string own=Message(request);
+        Check(own=="【海克斯大乱斗·我方】连死/本局最高：拉克丝 3/5、莫甘娜 0/2","Confirmed zero and highest remain sendable, with own red-side players only");
+        Check(Message(request with{Target="enemy"}).Contains("阿狸 2/4（已记录）"),"Partial history is explicit instead of presented as a complete match");
+        var single=request with{Target="single",Slot=5,ChampionId=103};
+        Check(Message(single).Contains("·英雄") && !Message(single).Contains("拉克丝"),"Single selection sends exactly the selected hero");
+        streaks["ally"]=LiveDeathStreak.Unavailable();
+        Check(Message(request).Contains("莫甘娜 未知") && !Message(request).Contains("secret") && !Message(request).Contains("private"),"Unknown rows never become zero or expose account identifiers");
+        var hidden=roster with{Players=roster.Players.Select(p=>p.Key=="ally"?p with{IdentityHidden=true}:p).ToArray()};
+        streaks["ally"]=new(5,5,true,"unexpected cached value");
+        Check(Message(request,hidden).Contains("莫甘娜 未知"),"Hidden identities do not inherit another player's counts");
+        bool Rejected(OverlayChatRequest command,LoadingRoster? source=null){try{_=Message(command,source);return false;}catch(InvalidOperationException){return true;}}
+        streaks["enemy"]=new(-1,4,true,"");Check(Rejected(single),"Invalid counters are not sent");
+        streaks["enemy"]=new(5,2,true,"");Check(Rejected(single),"Highest cannot be less than current");
+        streaks["enemy"]=new(0,null,true,"");Check(Rejected(single),"Missing highest is not presented as a numeric count");
+        Check(Rejected(single with{ChampionId=99}),"Changed selected hero cannot send");
+        Check(Rejected(request,roster with{Players=roster.Players.Select(p=>p with{Self=false}).ToArray()}),"Team selection never guesses own side");
+        streaks["enemy"]=new(2,4,true,"");
+        string rift=Message(single,roster with{Queue=420,Mode="CLASSIC"});
+        Check(rift.Contains("召唤师峡谷") && !rift.Contains("arammeta") && !rift.Contains("OP.GG"),"Event-derived counters carry the actual mode rather than a statistics provider");
+        string[] lines=OverlayDeathStreakChatMessage.Build(roster,request,streaks,id=>new string('英',120)+id).ToArray();
+        Check(lines.Length>1 && lines.All(l=>l.Length<=180) && lines.All(l=>l.StartsWith("【海克斯大乱斗·我方】")),"Long entries split with context below the game chat limit");
+        Check(Message(single,names:_=>"阿狸\r\n英雄").Count(c=>c=='\n')==0,"Resource names cannot inject additional chat lines");
+        Check(Message(single,names:_=>new string('英',500)).Length<=180,"A single unusual name is also bounded");
+        streaks.Clear();Check(Rejected(request),"An entirely unavailable history does not send placeholder-only text");
+    }
     private static async Task CheckBridge()
     {
         string folder=Path.Combine(Path.GetTempPath(),"League-chat-check-"+Guid.NewGuid().ToString("N"));
@@ -98,11 +132,13 @@ internal static class OverlayTierChatChecks
             Publish("one");string snapshot=Path.Combine(folder,"snapshot.json");
             Check(SpinWait.SpinUntil(()=>File.Exists(snapshot),5000),"Snapshot written");
             var source=JObject.Parse(await File.ReadAllTextAsync(snapshot));
-            Check((int?)source["chatProtocol"]==1 && (bool?)source["chatTeams"]==true && (bool?)source["chatMastery"]==true,"Send capability, mastery extension and side identity advertised");
+            Check((int?)source["chatProtocol"]==1 && (bool?)source["chatTeams"]==true && (bool?)source["chatMastery"]==true && (bool?)source["chatDeathStreak"]==true,"Send capabilities and side identity advertised");
             var data=new JObject{["protocol"]=1,["id"]=Guid.NewGuid().ToString("N"),["session"]=source["session"],
                 ["target"]="single",["kind"]="mastery",["slot"]=0,["championId"]=99,["updatedAt"]=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),["dismissed"]=false,["cancelled"]=false};
             string file=Path.Combine(folder,"chat-request.json");await File.WriteAllTextAsync(file,data.ToString());
             var request=await bridge.ReadChatRequestAsync();Check(request!=null && !request.Dismissed && request.Kind=="mastery","Mastery click reaches main process before dismissal");
+            data["kind"]="deathStreak";await File.WriteAllTextAsync(file,data.ToString());
+            request=await bridge.ReadChatRequestAsync();Check(request?.Kind=="deathStreak" && !request.Dismissed,"Death streak command reaches the main process");
             data["dismissed"]=true;await File.WriteAllTextAsync(file,data.ToString());
             var ready=await bridge.ReadChatRequestAsync();Check(ready!.Dismissed && ready.SameCommand(request!),"Closing Game Bar updates the same command without a new send");
             bridge.PublishChatStatus(request!,"permission","请以管理员身份启动 League.exe。",true);

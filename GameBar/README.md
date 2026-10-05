@@ -70,6 +70,10 @@ Get-AppxPackage -Name LeagueHistory.GameBar | Remove-AppxPackage
 
 LCU 因隐藏玩家只返回部分名单时，先查询已公开召唤师的完整 Riot ID，再与 Live Client 十人名单合并，保留其 PUUID。隐藏位置不按英雄猜账号；无法匹配的公开身份显示“成就待确认”。身份资料按对局与连接缓存，失败退避一分钟；`room-players.log` 的 `overlay-identities` 行记录名单和已确认 / 隐藏人数，不写账号或名称。
 
+连续死亡：对局页面和 Game Bar 卡片 / 详情显示“连死 N · 最高 M”。死亡加一，击杀清零，助攻不清零；环境死亡也计入。复用现有轮询，从 2999 的本局事件历史重建并去重，不跨对局累计、不另行落盘。死亡 / 击杀总数用于检查历史完整性；`*` 表示仅统计已取得的事件，悬浮可看规则。缺少事件、隐藏 / 重名身份或比分尚未同步时显示未知，避免显示假的零。
+
+Game Bar 底部“发送连死”菜单支持我方、敌方及当前选中英雄，发送格式为 `【海克斯大乱斗·我方】连死/本局最高：拉克丝 3/5、莫甘娜 0/2`。不完整历史标注“已记录”，无法匹配的玩家显示“未知”；全部未知或事件超过 15 秒未更新时拒绝发送。退出 Win＋G 后，主程序使用最新轮询结果生成文案，复用已有权限、对局核对、取消与返回游戏检查，不自动发送、不新增快捷键。
+
 ```powershell
 dotnet run --project Tests/StatisticsChecks/StatisticsChecks.csproj -c Release -- --loading-overlay-checks
 ```

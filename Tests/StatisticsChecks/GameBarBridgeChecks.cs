@@ -35,8 +35,9 @@ internal static class GameBarBridgeChecks
             var ranks=new Dictionary<string,PlayerChampionTier>{["self-key"]=new("T4","胜 48.5%","arammeta · 调整后胜率",2400,"none"){PickRate="7.1%"}};
             var icons=new Dictionary<int,Image>{[2]=icon};
             var mastery=new Dictionary<string,PlayerChampionMastery>{["self-key"]=new(2,12,186321,null,true),["enemy-key"]=new(1,5,2000,null,true)};
+            var streaks=new Dictionary<string,LiveDeathStreak>{["self-key"]=new(3,5,true,"完整历史"),["enemy-key"]=LiveDeathStreak.Unavailable()};
             var bridge=new GameBarBridge(folder);
-            void Publish(bool enabled=true,bool active=true)=>bridge.Publish(roster,ranks,icons,id=>"英雄 "+id,_=>"近期 20 场，12 胜","match-1","当前对局",enabled,active,true,mastery);
+            void Publish(bool enabled=true,bool active=true)=>bridge.Publish(roster,ranks,icons,id=>"英雄 "+id,_=>"近期 20 场，12 胜","match-1","当前对局",enabled,active,true,mastery,streaks);
             Publish();
             string file=Path.Combine(folder,"snapshot.json");
             Check(SpinWait.SpinUntil(()=>File.Exists(file),5000),"Game Bar snapshot is written asynchronously");
@@ -51,6 +52,8 @@ internal static class GameBarBridgeChecks
             Check(latest["players"]!.Count()==10 && !latest["players"]![1]!.HasValues,"Missing slots stay on the correct team");
             Check((string?)latest["players"]![5]!["name"]=="Enemy","Enemy remains in the other column");
             Check(((string?)latest["players"]![0]!["mastery"])?.Contains("12级")==true && ((string?)latest["players"]![5]!["mastery"])?.Contains("5级")==true,"Player mastery is independent on both teams");
+            Check((int?)latest["players"]![0]!["currentDeathStreak"]==3 && (int?)latest["players"]![0]!["maxDeathStreak"]==5 && (bool?)latest["players"]![0]!["deathStreakComplete"]==true && ((string?)latest["players"]![0]!["deathStreak"])?.Contains("连死 3")==true,"Current/highest death streaks and completeness cross the bridge");
+            Check(latest["players"]![5]!["currentDeathStreak"]!.Type==JTokenType.Null,"Unavailable event data remains unknown instead of becoming zero");
             Check((string?)latest["players"]![0]!["tier"]=="T4" && ((string)latest["players"]![0]!["stats"]!).Contains("7.1%"),"Tier, win rate and pick rate cross the bridge");
             using var imageBytes=new MemoryStream(Convert.FromBase64String((string)latest["players"]![0]!["icon"]!));
             using var decoded=Image.FromStream(imageBytes);

@@ -12,6 +12,8 @@ internal static class Program
     {
         if(args.Contains("--mastery-live-diagnostics")){Task.Run(MasteryLiveDiagnostics.Run).GetAwaiter().GetResult();return;}
         if(args.Contains("--roster-identity-checks")){Task.Run(LoadingRosterIdentityChecks.Run).GetAwaiter().GetResult();return;}
+        if(args.Contains("--death-streak-checks")){LiveDeathStreakChecks.Run();return;}
+        if(args.Contains("--death-streak-live-diagnostics")){Task.Run(LiveDeathStreakChecks.RunLiveAsync).GetAwaiter().GetResult();return;}
         if(args.Contains("--room-player-checks")){RoomPlayerChecks.Run();return;}
         if(args.Contains("--config-checks")){LeagueConfigChecks.Run();return;}
         if(args.Contains("--shutdown-checks")){ShutdownSettingsChecks.Run();return;}
@@ -27,6 +29,7 @@ internal static class Program
         ChampionAnalysisChecks.Run();
         AssistantVisibilityChecks.Run();
         ChampionTierChatChecks.Run();
+        LiveDeathStreakChecks.Run();
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
