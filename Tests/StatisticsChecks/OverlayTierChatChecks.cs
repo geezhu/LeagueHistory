@@ -46,7 +46,7 @@ internal static class OverlayTierChatChecks
         string Own()=>string.Join("\n",OverlayTierChatMessage.Build(roster,request,ranks,Hero));
         Check(Own().Contains("我方") && Own().Contains("拉克丝") && Own().Contains("莫甘娜") && !Own().Contains("阿狸"),"Red-side self maps to own team correctly");
         string enemy=string.Join("",OverlayTierChatMessage.Build(roster,request with{Target="enemy"},ranks,Hero));
-        Check(enemy.Contains("阿狸") && !enemy.Contains("拉克丝") && enemy.Contains("调整后胜率 52.7%｜样本选取率 8.6%"),"Enemy tier preserves Mayhem definitions and rates");
+        Check(enemy.Contains("阿狸 T2 52.7%/8.6%") && !enemy.Contains("拉克丝") && enemy.Contains("调整后胜率/样本选取率"),"Enemy tier preserves Mayhem definitions and rates");
         var individual=request with{Target="single",Slot=5,ChampionId=103};
         Check(OverlayTierChatMessage.Select(roster,individual).Single().Key=="enemy","Single selection uses exactly the clicked slot");
         var unknown=roster with{Players=roster.Players.Select(p=>p with{Self=false}).ToArray()};
@@ -55,7 +55,7 @@ internal static class OverlayTierChatChecks
         Check(OverlayTierChatMessage.Select(roster,individual with{ChampionId=99}).Length==0,"Changed hero is rejected");
         ranks["self"]=ranks["self"] with{Position="mid",ReferencePosition=true,Version="16.18",Queue=420};
         string normal=string.Join("",OverlayTierChatMessage.Build(roster with{Queue=420,Mode="CLASSIC"},request with{Target="single",Slot=0,ChampionId=99},ranks,Hero));
-        Check(normal.Contains("召唤师峡谷") && normal.Contains("OP.GG") && normal.Contains("参考中路") && normal.Contains("胜率 52.7%｜登场率 8.6%"),"Rift messages retain the reference lane instead of presenting it as the actual role");
+        Check(normal.Contains("召唤师峡谷") && normal.Contains("OP.GG") && normal.Contains("参考中路") && normal.Contains("胜率/登场率") && normal.Contains("52.7%/8.6%"),"Rift messages retain the reference lane instead of presenting it as the actual role");
         ranks.Clear();bool rejected=false;
         try{_=Own();}catch(InvalidOperationException){rejected=true;}
         Check(rejected,"Unloaded statistics do not send empty placeholder messages");
