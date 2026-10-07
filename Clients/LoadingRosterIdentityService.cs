@@ -20,7 +20,7 @@ public sealed class LoadingRosterIdentityService(Func<HttpClient?> client)
     public static bool HasPuuid(string value) => !string.IsNullOrWhiteSpace(value) && (!Guid.TryParse(value, out var id) || id != Guid.Empty);
 
     public async Task<LoadingRoster> MergeAsync(LoadingRoster roster, JObject flow, string own,
-        LiveMatchSnapshot live, Func<string, int> champion, CancellationToken token)
+        LiveMatchSnapshot live, Func<LiveMatchPlayer, int> champion, CancellationToken token)
     {
         var candidates = roster.Players.ToList();
         bool missingPublic = live.Players.Count(p => p.Name.Trim() != "#") > candidates.Count(p => HasPuuid(p.Puuid) || p.SummonerId > 0);

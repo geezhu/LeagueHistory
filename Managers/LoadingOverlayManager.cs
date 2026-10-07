@@ -34,7 +34,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     private bool _wanted=>_display.Requested;
     private long _lastPhaseRead,_lastDeathStreakRead,_nextWindowSearch;
     private string _visibilityReason="";
-    private string _identitySummary="";
+    private string _identitySummary="",_championIssue="";
     private int _generation;
     private IntPtr _gameWindow;
     public LoadingOverlayManager(FormMain owner)
@@ -110,7 +110,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
         _status=LoadingRoster.WaitingStatus(_phase);
         _masteries.Clear();
         _deathStreaks=new Dictionary<string,LiveDeathStreak>();_lastDeathStreakRead=0;
-        _identitySummary="";
+        _identitySummary="";_championIssue="";
         if(_roster!=null || _match.Length>0){_generation++;_roster=null;_match="";_ranks.Clear();_rankRequests.Clear();_rankRetry.Clear();}
         _gameWindow=IntPtr.Zero;_nextWindowSearch=0;_fullscreen.Reset();
         if(!_display.Preview){_display.Reset();_follow.Stop();_window?.Hide();}
@@ -149,7 +149,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
                     livePlayers=live.Players.Length;
                     if(live.Players.Length>=roster.Players.Length)
                     {
-                        roster=await _rosterIdentity.MergeAsync(roster,flow,_own,live,alias=>FormMain.Globals.resLoading?.Champions.Champions.FirstOrDefault(c=>c.Alias.Equals(alias,StringComparison.OrdinalIgnoreCase))?.Id??0,timeout.Token);
+                        roster=await _rosterIdentity.MergeAsync(roster,flow,_own,live,p=>LiveChampionIdentity.Resolve(p,FormMain.Globals.resLoading?.Champions.Champions??[])?.Id??0,timeout.Token);
                         int normalized=PlayerChampionTier.NormalizeQueue(roster.Queue,live.Mode);
                         roster=roster with {Queue=normalized};
                         if(flow["gameData"] is not JObject)flow["gameData"]=new JObject();
@@ -166,6 +166,13 @@ internal sealed partial class LoadingOverlayManager : IDisposable
             _roster=roster;
             _deathStreaks=LiveDeathStreakAnalysis.ForRoster(roster,liveSnapshot);
             _lastDeathStreakRead=liveSnapshot!=null?Environment.TickCount64:0;
+            if(liveSnapshot!=null)
+            {
+                var catalog=FormMain.Globals.resLoading?.Champions.Champions??[];
+                var unknown=liveSnapshot.Players.Where(p=>LiveChampionIdentity.Resolve(p,catalog)==null).ToArray();
+                string issue=unknown.Length==0?"":$"catalog={catalog.Count} unresolved={unknown.Length} raw="+string.Join(",",unknown.Select(p=>p.RawChampionName[..Math.Min(80,p.RawChampionName.Length)]).Distinct());
+                if(issue!=_championIssue){_championIssue=issue;RoomLoadDiagnostics.Shared.Report(_generation,"overlay-heroes",detail:issue.Length>0?issue:"英雄识别已恢复。");}
+            }
             string identitySummary=$"lcu={clientPlayers} live={livePlayers} roster={roster.Players.Length} confirmed={roster.Players.Count(p=>LoadingRosterIdentityService.HasPuuid(p.Puuid))} hidden={roster.Players.Count(p=>p.IdentityHidden)}";
             if(identitySummary!=_identitySummary){_identitySummary=identitySummary;RoomLoadDiagnostics.Shared.Report(_generation,"overlay-identities",detail:identitySummary);}
             _status=$"{(phase=="ChampSelect"?"准备进入对局":"当前对局")} · 已读取 {roster.Players.Length} 人 · {DateTime.Now:HH:mm:ss} · 点击卡片查看{(UseGameBar?"英雄详情":"缓存战绩")}";

@@ -82,8 +82,7 @@ public sealed partial class LiveMatchView : UserControl
     }
     private Button Button(string text)=>new(){Text=text,AutoSize=true,FlatStyle=FlatStyle.Flat,BackColor=Color.FromArgb(16,45,57),ForeColor=ForeColor};
     private LiveMatchPlayer? Selected()=>_snapshot?.Players.FirstOrDefault(p=>p.Key==_selectedKey);
-    private static int ChampionId(LiveMatchPlayer? player)=>player==null?0:FormMain.Globals.resLoading.Champions.Champions
-        .FirstOrDefault(c=>!string.IsNullOrEmpty(player.ChampionAlias) && c.Alias.Equals(player.ChampionAlias,StringComparison.OrdinalIgnoreCase))?.Id??0;
+    private static int ChampionId(LiveMatchPlayer? player)=>player==null?0:LiveChampionIdentity.Resolve(player,FormMain.Globals.resLoading.Champions.Champions)?.Id??0;
     private static string ChampionName(LiveMatchPlayer player)=>FormMain.Globals.resLoading.GetChampionById(ChampionId(player))?.Name??player.ChampionName;
     private static string ItemName(int id,string fallback="")=>FormMain.Globals.resLoading.GetItemById(id)?.Name??(fallback.Length>0?fallback:$"装备 {id}");
     private static string Rate(double? value)=>value.HasValue?value.Value.ToString("P1"):"—";
