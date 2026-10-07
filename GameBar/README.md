@@ -66,6 +66,8 @@ Get-AppxPackage -Name LeagueHistory.GameBar | Remove-AppxPackage
 
 ## 验证
 
+英雄识别兼容 `game_character_displayname_<英雄>` 和 `Character_<英雄>_Name`（例如萨勒芬妮的 `Character_Seraphine_Name`），并可用客户端资源中的完整名称匹配。合并名单时，若实时名称暂不能识别，保留同阵营、身份唯一匹配的 LCU 英雄编号；不按位置或相同英雄猜账号。未识别的游戏名称标识会在 `room-players.log` 的 `overlay-heroes` 行记录，状态变化时才写入，不包含玩家名称和账号。
+
 熟练度发送：选人助手的成就行可发送自己当前英雄的等级与点数；Game Bar 底部的“发送熟练度”菜单可选择我方、敌方或当前英雄。Game Bar 沿用游戏聊天发送流程，主程序需要管理员权限，点击后须在 20 秒内按 Win＋G 返回游戏并保持聊天框关闭。过期缓存与未公开身份会标注，全部数据不可用时拒绝发送。组件只提交发送类型和当前对局的英雄位置，由主程序生成文本；没有新增快捷键。
 
 LCU 因隐藏玩家只返回部分名单时，先查询已公开召唤师的完整 Riot ID，再与 Live Client 十人名单合并，保留其 PUUID。隐藏位置不按英雄猜账号；无法匹配的公开身份显示“成就待确认”。身份资料按对局与连接缓存，失败退避一分钟；`room-players.log` 的 `overlay-identities` 行记录名单和已确认 / 隐藏人数，不写账号或名称。

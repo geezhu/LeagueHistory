@@ -85,6 +85,17 @@ internal static class LiveMatchChecks
         using(var image=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(image,new Rectangle(Point.Empty,form.Size));image.Save(Path.Combine(AppContext.BaseDirectory,"live-match-narrow.png"));}
         Check(All(view).OfType<Button>().Any(b=>b.BackgroundImage!=null),"Icons survive responsive layout");
         Check(imageCalls.Values.All(count=>count==1),"Each icon is loaded once across duplicate champions, recommendations and resizing");
+        var testSeraphine=new Champion{Id=147,Alias="Seraphine",Name="星籁歌姬",Description=""};champions.Add(testSeraphine);
+        try
+        {
+            var alternate=JObject.Parse(Sample);alternate["allPlayers"]![1]!["rawChampionName"]="Character_Seraphine_Name";
+            alternate["allPlayers"]![1]!["championName"]="星籁歌姬";
+            type.GetField("_currentQueue",flags)!.SetValue(view,0);
+            type.GetField("_snapshot",flags)!.SetValue(view,LiveMatchSnapshot.Parse(alternate));
+            type.GetMethod("Render",flags)!.Invoke(view,null);
+            Check(All(view).OfType<Label>().Any(l=>l.Text=="星籁歌姬") && imageCalls.ContainsKey(("champion",147)),"The live page resolves Seraphine's alternate key into the actual champion and portrait");
+        }
+        finally{champions.Remove(testSeraphine);}
         handler.Fail=true;
         var task=(Task)type.GetMethod("PollAsync",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(view,null)!;
         while(!task.IsCompleted){Application.DoEvents();Thread.Sleep(5);}task.GetAwaiter().GetResult();
