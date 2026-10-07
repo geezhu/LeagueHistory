@@ -46,7 +46,7 @@ public sealed class LiveTierChatService : IDisposable
         var catalog=champions.ToArray();
         var rows=match.Players.Where(p=>p.Team!="UNKNOWN" && (enemy?p.Team!=self.Team:p.Team==self.Team)).Select(p=>
         {
-            var hero=catalog.FirstOrDefault(c=>!string.IsNullOrWhiteSpace(p.ChampionAlias) && c.Alias.Equals(p.ChampionAlias,StringComparison.OrdinalIgnoreCase));
+            var hero=LiveChampionIdentity.Resolve(p,catalog);
             var rank=ranks.GetValueOrDefault(hero?.Id??0);
             return new ChampionTierChatEntry(hero?.Name??p.ChampionName,rank.Tier??"暂无梯队",rank.Win,rank.Pick);
         });

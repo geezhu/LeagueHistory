@@ -7,6 +7,7 @@ public sealed record LiveMatchPlayer(string Key, string Name, string ChampionAli
     string Team, bool Self, int Level, LiveMatchItem[]? Items)
 {
     public string[] EventAliases { get; init; } = [];
+    public string RawChampionName { get; init; } = "";
     public int? Kills { get; init; }
     public int? Deaths { get; init; }
     public bool IsBot { get; init; }
@@ -29,9 +30,8 @@ public sealed record LiveMatchSnapshot(string Mode, int Map, double Time, LiveMa
             if(bot && (string.IsNullOrWhiteSpace(name) || name.Trim()=="#"))name=(string?)row["summonerName"]??$"机器人 {index+1}";
             bool self=!string.IsNullOrWhiteSpace(activeId)?(string?)row["riotId"]==activeId:
                 !string.IsNullOrWhiteSpace(activeName) && (string?)row["summonerName"]==activeName;
-            const string prefix="game_character_displayname_";
             string raw=(string?)row["rawChampionName"]??"";
-            string alias=raw.StartsWith(prefix,StringComparison.Ordinal)?raw[prefix.Length..]:"";
+            string alias=LiveChampionIdentity.ReadAlias(raw);
             var items=(row["items"] as JArray)?.OfType<JObject>().Where(i=>(int?)i["itemID"]>0)
                 .Select(i=>new LiveMatchItem((int)i["itemID"]!,(string?)i["displayName"]??"未知装备",Math.Max(1,(int?)i["count"]??1))).ToArray();
             static int? Score(JToken? value) => value?.Type == JTokenType.Integer && int.TryParse(value.ToString(), out int count) && count >= 0 ? count : null;
@@ -42,7 +42,7 @@ public sealed record LiveMatchSnapshot(string Mode, int Map, double Time, LiveMa
                 (string?)row["team"]??"UNKNOWN",self,(int?)row["level"]??0,items)
             {
                 EventAliases = new[]{riot,(string?)row["summonerName"],gameName}.Where(n=>!string.IsNullOrWhiteSpace(n) && n.Trim()!="#").Select(n=>n!).Distinct().ToArray(),
-                Kills=Score(row["scores"]?["kills"]),Deaths=Score(row["scores"]?["deaths"]),IsBot=bot
+                Kills=Score(row["scores"]?["kills"]),Deaths=Score(row["scores"]?["deaths"]),IsBot=bot,RawChampionName=raw
             };
         }).ToArray();
         var events = new List<LiveMatchEvent>();

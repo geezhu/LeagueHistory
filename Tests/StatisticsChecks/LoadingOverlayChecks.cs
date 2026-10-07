@@ -53,7 +53,7 @@ internal static class LoadingOverlayChecks
         Check(LoadingRoster.WaitingStatus("Lobby").Contains("暂无进行中的对局") && LoadingRoster.WaitingStatus("EndOfGame").Contains("本局已结束"),"Lobby and game end are distinguished from connection failures");
         Check(LoadingRoster.WaitingStatus("ChampSelect").Contains("选人中") && LoadingRoster.WaitingStatus("").Contains("等待连接英雄联盟客户端"),"Missing client and champion selection have distinct waiting states");
         var live=new LiveMatchSnapshot("ARAM",12,0,[new("live-a","玩家甲#01","Lux","拉克丝","ORDER",true,1,[]),new("live-b","不同玩家","Morgana","莫甘娜","CHAOS",false,1,[])]);
-        var merged=roster.FromLive(live,a=>a=="Lux"?99:25);
+        var merged=roster.FromLive(live,p=>p.ChampionAlias=="Lux"?99:25);
         Check(merged.Players[0].Puuid=="a" && merged.Players[1].Puuid=="","Live merge never guesses identity from champion");
         var type=typeof(League.FormMain).Assembly.GetType("League.LoadingOverlayForm")!;
         using var form=(Form)Activator.CreateInstance(type,new object[]{(Func<int,string>)(id=>id==99?"光辉女郎":"堕落天使"),(Func<LoadingPlayer,string>)(_=>"单双排 钻石 · 近期 20 场 12 胜 8 负")})!;

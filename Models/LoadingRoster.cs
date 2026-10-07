@@ -32,7 +32,7 @@ public sealed record LoadingRoster(string GameId,int Queue,string Mode,LoadingPl
         }
         return new((string?)data["gameId"]??"",(int?)data["queue"]?["id"]??0,(string?)data["queue"]?["gameMode"]??(string?)data["gameMode"]??"",players.ToArray());
     }
-    public LoadingRoster FromLive(LiveMatchSnapshot live,Func<string,int> championId)=>this with
+    public LoadingRoster FromLive(LiveMatchSnapshot live,Func<LiveMatchPlayer,int> championId)=>this with
     {
         Players=live.Players.Select(p=>
         {
@@ -40,7 +40,12 @@ public sealed record LoadingRoster(string GameId,int Queue,string Mode,LoadingPl
             var matches=Players.Where(old=>old.Name.Length>0 && old.Name==p.Name).ToArray();
             var known=matches.Length==1?matches[0]:null;
             bool hidden=p.Name.Trim()=="#";
-            return new LoadingPlayer(known?.Key??p.Key,hidden?"隐藏玩家":p.Name,hidden?"":known?.Puuid??"",hidden?0:known?.SummonerId??0,championId(p.ChampionAlias),p.Team=="ORDER"?100:p.Team=="CHAOS"?200:0,p.Self,hidden);
+            int team=p.Team=="ORDER"?100:p.Team=="CHAOS"?200:0;
+            int hero=championId(p);
+            // An unavailable Live key must not erase an LCU pick joined by confirmed account identity.
+            if(hero<=0 && !hidden && known is{ChampionId:>0} && team>0 && (known.Team==0 || known.Team==team)
+                && (Clients.LoadingRosterIdentityService.HasPuuid(known.Puuid) || known.SummonerId>0))hero=known.ChampionId;
+            return new LoadingPlayer(known?.Key??p.Key,hidden?"隐藏玩家":p.Name,hidden?"":known?.Puuid??"",hidden?0:known?.SummonerId??0,hero,team,p.Self,hidden);
         }).ToArray()
     };
     public string TeamLabel(int team)
