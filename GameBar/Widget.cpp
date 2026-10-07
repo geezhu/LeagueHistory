@@ -78,9 +78,11 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     {
         Button button;
         Image icon;
-        TextBlock champion, player, tier, stats, mastery, deathStreak;
-        hstring imageData, details, masteryDetails, deathStreakDetails;
+        TextBlock champion, player, tier, stats, mastery, deathStreak, party;
+        Border partyBadge;
+        hstring imageData, details, masteryDetails, deathStreakDetails, partyLabel, partyDetails;
         int hero = 0;
+        uint32_t partyColor = 0;
     };
     Grid root;
     Grid list;
@@ -167,10 +169,13 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             card.deathStreak=MakeText(L"",11,0xf3b37e);card.deathStreak.Margin({6,3,0,0});Grid::SetColumn(card.deathStreak,2);heading.Children().Append(card.deathStreak);
             labels.Children().Append(heading);
             Grid account;
+            ColumnDefinition partyColumn;partyColumn.Width({1,GridUnitType::Auto});account.ColumnDefinitions().Append(partyColumn);
             account.ColumnDefinitions().Append(ColumnDefinition());
             ColumnDefinition masteryColumn;masteryColumn.Width({1,GridUnitType::Auto});account.ColumnDefinitions().Append(masteryColumn);
-            card.player = MakeText(L"空缺位置", 12, 0x91acbb); account.Children().Append(card.player);
-            card.mastery = MakeText(L"", 12, 0xdbc47f);card.mastery.Margin({8,0,0,0});Grid::SetColumn(card.mastery,1);account.Children().Append(card.mastery);
+            card.party=MakeText(L"",10);card.partyBadge.Child(card.party);card.partyBadge.Padding({4,0,4,0});card.partyBadge.CornerRadius({2});card.partyBadge.Background(MakeBrush(0x253e4c));
+            card.partyBadge.Margin({0,0,6,0});card.partyBadge.VerticalAlignment(VerticalAlignment::Center);card.partyBadge.Visibility(Visibility::Collapsed);account.Children().Append(card.partyBadge);
+            card.player = MakeText(L"空缺位置", 12, 0x91acbb);Grid::SetColumn(card.player,1);account.Children().Append(card.player);
+            card.mastery = MakeText(L"", 12, 0xdbc47f);card.mastery.Margin({8,0,0,0});Grid::SetColumn(card.mastery,2);account.Children().Append(card.mastery);
             labels.Children().Append(account);
             card.stats = MakeText(L"胜率 —    选用率 —", 12, 0x45c7ce); labels.Children().Append(card.stats);
             body.Children().Append(labels); card.button.Content(body);
@@ -256,6 +261,8 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             card.champion.Text(L"等待英雄"); card.player.Text(L"空缺位置"); card.tier.Text(L"—");
             card.stats.Text(L"胜率 —    选用率 —"); card.button.IsEnabled(false);
             card.mastery.Text(L""); card.masteryDetails=L"";card.deathStreak.Text(L"");card.deathStreakDetails=L"";
+            card.party.Text(L"");card.partyLabel=L"";card.partyDetails=L"";card.partyColor=0;card.partyBadge.Visibility(Visibility::Collapsed);
+            card.player.Foreground(MakeBrush(0x91acbb));card.button.BorderThickness({0});
         }
         details.Text(L"等待当前对局数据。");
     }
@@ -305,6 +312,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                 for (uint32_t i = 0; i < 2 && i < teamNames.Size(); ++i) teams[i].Text(teamNames.GetStringAt(i));
                 auto rows = data.GetNamedArray(L"players", JsonArray());
                 populatedCards = 0;
+                bool marked=false;
                 for (uint32_t i = 0; i < 10; ++i)
                 {
                     auto row = i < rows.Size() ? rows.GetObjectAt(i) : JsonObject();
@@ -314,7 +322,16 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                     card.hero=hero;
                     auto playerName = row.GetNamedString(L"name", L"空缺位置");
                     card.player.Text(playerName.empty() ? L"玩家名称尚未提供" : playerName); card.tier.Text(row.GetNamedString(L"tier", L"—"));
-                    ToolTipService::SetToolTip(card.player,box_value(playerName));
+                    int partySize=static_cast<int>(row.GetNamedNumber(L"partySize",0));
+                    card.partyColor=partySize>=2 && partySize<=5?static_cast<uint32_t>(row.GetNamedNumber(L"partyColor",0))&0xffffff:0;
+                    card.partyLabel=card.partyColor?row.GetNamedString(L"partyLabel",L""):L"";
+                    card.partyDetails=card.partyColor?row.GetNamedString(L"partyDetails",L""):L"";
+                    card.party.Text(card.partyColor?row.GetNamedString(L"party",L""):L"");card.party.Foreground(MakeBrush(card.partyColor));
+                    card.partyBadge.Visibility(card.partyColor?Visibility::Visible:Visibility::Collapsed);marked=marked || card.partyColor!=0;
+                    card.player.Foreground(MakeBrush(card.partyColor?card.partyColor:0x91acbb));
+                    card.button.BorderBrush(MakeBrush(card.partyColor?card.partyColor:0x315662));card.button.BorderThickness({card.partyColor?3.0:0.0,0,0,0});
+                    ToolTip partyTip;auto partyText=MakeText(card.partyDetails,12);partyText.TextWrapping(TextWrapping::Wrap);partyText.MaxWidth(320);partyTip.Content(partyText);ToolTipService::SetToolTip(card.partyBadge,partyTip);
+                    ToolTipService::SetToolTip(card.player,box_value(playerName+(card.partyDetails.empty()?L"":L"\n"+card.partyDetails)));
                     card.tier.Foreground(MakeBrush(static_cast<uint32_t>(row.GetNamedNumber(L"color", 0x91acbb))));
                     card.stats.Text(row.GetNamedString(L"stats", L"胜率 —    选用率 —"));
                     card.mastery.Text(row.GetNamedString(L"mastery", L""));
@@ -329,7 +346,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                     auto image = row.GetNamedString(L"icon", L""); if (card.imageData != image) SetImage(i, image);
                 }
                 if (selectedCard >= 0) RefreshDetailHeader();
-                else if (populatedCards > 0) details.Text(L"点击英雄卡片查看技能、出装与模式推荐；详情胜率属于英雄统计。");
+                else if (populatedCards > 0) details.Text(L"点击英雄卡片查看技能、出装与模式推荐；详情胜率属于英雄统计。"+hstring(marked?L"\n同色与人数标记：根据近期共同战绩推测的疑似组队。":L""));
                 if(fixturePreview && !fixtureOpened && populatedCards>0){fixtureOpened=true;if(detailTab!=L"roster")OpenDetails(0);}
                 auto nextCommand = data.GetNamedString(L"command", L"");
                 if (widget && command != nextCommand)

@@ -75,14 +75,16 @@
         for(int i=0;i<10;++i)
         {
             heroIcons[i].Source(cards[i].icon.Source()); heroButtons[i].IsEnabled(cards[i].hero>0);
-            heroButtons[i].BorderBrush(MakeBrush(i==selectedCard?0x43d8d7:0x315662));
-            ToolTipService::SetToolTip(heroButtons[i],box_value(teams[i/5].Text()+L" · "+cards[i].champion.Text()));
+            heroButtons[i].BorderBrush(MakeBrush(i==selectedCard?0x43d8d7:cards[i].partyColor?cards[i].partyColor:0x315662));
+            heroButtons[i].BorderThickness({cards[i].partyColor?2.0:1.0});
+            ToolTipService::SetToolTip(heroButtons[i],box_value(teams[i/5].Text()+L" · "+cards[i].champion.Text()+(cards[i].partyLabel.empty()?L"":L" · "+cards[i].partyLabel)));
         }
         if(selectedCard<0)return;
         detailTitle.Text(cards[selectedCard].champion.Text()+L"  "+cards[selectedCard].tier.Text());
         detailStats.Text(cards[selectedCard].stats.Text()+(cards[selectedCard].deathStreak.Text().empty()?L"":L" · "+cards[selectedCard].deathStreak.Text()));
-        detailMastery.Text(cards[selectedCard].player.Text()+L" · "+cards[selectedCard].mastery.Text());
-        ToolTipService::SetToolTip(detailMastery,box_value(cards[selectedCard].masteryDetails));
+        detailMastery.Text(cards[selectedCard].player.Text()+L" · "+cards[selectedCard].mastery.Text()+(cards[selectedCard].partyLabel.empty()?L"":L" · "+cards[selectedCard].partyLabel));
+        detailMastery.Foreground(MakeBrush(cards[selectedCard].partyColor?cards[selectedCard].partyColor:0xdbc47f));
+        ToolTipService::SetToolTip(detailMastery,box_value(cards[selectedCard].masteryDetails+(cards[selectedCard].partyDetails.empty()?L"":L"\n"+cards[selectedCard].partyDetails)));
         ToolTipService::SetToolTip(detailStats,box_value(cards[selectedCard].details+L"\n"+cards[selectedCard].deathStreakDetails));
         bool mayhem=detailQueue==2400 || detailQueue==3270;
         tabButtons[2].Visibility(mayhem?Visibility::Collapsed:Visibility::Visible);
