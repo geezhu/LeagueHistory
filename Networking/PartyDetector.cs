@@ -14,7 +14,8 @@ namespace League.Networking
         private Dictionary<string, string> parentMap = new Dictionary<string, string>();
         private int colorIndex = 0;
 
-        public PartyDetector(int matchThreshold = 2)
+        public const int DefaultMatchThreshold = 2;
+        public PartyDetector(int matchThreshold = DefaultMatchThreshold)
         {
             _matchThreshold = matchThreshold;
         }

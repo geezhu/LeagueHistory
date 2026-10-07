@@ -220,7 +220,8 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     private void PublishGameBar(bool? enabled=null)=>_gameBar.Publish(_roster,_ranks,_icons,Champion,Details,_match,
         enabled==false?"对局速览已停止同步。":LoadingRoster.CanDisplay(_phase)?_status:LoadingRoster.WaitingStatus(_phase),
         enabled??(UseGameBar && (_owner.GetAppConfig()?.EnableLoadingOverlay??true)),
-        LoadingRoster.CanDisplay(_phase) && Environment.TickCount64-_lastPhaseRead<=15000,_wanted && !_display.Preview,_masteries,_deathStreaks);
+        LoadingRoster.CanDisplay(_phase) && Environment.TickCount64-_lastPhaseRead<=15000,_wanted && !_display.Preview,_masteries,_deathStreaks,
+        OverlayPartyAnalysis.ForRoster(_roster,_owner._playerCardManager?.GetAllCachedPlayerInfos().Values.AsEnumerable()??[]));
     private void PaintSnapshot()
     {
         if(_disposed)return;

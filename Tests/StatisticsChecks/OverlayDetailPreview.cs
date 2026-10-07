@@ -46,7 +46,9 @@ internal static class OverlayDetailPreview
         {
             var streak=slot==3?LiveDeathStreak.Unavailable("布局样例：隐藏玩家无法匹配事件。")
                 :new LiveDeathStreak(slot%4,slot+3,slot!=2,slot==2?"* 布局样例：仅记录部分事件。":"布局样例：完整本局事件。");
-            row["deathStreak"]=streak.Text;row["deathStreakDetails"]=streak.Rule;slot++;
+            row["deathStreak"]=streak.Text;row["deathStreakDetails"]=streak.Rule;
+            var party=new OverlayPartyMarker(slot<5?5:slot<7?2:3,slot<5?0xff8d9e:slot<7?0xcba2ff:0xffce7a);
+            row["party"]=party.Badge;row["partySize"]=party.Size;row["partyColor"]=party.Color;row["partyLabel"]=party.Label;row["partyDetails"]=party.Description;slot++;
         }
         File.WriteAllText(Path.Combine(destination,"detail-preview-snapshot.json"),roster.ToString());
         Console.WriteLine("Detail preview fixture exported to "+destination);
