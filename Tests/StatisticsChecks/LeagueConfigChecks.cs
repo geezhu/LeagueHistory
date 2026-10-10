@@ -9,6 +9,7 @@ internal static class LeagueConfigChecks
     public static void Run()
     {
         Check(new LeagueConfig().ChampionMasteryCacheMinutes==30,"Old configurations default to a 30-minute mastery cache");
+        Check(JsonConvert.DeserializeObject<LeagueConfig>("{}")!.VoiceMicrophoneId=="","Old configurations follow the Windows default input");
         Check(JsonConvert.DeserializeObject<LeagueConfig>("{\"ChampionMasteryCacheMinutes\":120}")!.ChampionMasteryCacheMinutes==120,"Mastery expiry persists with user settings");
         string root = Path.Combine(Path.GetTempPath(), "League-Settings-" + Guid.NewGuid().ToString("N"));
         string shared = Path.Combine(root, "user"), oldExe = Path.Combine(root, "old"), newExe = Path.Combine(root, "new"), cwd = Path.Combine(root, "launch");
@@ -29,8 +30,10 @@ internal static class LeagueConfigChecks
             var upgraded = new LeagueConfigStore(shared, newExe, cwd);
             Check(upgraded.Load().LoadingOverlayBackend == "GameBar" && upgraded.Load().CustomSendContent == "保留我的设置", "Changing executable and launch directories keeps the same preferences");
             migrated.LoadingOverlayBackend = "Desktop";
+            migrated.VoiceMicrophoneId="test-capture-endpoint";
             upgraded.Save(migrated);
             Check(store.Load().LoadingOverlayBackend == "Desktop", "Old per-folder settings cannot overwrite a later saved selection");
+            Check(upgraded.Load().VoiceMicrophoneId=="test-capture-endpoint","Microphone selection persists across executable upgrades");
             Check(!Directory.EnumerateFiles(shared, "*.tmp").Any(), "Completed saves leave no partial files");
 
             var fallback = new LeagueConfigStore(Path.Combine(root, "fallback"), newExe, cwd);

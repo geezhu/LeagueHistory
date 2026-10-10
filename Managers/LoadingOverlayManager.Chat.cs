@@ -27,12 +27,12 @@ internal sealed partial class LoadingOverlayManager
         void Report(string next,string text){state=next;message=text;_gameBar.PublishChatStatus(request,state,message,false);}
         int generation=_generation;
         var roster=_roster;
-        var players=roster==null?[]:OverlayTierChatMessage.Select(roster,request);
+        var players=request.IsVoice || roster==null?[]:OverlayTierChatMessage.Select(roster,request);
         bool currentRequest=true;
         bool Current()=>currentRequest && !_disposed && !_life.IsCancellationRequested && generation==_generation &&
             UseGameBar && (_owner.GetAppConfig()?.EnableLoadingOverlay??true) && _phase=="InProgress" &&
-            Environment.TickCount64-_lastPhaseRead<15000 && _roster!=null &&
-            players.Length>0 && players.All(p=>_roster.Players.Any(q=>p.Key==q.Key && p.ChampionId==q.ChampionId && p.Team==q.Team));
+            Environment.TickCount64-_lastPhaseRead<15000 &&
+            (request.IsVoice || (_roster!=null && players.Length>0 && players.All(p=>_roster.Players.Any(q=>p.Key==q.Key && p.ChampionId==q.ChampionId && p.Team==q.Team))));
         try
         {
             if(request.Cancelled)return;
@@ -47,6 +47,7 @@ internal sealed partial class LoadingOverlayManager
             }
             var messages=request.Kind switch
             {
+                "voice"=>OverlayVoiceChatText.Build(request),
                 "mastery"=>OverlayMasteryChatMessage.Build(roster!,request,_masteries,Champion),
                 "deathStreak"=>DeathMessages(),
                 _=>OverlayTierChatMessage.Build(roster!,request,_ranks,Champion)

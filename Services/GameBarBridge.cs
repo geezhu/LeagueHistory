@@ -64,7 +64,7 @@ public sealed partial class GameBarBridge : IDisposable
         }
         _detailScope=new(enabled && active?_instance+":"+session:"",rows.Select(r=>(int?)r["championId"]??0).ToArray());
         _pending.Writer.TryWrite(new JObject{
-            ["detailProtocol"]=1,["chatProtocol"]=1,["chatMastery"]=true,["chatDeathStreak"]=true,["chatTeams"]=roster?.Players.Any(p=>p.Self)??false,["queue"]=roster?.Queue??0,
+            ["detailProtocol"]=1,["chatProtocol"]=1,["chatMastery"]=true,["chatDeathStreak"]=true,["chatVoice"]=true,["voiceProtocol"]=2,["chatTeams"]=roster?.Players.Any(p=>p.Self)??false,["queue"]=roster?.Queue??0,
             ["protocol"]=1,["revision"]=_instance+":"+(++_revision),["command"]=_instance+":"+_command,
             ["session"]=_instance+":"+session,["updatedAt"]=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             ["enabled"]=enabled,["active"]=active,["show"]=show,
@@ -125,5 +125,7 @@ public sealed partial class GameBarBridge : IDisposable
         if((bool?)state["active"]==false)return "Game Bar 已连接并固定 · 等待对局 · Win＋G 管理面板。";
         return "Game Bar 已连接并固定 · Win＋G 管理面板。";
     }
-    public void Dispose(){if(_disposed)return;_disposed=true;_pending.Writer.TryComplete();_detailPending.Writer.TryComplete();_chatPending.Writer.TryComplete();}
+    private readonly GameBarVoiceRecognition _voiceRecognition=new();
+    public Task PollVoiceAsync(bool enabled,CancellationToken token)=>_voiceRecognition.PollAsync(_testDirectory??_directory,_detailScope.Session,enabled && !_disposed,token);
+    public void Dispose(){if(_disposed)return;_disposed=true;_voiceRecognition.Dispose();_pending.Writer.TryComplete();_detailPending.Writer.TryComplete();_chatPending.Writer.TryComplete();}
 }

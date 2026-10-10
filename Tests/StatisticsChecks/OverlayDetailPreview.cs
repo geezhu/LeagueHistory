@@ -37,7 +37,7 @@ internal static class OverlayDetailPreview
         string heroIcon=Encode(Path.Combine(assetDirectory,"champion","九尾妖狐.png"));
         content["art"]=Encode(Path.Combine(assetDirectory,"profile-backgrounds","21000.png"),560,280);
         content["revision"]="fixture-1";content["state"]="ready";content["mode"]="布局测试";content["source"]="本地测试样例 · 不代表当前对局";
-        var roster=new JObject{["protocol"]=1,["detailProtocol"]=1,["chatProtocol"]=1,["chatMastery"]=true,["chatDeathStreak"]=true,["chatTeams"]=true,["queue"]=2400,["revision"]="fixture-1",["session"]="fixture-session",["command"]="fixture-command",["enabled"]=true,["active"]=true,["show"]=true,
+        var roster=new JObject{["protocol"]=1,["detailProtocol"]=1,["chatProtocol"]=1,["chatMastery"]=true,["chatDeathStreak"]=true,["chatVoice"]=true,["voiceProtocol"]=2,["chatTeams"]=true,["queue"]=2400,["revision"]="fixture-1",["session"]="fixture-session",["command"]="fixture-command",["enabled"]=true,["active"]=true,["show"]=true,
             ["status"]="英雄详情布局验证 · 本地样例",["teams"]=new JArray("我方","对方"),["updatedAt"]=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             ["players"]=new JArray(Enumerable.Range(0,10).Select(i=>new JObject{["championId"]=103,["champion"]="样例英雄",["name"]=$"测试玩家 {i+1}",["tier"]="T2",["stats"]="胜率 52.4% · 选用率 8.7%",["mastery"]=i==0?"成就 12级 · 18.6万":$"成就 {i+1}级 · {(i+1)*1000:N0}",["masteryDetails"]="英雄成就：12级 · 186,321 点\n最近使用：2026-09-30\n本地测试样例",["details"]="缓存战绩示例",["icon"]=heroIcon}))};
         File.WriteAllText(Path.Combine(destination,"detail-preview-content.json"),content.ToString());

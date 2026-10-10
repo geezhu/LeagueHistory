@@ -20,6 +20,8 @@
 #include <memory>
 #include <fstream>
 #include <vector>
+#include <functional>
+#include <cwctype>
 
 using namespace winrt;
 using namespace Windows::ApplicationModel::Activation;
@@ -104,6 +106,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
 
 #include "ChampionDetailView.inl"
 #include "TierChatView.inl"
+#include "VoiceChatView.inl"
 
     fire_and_forget CapturePreview()
     {
@@ -197,7 +200,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         {
             widget.GameBarDisplayModeChanged([weak=weak_from_this()](auto&&,auto&&){
                 if(auto self=weak.lock())self->root.Dispatcher().RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,[self]{
-                    if(!self->stopped)self->SaveChatRequest();
+                    if(!self->stopped){if(self->widget.GameBarDisplayMode()==XboxGameBarDisplayMode::PinnedOnly)self->RequestVoiceStop();self->SaveChatRequest();self->UpdateChatButtons();}
                 });
             });
             widget.PinnedChanged([weak = weak_from_this()](auto&&, auto&&) {
@@ -207,11 +210,13 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                 });
             });
             widget.VisibleChanged([weak = weak_from_this()](auto&&, auto&&) {
-                if (auto self = weak.lock(); self && !self->stopped && self->widget) Trace(self->widget.Visible() ? L"widget-visible" : L"widget-hidden");
+                if(auto self=weak.lock())self->root.Dispatcher().RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,[self]{
+                    if(!self->stopped && self->widget){if(!self->widget.Visible())self->RequestVoiceStop();Trace(self->widget.Visible()?L"widget-visible":L"widget-hidden");}
+                });
             });
         }
         timer.Interval(std::chrono::milliseconds(500));
-        timer.Tick([weak = weak_from_this()](auto&&, auto&&) { if (auto self = weak.lock()) { self->Read(); self->ReadDetails(); self->ReadChatStatus(); } });
+        timer.Tick([weak = weak_from_this()](auto&&, auto&&) { if (auto self = weak.lock()) { self->Read(); self->ReadDetails(); self->ReadChatStatus(); self->ReadVoiceStatus(); } });
         timer.Start(); Read();
         root.Loaded([weak = weak_from_this()](auto&&, auto&&) {
             if (auto self = weak.lock()) Trace(L"view-loaded " + to_hstring(self->root.ActualWidth()) + L"x" + to_hstring(self->root.ActualHeight()));
@@ -219,7 +224,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     }
     void Stop()
     {
-        stopped = true; timer.Stop(); widget = nullptr;
+        CloseVoice();ResetChat();stopped = true; timer.Stop(); widget = nullptr;
     }
     void UpdateHint()
     {
@@ -254,6 +259,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     void Clear()
     {
         CloseDetails(false);
+        CloseVoice();
         ResetChat();
         for (auto& card : cards)
         {
@@ -299,6 +305,9 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             enabled = data.GetNamedBoolean(L"enabled", false); active = data.GetNamedBoolean(L"active", false);
             supportsDetails = data.GetNamedNumber(L"detailProtocol",0)==1;
             supportsChat=data.GetNamedNumber(L"chatProtocol",0)==1;supportsMasteryChat=data.GetNamedBoolean(L"chatMastery",false);supportsDeathStreakChat=data.GetNamedBoolean(L"chatDeathStreak",false);chatTeams=data.GetNamedBoolean(L"chatTeams",false);
+            supportsVoiceChat=data.GetNamedBoolean(L"chatVoice",false);
+            supportsVoiceRecording=data.GetNamedNumber(L"voiceProtocol",0)==2;
+            if(!enabled || !active)CloseVoice();
             detailQueue = static_cast<int>(data.GetNamedNumber(L"queue",0));
             auto next = data.GetNamedString(L"revision", L"");
             if (next != revision)
@@ -347,7 +356,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                 }
                 if (selectedCard >= 0) RefreshDetailHeader();
                 else if (populatedCards > 0) details.Text(L"点击英雄卡片查看技能、出装与模式推荐；详情胜率属于英雄统计。"+hstring(marked?L"\n同色与人数标记：根据近期共同战绩推测的疑似组队。":L""));
-                if(fixturePreview && !fixtureOpened && populatedCards>0){fixtureOpened=true;if(detailTab!=L"roster")OpenDetails(0);}
+                if(fixturePreview && !fixtureOpened && populatedCards>0){fixtureOpened=true;if(detailTab==L"voice")ConfigureVoicePreview();else if(detailTab!=L"roster")OpenDetails(0);}
                 auto nextCommand = data.GetNamedString(L"command", L"");
                 if (widget && command != nextCommand)
                 {
@@ -394,7 +403,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         busy = false;
         UpdateChatButtons();
         if (capturePending && root.ActualWidth() > 0 && root.ActualHeight() > 0 && populatedCards > 0
-            && (!fixturePreview || detailTab==L"roster" || (!detailRevision.empty() && pendingDetailImages==0)))
+            && (!fixturePreview || detailTab==L"roster" || detailTab==L"voice" || (!detailRevision.empty() && pendingDetailImages==0)))
         {
             capturePending = false;
             CapturePreview();
@@ -408,6 +417,7 @@ struct WidgetApp : ApplicationT<WidgetApp>
     WidgetApp()
     {
         UnhandledException([](auto&&, UnhandledExceptionEventArgs const& args) { LogError(args.Message()); });
+        Suspending([this](auto&&,auto&&){for(auto const& view:views)if(!view->stopped)view->CloseVoice();});
     }
     void OnActivated(IActivatedEventArgs const& args)
     {

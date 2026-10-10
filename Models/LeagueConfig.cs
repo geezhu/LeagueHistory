@@ -12,6 +12,7 @@ namespace League.Models
         public int AramBalanceCacheMinutes { get; set; } = 1440;
         public int ChampionAnalysisCacheMinutes { get; set; } = 1440;
         public int ChampionMasteryCacheMinutes { get; set; } = 30;
+        public string VoiceMicrophoneId { get; set; } = string.Empty;
         /// <summary>
         /// 游戏结束后自动退出并返回客户端
         /// </summary>

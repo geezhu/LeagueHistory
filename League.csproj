@@ -21,11 +21,28 @@
 	  <EmbeddedResource Include="Assets\Maps\*.png" />
 	  <EmbeddedResource Include="Assets\ChampionClasses\*.png" />
 	  <None Update="Assets\Defaults\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+	  <None Update="Assets\ThirdParty\*.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="System.Management" Version="9.0.4" />
+		<PackageReference Include="System.Speech" Version="9.0.4" />
+		<PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+		<PackageReference Include="org.k2fsa.sherpa.onnx.runtime.win-x64" Version="1.13.8" />
+		<!-- Download only the managed binding; its meta-package otherwise restores every OS runtime. -->
+		<PackageDownload Include="org.k2fsa.sherpa.onnx" Version="[1.13.8]" />
+		<Reference Include="sherpa-onnx">
+			<HintPath>$(NuGetPackageRoot)org.k2fsa.sherpa.onnx/1.13.8/lib/net8.0/sherpa-onnx.dll</HintPath>
+			<Private>true</Private>
+		</Reference>
+	</ItemGroup>
+	<ItemGroup Condition="Exists('bin/VoiceModels/SenseVoice/model.int8.onnx')">
+		<Content Include="bin/VoiceModels/SenseVoice/model.int8.onnx;bin/VoiceModels/SenseVoice/tokens.txt;bin/VoiceModels/SenseVoice/LICENSE">
+			<Link>VoiceModels/SenseVoice/%(Filename)%(Extension)</Link>
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+		</Content>
 	</ItemGroup>
 
 	<!-- 资源文件配置（保持不变） -->

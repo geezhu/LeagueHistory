@@ -88,7 +88,7 @@ internal static class AssistantChecks
             if(path!="/lol-chat/v1/conversations/room/messages" || request.Method!=HttpMethod.Post)throw new Exception("Notice must target champion select only");
             notices++;return new(reject?System.Net.HttpStatusCode.Forbidden:System.Net.HttpStatusCode.OK);
         })){BaseAddress=new Uri("https://test.invalid")};
-        bool Announce(string message)=>((Task<bool>)type.GetMethod("AnnounceRunesAsync",flags)!.Invoke(assistant,new object[]{chatClient,message,CancellationToken.None})!).GetAwaiter().GetResult();
+        bool Announce(string message)=>((Task<bool>)type.GetMethod("AnnounceRunesAsync",flags)!.Invoke(assistant,new object?[]{chatClient,message,CancellationToken.None,null,true})!).GetAwaiter().GetResult();
         if(!Announce("configured") || !Announce("configured") || notices!=1)throw new Exception("Repeated rune notice must be deduplicated");
         phase="InProgress";
         if(Announce("another") || notices!=1)throw new Exception("Notice must not send outside champion select");

@@ -49,9 +49,13 @@ internal sealed partial class ChampionSelectAssistant : Form
         toolbar.Controls.AddRange(new Control[]{_pin,_fold,_mode,_region,_tier,_lane});
         toolbar.SetFlowBreak(_mode,true);
         _lane.Items.AddRange(new object[]{"自动分路","上路","打野","中路","下路","辅助"});_lane.SelectedIndex=0;
-        var footer=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=44,Padding=new Padding(8)};
-        var guide=new Button{Text="完整攻略",AutoSize=true};
-        var retry=new Button{Text="重试",AutoSize=true};footer.Controls.AddRange(new Control[]{guide,_apply,retry});
+        var footer=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=44,Padding=new Padding(8),WrapContents=false};
+        var guide=new Button{Text="完整攻略",Size=new Size(64,28)};
+        _apply.AutoSize=false;_apply.Size=new Size(90,28);
+        var retry=new Button{Text="重试",Size=new Size(44,28)};footer.Controls.AddRange(new Control[]{guide,_apply,retry,_voiceButton});
+        foreach(Control button in footer.Controls)button.Margin=new Padding(2,0,2,0);
+        _tips.SetToolTip(_voiceButton,"中文录音后编辑确认，直接发送到选人聊天；也可以手动输入。");
+        _voiceButton.Click+=async (_,_)=>await ShowVoiceInputAsync();
         var statusBar=new Panel{Dock=DockStyle.Top,Height=26};_status.Dock=DockStyle.Fill;_status.AutoEllipsis=true;
         _rosterButton.BackColor=Color.FromArgb(16,45,57);_rosterButton.ForeColor=Color.FromArgb(208,185,130);_rosterButton.FlatAppearance.BorderColor=Color.FromArgb(49,113,126);_rosterButton.FlatAppearance.BorderSize=1;
         _tips.SetToolTip(_rosterButton,"等待客户端提供大乱斗选人数据");
@@ -71,7 +75,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         _tips.SetToolTip(_mode,"默认跟随选人模式，也可以手动切换攻略模式。英雄仍自动跟随当前选人。");
         _tips.SetToolTip(_region,"OP.GG 统计地区，与登录账号大区无关。");
         _tips.SetToolTip(_tier,"统计段位；各模式分别保留选择。");
-        _fold.Click+=(_,_)=>{_collapsed=!_collapsed;_fold.Text=_collapsed?"展开":"收起";_body.Visible=!_collapsed;statusBar.Visible=!_collapsed;footer.Visible=!_collapsed;_region.Visible=_tier.Visible=_lane.Visible=!_collapsed;toolbar.Height=_collapsed?44:74;Height=_collapsed?84:630;SyncFilters();};
+        _fold.Click+=(_,_)=>{_collapsed=!_collapsed;if(_collapsed)CloseVoiceInput();_fold.Text=_collapsed?"展开":"收起";_body.Visible=!_collapsed;statusBar.Visible=!_collapsed;footer.Visible=!_collapsed;_region.Visible=_tier.Visible=_lane.Visible=!_collapsed;toolbar.Height=_collapsed?44:74;Height=_collapsed?84:630;SyncFilters();};
         guide.Click+=(_,_)=>{if(_hero>0)_owner.OpenAssistantGuide(_hero,SelectedMode=="mayhem"?2400:0,_position,SelectedMode=="mayhem"?null:SelectedQuery);};
         retry.Click+=(_,_)=>{if(_hero>0)_ = LoadHeroAsync();};
         _apply.Click+=async (_,_)=>await ApplyAsync();
@@ -134,6 +138,7 @@ internal sealed partial class ChampionSelectAssistant : Form
             _pollFailures=0;
             _lastSessionRead=Environment.TickCount64;
             _selecting=true;
+            _voiceButton.Enabled=!_openingVoice;
             int queue=(int?)flow["gameData"]?["queue"]?["id"]??0;
             _queue=queue;UpdateRoster(session,queue);
             var own=(session["myTeam"] as JArray)?.OfType<JObject>().FirstOrDefault(p=>(int?)p["cellId"]==(int?)session["localPlayerCellId"]);
@@ -166,7 +171,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         }
         finally{_busy=false;}
     }
-    private void Reset(){_selecting=false;_key="";_hero=0;_load?.Cancel();_runes=null;_apply.Enabled=false;ClearRoster();if(Visible)Hide();_windowLayer.Detach();}
+    private void Reset(){_selecting=false;CloseVoiceInput();_key="";_hero=0;_load?.Cancel();_runes=null;_apply.Enabled=false;ClearRoster();if(Visible)Hide();_windowLayer.Detach();}
     private void ClearBody()
     {
         _masteryLabel=null;
@@ -293,7 +298,7 @@ internal sealed partial class ChampionSelectAssistant : Form
     }
     protected override void Dispose(bool disposing)
     {
-        if(disposing){_timer.Stop();_timer.Dispose();_load?.Cancel();_poll?.Cancel();_windowLayer.Dispose();_opgg.Dispose();_am.Dispose();_tips.Dispose();}
+        if(disposing){CloseVoiceInput();_timer.Stop();_timer.Dispose();_load?.Cancel();_poll?.Cancel();_windowLayer.Dispose();_opgg.Dispose();_am.Dispose();_tips.Dispose();}
         base.Dispose(disposing);
     }
     [StructLayout(LayoutKind.Sequential)]private struct RECT{public int Left,Top,Right,Bottom;}

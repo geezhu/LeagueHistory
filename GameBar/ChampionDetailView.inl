@@ -27,7 +27,7 @@
         std::wstring_view text(argument),prefix=L"--capture-detail-fixture:";
         if(!text.starts_with(prefix))return;
         auto tab=text.substr(prefix.size());
-        if(tab!=L"skills" && tab!=L"builds" && tab!=L"runes" && tab!=L"augments" && tab!=L"roster")return;
+        if(tab!=L"skills" && tab!=L"builds" && tab!=L"runes" && tab!=L"augments" && tab!=L"roster" && tab!=L"voice")return;
         fixturePreview=true;fixtureOpened=false;Clear();revision=L"";detailTab=hstring(tab);capturePending=true;
     }
 

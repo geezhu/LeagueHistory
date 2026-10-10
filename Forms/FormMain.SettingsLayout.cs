@@ -80,6 +80,7 @@ public partial class FormMain
         label3.Text="自定义内容每行一条，使用相同快捷键发送。\n游戏内发送前请关闭聊天输入框和游戏菜单，按快捷键后松开 Ctrl，并保持游戏在前台。程序启动时需要允许管理员权限。";
         SettingsCard(messages,"发送内容",rbModeMatch,rbModeCustom,label2,label3,txtCustomContent);
         SettingsCard(messages,"战绩显示",chkHideSelf,chkUseChampionName);
+        ConfigureVoiceSettings(messages);
         var logButton=new Button{Text="打开快捷发送日志",AutoSize=true};
         logButton.Click+=(_,_)=>{try{var path=Services.ChatSendDiagnostics.Shared.LogPath;
             System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
