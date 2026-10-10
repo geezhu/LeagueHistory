@@ -27,6 +27,7 @@ internal static class Program
         if(args.Contains("--room-player-checks")){RoomPlayerChecks.Run();return;}
         if(args.Contains("--config-checks")){LeagueConfigChecks.Run();return;}
         if(args.Contains("--shutdown-checks")){ShutdownSettingsChecks.Run();return;}
+        if(args.Contains("--shutdown-ui-checks")){Application.SetHighDpiMode(HighDpiMode.DpiUnaware);Application.EnableVisualStyles();ShutdownUiChecks.Run();return;}
         if(args.Contains("--shutdown-validate")){ShutdownSettingsChecks.ValidateWindows();return;}
         if(args.Contains("--assistant-placement-checks")){AssistantChecks.Placement();AssistantVisibilityChecks.Run();return;}
         if(args.Contains("--assistant-window-checks")){AssistantVisibilityChecks.Run();AssistantWindowChecks.Run();return;}
