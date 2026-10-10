@@ -4,9 +4,9 @@ namespace League;
 
 public partial class FormMain
 {
-    private void ConfigureShutdownSettings(FlowLayoutPanel parent)
+    private void ConfigureShutdownSettings(FlowLayoutPanel parent,ScheduledShutdownService? schedulerService=null)
     {
-        var service=new ScheduledShutdownService();
+        var service=schedulerService??new ScheduledShutdownService();
         var summary=new Label{Name="ShutdownPlanSummary",Text="正在读取每日关机计划…",Font=new Font(tabControl1.Font,FontStyle.Bold)};
         var nextRun=new Label{Name="ShutdownNextRun",Text=""};
         var status=new Label{Name="ShutdownStatus",Text=""};
@@ -37,12 +37,12 @@ public partial class FormMain
             new Label{Text="创建后立即启用每日计划；重复创建会替换原计划。到点仍在游戏则等待本局结束，退出联盟视界后仍有效。"});
         var card=(FlowLayoutPanel)summary.Parent!;
         card.SizeChanged+=(_,_)=>{clockRow.MaximumSize=actions.MaximumSize=new Size(Math.Max(240,card.ClientSize.Width-40),0);};
-        bool busy=false,loaded=false,reading=false,populating=false,dirty=false;
+        bool busy=false,loaded=false,available=false,reading=false,populating=false,dirty=false;
         ShutdownTaskView? view=null;
         void ControlsReady()
         {
-            time.Enabled=countdown.Enabled=create.Enabled=loaded && !busy;
-            delete.Enabled=!busy && view is {Exists:true};
+            time.Enabled=countdown.Enabled=create.Enabled=available && !busy;
+            delete.Enabled=available && !busy && view is {Exists:true};
             log.Enabled=!busy;
         }
         void Show(ShutdownTaskView value,bool populate)
@@ -58,7 +58,7 @@ public partial class FormMain
                 time.Value=DateTime.Today.Add(TimeSpan.Parse(value.Plan.Time));countdown.Value=value.Plan.CountdownSeconds;
                 populating=false;dirty=false;
             }
-            loaded=true;ControlsReady();
+            loaded=available=true;ControlsReady();
         }
         async Task Refresh()
         {
@@ -68,7 +68,15 @@ public partial class FormMain
                 var value=await service.ReadAsync();
                 if(!status.IsDisposed && !busy)Show(value,!loaded || !dirty);
             }
-            catch(Exception ex){if(!status.IsDisposed){status.Text="读取计划失败："+ex.Message;ControlsReady();}}
+            catch(Exception ex)
+            {
+                if(!status.IsDisposed)
+                {
+                    available=false;view=null;
+                    summary.Text="每日关机计划读取失败";summary.ForeColor=Color.FromArgb(176,70,70);nextRun.Text="";
+                    status.Text="读取计划失败："+ex.Message;ControlsReady();
+                }
+            }
             finally{reading=false;}
         }
         void Changed()

@@ -33,6 +33,7 @@ internal static class ShutdownSettingsChecks
     }
     private static async Task Core()
     {
+        LookupChecks();
         var now=new DateTime(2026,9,17,23,20,0);
         var plan=new ShutdownPlan(false,"23:00",30);
         Check(plan.NextOccurrence(now)==new DateTime(2026,9,18,23,0,0),"Saving after today's deadline starts tomorrow");
@@ -94,6 +95,23 @@ internal static class ShutdownSettingsChecks
         }
         finally{if(Directory.Exists(root))Directory.Delete(root,true);}
         Console.WriteLine("PASS: daily shutdown create/replace/delete uses a fake scheduler; migration, timing, worker cancellation, retained logs and failure handling checked. No system task changed.");
+    }
+    private static void LookupChecks()
+    {
+        var type=typeof(ScheduledShutdownService).Assembly.GetType("League.Services.WindowsShutdownTaskStore")!;
+        var lookup=type.GetMethod("LookupTask",BindingFlags.Static|BindingFlags.NonPublic)!;
+        foreach(var error in new Exception[]{new FileNotFoundException(),new DirectoryNotFoundException(),
+            new COMException("missing task",unchecked((int)0x80070002)),new COMException("missing task path",unchecked((int)0x80070003))})
+        {
+            Check(lookup.Invoke(null,new object[]{(Func<object>)(()=>throw error)})==null,"Absent task is recognized for mapped .NET exceptions as well as COM exceptions");
+        }
+        var existing=new object();Check(ReferenceEquals(existing,lookup.Invoke(null,new object[]{(Func<object>)(()=>existing)})),"A found task is preserved");
+        foreach(var error in new Exception[]{new UnauthorizedAccessException(),new COMException("scheduler unavailable",unchecked((int)0x800706BA)),new IOException("unrelated read failure")})
+        {
+            bool failed=false;try{lookup.Invoke(null,new object[]{(Func<object>)(()=>throw error)});}
+            catch(TargetInvocationException e){failed=ReferenceEquals(e.InnerException,error);}
+            Check(failed,"Permission and scheduler failures cannot be mistaken for a missing task");
+        }
     }
     private sealed class FakeTasks : IShutdownTaskStore
     {

@@ -208,10 +208,20 @@ internal sealed class WindowsShutdownTaskStore : IShutdownTaskStore
     public ShutdownTaskRecord? Read()=>Access<ShutdownTaskRecord?>(folder=>
     {
         dynamic? task=null;
-        try{task=folder.GetTask(ScheduledShutdownService.TaskName);return new((string)task.Xml,(bool)task.Enabled,(int)task.State==4);}
-        catch(COMException e) when(e.HResult is unchecked((int)0x80070002) or unchecked((int)0x80070003)){return null;}
+        try
+        {
+            task=LookupTask(()=>folder.GetTask(ScheduledShutdownService.TaskName));
+            return task==null?null:new((string)task.Xml,(bool)task.Enabled,(int)task.State==4);
+        }
         finally{if(task!=null)Marshal.FinalReleaseComObject(task);}
     });
+    private static object? LookupTask(Func<object> lookup)
+    {
+        try{return lookup();}
+        // COM interop maps known HRESULTs to FileNotFoundException / DirectoryNotFoundException too.
+        // Only task lookup may mean "not created"; errors reading a found task must still propagate.
+        catch(Exception e) when(e.HResult is unchecked((int)0x80070002) or unchecked((int)0x80070003)){return null;}
+    }
     public void Register(string xml)=>Access(folder=>
     {
         dynamic registered=folder.RegisterTask(ScheduledShutdownService.TaskName,xml,6,null,null,3,null);
