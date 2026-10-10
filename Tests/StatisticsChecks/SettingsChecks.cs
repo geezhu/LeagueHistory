@@ -25,6 +25,8 @@ internal static class SettingsChecks
         IEnumerable<Control> All(Control root)=>root.Controls.Cast<Control>().SelectMany(c=>new[]{c}.Concat(All(c)));
         if(All(tabs).OfType<NumericUpDown>().Single(c=>c.Name=="ChampionMasteryCacheMinutes").Value<1)throw new Exception("Mastery cache lifetime is configurable and initialized");
         var count=All(tabs).OfType<ComboBox>().Single(c=>c.Name=="CardMatchHistoryCount");
+        if(!All(tabs).OfType<ComboBox>().Any(c=>c.Name=="VoiceMicrophone") || !All(tabs).OfType<Button>().Any(c=>c.Name=="VoiceMicrophoneRefresh"))
+            throw new Exception("Voice settings expose input selection and refresh without starting a microphone");
         foreach(var name in new[]{"ShutdownPlanSummary","ShutdownNextRun","CreateShutdownPlan","DeleteShutdownPlan","ShutdownLog"})
             if(!All(tabs).Any(c=>c.Name==name))throw new Exception("Missing daily shutdown management control: "+name);
         var shutdownCard=All(tabs).Single(c=>c.Name=="ShutdownPlanSummary").Parent!;
@@ -48,6 +50,12 @@ internal static class SettingsChecks
         Application.DoEvents();Save("settings-shutdown");
         preview.ClientSize=new Size(650,720);Application.DoEvents();Save("settings-shutdown-narrow");preview.ClientSize=new Size(1050,800);
         tabs.SelectedIndex=1;Application.DoEvents();Save("settings-messages");
+        var voice=All(tabs).Single(c=>c.Name=="VoiceMicrophone");
+        ((FlowLayoutPanel)voice.Parent!.Parent!).AutoScrollPosition=new Point(0,Math.Max(0,voice.Parent.Top-16));
+        var microphoneDeadline=DateTime.UtcNow.AddSeconds(3);
+        while(!voice.Enabled && DateTime.UtcNow<microphoneDeadline){Application.DoEvents();Thread.Sleep(5);}
+        Save("settings-voice");
+        preview.ClientSize=new Size(650,720);Application.DoEvents();Save("settings-voice-narrow");preview.ClientSize=new Size(1050,800);
         tabs.SelectedIndex=2;Application.DoEvents();Save("settings-launcher");
         preview.ClientSize=new Size(650,720);tabs.SelectedIndex=3;Application.DoEvents();Save("settings-cache-narrow");
         // The task-scheduler query is asynchronous. Keep its UI context alive until the initial read finishes.

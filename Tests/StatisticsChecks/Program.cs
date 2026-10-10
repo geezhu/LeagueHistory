@@ -10,6 +10,13 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if(args.Contains("--sensevoice-checks")){Task.Run(SenseVoiceChecks.RunAsync).GetAwaiter().GetResult();return;}
+        if(args.Length==2 && args[0]=="--sensevoice-engine-check"){Task.Run(()=>SenseVoiceChecks.EngineAsync(args[1])).GetAwaiter().GetResult();return;}
+        if(args.Contains("--gamebar-voice-checks")){Task.Run(GameBarVoiceRecognitionChecks.RunAsync).GetAwaiter().GetResult();return;}
+        if(args.Contains("--assistant-voice-checks")){AssistantVoiceChecks.Run();return;}
+        if(args.Contains("--assistant-voice-engine-check")){AssistantVoiceChecks.EngineCheck();return;}
+        if(args.Contains("--assistant-checks")){Application.SetHighDpiMode(HighDpiMode.DpiUnaware);Application.EnableVisualStyles();AssistantChecks.Run();MayhemAssistantChecks.Run();return;}
+        if(args.Contains("--overlay-chat-checks")){OverlayVoiceChatChecks.Run();OverlayTierChatChecks.Run();return;}
         if(args.Contains("--mastery-live-diagnostics")){Task.Run(MasteryLiveDiagnostics.Run).GetAwaiter().GetResult();return;}
         if(args.Contains("--roster-identity-checks")){Task.Run(LoadingRosterIdentityChecks.Run).GetAwaiter().GetResult();return;}
         if(args.Contains("--overlay-party-checks")){OverlayPartyChecks.Run();return;}
@@ -52,7 +59,7 @@ internal static class Program
             return;
         }
         AssistantWindowChecks.Run();
-        if(args.Contains("--loading-overlay-checks")){GameBarBridgeChecks.Run();OverlayChampionDetailChecks.Run();OverlayTierChatChecks.Run();LoadingOverlayChecks.Run();return;}
+        if(args.Contains("--loading-overlay-checks")){GameBarBridgeChecks.Run();OverlayChampionDetailChecks.Run();OverlayTierChatChecks.Run();OverlayVoiceChatChecks.Run();LoadingOverlayChecks.Run();return;}
         if(args.Contains("--settings-checks")){SettingsChecks.Render();return;}
         RoomPlayerChecks.Run();
         TierHotkeyChecks.Run();

@@ -2,7 +2,7 @@
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3" IgnorableNamespaces="uap uap3">
-  <Identity Name="LeagueHistory.GameBar" Publisher="CN=LeagueHistory" Version="1.0.0.19" ProcessorArchitecture="x64" />
+  <Identity Name="LeagueHistory.GameBar" Publisher="CN=LeagueHistory" Version="1.0.0.24" ProcessorArchitecture="x64" />
   <Properties><DisplayName>League 对局速览</DisplayName><PublisherDisplayName>LeagueHistory</PublisherDisplayName><Logo>Assets\Logo50.png</Logo></Properties>
   <Dependencies>
     <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
@@ -29,4 +29,7 @@
     <Extension Category="windows.activatableClass.inProcessServer"><InProcessServer><Path>Microsoft.Gaming.XboxGameBar.dll</Path><!-- SDK_ACTIVATION --></InProcessServer></Extension>
     <Extension Category="windows.activatableClass.proxyStub"><ProxyStub ClassId="00000355-0000-0000-C000-000000000046"><Path>Microsoft.Gaming.XboxGameBar.Private.winmd</Path><!-- SDK_INTERFACES --></ProxyStub></Extension>
   </Extensions>
+  <Capabilities>
+    <Capability Name="internetClient" />
+  </Capabilities>
 </Package>
