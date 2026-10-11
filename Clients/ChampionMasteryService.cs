@@ -77,7 +77,8 @@ public sealed class ChampionMasteryService
 
             entry.Access = Environment.TickCount64;
             int version = entry.Version;
-            disk = entry.Disk ??= Task.Run(() => LoadDisk(key, entry, version));
+            // Shared disk initialization belongs to the entry, not to one view's cancellation token.
+            disk = entry.Disk ??= Task.Run(() => LoadDisk(key, entry, version), CancellationToken.None);
             if (_entries.Count > 256)
             {
                 foreach (
@@ -203,7 +204,10 @@ public sealed class ChampionMasteryService
                         or ArgumentException
                         or OverflowException
                         or InvalidCastException
-            ) { }
+            )
+        {
+            // Invalid cache is optional; the entry will fetch a fresh mastery list.
+        }
     }
 
     private async Task<ChampionMasteryPage> Fetch(string key, string puuid, Entry entry, int version)
@@ -222,25 +226,7 @@ public sealed class ChampionMasteryService
                 )
                 .ConfigureAwait(false);
             denied = response.Status is 401 or 403;
-            if (TryNormalize(response.Data, out var data))
-            {
-                result = new(data, DateTimeOffset.UtcNow);
-            }
-            else
-            {
-                string message = response.Message.Length > 0 ? response.Message : "客户端未返回有效英雄成就。";
-                lock (_gate)
-                {
-                    result =
-                        !denied && entry.Page?.Data != null
-                            ? entry.Page with
-                            {
-                                Stale = true,
-                                Message = message,
-                            }
-                            : new(null, null, message);
-                }
-            }
+            result = ReadResponse(entry, response, denied);
             // Reconnection/account changes must not populate or display a response from the old client.
             if (!ReferenceEquals(client, _client()) || key != Key(puuid))
             {
@@ -293,6 +279,25 @@ public sealed class ChampionMasteryService
         }
 
         return result;
+    }
+
+    private ChampionMasteryPage ReadResponse(Entry entry, StatisticsResponse response, bool denied)
+    {
+        if (TryNormalize(response.Data, out var data))
+        {
+            return new(data, DateTimeOffset.UtcNow);
+        }
+        string message = response.Message.Length > 0 ? response.Message : "客户端未返回有效英雄成就。";
+        lock (_gate)
+        {
+            return !denied && entry.Page?.Data != null
+                ? entry.Page with
+                {
+                    Stale = true,
+                    Message = message,
+                }
+                : new(null, null, message);
+        }
     }
 
     public static bool TryNormalize(JToken? value, out JArray data)
@@ -375,7 +380,10 @@ public sealed class ChampionMasteryService
                 old.Delete();
             }
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // A disk failure must not discard the validated mastery data held in memory.
+        }
         finally
         {
             try
@@ -385,7 +393,10 @@ public sealed class ChampionMasteryService
                     File.Delete(temporary);
                 }
             }
-            catch (IOException) { }
+            catch (IOException)
+            {
+                // Temporary-file cleanup is best effort; always release the disk gate.
+            }
             _disk.Release();
         }
     }
@@ -403,7 +414,10 @@ public sealed class ChampionMasteryService
                 }
             }
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Denied data is already removed from memory; a locked disk cache may remain until a later attempt.
+        }
         finally
         {
             _disk.Release();
