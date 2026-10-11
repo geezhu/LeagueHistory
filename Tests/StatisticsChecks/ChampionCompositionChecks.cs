@@ -36,8 +36,9 @@ internal static class ChampionCompositionChecks
             return new(HttpStatusCode.OK)
             {
                 Content = new StringContent(
-                    File.ReadAllText(
-                        Path.Combine(AppContext.BaseDirectory, "Fixtures", "ChampionAnalysis", alias + ".json")
+                    await File.ReadAllTextAsync(
+                        Path.Combine(AppContext.BaseDirectory, "Fixtures", "ChampionAnalysis", alias + ".json"),
+                        token
                     )
                 ),
             };
@@ -68,13 +69,16 @@ internal static class ChampionCompositionChecks
                 await client.GetAsync("lux", TimeSpan.Zero, CancellationToken.None);
                 Check(handler.Calls == 2, "Failure retry backoff");
                 using var cancel = new CancellationTokenSource();
-                cancel.Cancel();
+                await cancel.CancelAsync();
                 try
                 {
                     await client.GetAsync("morgana", TimeSpan.FromDays(1), cancel.Token);
                     throw new Exception("Cancellation ignored");
                 }
-                catch (OperationCanceledException) { }
+                catch (OperationCanceledException)
+                {
+                    // Cancellation is the expected outcome; no download must have started.
+                }
                 Check(handler.Calls == 2, "Canceled request does not download");
             }
             var restartedHandler = new Handler { Fail = true };
@@ -93,7 +97,10 @@ internal static class ChampionCompositionChecks
                 await repaired.GetAsync("../lux", TimeSpan.FromDays(1), CancellationToken.None);
                 throw new Exception("Unsafe alias accepted");
             }
-            catch (ArgumentException) { }
+            catch (ArgumentException)
+            {
+                // Unsafe aliases must fail validation before accessing the cache.
+            }
         }
         finally
         {
@@ -178,26 +185,11 @@ internal static class ChampionCompositionChecks
 
     private static void TacticsChecks()
     {
-        ChampionAnalysisReport Report(string targeting = "Location") =>
-            new(
-                "test",
-                "fixture",
-                "test",
-                [new("普攻距离", "", [175], "fixture")],
-                [
-                    new(
-                        "Q",
-                        "/q",
-                        targeting,
-                        [new("显示施法范围", "", [900], "fixture")],
-                        [],
-                        ["Trait_ImmobilizingCCSpell"],
-                        []
-                    ),
-                ],
-                []
-            );
-        var reports = new Dictionary<int, ChampionAnalysisReport> { [1] = Report(), [2] = Report("Target") };
+        var reports = new Dictionary<int, ChampionAnalysisReport>
+        {
+            [1] = TacticsReport(),
+            [2] = TacticsReport("Target"),
+        };
         var texts = new Dictionary<int, CompositionSkillText[]>
         {
             [1] =
@@ -261,6 +253,26 @@ internal static class ChampionCompositionChecks
         );
     }
 
+    private static ChampionAnalysisReport TacticsReport(string targeting = "Location") =>
+        new(
+            "test",
+            "fixture",
+            "test",
+            [new("普攻距离", "", [175], "fixture")],
+            [
+                new(
+                    "Q",
+                    "/q",
+                    targeting,
+                    [new("显示施法范围", "", [900], "fixture")],
+                    [],
+                    ["Trait_ImmobilizingCCSpell"],
+                    []
+                ),
+            ],
+            []
+        );
+
     public static void Render()
     {
         string directory = Path.Combine(Path.GetTempPath(), "league-composition-ui-" + Guid.NewGuid().ToString("N"));
@@ -296,143 +308,15 @@ internal static class ChampionCompositionChecks
                 [25, 111],
                 true
             );
-            view.SetRoster(roster);
-            IEnumerable<Control> Descendants(Control root) =>
-                root.Controls.Cast<Control>().SelectMany(c => new[] { c }.Concat(Descendants(c)));
-            var grid = Descendants(view).OfType<DataGridView>().Single();
-            var deadline = DateTime.UtcNow.AddSeconds(5);
-            while (
-                grid.Rows.Cast<DataGridViewRow>().Count(r => Equals(r.Cells[5].Value, "已读取")) < 4
-                && DateTime.UtcNow < deadline
-            )
-            {
-                Application.DoEvents();
-                Thread.Sleep(10);
-            }
-            Check(
-                grid.Rows.Count == 5 && handler.Calls == 3,
-                "Team duplicates and empty slots retained; only unique heroes downloaded"
-            );
-            Check(
-                grid.Rows.Cast<DataGridViewRow>().Count(r => Equals(r.Cells[5].Value, "已读取")) == 4,
-                "Rows finish loading"
-            );
-            var select = Descendants(view).OfType<ComboBox>().Single();
-            Check(
-                Descendants(view)
-                    .OfType<Label>()
-                    .Any(l => l.Text.Contains("硬控制") && l.Text.Contains("个位置有记录")),
-                "Overview exposes sourced capability coverage"
-            );
-            Check(
-                Descendants(view).OfType<Label>().Any(l => l.Text.Contains("未记录不代表没有")),
-                "Unknown coverage is not presented as a missing capability"
-            );
-            Check(
-                Descendants(view).OfType<Label>().Any(l => l.Text == "可能的短板"),
-                "Current roster exposes weakness summary"
-            );
-            Check(
-                Descendants(view).OfType<Label>().Any(l => l.Text.StartsWith("可靠先手 ·")),
-                "Tactical findings are rendered"
-            );
-            select.SelectedIndex = 1;
-            Application.DoEvents();
-            Check(
-                Descendants(view).OfType<Label>().Any(l => l.Text == "可能的短板 · 换人预览"),
-                "Preview assessment is clearly labelled"
-            );
-            Check(grid.Rows[0].Cells[0].Value!.ToString()!.Contains("莫甘娜"), "Swap preview replaces only self");
-            Check(roster.Team[0].ChampionId == 99 && grid.Rows.Count == 5, "Preview does not mutate actual roster");
+            CheckTeamSummary(view, roster, handler);
+            CheckSwapPreview(view, roster);
             using var image = new Bitmap(form.ClientSize.Width, form.ClientSize.Height);
             form.DrawToBitmap(image, form.ClientRectangle);
             image.Save(Path.Combine(AppContext.BaseDirectory, "champion-composition.png"));
-            form.ClientSize = new Size(620, 650);
-            Application.DoEvents();
-            var heroStrip = view
-                .Controls.OfType<FlowLayoutPanel>()
-                .Single(p => p.Controls.Count == 5 && p.Controls.Cast<Control>().All(c => c is Panel));
-            Check(
-                heroStrip.Controls.Cast<Control>().All(c => c.Right <= heroStrip.ClientSize.Width),
-                "All five heroes remain visible in a narrow window"
-            );
-            Check(
-                Descendants(view).OfType<Label>().Any(l => l.Text.Contains("移除已记录来源")),
-                "Swap reports capability changes without claiming an unknown ability is absent"
-            );
-            using var narrow = new Bitmap(form.ClientSize.Width, form.ClientSize.Height);
-            form.DrawToBitmap(narrow, form.ClientRectangle);
-            narrow.Save(Path.Combine(AppContext.BaseDirectory, "champion-composition-narrow.png"));
-            view.SetRoster(new ChampionSelectRoster([new(99, 0, true, false)], [], false));
-            Application.DoEvents();
-            Check(
-                Descendants(view).OfType<Label>().Any(l => l.Text == "英雄能力分析"),
-                "Single player switches to hero analysis"
-            );
-            Check(
-                Descendants(view).OfType<Label>().Any(l => l.Text.Contains("控制依赖")),
-                "Single player sees specific advice instead of empty team assessment"
-            );
-            using var solo = new Bitmap(form.ClientSize.Width, form.ClientSize.Height);
-            form.DrawToBitmap(solo, form.ClientRectangle);
-            solo.Save(Path.Combine(AppContext.BaseDirectory, "champion-composition-solo.png"));
-            Check(Descendants(view).OfType<CompositionRadar>().Count() == 1, "Overview displays a radar");
-            var embedded = Descendants(view).OfType<CompositionRadar>().Single();
-            Check(
-                embedded.Height >= 250 && embedded.Bottom <= embedded.Parent!.ClientSize.Height,
-                "Radar remains inside its auto-sized card"
-            );
-            // Count removed cards to detect repeated whole-page rebuilding.
-            int overviewPasses = 0;
-            var overview = embedded.Parent.Parent;
-            overview.ControlRemoved += (_, _) => overviewPasses++;
-            int initialCards = overview.Controls.Count;
-            var queue = typeof(ChampionCompositionView).GetMethod(
-                "QueueDashboardRefresh",
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic
-            )!;
-            for (int i = 0; i < 100; i++)
-            {
-                queue.Invoke(view, null);
-            }
-
-            var watch = System.Diagnostics.Stopwatch.StartNew();
-            while (watch.ElapsedMilliseconds < 450)
-            {
-                Application.DoEvents();
-                Thread.Sleep(5);
-            }
-            Check(overviewPasses == initialCards, "Burst of 100 refresh requests produces a single overview rebuild");
-            watch.Restart();
-            for (int i = 0; i < 20; i++)
-            {
-                form.ClientSize = new Size(i % 2 == 0 ? 760 : 620, 650);
-                Application.DoEvents();
-            }
-            Check(watch.Elapsed < TimeSpan.FromSeconds(5), "Repeated resizing does not enter a layout loop");
-            Console.WriteLine(
-                $"PASS: 100 refresh requests coalesced; 20 resizes completed in {watch.ElapsedMilliseconds} ms."
-            );
-            var axes = new[]
-            {
-                new CompositionRadarAxis("控制覆盖", 80, "四个位置有控制"),
-                new("保护覆盖", 40, "两个位置有保护"),
-                new("指向控制", 20, "一个位置有指向控制"),
-                new("普攻距离", 53, "平均 530"),
-                new("伤害多样", 80, "类型平衡参考"),
-            };
-            using var radar = new CompositionRadar(axes) { Size = new Size(540, 290) };
-            using var radarImage = new Bitmap(540, 290);
-            radar.DrawToBitmap(radarImage, new Rectangle(0, 0, 540, 290));
-            radarImage.Save(Path.Combine(AppContext.BaseDirectory, "composition-radar-complete.png"));
-            radar.Width = 280;
-            using var compactImage = new Bitmap(280, 290);
-            radar.DrawToBitmap(compactImage, new Rectangle(0, 0, 280, 290));
-            compactImage.Save(Path.Combine(AppContext.BaseDirectory, "composition-radar-narrow.png"));
-            Check(
-                radar.AccessibleDescription!.Contains("控制覆盖") && radar.AccessibleDescription.Contains("80"),
-                "Radar exposes accessible values"
-            );
+            CheckCompactTeam(view, form);
+            CheckSolo(view, form);
+            CheckRefreshCoalescing(view, form);
+            CheckRadarPreview();
             form.Close();
             Application.DoEvents();
         }
@@ -444,5 +328,163 @@ internal static class ChampionCompositionChecks
             }
         }
         Console.WriteLine("Champion composition UI checks passed.");
+    }
+
+    private static IEnumerable<Control> Descendants(Control root) => StatisticsCheckSupport.Children(root);
+
+    private static void CheckTeamSummary(ChampionCompositionView view, ChampionSelectRoster roster, Handler handler)
+    {
+        view.SetRoster(roster);
+        var grid = Descendants(view).OfType<DataGridView>().Single();
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (
+            grid.Rows.Cast<DataGridViewRow>().Count(r => Equals(r.Cells[5].Value, "已读取")) < 4
+            && DateTime.UtcNow < deadline
+        )
+        {
+            Application.DoEvents();
+            Thread.Sleep(10);
+        }
+        Check(
+            grid.Rows.Count == 5 && handler.Calls == 3,
+            "Team duplicates and empty slots retained; only unique heroes downloaded"
+        );
+        Check(
+            grid.Rows.Cast<DataGridViewRow>().Count(r => Equals(r.Cells[5].Value, "已读取")) == 4,
+            "Rows finish loading"
+        );
+        Check(
+            Descendants(view).OfType<Label>().Any(l => l.Text.Contains("硬控制") && l.Text.Contains("个位置有记录")),
+            "Overview exposes sourced capability coverage"
+        );
+        Check(
+            Descendants(view).OfType<Label>().Any(l => l.Text.Contains("未记录不代表没有")),
+            "Unknown coverage is not presented as a missing capability"
+        );
+        Check(
+            Descendants(view).OfType<Label>().Any(l => l.Text == "可能的短板"),
+            "Current roster exposes weakness summary"
+        );
+        Check(
+            Descendants(view).OfType<Label>().Any(l => l.Text.StartsWith("可靠先手 ·")),
+            "Tactical findings are rendered"
+        );
+    }
+
+    private static void CheckSwapPreview(ChampionCompositionView view, ChampionSelectRoster roster)
+    {
+        var select = Descendants(view).OfType<ComboBox>().Single();
+        var grid = Descendants(view).OfType<DataGridView>().Single();
+        select.SelectedIndex = 1;
+        Application.DoEvents();
+        Check(
+            Descendants(view).OfType<Label>().Any(l => l.Text == "可能的短板 · 换人预览"),
+            "Preview assessment is clearly labelled"
+        );
+        Check(grid.Rows[0].Cells[0].Value!.ToString()!.Contains("莫甘娜"), "Swap preview replaces only self");
+        Check(roster.Team[0].ChampionId == 99 && grid.Rows.Count == 5, "Preview does not mutate actual roster");
+    }
+
+    private static void CheckCompactTeam(ChampionCompositionView view, Form form)
+    {
+        form.ClientSize = new Size(620, 650);
+        Application.DoEvents();
+        var heroStrip = view
+            .Controls.OfType<FlowLayoutPanel>()
+            .Single(p => p.Controls.Count == 5 && p.Controls.Cast<Control>().All(c => c is Panel));
+        Check(
+            heroStrip.Controls.Cast<Control>().All(c => c.Right <= heroStrip.ClientSize.Width),
+            "All five heroes remain visible in a narrow window"
+        );
+        Check(
+            Descendants(view).OfType<Label>().Any(l => l.Text.Contains("移除已记录来源")),
+            "Swap reports capability changes without claiming an unknown ability is absent"
+        );
+        using var narrow = new Bitmap(form.ClientSize.Width, form.ClientSize.Height);
+        form.DrawToBitmap(narrow, form.ClientRectangle);
+        narrow.Save(Path.Combine(AppContext.BaseDirectory, "champion-composition-narrow.png"));
+    }
+
+    private static void CheckSolo(ChampionCompositionView view, Form form)
+    {
+        view.SetRoster(new ChampionSelectRoster([new(99, 0, true, false)], [], false));
+        Application.DoEvents();
+        Check(
+            Descendants(view).OfType<Label>().Any(l => l.Text == "英雄能力分析"),
+            "Single player switches to hero analysis"
+        );
+        Check(
+            Descendants(view).OfType<Label>().Any(l => l.Text.Contains("控制依赖")),
+            "Single player sees specific advice instead of empty team assessment"
+        );
+        using var solo = new Bitmap(form.ClientSize.Width, form.ClientSize.Height);
+        form.DrawToBitmap(solo, form.ClientRectangle);
+        solo.Save(Path.Combine(AppContext.BaseDirectory, "champion-composition-solo.png"));
+        Check(Descendants(view).OfType<CompositionRadar>().Count() == 1, "Overview displays a radar");
+        var embedded = Descendants(view).OfType<CompositionRadar>().Single();
+        Check(
+            embedded.Height >= 250 && embedded.Bottom <= embedded.Parent!.ClientSize.Height,
+            "Radar remains inside its auto-sized card"
+        );
+    }
+
+    private static void CheckRefreshCoalescing(ChampionCompositionView view, Form form)
+    {
+        var embedded = Descendants(view).OfType<CompositionRadar>().Single();
+        // Count removed cards to detect repeated whole-page rebuilding.
+        int overviewPasses = 0;
+        var overview = embedded.Parent.Parent;
+        overview.ControlRemoved += (_, _) => overviewPasses++;
+        int initialCards = overview.Controls.Count;
+        var queue = typeof(ChampionCompositionView).GetMethod(
+            "QueueDashboardRefresh",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic
+        )!;
+        for (int i = 0; i < 100; i++)
+        {
+            queue.Invoke(view, null);
+        }
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        while (watch.ElapsedMilliseconds < 450)
+        {
+            Application.DoEvents();
+            Thread.Sleep(5);
+        }
+        Check(overviewPasses == initialCards, "Burst of 100 refresh requests produces a single overview rebuild");
+        watch.Restart();
+        for (int i = 0; i < 20; i++)
+        {
+            form.ClientSize = new Size(i % 2 == 0 ? 760 : 620, 650);
+            Application.DoEvents();
+        }
+        Check(watch.Elapsed < TimeSpan.FromSeconds(5), "Repeated resizing does not enter a layout loop");
+        Console.WriteLine(
+            $"PASS: 100 refresh requests coalesced; 20 resizes completed in {watch.ElapsedMilliseconds} ms."
+        );
+    }
+
+    private static void CheckRadarPreview()
+    {
+        var axes = new[]
+        {
+            new CompositionRadarAxis("控制覆盖", 80, "四个位置有控制"),
+            new("保护覆盖", 40, "两个位置有保护"),
+            new("指向控制", 20, "一个位置有指向控制"),
+            new("普攻距离", 53, "平均 530"),
+            new("伤害多样", 80, "类型平衡参考"),
+        };
+        using var radar = new CompositionRadar(axes) { Size = new Size(540, 290) };
+        using var radarImage = new Bitmap(540, 290);
+        radar.DrawToBitmap(radarImage, new Rectangle(0, 0, 540, 290));
+        radarImage.Save(Path.Combine(AppContext.BaseDirectory, "composition-radar-complete.png"));
+        radar.Width = 280;
+        using var compactImage = new Bitmap(280, 290);
+        radar.DrawToBitmap(compactImage, new Rectangle(0, 0, 280, 290));
+        compactImage.Save(Path.Combine(AppContext.BaseDirectory, "composition-radar-narrow.png"));
+        Check(
+            radar.AccessibleDescription!.Contains("控制覆盖") && radar.AccessibleDescription.Contains("80"),
+            "Radar exposes accessible values"
+        );
     }
 }

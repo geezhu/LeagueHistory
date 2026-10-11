@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 
 internal static class AssistantChecks
 {
@@ -51,6 +51,28 @@ internal static class AssistantChecks
     {
         Placement();
         var type = typeof(League.FormMain).Assembly.GetType("League.ChampionSelectAssistant")!;
+        var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        CheckParsing(type);
+        CheckSpellApplication();
+        using var owner = new League.FormMain();
+        using var assistant = (Form)Activator.CreateInstance(type, new object[] { owner })!;
+        CheckFilters(assistant, type, flags);
+        CheckNotices(assistant, type, flags);
+        var schemes = CreateSchemes();
+        CheckRuneHighlights(type, schemes);
+        CheckRuneSelection(assistant, type, flags, schemes);
+        var scroll = (FlowLayoutPanel)type.GetField("_body", flags)!.GetValue(assistant)!;
+        AddRunePreview(assistant, type, flags, schemes, scroll);
+        AddEquipmentPreview(assistant, type, flags);
+        var layoutOptions = AddSpellPreview(assistant, type, flags);
+        CheckSinglePage(assistant, scroll);
+        CheckToolbar(assistant, type, flags);
+        CheckEquipmentEditor(scroll);
+        CheckFooter(assistant, type, flags, scroll, layoutOptions);
+    }
+
+    private static void CheckParsing(Type type)
+    {
         var skills = type.GetMethod("ParseSkills", BindingFlags.Static | BindingFlags.NonPublic)!;
         var spellOptions = Newtonsoft.Json.Linq.JArray.Parse(
             "[{\"ids\":[4,14],\"pick_rate\":0.7,\"play\":100,\"win\":50},{\"ids\":[4,12],\"pick_rate\":0.3,\"play\":20,\"win\":12}]"
@@ -86,10 +108,10 @@ internal static class AssistantChecks
         {
             throw new Exception("Skill descriptions must preserve passive and map ability keys while removing markup");
         }
+    }
 
-        using var owner = new League.FormMain();
-        using var assistant = (Form)Activator.CreateInstance(type, new object[] { owner })!;
-        var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+    private static void CheckSpellApplication()
+    {
         var spellService = typeof(League.FormMain).Assembly.GetType("League.Services.ChampionSelectSpellService")!;
         foreach (bool accept in new[] { true, false })
         {
@@ -142,13 +164,20 @@ internal static class AssistantChecks
                     .GetResult();
                 success = true;
             }
-            catch (InvalidOperationException) { }
+            catch (InvalidOperationException)
+            {
+                // A rejected mock write is expected; success is verified against the resulting state below.
+            }
             if (success != accept)
             {
                 throw new Exception("Spell configuration must verify the resulting client state");
             }
         }
         Console.WriteLine("PASS: summoner spell application preserves slots and verifies actual changes.");
+    }
+
+    private static void CheckFilters(Form assistant, Type type, BindingFlags flags)
+    {
         var modeFilter = (ComboBox)type.GetField("_mode", flags)!.GetValue(assistant)!;
         var regionFilter = (ComboBox)type.GetField("_region", flags)!.GetValue(assistant)!;
         var tierFilter = (ComboBox)type.GetField("_tier", flags)!.GetValue(assistant)!;
@@ -186,6 +215,10 @@ internal static class AssistantChecks
         tierFilter.SelectedIndex = 0;
         laneFilter.SelectedIndex = 0;
         Console.WriteLine("PASS: assistant filters drive requests and preserve mode-specific tiers.");
+    }
+
+    private static void CheckNotices(Form assistant, Type type, BindingFlags flags)
+    {
         int notices = 0;
         string phase = "ChampSelect";
         bool reject = false;
@@ -247,11 +280,19 @@ internal static class AssistantChecks
         }
 
         Console.WriteLine("PASS: rune notices use champion-select chat, deduplicate, and report rejection.");
-        var schemes = new[]
+    }
+
+    private static League.Models.OpggRunes[] CreateSchemes()
+    {
+        return new[]
         {
             new League.Models.OpggRunes(8000, 8100, Enumerable.Range(1, 9).ToArray(), 100, .5),
             new League.Models.OpggRunes(8100, 8000, Enumerable.Range(11, 9).ToArray(), 80, .55),
         };
+    }
+
+    private static void CheckRuneHighlights(Type type, League.Models.OpggRunes[] schemes)
+    {
         var highlights = type.GetMethod("RuneHighlights", BindingFlags.NonPublic | BindingFlags.Static)!;
         var tagged = new[] { schemes[0] with { PickRate = .6 }, schemes[1] with { PickRate = .4 } };
         var popular = (string[])highlights.Invoke(null, new object[] { tagged[0], tagged })!;
@@ -266,7 +307,15 @@ internal static class AssistantChecks
         {
             throw new Exception("Missing rates must not receive highest labels");
         }
+    }
 
+    private static void CheckRuneSelection(
+        Form assistant,
+        Type type,
+        BindingFlags flags,
+        League.Models.OpggRunes[] schemes
+    )
+    {
         var resources = League.FormMain.Globals.resLoading.Runes;
         var original = resources.Runes.ToArray();
         resources.Runes.Clear();
@@ -315,13 +364,21 @@ internal static class AssistantChecks
             resources.Runes.Clear();
             resources.Runes.AddRange(original);
         }
+    }
+
+    private static void AddRunePreview(
+        Form assistant,
+        Type type,
+        BindingFlags flags,
+        League.Models.OpggRunes[] schemes,
+        FlowLayoutPanel scroll
+    )
+    {
         ((System.Windows.Forms.Timer)type.GetField("_timer", flags)!.GetValue(assistant)!).Stop();
-        var scroll = (FlowLayoutPanel)type.GetField("_body", flags)!.GetValue(assistant)!;
         type.GetMethod("ClearBody", flags)!.Invoke(assistant, null);
         scroll.Controls.Add(new Panel { Size = new Size(282, 80), Margin = new Padding(0, 0, 0, 4) });
-        void Line(string text) => type.GetMethod("Line", flags)!.Invoke(assistant, new object[] { text, true });
-        Line("T1 / 50.5% / MID");
-        Line("Runes");
+        Line(assistant, type, flags, "T1 / 50.5% / MID");
+        Line(assistant, type, flags, "Runes");
         type.GetMethod("AddRuneChoices", flags)!.Invoke(assistant, new object[] { schemes, CancellationToken.None });
         var runeIcons = scroll.Controls[3].Controls.OfType<FlowLayoutPanel>().Single();
         runeIcons.Controls.Clear();
@@ -336,8 +393,10 @@ internal static class AssistantChecks
                 }
             );
         }
+    }
 
-        Line("Core items / Q > W > E");
+    private static League.Models.OpggBuild CreateEquipmentBuild()
+    {
         var equipmentData = Newtonsoft.Json.Linq.JObject.Parse(
             "{\"core_items\":[{\"ids\":[99991,99992,99993],\"pick_rate\":0.6,\"play\":100,\"win\":52},{\"ids\":[99991,99992,99994],\"pick_rate\":0.3,\"play\":100,\"win\":55}],\"starter_items\":[{\"ids\":[99990,99989,99989]}],\"boots\":[{\"ids\":[99988]}],\"last_items\":[{\"ids\":[99991]},{\"ids\":[99994]},{\"ids\":[99995]}]}"
         );
@@ -360,9 +419,20 @@ internal static class AssistantChecks
             );
         }
 
+        return equipmentBuild;
+    }
+
+    private static void AddEquipmentPreview(Form assistant, Type type, BindingFlags flags)
+    {
+        Line(assistant, type, flags, "Core items / Q > W > E");
+        var equipmentBuild = CreateEquipmentBuild();
         type.GetMethod("AddEquipmentChoices", flags)!
             .Invoke(assistant, new object[] { equipmentBuild, CancellationToken.None });
-        Line("Summoner spells");
+    }
+
+    private static Newtonsoft.Json.Linq.JArray AddSpellPreview(Form assistant, Type type, BindingFlags flags)
+    {
+        Line(assistant, type, flags, "Summoner spells");
         var layoutOptions = Newtonsoft.Json.Linq.JArray.Parse(
             "[{\"ids\":[99998,99999],\"pick_rate\":0.8294,\"win_rate\":0.5276}]"
         );
@@ -373,25 +443,11 @@ internal static class AssistantChecks
         )
             .GetAwaiter()
             .GetResult();
-        void ReplaceSpellIcons(Control cards)
-        {
-            foreach (Control card in cards.Controls)
-            {
-                var icons = card.Controls.OfType<FlowLayoutPanel>().Single();
-                icons.Controls.Clear();
-                for (int i = 0; i < 2; i++)
-                {
-                    icons.Controls.Add(
-                        new PictureBox
-                        {
-                            Size = new Size(32, 32),
-                            Margin = new Padding(2),
-                            BackColor = Color.Teal,
-                        }
-                    );
-                }
-            }
-        }
+        return layoutOptions;
+    }
+
+    private static void CheckSinglePage(Form assistant, FlowLayoutPanel scroll)
+    {
         ReplaceSpellIcons(scroll.Controls[7]);
         assistant.Show();
         Application.DoEvents();
@@ -406,6 +462,14 @@ internal static class AssistantChecks
             preview.Save(Path.Combine(AppContext.BaseDirectory, "assistant-single-page.png"));
         }
         Console.WriteLine("PASS: normal assistant recommendations fit without scrolling.");
+    }
+
+    private static void CheckToolbar(Form assistant, Type type, BindingFlags flags)
+    {
+        var modeFilter = (ComboBox)type.GetField("_mode", flags)!.GetValue(assistant)!;
+        var regionFilter = (ComboBox)type.GetField("_region", flags)!.GetValue(assistant)!;
+        var tierFilter = (ComboBox)type.GetField("_tier", flags)!.GetValue(assistant)!;
+        var laneFilter = (ComboBox)type.GetField("_lane", flags)!.GetValue(assistant)!;
         modeFilter.SelectedIndex = 3;
         Application.DoEvents();
         if (regionFilter.Visible || tierFilter.Visible || laneFilter.Visible || modeFilter.Parent!.Height != 44)
@@ -424,7 +488,10 @@ internal static class AssistantChecks
         {
             throw new Exception("Ranked filters must reappear when switching back");
         }
+    }
 
+    private static void CheckEquipmentEditor(FlowLayoutPanel scroll)
+    {
         bool editorRendered = false;
         using (var closeEditor = new System.Windows.Forms.Timer { Interval = 300 })
         {
@@ -453,7 +520,16 @@ internal static class AssistantChecks
         {
             throw new Exception("Equipment editor must open from assistant");
         }
+    }
 
+    private static void CheckFooter(
+        Form assistant,
+        Type type,
+        BindingFlags flags,
+        FlowLayoutPanel scroll,
+        Newtonsoft.Json.Linq.JArray layoutOptions
+    )
+    {
         type.GetMethod("ClearBody", flags)!.Invoke(assistant, null);
         scroll.Controls.Add(new Panel { Size = new Size(270, 650) });
         (
@@ -464,22 +540,7 @@ internal static class AssistantChecks
             .GetAwaiter()
             .GetResult();
         var columns = scroll.Controls[1];
-        foreach (Control card in columns.Controls)
-        {
-            var icons = card.Controls.OfType<FlowLayoutPanel>().Single();
-            icons.Controls.Clear();
-            for (int i = 0; i < 2; i++)
-            {
-                icons.Controls.Add(
-                    new PictureBox
-                    {
-                        Size = new Size(32, 32),
-                        Margin = new Padding(2),
-                        BackColor = Color.Teal,
-                    }
-                );
-            }
-        }
+        ReplaceSpellIcons(columns);
         assistant.Show();
         Application.DoEvents();
         foreach (int height in new[] { 590, 420 })
@@ -514,6 +575,29 @@ internal static class AssistantChecks
         Console.WriteLine(
             "PASS: assistant bottom rates remain visible above fixed actions at normal and short heights."
         );
+    }
+
+    private static void Line(Form assistant, Type type, BindingFlags flags, string text) =>
+        type.GetMethod("Line", flags)!.Invoke(assistant, new object[] { text, true });
+
+    private static void ReplaceSpellIcons(Control cards)
+    {
+        foreach (Control card in cards.Controls)
+        {
+            var icons = card.Controls.OfType<FlowLayoutPanel>().Single();
+            icons.Controls.Clear();
+            for (int i = 0; i < 2; i++)
+            {
+                icons.Controls.Add(
+                    new PictureBox
+                    {
+                        Size = new Size(32, 32),
+                        Margin = new Padding(2),
+                        BackColor = Color.Teal,
+                    }
+                );
+            }
+        }
     }
 
     private sealed class ChatHandler(Func<HttpRequestMessage, HttpResponseMessage> send) : HttpMessageHandler
