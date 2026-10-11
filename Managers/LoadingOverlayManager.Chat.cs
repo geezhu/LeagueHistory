@@ -53,25 +53,7 @@ internal sealed partial class LoadingOverlayManager
         var roster = _roster;
         var players = request.IsVoice || roster == null ? [] : OverlayTierChatMessage.Select(roster, request);
         bool currentRequest = true;
-        bool Current() =>
-            currentRequest
-            && !_disposed
-            && !_life.IsCancellationRequested
-            && generation == _generation
-            && UseGameBar
-            && (_owner.GetAppConfig()?.EnableLoadingOverlay ?? true)
-            && _phase == "InProgress"
-            && Environment.TickCount64 - _lastPhaseRead < 15000
-            && (
-                request.IsVoice
-                || (
-                    _roster != null
-                    && players.Length > 0
-                    && players.All(p =>
-                        _roster.Players.Any(q => p.Key == q.Key && p.ChampionId == q.ChampionId && p.Team == q.Team)
-                    )
-                )
-            );
+        bool Current() => CurrentChatContext(request, generation, players, currentRequest);
         try
         {
             if (request.Cancelled)
@@ -79,16 +61,10 @@ internal sealed partial class LoadingOverlayManager
                 return;
             }
 
-            if (_phase != "InProgress")
+            var rejection = ChatRejection();
+            if (rejection.HasValue)
             {
-                state = "phase";
-                message = "进入游戏后才能发送；加载界面只提供查看。";
-                return;
-            }
-            if (!GameInputService.HasInputPermission())
-            {
-                state = "permission";
-                message = "未发送：请以管理员身份启动 League.exe。";
+                (state, message) = rejection.Value;
                 return;
             }
             if (!Current())
@@ -96,43 +72,9 @@ internal sealed partial class LoadingOverlayManager
                 return;
             }
 
-            IReadOnlyList<string> DeathMessages()
-            {
-                if (_lastDeathStreakRead == 0 || Environment.TickCount64 - _lastDeathStreakRead >= 15000)
-                {
-                    throw new InvalidOperationException("未发送：本局事件数据未更新，请等待 2999 连接恢复。");
-                }
-
-                return OverlayDeathStreakChatMessage.Build(_roster!, request, _deathStreaks, Champion);
-            }
-            var messages = request.Kind switch
-            {
-                "voice" => OverlayVoiceChatText.Build(request),
-                "mastery" => OverlayMasteryChatMessage.Build(roster!, request, _masteries, Champion),
-                "deathStreak" => DeathMessages(),
-                _ => OverlayTierChatMessage.Build(roster!, request, _ranks, Champion),
-            };
+            var messages = BuildChatMessages(roster, request);
             Report("waiting", "请在 20 秒内按 Win＋G 返回游戏，保持聊天输入框关闭；返回后发送到游戏聊天。");
-            var gate = new OverlayChatReady(request);
-            var readiness = OverlayChatReadiness.Waiting;
-            while (Current())
-            {
-                var latest = await _gameBar.ReadChatRequestAsync();
-                // SDK dismissal and foreground game must both agree. Pinning is not required.
-                readiness = gate.Observe(
-                    latest,
-                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                    latest?.Dismissed == true
-                        && GameInputService.ModifiersReleased()
-                        && GameInputService.IsGameForeground()
-                );
-                if (readiness != OverlayChatReadiness.Waiting)
-                {
-                    break;
-                }
-
-                await Task.Delay(200, _life.Token);
-            }
+            var readiness = await WaitForChatReadinessAsync(request, Current);
             if (!Current() || readiness == OverlayChatReadiness.Cancelled)
             {
                 state = "cancelled";
@@ -148,39 +90,9 @@ internal sealed partial class LoadingOverlayManager
             // Counts may change while the user is in Game Bar; use the latest polled events.
             if (request.Kind == "deathStreak")
             {
-                messages = DeathMessages();
+                messages = BuildDeathStreakMessages(request);
             }
-            // Keep observing cancellation / Game Bar reopening while input is in flight.
-            using var monitor = CancellationTokenSource.CreateLinkedTokenSource(_life.Token);
-            async Task Observe()
-            {
-                try
-                {
-                    while (!monitor.IsCancellationRequested)
-                    {
-                        var latest = await _gameBar.ReadChatRequestAsync();
-                        currentRequest =
-                            latest != null && request.SameCommand(latest) && !latest.Cancelled && latest.Dismissed;
-                        if (!currentRequest)
-                        {
-                            return;
-                        }
-
-                        await Task.Delay(100, monitor.Token);
-                    }
-                }
-                catch (OperationCanceledException) { }
-            }
-            var watching = Observe();
-            try
-            {
-                await _owner.SendOverlayTiersAsync(messages, Report, Current, monitor.Token);
-            }
-            finally
-            {
-                monitor.Cancel();
-                await watching;
-            }
+            await SendWithMonitorAsync(request, messages, Report, Current, value => currentRequest = value);
         }
         catch (OperationCanceledException)
         {
@@ -201,6 +113,130 @@ internal sealed partial class LoadingOverlayManager
         {
             _sendingChat = false;
             _gameBar.PublishChatStatus(request, state, message, true);
+        }
+    }
+
+    private (string State, string Message)? ChatRejection()
+    {
+        if (_phase != "InProgress")
+        {
+            return ("phase", "进入游戏后才能发送；加载界面只提供查看。");
+        }
+        if (!GameInputService.HasInputPermission())
+        {
+            return ("permission", "未发送：请以管理员身份启动 League.exe。");
+        }
+        return null;
+    }
+
+    private IReadOnlyList<string> BuildChatMessages(LoadingRoster? roster, OverlayChatRequest request) =>
+        request.Kind switch
+        {
+            "voice" => OverlayVoiceChatText.Build(request),
+            "mastery" => OverlayMasteryChatMessage.Build(roster!, request, _masteries, Champion),
+            "deathStreak" => BuildDeathStreakMessages(request),
+            _ => OverlayTierChatMessage.Build(roster!, request, _ranks, Champion),
+        };
+
+    private bool CurrentChatContext(
+        OverlayChatRequest request,
+        int generation,
+        LoadingPlayer[] players,
+        bool currentRequest
+    ) =>
+        currentRequest
+        && !_disposed
+        && !_life.IsCancellationRequested
+        && generation == _generation
+        && UseGameBar
+        && (_owner.GetAppConfig()?.EnableLoadingOverlay ?? true)
+        && _phase == "InProgress"
+        && Environment.TickCount64 - _lastPhaseRead < 15000
+        && (
+            request.IsVoice
+            || (
+                _roster != null
+                && players.Length > 0
+                && players.All(p =>
+                    _roster.Players.Any(q => p.Key == q.Key && p.ChampionId == q.ChampionId && p.Team == q.Team)
+                )
+            )
+        );
+
+    private IReadOnlyList<string> BuildDeathStreakMessages(OverlayChatRequest request)
+    {
+        if (_lastDeathStreakRead == 0 || Environment.TickCount64 - _lastDeathStreakRead >= 15000)
+        {
+            throw new InvalidOperationException("未发送：本局事件数据未更新，请等待 2999 连接恢复。");
+        }
+
+        return OverlayDeathStreakChatMessage.Build(_roster!, request, _deathStreaks, Champion);
+    }
+
+    private async Task<OverlayChatReadiness> WaitForChatReadinessAsync(OverlayChatRequest request, Func<bool> current)
+    {
+        var gate = new OverlayChatReady(request);
+        var readiness = OverlayChatReadiness.Waiting;
+        while (current())
+        {
+            var latest = await _gameBar.ReadChatRequestAsync();
+            // SDK dismissal and foreground game must both agree. Pinning is not required.
+            readiness = gate.Observe(
+                latest,
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                latest?.Dismissed == true && GameInputService.ModifiersReleased() && GameInputService.IsGameForeground()
+            );
+            if (readiness != OverlayChatReadiness.Waiting)
+            {
+                break;
+            }
+
+            await Task.Delay(200, _life.Token);
+        }
+        return readiness;
+    }
+
+    private async Task SendWithMonitorAsync(
+        OverlayChatRequest request,
+        IReadOnlyList<string> messages,
+        Action<string, string> report,
+        Func<bool> current,
+        Action<bool> setCurrentRequest
+    )
+    {
+        using var monitor = CancellationTokenSource.CreateLinkedTokenSource(_life.Token);
+        async Task Observe()
+        {
+            try
+            {
+                while (!monitor.IsCancellationRequested)
+                {
+                    var latest = await _gameBar.ReadChatRequestAsync();
+                    bool currentRequest =
+                        latest != null && request.SameCommand(latest) && !latest.Cancelled && latest.Dismissed;
+                    setCurrentRequest(currentRequest);
+                    if (!currentRequest)
+                    {
+                        return;
+                    }
+
+                    await Task.Delay(100, monitor.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Cancelling the monitor joins its worker before the token source is disposed.
+            }
+        }
+        var watching = Observe();
+        try
+        {
+            await _owner.SendOverlayTiersAsync(messages, report, current, monitor.Token);
+        }
+        finally
+        {
+            await monitor.CancelAsync();
+            await watching;
         }
     }
 }
