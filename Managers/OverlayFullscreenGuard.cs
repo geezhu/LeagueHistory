@@ -14,7 +14,10 @@ internal sealed class OverlayFullscreenGuard
     public bool ShouldPause(long now, bool force = false)
     {
         if (!force && now < _nextCheck)
+        {
             return _exclusive;
+        }
+
         _nextCheck = now + 1000;
         // QUNS_BUSY also covers borderless windows and presentations; only value 3 is exclusive D3D.
         _exclusive = _query() == 3;

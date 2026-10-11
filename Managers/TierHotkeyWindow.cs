@@ -20,17 +20,29 @@ internal sealed class TierHotkeyWindow : NativeWindow, IDisposable
         _pressed = pressed;
         CreateHandle(new CreateParams { Caption = "League tier hotkeys", Parent = new IntPtr(-3) });
         if (keys.Length == 0)
+        {
             keys = new[] { Keys.F9, Keys.F11, Keys.Control | Keys.F7, Keys.Control | Keys.F9, Keys.Control | Keys.F11 };
+        }
+
         foreach (var (key, index) in keys.Select((key, index) => (key, index)))
         {
             int id = index + 1;
             uint modifiers = 0x4000;
             if ((key & Keys.Control) != 0)
+            {
                 modifiers |= 0x0002;
+            }
+
             if ((key & Keys.Shift) != 0)
+            {
                 modifiers |= 0x0004;
+            }
+
             if ((key & Keys.Alt) != 0)
+            {
                 modifiers |= 0x0001;
+            }
+
             string label = new KeysConverter().ConvertToString(key) ?? key.ToString();
             if (RegisterHotKey(Handle, id, modifiers, (uint)(key & Keys.KeyCode)))
             {
@@ -72,9 +84,15 @@ internal sealed class TierHotkeyWindow : NativeWindow, IDisposable
     public void Dispose()
     {
         if (Handle == IntPtr.Zero)
+        {
             return;
+        }
+
         foreach (int id in _registered.Keys)
+        {
             UnregisterHotKey(Handle, id);
+        }
+
         _registered.Clear();
         DestroyHandle();
     }
