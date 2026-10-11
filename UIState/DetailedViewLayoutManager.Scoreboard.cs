@@ -42,7 +42,10 @@ namespace League.UIState
                 void Highlight(int start, int length)
                 {
                     if (length <= 0)
+                    {
                         return;
+                    }
+
                     var state = e.Graphics.Save();
                     try
                     {
@@ -70,7 +73,9 @@ namespace League.UIState
                 }
                 Highlight(0, KillsLength);
                 if (AssistsStart >= 0)
+                {
                     Highlight(AssistsStart, Text.Length - AssistsStart);
+                }
             }
         }
 
@@ -127,12 +132,19 @@ namespace League.UIState
             void Cached(Dictionary<int, (Image, string, string)> cache, int id, int x, int y, int size)
             {
                 if (cache.TryGetValue(id, out var data))
+                {
                     Icon(data.Item1, data.Item2 + "\n" + data.Item3, x, y, size);
+                }
                 else
+                {
                     Icon(null, id > 0 ? "资源暂未加载" : "空槽位", x, y, size);
+                }
             }
             if (isSelf)
+            {
                 row.Controls.Add(new Panel { BackColor = Color.FromArgb(46, 103, 190), Size = new Size(3, 44) });
+            }
+
             Cached(_championCache, player["championId"]?.Value<int>() ?? 0, 12, 5, 34);
             var nameLabel = new League.Controls.PlayerNameLink
             {
@@ -154,7 +166,10 @@ namespace League.UIState
             var badges = League.UIHelpers.WeGameHonorIcons.Select(player, match.AllParticipants);
             bool firstBlood = player["firstBloodKill"]?.Value<bool>() == true;
             if (firstBlood)
+            {
                 badges.Insert(0, ("firstBlood", "获得本场首杀"));
+            }
+
             if (firstBlood || badges.Count > 0)
             {
                 nameLabel.SetBounds(58, 1, 180, 22);
@@ -176,14 +191,22 @@ namespace League.UIState
                 }
             }
             for (int i = 1; i <= 2; i++)
+            {
                 Cached(_spellCache, player[$"spell{i}Id"]?.Value<int>() ?? 0, 242, 11 + (i - 1) * 12, 10);
+            }
+
             for (int i = 0; i < 7; i++)
+            {
                 Cached(_itemCache, player[$"item{i}"]?.Value<int>() ?? 0, 258 + i * 24, 11, 22);
+            }
+
             if (IsHextechArenaMode(player))
             {
                 var augments = GetSelfAugments(player, match);
                 for (int i = 0; i < Math.Min(6, augments.Length); i++)
+                {
                     Icon(augments[i]?.Icon, augments[i]?.name + "\n" + augments[i]?.longDesc, 436 + i * 24, 11, 22);
+                }
             }
             else
             {
@@ -192,7 +215,9 @@ namespace League.UIState
                     .Concat(runes.Secondary ?? Array.Empty<RuneInfo>())
                     .ToArray();
                 for (int i = 0; i < Math.Min(6, all.Length); i++)
+                {
                     Cached(_runeCache, all[i].RuneId, 436 + i * 24, 11, 22);
+                }
                 // Retain access to the stat shards without expanding every row.
                 string shards = string.Join(
                     "\n",
@@ -203,7 +228,9 @@ namespace League.UIState
                     )
                 );
                 if (shards.Length > 0)
+                {
                     _toolTip.SetToolTip(row, shards);
+                }
             }
             bool IsMaximum(string key)
             {
@@ -211,7 +238,10 @@ namespace League.UIState
                     match.AllParticipants.Count == 0
                     || match.AllParticipants.Any(p => p[key]?.Type != JTokenType.Integer)
                 )
+                {
                     return false;
+                }
+
                 int value = player[key]?.Value<int>() ?? 0;
                 return value > 0 && value == match.AllParticipants.Max(p => p[key]!.Value<int>());
             }
