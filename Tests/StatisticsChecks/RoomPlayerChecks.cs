@@ -76,6 +76,19 @@ internal static class RoomPlayerChecks
         string directory = Path.Combine(AppContext.BaseDirectory, "room-player-checks");
         Directory.CreateDirectory(directory);
         var log = new RoomLoadDiagnostics(Path.Combine(directory, "diagnostic.log"));
+        await CheckParallelLoadingAsync(log);
+        CheckRosterNormalization();
+        await HiddenRosterChecks(log);
+        await CheckModeChangeAsync(log);
+        await CheckQueuedTimeoutAsync(log);
+        await CheckRetryAsync(log);
+        await CheckLateUiDeliveryAsync(log);
+        await HttpCancellationChecks();
+        await CheckDiagnosticsAsync(log);
+    }
+
+    private static async Task CheckParallelLoadingAsync(RoomLoadDiagnostics log)
+    {
         var gates = new ConcurrentDictionary<int, TaskCompletionSource<PlayerMatchInfo>>();
         var calls = new ConcurrentDictionary<int, int>();
         var tokens = new ConcurrentDictionary<int, CancellationToken>();
@@ -137,7 +150,10 @@ internal static class RoomPlayerChecks
             () => latest.Length == 1 && latest[0].Info?.Player.SummonerId == 5,
             "Old generation snapshots and responses must be ignored"
         );
+    }
 
+    private static void CheckRosterNormalization()
+    {
         var duplicate = new JArray(Player(1), Player(1), Player(2), Player(3), Player(4), Player(5), Player(6));
         Check(
             RoomPlayerLoader.Normalize(duplicate).Count == 5,
@@ -162,8 +178,10 @@ internal static class RoomPlayerChecks
             selected.Count == 1 && selected[0].Value<int>("championId") == 99,
             "Selection data enriches known members without inventing team membership"
         );
-        await HiddenRosterChecks(log);
+    }
 
+    private static async Task CheckModeChangeAsync(RoomLoadDiagnostics log)
+    {
         int modeCalls = 0;
         RoomPlayerState[] modeStates = Array.Empty<RoomPlayerState>();
         using var modes = new RoomPlayerLoader(
@@ -191,7 +209,10 @@ internal static class RoomPlayerChecks
             () => modeCalls == 2 && modeStates[0].Info != null,
             "Changed queue reloads histories rather than keeping the previous mode cache"
         );
+    }
 
+    private static async Task CheckQueuedTimeoutAsync(RoomLoadDiagnostics log)
+    {
         RoomPlayerState[] queuedStates = Array.Empty<RoomPlayerState>();
         using var queued = new RoomPlayerLoader(
             async (p, t) =>
@@ -214,7 +235,10 @@ internal static class RoomPlayerChecks
             () => queuedStates.Length == 5 && queuedStates.All(s => s.CanRetry),
             "Queued players also have a bounded timeout when all active requests stall"
         );
+    }
 
+    private static async Task CheckRetryAsync(RoomLoadDiagnostics log)
+    {
         int attempts = 0;
         RoomPlayerState[] retryStates = Array.Empty<RoomPlayerState>();
         using var retry = new RoomPlayerLoader(
@@ -249,7 +273,10 @@ internal static class RoomPlayerChecks
         Check(attempts == 3 && !retryStates[0].CanRetry, "Successful retry clears failure state");
         retry.Reset();
         retry.Reset(); // Completed entries must remain safe to cancel/dispose.
+    }
 
+    private static async Task CheckLateUiDeliveryAsync(RoomLoadDiagnostics log)
+    {
         // A callback already queued for an old generation must also be rejected at delivery time.
         var callbacks = new ConcurrentQueue<Action>();
         int delivered = 0;
@@ -274,8 +301,10 @@ internal static class RoomPlayerChecks
         callback!();
         await updating;
         Check(delivered == 0, "Generation must be checked inside UI callback, not just before posting it");
+    }
 
-        await HttpCancellationChecks();
+    private static async Task CheckDiagnosticsAsync(RoomLoadDiagnostics log)
+    {
         await log.FlushAsync();
         string text = await File.ReadAllTextAsync(log.LogPath);
         Check(
@@ -374,7 +403,10 @@ internal static class RoomPlayerChecks
             },
         };
 
-    private static async Task HiddenRosterChecks(RoomLoadDiagnostics log)
+    private static Task HiddenRosterChecks(RoomLoadDiagnostics log) =>
+        CheckHiddenLoadingAsync(CheckHiddenParsing(), log);
+
+    private static JObject CheckHiddenParsing()
     {
         var data = HiddenRosterFixture();
         var teams = RoomPlayerLoader.ResolveGameTeams(data);
@@ -446,6 +478,12 @@ internal static class RoomPlayerChecks
             "Zero UUID is a hidden placeholder, not a shared public identity"
         );
 
+        return data;
+    }
+
+    private static async Task CheckHiddenLoadingAsync(JObject data, RoomLoadDiagnostics log)
+    {
+        var teams = RoomPlayerLoader.ResolveGameTeams(data);
         RoomPlayerState[] states = [];
         int calls = 0;
         using var loader = new RoomPlayerLoader(
@@ -504,6 +542,12 @@ internal static class RoomPlayerChecks
         var ui = new PlayerCardUIManager(form, table);
         form.Show();
         Application.DoEvents();
+        CheckRetainedCards(form, table, ui);
+        CheckHiddenCards(form, table, ui);
+    }
+
+    private static void CheckRetainedCards(Form form, TableLayoutPanel table, PlayerCardUIManager ui)
+    {
         RoomPlayerState State(int id, bool ally, int column, long revision, PlayerMatchInfo? info = null) =>
             new(
                 1,
@@ -572,6 +616,12 @@ internal static class RoomPlayerChecks
         }
         ui.Render(states.Skip(1).ToArray());
         Check(table.Controls.Count == 9 && original.IsDisposed, "Departed player's complete card is disposed");
+    }
+
+    private static void CheckHiddenCards(Form form, TableLayoutPanel table, PlayerCardUIManager ui)
+    {
+        PlayerCardControl Card(int col, int row) =>
+            table.GetControlFromPosition(col, row)!.Controls.OfType<PlayerCardControl>().Single();
         var hiddenTeams = RoomPlayerLoader.ResolveGameTeams(HiddenRosterFixture());
         var hiddenStates = hiddenTeams
             .One.Select(
@@ -636,7 +686,7 @@ internal static class RoomPlayerChecks
         using (var bitmap = new Bitmap(form.Width, form.Height))
         {
             form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
-            bitmap.Save(Path.Combine(Path.GetDirectoryName(image)!, "hidden-cards.png"));
+            bitmap.Save(Path.Combine(AppContext.BaseDirectory, "room-player-checks", "hidden-cards.png"));
         }
         ui.Render(Array.Empty<RoomPlayerState>());
         Check(table.Controls.Count == 0, "New session clears every card");
