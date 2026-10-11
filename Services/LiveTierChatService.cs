@@ -45,14 +45,18 @@ public sealed class LiveTierChatService : IDisposable
             var page = await _am.GetAsync(0, false, token);
             version = page.Index.Patch + (page.UpdateFailed ? " 旧缓存" : "");
             foreach (var c in page.Index.Champions)
+            {
                 ranks[c.Id] = (c.Tier, c.WinRate, page.Index.PickRate(c));
+            }
         }
         else
         {
             var page = await _opgg.GetTiersAsync(new("global", "aram", "all", "none", 0), false, token);
             version = page.Version;
             foreach (var c in page.Rows)
+            {
                 ranks[c.ChampionId] = (c.Tier.HasValue ? "T" + c.Tier : "暂无梯队", c.WinRate, c.PickRate);
+            }
         }
         // Refresh participants after a potentially slow statistics request.
         var latest = await _live.GetAsync(token);
@@ -67,9 +71,14 @@ public sealed class LiveTierChatService : IDisposable
         }
         var result = BuildMessages(latest, queue, enemy, champions, ranks, version);
         if (result.Count == 0)
+        {
             ChatSendDiagnostics.Shared.Report("identity", "未发送：无法确定自己的阵营，或所选阵营没有英雄。");
+        }
         else
+        {
             ChatSendDiagnostics.Shared.Report("prepared", $"数据已准备，将分 {result.Count} 条发送。");
+        }
+
         return result;
     }
 
@@ -84,7 +93,10 @@ public sealed class LiveTierChatService : IDisposable
     {
         var self = match.Players.FirstOrDefault(p => p.Self);
         if (self == null || self.Team == "UNKNOWN" || queue is not (450 or 2400))
+        {
             return [];
+        }
+
         var catalog = champions.ToArray();
         var rows = match
             .Players.Where(p => p.Team != "UNKNOWN" && (enemy ? p.Team != self.Team : p.Team == self.Team))

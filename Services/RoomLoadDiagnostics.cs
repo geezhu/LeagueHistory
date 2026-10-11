@@ -40,7 +40,10 @@ public sealed class RoomLoadDiagnostics
         lock (_gate)
         {
             if (_pending.Count >= 500)
+            {
                 _pending.Dequeue();
+            }
+
             _pending.Enqueue(line.Replace('\r', ' ').Replace('\n', ' '));
             if (!_writing)
             {
@@ -69,7 +72,10 @@ public sealed class RoomLoadDiagnostics
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
                 if (File.Exists(LogPath) && new FileInfo(LogPath).Length > 512 * 1024)
+                {
                     File.Move(LogPath, LogPath + ".previous", true);
+                }
+
                 File.AppendAllLines(LogPath, lines, Encoding.UTF8);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
@@ -82,11 +88,18 @@ public sealed class RoomLoadDiagnostics
         {
             Task writer;
             lock (_gate)
+            {
                 writer = _writer;
+            }
+
             await writer;
             lock (_gate)
+            {
                 if (!_writing)
+                {
                     return;
+                }
+            }
         }
     }
 }

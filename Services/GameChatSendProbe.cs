@@ -24,7 +24,10 @@ internal static class GameChatSendProbe
                 administrator ? "已确认测试进程具有管理员权限。" : "测试进程没有管理员权限，取消测试。"
             );
             if (!administrator)
+            {
                 return 4;
+            }
+
             log.Report("probe-start", "单次聊天测试：等待游戏数据、游戏前台和修饰键释放，最长等待两分钟。");
             DateTime? readySince = null;
             while (!timeout.IsCancellationRequested)
@@ -34,7 +37,9 @@ internal static class GameChatSendProbe
                 {
                     var snapshot = await live.GetAsync(timeout.Token);
                     if (snapshot.Players.Length == 0 || snapshot.Time < 1)
+                    {
                         waiting = "等待游戏载入完成。";
+                    }
                 }
                 catch (Exception ex) when (!timeout.IsCancellationRequested)
                 {
@@ -42,14 +47,23 @@ internal static class GameChatSendProbe
                 }
                 var foreground = GameInputService.GetGameForegroundState();
                 if (waiting == null && !foreground.IsGame)
+                {
                     waiting = foreground.Reason;
+                }
+
                 if (waiting == null && !GameInputService.ModifiersReleased())
+                {
                     waiting = "等待 Ctrl、Shift、Alt 松开。";
+                }
+
                 if (waiting != null)
                 {
                     readySince = null;
                     if (waiting != lastWait)
+                    {
                         log.Report("probe-wait", waiting);
+                    }
+
                     lastWait = waiting;
                 }
                 else

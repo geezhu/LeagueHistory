@@ -93,7 +93,10 @@ public sealed class OverlayChampionDetailService : IDisposable
     {
         var icon = Icon("item", id);
         if (!string.IsNullOrWhiteSpace(name))
+        {
             icon["name"] = name;
+        }
+
         var row = Row("", icons: [icon], stats: Stats(win, pick, games));
         row["winRateText"] = "胜率 " + Rate(win);
         row["pickRateText"] = "使用率 " + Rate(pick);
@@ -145,6 +148,7 @@ public sealed class OverlayChampionDetailService : IDisposable
             .ToArray();
         sections.Add(Section("builds", "核心出装 · 按使用率排序", cores));
         foreach (var (key, title) in new[] { ("starter_items", "出门装"), ("boots", "鞋子") })
+        {
             sections.Add(
                 Section(
                     "builds",
@@ -152,6 +156,8 @@ public sealed class OverlayChampionDetailService : IDisposable
                     OpggItemSetService.Options(build.Data, key).Take(3).Select(row => Option(row, title))
                 )
             );
+        }
+
         var spells = OpggItemSetService.Options(build.Data, "summoner_spells");
         var highlights = new[]
         {
@@ -198,7 +204,10 @@ public sealed class OverlayChampionDetailService : IDisposable
             (build.Data["skill_masteries"]?.First?["ids"] as JArray ?? new()).Values<string>()
         );
         if (priority.Length > 0)
+        {
             sections.Add(Section("skills", "推荐加点", [Row(priority)]));
+        }
+
         return new()
         {
             ["source"] =
@@ -225,6 +234,7 @@ public sealed class OverlayChampionDetailService : IDisposable
         foreach (
             var (key, title) in new[] { ("kPrismatic", "棱彩强化"), ("kGold", "黄金强化"), ("kSilver", "白银强化") }
         )
+        {
             sections.Add(
                 Section(
                     "augments",
@@ -244,6 +254,8 @@ public sealed class OverlayChampionDetailService : IDisposable
                         })
                 )
             );
+        }
+
         if (page.Detail != null)
         {
             sections.Add(
@@ -259,6 +271,7 @@ public sealed class OverlayChampionDetailService : IDisposable
             );
             var build = OpggItemSetService.FromAramMeta(page, hero);
             foreach (var (key, title) in new[] { ("items", "出装组合"), ("boots", "鞋子") })
+            {
                 sections.Add(
                     Section(
                         "builds",
@@ -275,17 +288,22 @@ public sealed class OverlayChampionDetailService : IDisposable
                                         stats: Stats(r.WinRate, r.PickRate, r.Games)
                                     );
                                     if (key == "items")
+                                    {
                                         row["later"] = new JArray(
                                             OpggItemSetService
                                                 .Later(build.Data, r.ToOption())
                                                 .Take(20)
                                                 .Select(id => Icon("item", id))
                                         );
+                                    }
+
                                     return row;
                                 }
                             )
                     )
                 );
+            }
+
             sections.Add(
                 Section(
                     "builds",
@@ -323,7 +341,10 @@ public sealed class OverlayChampionDetailService : IDisposable
         string key = $"{hero}:{queue}:{position}";
         var lifetime = queue == 2400 ? _lifetime() : TimeSpan.FromMinutes(15);
         if (_cache.TryGetValue(key, out var cached) && DateTime.UtcNow - cached.Time < lifetime)
+        {
             return (JObject)cached.Data.DeepClone();
+        }
+
         var data = new JObject
         {
             ["state"] = "loading",
@@ -344,7 +365,10 @@ public sealed class OverlayChampionDetailService : IDisposable
                         await client.GetStringAsync($"/lol-game-data/assets/v1/champions/{hero}.json", token)
                     );
                     if ((int?)champion["id"] != hero)
+                    {
                         throw new InvalidDataException();
+                    }
+
                     _skills[hero] = champion;
                 }
                 var skills = ChampionSelectAssistant.ParseSkills(champion);
@@ -408,7 +432,10 @@ public sealed class OverlayChampionDetailService : IDisposable
                                 var available = FromAramMeta(early, hero);
                                 partial["source"] = available["source"];
                                 foreach (var section in (JArray)available["sections"]!)
+                                {
                                     ((JArray)partial["sections"]!).Add(section.DeepClone());
+                                }
+
                                 preview(partial);
                             }
                         ),
@@ -442,14 +469,19 @@ public sealed class OverlayChampionDetailService : IDisposable
                 );
             }
             else
+            {
                 recommendations = new JObject
                 {
                     ["source"] = "当前模式暂无对应推荐，仍可查看英雄技能。",
                     ["sections"] = new JArray(),
                 };
+            }
+
             data["source"] = recommendations["source"];
             foreach (var section in (JArray)recommendations["sections"]!)
+            {
                 ((JArray)data["sections"]!).Add(section.DeepClone());
+            }
         }
         catch (OperationCanceledException)
         {
@@ -478,6 +510,7 @@ public sealed class OverlayChampionDetailService : IDisposable
         string artPath = (string?)data["artPath"] ?? "";
         data.Remove("artPath");
         if (artPath.StartsWith("/lol-game-data/assets/", StringComparison.OrdinalIgnoreCase))
+        {
             data["art"] = await LoadImage(
                 new JObject
                 {
@@ -487,11 +520,16 @@ public sealed class OverlayChampionDetailService : IDisposable
                 },
                 token
             );
+        }
+
         data["state"] = failed ? "partial" : "ready";
         if (!failed)
         {
             if (_cache.Count >= 30)
+            {
                 _cache.Clear();
+            }
+
             _cache[key] = (DateTime.UtcNow, (JObject)data.DeepClone());
         }
         return data;
@@ -501,7 +539,10 @@ public sealed class OverlayChampionDetailService : IDisposable
     {
         var res = FormMain.Globals.resLoading;
         if (res == null)
+        {
             return;
+        }
+
         foreach (var icon in data.Descendants().OfType<JObject>().Where(o => o["kind"] != null))
         {
             int id = (int?)icon["id"] ?? 0;
@@ -514,22 +555,29 @@ public sealed class OverlayChampionDetailService : IDisposable
                 _ => (null, null),
             };
             if (!string.IsNullOrEmpty(name))
+            {
                 icon["name"] = name;
+            }
+
             if (!string.IsNullOrEmpty(description))
+            {
                 icon["description"] = TooltipText.PlainText(description);
+            }
         }
         foreach (
             var section in ((JArray?)data["sections"] ?? new())
                 .OfType<JObject>()
                 .Where(s => (string?)s["tab"] == "runes")
         )
-        foreach (var row in ((JArray?)section["rows"] ?? new()).OfType<JObject>())
         {
-            string name = (string?)row["icons"]?.First?["name"] ?? "符文方案";
-            string title = (string?)row["title"] ?? "";
-            int separator = title.IndexOf('·');
-            string tags = separator >= 0 ? title[(separator + 1)..].Trim() : "";
-            row["title"] = name + (tags.Length > 0 ? " · " + tags : "");
+            foreach (var row in ((JArray?)section["rows"] ?? new()).OfType<JObject>())
+            {
+                string name = (string?)row["icons"]?.First?["name"] ?? "符文方案";
+                string title = (string?)row["title"] ?? "";
+                int separator = title.IndexOf('·');
+                string tags = separator >= 0 ? title[(separator + 1)..].Trim() : "";
+                row["title"] = name + (tags.Length > 0 ? " · " + tags : "");
+            }
         }
     }
 
@@ -556,13 +604,16 @@ public sealed class OverlayChampionDetailService : IDisposable
                                 client != null
                                 && path.StartsWith("/lol-game-data/assets/", StringComparison.OrdinalIgnoreCase)
                             )
+                            {
                                 image = await new ImageCacheService(client).GetOrDownloadImageAsync(
                                     path,
                                     kind == "art" ? "profile-backgrounds" : "skills",
                                     kind == "art" ? $"{id * 1000}.png" : $"{id}-{(string?)icon["key"]}.png"
                                 );
+                            }
                         }
                         else if (res != null)
+                        {
                             image = (
                                 await (
                                     kind switch
@@ -574,10 +625,15 @@ public sealed class OverlayChampionDetailService : IDisposable
                                     }
                                 )
                             ).image;
+                        }
+
                         using (image)
                         {
                             if (image == null)
+                            {
                                 return "";
+                            }
+
                             using var small = new Bitmap(image, kind == "art" ? new Size(560, 280) : new Size(48, 48));
                             using var stream = new MemoryStream();
                             small.Save(stream, kind == "art" ? ImageFormat.Jpeg : ImageFormat.Png);
@@ -596,7 +652,10 @@ public sealed class OverlayChampionDetailService : IDisposable
         );
         string result = await task.WaitAsync(token);
         if (result.Length == 0)
+        {
             _images.TryRemove(key, out _);
+        }
+
         return result;
     }
 

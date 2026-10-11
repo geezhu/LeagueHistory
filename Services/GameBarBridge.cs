@@ -47,7 +47,10 @@ public sealed partial class GameBarBridge : IDisposable
     )
     {
         if (_disposed)
+        {
             return;
+        }
+
         string identity = $"{session}|{enabled}|{active}|{show}";
         if (identity != _lastCommand)
         {
@@ -78,11 +81,17 @@ public sealed partial class GameBarBridge : IDisposable
                 var rank = ranks.GetValueOrDefault(p.Key);
                 var mastery = masteries?.GetValueOrDefault(p.Key);
                 if (mastery?.ChampionId != p.ChampionId)
+                {
                     mastery = null;
+                }
+
                 var streak = deathStreaks?.GetValueOrDefault(p.Key) ?? LiveDeathStreak.Unavailable();
                 var party = p.IdentityHidden ? null : parties?.GetValueOrDefault(p.Key);
                 if (party?.Size is not (>= 2 and <= 5))
+                {
                     party = null;
+                }
+
                 rows.Add(
                     new JObject
                     {
@@ -147,9 +156,15 @@ public sealed partial class GameBarBridge : IDisposable
     private string FindDirectory()
     {
         if (_testDirectory != null)
+        {
             return _testDirectory;
+        }
+
         if (Environment.TickCount64 < _nextDiscovery)
+        {
             return _directory;
+        }
+
         _nextDiscovery = Environment.TickCount64 + 10000;
         string packages = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -193,7 +208,9 @@ public sealed partial class GameBarBridge : IDisposable
                 finally
                 {
                     if (File.Exists(temporary))
+                    {
                         File.Delete(temporary);
+                    }
                 }
                 Status = DescribeWidgetState(null, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                 string heartbeat = Path.Combine(directory, "widget-status.json");
@@ -214,21 +231,39 @@ public sealed partial class GameBarBridge : IDisposable
     {
         long age = now - ((long?)state?["updatedAt"] ?? 0);
         if (state == null || age < 0 || age >= 15000)
+        {
             return "数据已准备，Game Bar 组件未连接；请在 Win＋G 中打开「League 对局速览」。";
+        }
+
         string error = (string?)state["error"] ?? "";
         if (error.Length > 0)
+        {
             return error;
+        }
+
         if (
             (bool?)state["connected"] == false
             || (state["connected"] == null && !string.IsNullOrEmpty((string?)state["readError"]))
         )
+        {
             return "组件已启动，但尚未读到有效数据；请确认主程序正在运行。";
+        }
+
         if ((double?)state["width"] <= 0 || (double?)state["height"] <= 0)
+        {
             return "组件已连接，但画面尚未加载；请关闭该小组件后重新打开。";
+        }
+
         if ((bool?)state["pinned"] != true)
+        {
             return "Game Bar 已连接但尚未固定 · 在 Win＋G 中查看，固定后可保留在游戏上方。";
+        }
+
         if ((bool?)state["active"] == false)
+        {
             return "Game Bar 已连接并固定 · 等待对局 · Win＋G 管理面板。";
+        }
+
         return "Game Bar 已连接并固定 · Win＋G 管理面板。";
     }
 
@@ -240,7 +275,10 @@ public sealed partial class GameBarBridge : IDisposable
     public void Dispose()
     {
         if (_disposed)
+        {
             return;
+        }
+
         _disposed = true;
         _voiceRecognition.Dispose();
         _pending.Writer.TryComplete();

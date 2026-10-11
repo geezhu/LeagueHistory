@@ -13,7 +13,10 @@ public static class OverlayMasteryChatMessage
     {
         var players = OverlayTierChatMessage.Select(roster, request);
         if (players.Length == 0)
+        {
             throw new InvalidOperationException("未发送：无法确定所选阵营或英雄，请等待名单更新。");
+        }
+
         return ChampionMasteryChatMessage.Build(
             OverlayChampionDetailService.ModeName(PlayerChampionTier.NormalizeQueue(roster.Queue, roster.Mode)),
             request.Target switch
@@ -26,7 +29,10 @@ public static class OverlayMasteryChatMessage
             {
                 var mastery = masteries.GetValueOrDefault(p.Key);
                 if (mastery?.ChampionId != p.ChampionId)
+                {
                     mastery = null;
+                }
+
                 return new ChampionMasteryChatEntry(champion(p.ChampionId), mastery);
             })
         );

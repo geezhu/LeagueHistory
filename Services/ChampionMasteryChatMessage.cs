@@ -10,7 +10,10 @@ public static class ChampionMasteryChatMessage
     {
         var rows = entries.ToArray();
         if (rows.Length == 0 || !rows.Any(r => r.Mastery?.Available == true))
+        {
             throw new InvalidOperationException("未发送：英雄熟练度尚未就绪或无法查询，请稍后重试。");
+        }
+
         static string Clean(string value) => value.Replace('\r', ' ').Replace('\n', ' ').Trim();
         string prefix = $"【{Clean(map)}·{Clean(group)}】英雄熟练度：";
         var messages = new List<string>();
@@ -27,7 +30,10 @@ public static class ChampionMasteryChatMessage
                         ? (mastery.Level.HasValue ? $"{mastery.Level}级 / " : "") + $"{mastery.Points.Value:N0}点"
                         : "暂无成就记录";
             if (mastery is { Available: true, Stale: true })
+            {
                 text += "（缓存）";
+            }
+
             string item = Clean(entry.Champion) + " " + text;
             if (line.Length > prefix.Length && line.Length + item.Length + 1 > 180)
             {
@@ -37,7 +43,10 @@ public static class ChampionMasteryChatMessage
             line += (line.Length > prefix.Length ? "、" : "") + item;
         }
         if (line.Length > prefix.Length)
+        {
             messages.Add(line);
+        }
+
         return messages;
     }
 }
