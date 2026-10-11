@@ -101,8 +101,14 @@ public sealed class PlayerSearchHistory
                     File.Delete(temporary);
                 }
             }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            catch (IOException)
+            {
+                // Search history remains usable in memory when temporary-file cleanup fails.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Cleanup is best effort after the persistence attempt.
+            }
         }
     }
 }

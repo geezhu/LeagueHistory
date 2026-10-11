@@ -98,7 +98,10 @@ public sealed partial class GameBarBridge
                     .ConfigureAwait(false);
                 File.Move(temporary, Path.Combine(directory, "chat-status.json"), true);
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // The widget may close during a write; a later status replaces this optional response.
+            }
             finally
             {
                 try
@@ -108,7 +111,10 @@ public sealed partial class GameBarBridge
                         File.Delete(temporary);
                     }
                 }
-                catch (IOException) { }
+                catch (IOException)
+                {
+                    // Cleanup must not stop the background writer or mask a publication failure.
+                }
             }
         }
     }

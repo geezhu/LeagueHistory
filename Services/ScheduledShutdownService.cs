@@ -325,7 +325,10 @@ public sealed class ScheduledShutdownService
                 {
                     File.Delete(temporary);
                 }
-                catch (IOException) { }
+                catch (IOException)
+                {
+                    // Optional temporary script cleanup must not replace the scheduler result.
+                }
             }
         });
 

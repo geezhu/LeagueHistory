@@ -21,56 +21,10 @@ public static class OverlayPartyAnalysis
         }
 
         var infos = cached.Where(c => c?.Player != null).ToArray();
-        static string Identity(LoadingPlayer p) =>
-            LoadingRosterIdentityService.HasPuuid(p.Puuid) ? "p:" + p.Puuid
-            : p.SummonerId > 0 ? "s:" + p.SummonerId
-            : "";
         var identities = roster.Players.Select(Identity).GroupBy(i => i).ToDictionary(g => g.Key, g => g.Count());
         foreach (var team in roster.Players.Where(p => p.Team is 100 or 200).GroupBy(p => p.Team))
         {
-            var entries = new List<(LoadingPlayer Player, HashSet<string> Matches)>();
-            foreach (var p in team.Take(5))
-            {
-                string identity = Identity(p);
-                if (p.IdentityHidden || identity.Length == 0 || identities[identity] != 1)
-                {
-                    continue;
-                }
-
-                var matches = infos
-                    .Where(c =>
-                        LoadingRosterIdentityService.HasPuuid(p.Puuid)
-                            ? c.Player.Puuid == p.Puuid
-                            : c.Player.SummonerId == p.SummonerId
-                    )
-                    .Take(2)
-                    .ToArray();
-                if (matches.Length != 1)
-                {
-                    continue;
-                }
-                // A PUUID entry and a summoner-ID-only entry must not count the same account twice.
-                if (
-                    roster.Players.Count(q =>
-                        !q.IdentityHidden
-                        && (
-                            LoadingRosterIdentityService.HasPuuid(q.Puuid)
-                                ? matches[0].Player.Puuid == q.Puuid
-                                : q.SummonerId > 0 && matches[0].Player.SummonerId == q.SummonerId
-                        )
-                    ) != 1
-                )
-                {
-                    continue;
-                }
-
-                entries.Add(
-                    (
-                        p,
-                        matches[0].MatchKeys.Where(k => !string.IsNullOrWhiteSpace(k)).ToHashSet(StringComparer.Ordinal)
-                    )
-                );
-            }
+            var entries = EligiblePlayers(roster, team, infos, identities);
             int[] parents = Enumerable.Range(0, entries.Count).ToArray();
             int Root(int i) => parents[i] == i ? i : parents[i] = Root(parents[i]);
             for (int i = 0; i < entries.Count; i++)
@@ -101,4 +55,59 @@ public static class OverlayPartyAnalysis
         }
         return result;
     }
+
+    private static List<(LoadingPlayer Player, HashSet<string> Matches)> EligiblePlayers(
+        LoadingRoster roster,
+        IEnumerable<LoadingPlayer> team,
+        PlayerMatchInfo[] infos,
+        IReadOnlyDictionary<string, int> identities
+    )
+    {
+        var entries = new List<(LoadingPlayer Player, HashSet<string> Matches)>();
+        foreach (var p in team.Take(5))
+        {
+            string identity = Identity(p);
+            if (p.IdentityHidden || identity.Length == 0 || identities[identity] != 1)
+            {
+                continue;
+            }
+
+            var matches = infos
+                .Where(c =>
+                    LoadingRosterIdentityService.HasPuuid(p.Puuid)
+                        ? c.Player.Puuid == p.Puuid
+                        : c.Player.SummonerId == p.SummonerId
+                )
+                .Take(2)
+                .ToArray();
+            if (matches.Length != 1)
+            {
+                continue;
+            }
+            // A PUUID entry and a summoner-ID-only entry must not count the same account twice.
+            if (
+                roster.Players.Count(q =>
+                    !q.IdentityHidden
+                    && (
+                        LoadingRosterIdentityService.HasPuuid(q.Puuid)
+                            ? matches[0].Player.Puuid == q.Puuid
+                            : q.SummonerId > 0 && matches[0].Player.SummonerId == q.SummonerId
+                    )
+                ) != 1
+            )
+            {
+                continue;
+            }
+
+            entries.Add(
+                (p, matches[0].MatchKeys.Where(k => !string.IsNullOrWhiteSpace(k)).ToHashSet(StringComparer.Ordinal))
+            );
+        }
+        return entries;
+    }
+
+    private static string Identity(LoadingPlayer p) =>
+        LoadingRosterIdentityService.HasPuuid(p.Puuid) ? "p:" + p.Puuid
+        : p.SummonerId > 0 ? "s:" + p.SummonerId
+        : "";
 }
