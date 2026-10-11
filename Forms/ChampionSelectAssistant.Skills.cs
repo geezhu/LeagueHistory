@@ -25,7 +25,10 @@ internal sealed partial class ChampionSelectAssistant
             );
         }
         if (champion["passive"] is JObject passive)
+        {
             Add("被动", passive);
+        }
+
         var spells = (champion["spells"] as JArray ?? new()).OfType<JObject>().ToArray();
         var keys = new[] { "Q", "W", "E", "R" };
         for (int i = 0; i < Math.Min(4, spells.Length); i++)
@@ -90,7 +93,10 @@ internal sealed partial class ChampionSelectAssistant
         {
             var client = FormMain.Globals.lcuClient?.Client;
             if (client == null)
+            {
                 throw new InvalidOperationException("客户端未连接");
+            }
+
             if (!_skillCache.TryGetValue(hero, out var data))
             {
                 data = JObject.Parse(
@@ -98,12 +104,18 @@ internal sealed partial class ChampionSelectAssistant
                 );
                 token.ThrowIfCancellationRequested();
                 if ((int?)data["id"] != hero)
+                {
                     throw new InvalidDataException("技能资料与英雄不匹配");
+                }
+
                 _skillCache[hero] = data;
             }
             var skills = ParseSkills(data);
             if (section.IsDisposed || token.IsCancellationRequested)
+            {
                 return;
+            }
+
             description.Text = "暂无技能资料";
             description.Visible = skills.Length == 0;
             var cache = new ImageCacheService(client);
@@ -114,7 +126,10 @@ internal sealed partial class ChampionSelectAssistant
                 {
                     var path = ProfileBackgroundPanel.FindSplash(data, hero * 1000);
                     if (path == null)
+                    {
                         return;
+                    }
+
                     var image = await cache.GetOrDownloadImageAsync(path, "profile-backgrounds", $"{hero * 1000}.png");
                     if (artwork.IsDisposed || token.IsCancellationRequested)
                     {
@@ -150,7 +165,10 @@ internal sealed partial class ChampionSelectAssistant
                     string.IsNullOrEmpty(skill.Icon)
                     || !skill.Icon.StartsWith("/lol-game-data/assets/", StringComparison.OrdinalIgnoreCase)
                 )
+                {
                     return;
+                }
+
                 var image = await cache.GetOrDownloadImageAsync(skill.Icon, "skills", $"{hero}-{skill.Key}.png");
                 if (button.IsDisposed || token.IsCancellationRequested)
                 {

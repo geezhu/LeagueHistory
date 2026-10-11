@@ -36,7 +36,10 @@ public partial class FormMain
             {
                 var choices = await Task.Run(VoiceMicrophoneDevices.List);
                 if (microphone.IsDisposed)
+                {
                     return;
+                }
+
                 string selected = _appConfig?.VoiceMicrophoneId ?? "";
                 microphone.Items.Clear();
                 microphone.Items.AddRange(choices.Cast<object>().ToArray());
@@ -56,20 +59,30 @@ public partial class FormMain
             catch (Exception)
             {
                 if (!microphoneStatus.IsDisposed)
+                {
                     microphoneStatus.Text = "麦克风列表读取失败，请连接设备后刷新。";
+                }
             }
             finally
             {
                 if (!refresh.IsDisposed)
+                {
                     refresh.Enabled = true;
+                }
+
                 if (!microphone.IsDisposed)
+                {
                     microphone.Enabled = choosing;
+                }
             }
         }
         microphone.SelectedIndexChanged += (_, _) =>
         {
             if (!choosing || _appConfig == null || microphone.SelectedItem is not VoiceMicrophoneChoice choice)
+            {
                 return;
+            }
+
             _appConfig.VoiceMicrophoneId = choice.Id;
             SaveAppConfig();
         };
@@ -99,29 +112,39 @@ public partial class FormMain
                     var progress = new Progress<int>(value =>
                     {
                         if (Current())
+                        {
                             status.Text = $"正在下载中文模型 {value}% · 约 228 MiB";
+                        }
                     });
                     await store.DownloadAsync(progress, source.Token);
                     await store.ValidateAsync(source.Token);
                 }
                 if (Current())
+                {
                     status.Text = "中文模型已准备 · 选人助手与 Game Bar 共用，识别时无需联网。";
+                }
             }
             catch (OperationCanceledException)
             {
                 if (!status.IsDisposed)
+                {
                     status.Text = "下载已取消，可以稍后重试。";
+                }
             }
             catch (Exception)
             {
                 if (!status.IsDisposed)
+                {
                     status.Text = "模型准备失败，请检查网络和本地空间后重试。";
+                }
             }
             finally
             {
                 downloading = null;
                 if (!prepare.IsDisposed)
+                {
                     prepare.Text = store.AvailableDirectory == null ? "下载中文模型" : "检查 / 修复模型";
+                }
             }
         };
         SettingsCard(

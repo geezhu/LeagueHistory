@@ -95,7 +95,9 @@ internal sealed partial class ChampionSelectAssistant
                 control.Cursor = Cursors.Hand;
                 control.Click += async (_, _) => await ApplySpellsAsync(spells, hero, token);
                 foreach (Control child in control.Controls)
+                {
                     MakeClickable(child);
+                }
             }
             MakeClickable(card);
             _tips.SetToolTip(card, "点击应用这组召唤师技能");
@@ -110,7 +112,10 @@ internal sealed partial class ChampionSelectAssistant
     private async Task ApplySpellsAsync(int[] spells, int hero, CancellationToken token)
     {
         if (_applyingSpells || token.IsCancellationRequested || hero <= 0)
+        {
             return;
+        }
+
         _applyingSpells = true;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(5));
@@ -120,7 +125,9 @@ internal sealed partial class ChampionSelectAssistant
             var client = FormMain.Globals.lcuClient?.Client ?? throw new InvalidOperationException("客户端已断开。");
             await Services.ChampionSelectSpellService.ApplyAsync(client, spells, hero, timeout.Token);
             if (!IsDisposed && !token.IsCancellationRequested)
+            {
                 _status.Text = "召唤师技能已配置并校验成功。";
+            }
         }
         catch (Exception ex)
         {

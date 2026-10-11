@@ -157,13 +157,18 @@ public partial class FormMain
         async Task Refresh()
         {
             if (reading || busy || status.IsDisposed)
+            {
                 return;
+            }
+
             reading = true;
             try
             {
                 var value = await service.ReadAsync();
                 if (!status.IsDisposed && !busy)
+                {
                     Show(value, !loaded || !dirty);
+                }
             }
             catch (Exception ex)
             {
@@ -186,7 +191,10 @@ public partial class FormMain
         void Changed()
         {
             if (!loaded || populating)
+            {
                 return;
+            }
+
             dirty = true;
             result.Text = "点击“创建计划”应用当前时间与倒计时。";
         }
@@ -195,7 +203,10 @@ public partial class FormMain
         async Task Operate(Func<Task> action)
         {
             if (busy)
+            {
                 return;
+            }
+
             busy = true;
             ControlsReady();
             try
@@ -205,13 +216,17 @@ public partial class FormMain
             catch (Exception ex)
             {
                 if (!result.IsDisposed)
+                {
                     result.Text = "操作未完成：" + ex.Message;
+                }
             }
             finally
             {
                 busy = false;
                 if (!status.IsDisposed)
+                {
                     ControlsReady();
+                }
             }
         }
         create.Click += async (_, _) =>
@@ -236,7 +251,10 @@ public partial class FormMain
                     MessageBoxDefaultButton.Button2
                 ) != DialogResult.Yes
             )
+            {
                 return;
+            }
+
             await Operate(async () =>
             {
                 var value = await service.DeleteAsync();
@@ -269,7 +287,9 @@ public partial class FormMain
         timer.Tick += async (_, _) =>
         {
             if (card.Visible)
+            {
                 await Refresh();
+            }
         };
         card.Disposed += (_, _) => timer.Dispose();
         card.HandleCreated += async (_, _) =>
@@ -278,7 +298,9 @@ public partial class FormMain
             {
                 await Refresh();
                 if (!card.IsDisposed)
+                {
                     timer.Start();
+                }
             }
         };
         ControlsReady();

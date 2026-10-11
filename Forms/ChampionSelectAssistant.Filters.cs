@@ -91,7 +91,10 @@ internal sealed partial class ChampionSelectAssistant
         _lane.Visible = !_collapsed && mode == "ranked";
         _apply.Visible = true;
         if (_mode.Parent is FlowLayoutPanel toolbar)
+        {
             toolbar.Height = _collapsed || mode == "mayhem" ? 44 : 74;
+        }
+
         _syncing = false;
     }
 }

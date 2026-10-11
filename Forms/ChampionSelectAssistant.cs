@@ -117,7 +117,10 @@ internal sealed partial class ChampionSelectAssistant : Form
         var retry = new Button { Text = "重试", Size = new Size(44, 28) };
         footer.Controls.AddRange(new Control[] { guide, _apply, retry, _voiceButton });
         foreach (Control button in footer.Controls)
+        {
             button.Margin = new Padding(2, 0, 2, 0);
+        }
+
         _tips.SetToolTip(_voiceButton, "中文录音后编辑确认，直接发送到选人聊天；也可以手动输入。");
         _voiceButton.Click += async (_, _) => await ShowVoiceInputAsync();
         var statusBar = new Panel { Dock = DockStyle.Top, Height = 26 };
@@ -150,10 +153,15 @@ internal sealed partial class ChampionSelectAssistant : Form
             box.SelectedIndexChanged += (_, _) =>
             {
                 if (_syncing)
+                {
                     return;
+                }
+
                 SyncFilters();
                 if (_hero > 0)
+                {
                     _ = LoadHeroAsync();
+                }
             };
         }
         _tips.SetToolTip(_mode, "默认跟随选人模式，也可以手动切换攻略模式。英雄仍自动跟随当前选人。");
@@ -163,7 +171,10 @@ internal sealed partial class ChampionSelectAssistant : Form
         {
             _collapsed = !_collapsed;
             if (_collapsed)
+            {
                 CloseVoiceInput();
+            }
+
             _fold.Text = _collapsed ? "展开" : "收起";
             _body.Visible = !_collapsed;
             statusBar.Visible = !_collapsed;
@@ -176,17 +187,21 @@ internal sealed partial class ChampionSelectAssistant : Form
         guide.Click += (_, _) =>
         {
             if (_hero > 0)
+            {
                 _owner.OpenAssistantGuide(
                     _hero,
                     SelectedMode == "mayhem" ? 2400 : 0,
                     _position,
                     SelectedMode == "mayhem" ? null : SelectedQuery
                 );
+            }
         };
         retry.Click += (_, _) =>
         {
             if (_hero > 0)
+            {
                 _ = LoadHeroAsync();
+            }
         };
         _apply.Click += async (_, _) => await ApplyAsync();
         FormClosing += (_, e) =>
@@ -195,7 +210,9 @@ internal sealed partial class ChampionSelectAssistant : Form
             {
                 e.Cancel = true;
                 if (!_collapsed)
+                {
                     _fold.PerformClick();
+                }
             }
         };
         ResizeBegin += (_, _) => _moving = true;
@@ -210,7 +227,10 @@ internal sealed partial class ChampionSelectAssistant : Form
             height = Math.Min(size.Height, screen.Height);
         int x = client.Left - width - 6;
         if (x < screen.Left && client.Right + 6 + width <= screen.Right)
+        {
             x = client.Right + 6;
+        }
+
         return new Rectangle(
             Math.Clamp(x, screen.Left, screen.Right - width),
             Math.Clamp(client.Top, screen.Top, screen.Bottom - height),
@@ -233,7 +253,9 @@ internal sealed partial class ChampionSelectAssistant : Form
                     {
                         var candidate = process.MainWindowHandle;
                         if (handle == IntPtr.Zero && candidate != IntPtr.Zero && IsWindowVisible(candidate))
+                        {
                             handle = candidate;
+                        }
                     }
                     catch { }
                 }
@@ -257,12 +279,18 @@ internal sealed partial class ChampionSelectAssistant : Form
         if (!show)
         {
             if (Visible)
+            {
                 Hide();
+            }
+
             return;
         }
         // Grace preserves an existing panel; it must not open one over an unrelated app.
         if (!Visible && (!focused || handle == IntPtr.Zero))
+        {
             return;
+        }
+
         if (
             handle != IntPtr.Zero
             && GetWindowRect(handle, out var rect)
@@ -278,10 +306,15 @@ internal sealed partial class ChampionSelectAssistant : Form
                 new Size(Width, _collapsed ? 84 : 630)
             );
             if (Bounds != target)
+            {
                 Bounds = target;
+            }
         }
         if (handle != IntPtr.Zero && !_windowLayer.Attach(handle))
+        {
             return;
+        }
+
         if (!Visible)
         {
             Show();
@@ -298,7 +331,10 @@ internal sealed partial class ChampionSelectAssistant : Form
         }
         PositionWindow();
         if (_busy)
+        {
             return;
+        }
+
         var client = FormMain.Globals.lcuClient?.Client;
         if (client == null)
         {
@@ -319,7 +355,10 @@ internal sealed partial class ChampionSelectAssistant : Form
             var flow = JObject.Parse(await client.GetStringAsync("/lol-gameflow/v1/session", _poll.Token));
             var session = JObject.Parse(await client.GetStringAsync("/lol-champ-select/v1/session", _poll.Token));
             if (IsDisposed)
+            {
                 return;
+            }
+
             _pollFailures = 0;
             _lastSessionRead = Environment.TickCount64;
             _selecting = true;
@@ -332,9 +371,13 @@ internal sealed partial class ChampionSelectAssistant : Form
                 .FirstOrDefault(p => (int?)p["cellId"] == (int?)session["localPlayerCellId"]);
             _masteryPuuid = (string?)own?["puuid"] ?? "";
             if (string.IsNullOrWhiteSpace(_masteryPuuid) || _masteryPuuid == Guid.Empty.ToString())
+            {
                 _masteryPuuid = _owner.GetCurrentPuuid() ?? "";
+            }
+
             int hero = (int?)own?["championId"] ?? 0;
             if (hero <= 0)
+            {
                 hero = (session["actions"] as JArray ?? new())
                     .OfType<JArray>()
                     .SelectMany(a => a.OfType<JObject>())
@@ -343,6 +386,8 @@ internal sealed partial class ChampionSelectAssistant : Form
                     )
                     .Select(a => (int?)a["championId"] ?? 0)
                     .LastOrDefault(id => id > 0);
+            }
+
             if (hero <= 0)
             {
                 if (_hero != 0)
@@ -389,7 +434,10 @@ internal sealed partial class ChampionSelectAssistant : Form
         catch (Exception ex)
         {
             if (!IsDisposed && ++_pollFailures >= 3 && Environment.TickCount64 - _lastSessionRead > 15000)
+            {
                 Reset();
+            }
+
             Debug.WriteLine("Assistant poll: " + ex.GetType().Name);
         }
         finally
@@ -409,7 +457,10 @@ internal sealed partial class ChampionSelectAssistant : Form
         _apply.Enabled = false;
         ClearRoster();
         if (Visible)
+        {
             Hide();
+        }
+
         _windowLayer.Detach();
     }
 
@@ -420,7 +471,9 @@ internal sealed partial class ChampionSelectAssistant : Form
         _sendMastery = null;
         _mastery = null;
         foreach (Control control in _body.Controls.Cast<Control>().ToArray())
+        {
             control.Dispose();
+        }
     }
 
     private void Line(string text, bool heading = false) =>
@@ -497,7 +550,10 @@ internal sealed partial class ChampionSelectAssistant : Form
                     $"胜率 {((double?)build.Stats["win_rate"] ?? OpggBuild.Ratio(build.Stats["win"], build.Stats["play"])):P2} · {laneName}"
                 );
                 if (mode == "aram")
+                {
                     AddBalanceHint(summary, hero, token);
+                }
+
                 if (_runes != null)
                 {
                     Line("推荐符文", true);
@@ -527,7 +583,9 @@ internal sealed partial class ChampionSelectAssistant : Form
         catch (Exception ex)
         {
             if (!token.IsCancellationRequested && !IsDisposed)
+            {
                 _status.Text = "加载失败：" + ex.Message;
+            }
         }
     }
 
@@ -598,7 +656,10 @@ internal sealed partial class ChampionSelectAssistant : Form
             return;
         }
         if (_applying || _runes == null || _hero <= 0)
+        {
             return;
+        }
+
         int hero = _hero,
             choice = _runeChoice + 1;
         var runes = _runes;
@@ -626,6 +687,7 @@ internal sealed partial class ChampionSelectAssistant : Form
                 .FirstOrDefault(p => (int?)p["cellId"] == (int?)session["localPlayerCellId"]);
             int selectedHero = (int?)own?["championId"] ?? 0;
             if (selectedHero <= 0)
+            {
                 selectedHero = (session["actions"] as JArray ?? new())
                     .OfType<JArray>()
                     .SelectMany(a => a.OfType<JObject>())
@@ -634,20 +696,34 @@ internal sealed partial class ChampionSelectAssistant : Form
                     )
                     .Select(a => (int?)a["championId"] ?? 0)
                     .LastOrDefault(id => id > 0);
+            }
+
             if (selectedHero != hero)
+            {
                 throw new InvalidOperationException("英雄已变化，请等待推荐更新。");
+            }
+
             string champion = FormMain.Globals.resLoading?.GetChampionById(hero)?.Name ?? hero.ToString();
             string keystone = FormMain.Globals.resLoading?.GetRuneById(runes.Perks[0])?.name ?? "推荐符文";
             await OpggRuneService.ApplyAsync(client, runes, champion, timeout.Token);
             if (!IsDisposed)
+            {
                 _status.Text = $"符文方案 {choice} 已应用。";
+            }
+
             try
             {
                 var rates = new List<string>();
                 if (runes.WinRate is double win && double.IsFinite(win) && win >= 0 && win <= 1)
+                {
                     rates.Add($"胜率 {win:P2}");
+                }
+
                 if (runes.PickRate is double pick && double.IsFinite(pick) && pick >= 0 && pick <= 1)
+                {
                     rates.Add($"使用率 {pick:P2}");
+                }
+
                 string statistics = rates.Count > 0 ? "（" + string.Join(" / ", rates) + "）" : "";
                 bool sent = await AnnounceRunesAsync(
                     client,
@@ -655,13 +731,17 @@ internal sealed partial class ChampionSelectAssistant : Form
                     timeout.Token
                 );
                 if (!sent && !IsDisposed)
+                {
                     _status.Text = $"方案 {choice} 已应用，聊天提示未发送。";
+                }
             }
             catch (Exception ex)
             {
                 Debug.WriteLine("符文应用后的聊天提示未发送：" + ex.GetType().Name);
                 if (!IsDisposed)
+                {
                     _status.Text = $"方案 {choice} 已应用，聊天提示未发送。";
+                }
             }
         }
         catch (Exception ex)
@@ -676,7 +756,9 @@ internal sealed partial class ChampionSelectAssistant : Form
         {
             _applying = false;
             if (!IsDisposed)
+            {
                 _apply.Enabled = _runes != null && _selecting;
+            }
         }
     }
 

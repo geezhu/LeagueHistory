@@ -35,7 +35,10 @@ internal sealed partial class ChampionSelectAssistant
                         || IsIconic(handle)
                         || !GetWindowRect(handle, out var rect)
                     )
+                    {
                         continue;
+                    }
+
                     client = Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom);
                     work = Screen.FromHandle(handle).WorkingArea;
                     break;
@@ -104,13 +107,18 @@ internal sealed partial class ChampionSelectAssistant
         select.SelectedIndexChanged += (_, _) =>
         {
             if (!token.IsCancellationRequested)
+            {
                 Refresh();
+            }
         };
         Refresh();
         configure.Click += (_, _) =>
         {
             if (token.IsCancellationRequested)
+            {
                 return;
+            }
+
             ShowEquipmentEditor(
                 build,
                 cores,
@@ -121,7 +129,10 @@ internal sealed partial class ChampionSelectAssistant
                 (core, starter, boots) =>
                 {
                     if (token.IsCancellationRequested || select.IsDisposed)
+                    {
                         return;
+                    }
+
                     starterIndex = starter;
                     bootsIndex = boots;
                     select.SelectedIndex = core;
@@ -172,7 +183,9 @@ internal sealed partial class ChampionSelectAssistant
             void UpdateTip()
             {
                 if (options.Length > 0)
+                {
                     _tips.SetToolTip(box, ItemOption(options[box.SelectedIndex]));
+                }
             }
             box.SelectedIndexChanged += (_, _) => UpdateTip();
             UpdateTip();
@@ -233,7 +246,10 @@ internal sealed partial class ChampionSelectAssistant
             Text = "保存所选出门装、鞋子、核心与后续装备。\n进入游戏后，在商店的物品套装中查看。",
         };
         if (source == "arammeta")
+        {
             feedback.Text = "保存核心、鞋子与后续装备 · 数据来自 arammeta。\n进入游戏后，在商店的物品套装中查看。";
+        }
+
         footer.Controls.Add(feedback);
         footer.Controls.Add(save);
         dialog.Controls.Add(preview);
@@ -253,13 +269,19 @@ internal sealed partial class ChampionSelectAssistant
         async Task Render()
         {
             if (lifetime.IsCancellationRequested)
+            {
                 return;
+            }
+
             rendering?.Cancel();
             rendering?.Dispose();
             rendering = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
             var renderToken = rendering.Token;
             foreach (Control child in preview.Controls.Cast<Control>().ToArray())
+            {
                 child.Dispose();
+            }
+
             changed(coreBox.SelectedIndex, starterBox.SelectedIndex, bootsBox.SelectedIndex);
             try
             {
@@ -294,7 +316,10 @@ internal sealed partial class ChampionSelectAssistant
                 };
                 preview.Controls.Add(grid);
                 if (later.Length == 0)
+                {
                     grid.Controls.Add(new Label { Text = "当前方案暂无其他可选装备", AutoSize = true });
+                }
+
                 foreach (int id in later)
                 {
                     renderToken.ThrowIfCancellationRequested();
@@ -343,31 +368,43 @@ internal sealed partial class ChampionSelectAssistant
                         League.Controls.TooltipText.Format(info.name, info.description)
                         + (option != null ? "\n" + ItemOption(option) : "");
                     foreach (Control child in tile.Controls)
+                    {
                         _tips.SetToolTip(child, details);
+                    }
                 }
             }
             catch (OperationCanceledException) { }
             catch (Exception)
             {
                 if (!lifetime.IsCancellationRequested)
+                {
                     feedback.Text = "部分预览图标暂不可用，仍可按所选装备保存。";
+                }
             }
         }
         foreach (var box in new[] { coreBox, starterBox, bootsBox })
+        {
             box.SelectedIndexChanged += (_, _) => _ = Render();
+        }
+
         preview.SizeChanged += (_, _) =>
         {
             foreach (var grid in preview.Controls.OfType<FlowLayoutPanel>())
+            {
                 grid.MaximumSize = new Size(
                     Math.Max(124, preview.ClientSize.Width - 24 - SystemInformation.VerticalScrollBarWidth),
                     0
                 );
+            }
         };
         bool saving = false;
         save.Click += async (_, _) =>
         {
             if (saving || lifetime.IsCancellationRequested)
+            {
                 return;
+            }
+
             saving = true;
             save.Enabled = false;
             filters.Enabled = false;
@@ -381,13 +418,17 @@ internal sealed partial class ChampionSelectAssistant
                     FormMain.Globals.lcuClient?.Client ?? throw new InvalidOperationException("客户端未连接。");
                 await OpggItemSetService.SaveAsync(client, payload, timeout.Token);
                 if (!dialog.IsDisposed)
+                {
                     feedback.Text = "出装已保存并校验成功。\n进入游戏后，在商店的物品套装中查看。";
+                }
             }
             catch (Exception ex)
             {
                 if (!dialog.IsDisposed)
+                {
                     feedback.Text =
                         ex is OperationCanceledException ? "保存中断或超时，请检查客户端物品套装。" : ex.Message;
+                }
             }
             finally
             {

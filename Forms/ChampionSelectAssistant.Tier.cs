@@ -23,10 +23,16 @@ internal sealed partial class ChampionSelectAssistant
         async Task Load()
         {
             if (busy || token.IsCancellationRequested || hint.IsDisposed)
+            {
                 return;
+            }
+
             int minutes = Math.Clamp(_owner.GetAppConfig()?.AramBalanceCacheMinutes ?? 1440, 1, 10080);
             if (checkedMinutes == minutes && DateTime.UtcNow - checkedAt < TimeSpan.FromMinutes(1))
+            {
                 return;
+            }
+
             busy = true;
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
             timeout.CancelAfter(TimeSpan.FromSeconds(12));
@@ -39,7 +45,10 @@ internal sealed partial class ChampionSelectAssistant
                     timeout.Token
                 );
                 if (hint.IsDisposed || token.IsCancellationRequested)
+                {
                     return;
+                }
+
                 checkedAt = DateTime.UtcNow;
                 checkedMinutes = minutes;
                 _tips.SetToolTip(hint, text);
@@ -47,7 +56,10 @@ internal sealed partial class ChampionSelectAssistant
             catch (Exception ex)
             {
                 if (hint.IsDisposed || token.IsCancellationRequested)
+                {
                     return;
+                }
+
                 checkedAt = DateTime.UtcNow;
                 checkedMinutes = minutes;
                 _tips.SetToolTip(
@@ -105,7 +117,10 @@ internal sealed partial class ChampionSelectAssistant
         );
         _body.Controls.Add(row);
         if (_masteryRow is { IsDisposed: false })
+        {
             _body.Controls.SetChildIndex(_masteryRow, _body.Controls.GetChildIndex(row) + 1);
+        }
+
         return row;
     }
 }

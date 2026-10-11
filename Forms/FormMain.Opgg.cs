@@ -19,9 +19,13 @@ public partial class FormMain
             imageTabControl1.SelectedIndex = 3;
             var view = imageTabControl1.TabPages[3].Controls.OfType<OpggView>().Single();
             if (query != null)
+            {
                 await view.OpenQueryAsync(query);
+            }
             else
+            {
                 await view.OpenChampionAsync(hero, queue, position);
+            }
         }
     }
 
@@ -86,7 +90,10 @@ public partial class FormMain
                 {
                     var client = Globals.lcuClient?.Client;
                     if (client == null)
+                    {
                         return 0;
+                    }
+
                     using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
                     var flow = Newtonsoft.Json.Linq.JObject.Parse(
                         await client.GetStringAsync("/lol-gameflow/v1/session", timeout.Token)

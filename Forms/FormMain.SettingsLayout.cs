@@ -46,7 +46,10 @@ public partial class FormMain
         historyCount.SelectedIndexChanged += (_, _) =>
         {
             if (_appConfig == null)
+            {
                 return;
+            }
+
             _appConfig.CardMatchHistoryCount = (int)historyCount.SelectedItem;
             _matchQueryProcessor?.SetMatchHistoryCount(_appConfig.CardMatchHistoryCount);
             SaveAppConfig();
@@ -69,7 +72,10 @@ public partial class FormMain
         acceptDelay.SelectedIndexChanged += (_, _) =>
         {
             if (_appConfig == null)
+            {
                 return;
+            }
+
             _appConfig.AutoAcceptDelaySeconds = acceptDelay.SelectedIndex switch
             {
                 1 => 5,
@@ -141,14 +147,19 @@ public partial class FormMain
         overlayStatusTimer.Tick += (_, _) =>
         {
             if (gameBarStatus.Visible)
+            {
                 gameBarStatus.Text = _loadingOverlay?.GameBarStatus ?? "";
+            }
         };
         gameBarStatus.Disposed += (_, _) => overlayStatusTimer.Dispose();
         overlayStatusTimer.Start();
         void SaveOverlay()
         {
             if (_appConfig == null)
+            {
                 return;
+            }
+
             _appConfig.EnableLoadingOverlay = overlay.Checked;
             _appConfig.AutoShowLoadingOverlay = overlayAuto.Checked;
             _appConfig.LoadingOverlayBackend = overlayBackend.SelectedIndex == 1 ? "GameBar" : "Desktop";
@@ -238,7 +249,10 @@ public partial class FormMain
         foreach (TabPage page in tabControl1.TabPages)
         {
             if (page == tabPage4 || page == tabPage5)
+            {
                 continue;
+            }
+
             if (page.Text == "客户端目录")
             {
                 var group = page.Controls.OfType<GroupBox>().First();
@@ -254,7 +268,10 @@ public partial class FormMain
                 var original = page.Controls.OfType<FlowLayoutPanel>().First();
                 var children = original.Controls.Cast<Control>().ToArray();
                 foreach (var child in children)
+                {
                     original.Controls.Remove(child);
+                }
+
                 var layout = SettingsPage(page, "数据缓存", "复用本地统计数据，减少重复请求与加载等待。");
                 SettingsCard(layout, "arammeta · 海克斯大乱斗", children.Take(3).ToArray());
                 SettingsCard(layout, "aramonly · 普通大乱斗平衡", children.Skip(3).Take(3).ToArray());
@@ -330,14 +347,22 @@ public partial class FormMain
             control.Margin = new Padding(0, 0, 0, 10);
             control.ForeColor = Color.FromArgb(59, 81, 99);
             if (control is CheckBox check)
+            {
                 check.AutoSize = true;
+            }
+
             if (control is RadioButton radio)
+            {
                 radio.AutoSize = true;
+            }
+
             if (control is Label label)
             {
                 label.AutoSize = true;
                 if (label is not LinkLabel)
+                {
                     label.ForeColor = Color.FromArgb(105, 122, 137);
+                }
             }
             if (control is LinkLabel link)
             {
@@ -367,7 +392,10 @@ public partial class FormMain
     {
         int width = Math.Max(300, Math.Min(940, flow.ClientSize.Width - 64));
         foreach (var label in flow.Controls.OfType<Label>())
+        {
             label.MaximumSize = new Size(width, 0);
+        }
+
         foreach (var card in flow.Controls.OfType<FlowLayoutPanel>())
         {
             card.MinimumSize = new Size(width, 0);
@@ -376,9 +404,13 @@ public partial class FormMain
             foreach (Control control in card.Controls)
             {
                 if (control is Label or CheckBox or RadioButton)
+                {
                     control.MaximumSize = new Size(width - 40, 0);
+                }
                 else if (control is TextBox || control is League.Controls.LolLauncherPanel)
+                {
                     control.Width = width - 40;
+                }
             }
         }
     }

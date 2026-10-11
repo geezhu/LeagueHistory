@@ -50,7 +50,10 @@ internal sealed partial class ChampionSelectAssistant
         void Browse(int tab, int rarity = 0)
         {
             if (token.IsCancellationRequested)
+            {
                 return;
+            }
+
             using var dialog = new Form
             {
                 Text = "arammeta · 推荐比较",
@@ -80,7 +83,9 @@ internal sealed partial class ChampionSelectAssistant
             watcher.Tick += (_, _) =>
             {
                 if (token.IsCancellationRequested)
+                {
                     dialog.Close();
+                }
             };
             watcher.Start();
             dialog.FormClosed += (_, _) => lifetime.Cancel();
@@ -139,7 +144,9 @@ internal sealed partial class ChampionSelectAssistant
             }
             card.Image = info.image;
             if (!string.IsNullOrWhiteSpace(info.description))
+            {
                 Describe(info.description);
+            }
         }
         foreach (
             var (key, title, index) in new[]
@@ -162,9 +169,14 @@ internal sealed partial class ChampionSelectAssistant
             };
             host.Controls.Add(row);
             foreach (var entry in AramMetaRecommendation.Read(page, hero, key).Take(5))
+            {
                 _ = Tile(row, entry);
+            }
+
             if (row.Controls.Count == 0)
+            {
                 row.Controls.Add(new Label { Text = "暂无推荐", AutoSize = true });
+            }
         }
         var itemsHeader = Heading("出装推荐");
         host.Controls.Add(itemsHeader);
@@ -196,23 +208,40 @@ internal sealed partial class ChampionSelectAssistant
         async Task LoadDetails()
         {
             if (token.IsCancellationRequested || items.IsDisposed)
+            {
                 return;
+            }
+
             foreach (var panel in new[] { items, spells })
             {
                 foreach (Control child in panel.Controls.Cast<Control>().ToArray())
+                {
                     child.Dispose();
+                }
+
                 panel.Controls.Add(new Label { Text = "加载推荐…", AutoSize = true });
             }
             try
             {
                 if (page.Detail == null)
+                {
                     page = await _am.GetAsync(hero, false, token);
+                }
+
                 token.ThrowIfCancellationRequested();
                 if (items.IsDisposed)
+                {
                     return;
+                }
+
                 foreach (var panel in new[] { items, spells })
-                foreach (Control child in panel.Controls.Cast<Control>().ToArray())
-                    child.Dispose();
+                {
+                    foreach (Control child in panel.Controls.Cast<Control>().ToArray())
+                    {
+                        child.Dispose();
+                    }
+                }
+
                 var equipment = AramMetaRecommendation.Read(page, hero, "items");
                 if (equipment.Length > 0)
                 {
@@ -232,7 +261,10 @@ internal sealed partial class ChampionSelectAssistant
                     configure.Click += (_, _) =>
                     {
                         if (token.IsCancellationRequested)
+                        {
                             return;
+                        }
+
                         ShowEquipmentEditor(
                             build,
                             cores,
@@ -243,7 +275,10 @@ internal sealed partial class ChampionSelectAssistant
                             (core, starter, boots) =>
                             {
                                 if (select.IsDisposed || token.IsCancellationRequested)
+                                {
                                     return;
+                                }
+
                                 select.SelectedIndex = core;
                                 bootsIndex = boots;
                             },
@@ -252,7 +287,10 @@ internal sealed partial class ChampionSelectAssistant
                     };
                 }
                 else
+                {
                     items.Controls.Add(new Label { Text = "暂无出装推荐", AutoSize = true });
+                }
+
                 var options = AramMetaRecommendation.Read(page, hero, "spells");
                 foreach (var (title, entry) in AramMetaRecommendation.SpellHighlights(options))
                 {
@@ -301,7 +339,10 @@ internal sealed partial class ChampionSelectAssistant
                     }
                     Clickable(card);
                     foreach (Control child in card.Controls)
+                    {
                         Clickable(child);
+                    }
+
                     for (int i = 0; i < entry.Ids.Length; i++)
                     {
                         var picture = new PictureBox
@@ -325,10 +366,18 @@ internal sealed partial class ChampionSelectAssistant
             catch
             {
                 if (items.IsDisposed || token.IsCancellationRequested)
+                {
                     return;
+                }
+
                 foreach (var panel in new[] { items, spells })
-                foreach (Control child in panel.Controls.Cast<Control>().ToArray())
-                    child.Dispose();
+                {
+                    foreach (Control child in panel.Controls.Cast<Control>().ToArray())
+                    {
+                        child.Dispose();
+                    }
+                }
+
                 var retry = Link("推荐加载失败 · 重试", 276);
                 items.Controls.Add(retry);
                 retry.Click += (_, _) => _ = LoadDetails();
