@@ -7,6 +7,10 @@ public partial class MatchDetailView
 {
     private void AddMatchHighlights(MatchInfo match)
     {
+        if (match.AllParticipants.Count == 0)
+        {
+            return;
+        }
         var strip = new FlowLayoutPanel
         {
             Name = "MatchHighlights",

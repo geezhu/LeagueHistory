@@ -9,6 +9,17 @@ internal sealed class ProfileBackgroundPanel : Panel
 {
     private Image? _artwork;
     private CancellationTokenSource? _request;
+    private bool _closing;
+    private readonly HashSet<Task> _work = new();
+    private Task _cleanupWork = Task.CompletedTask;
+    private Func<HttpClient?> _clientProvider = () => FormMain.Globals.lcuClient?.Client;
+    private Func<string, CancellationToken, Task<JToken?>> _readMastery = async (puuid, token) =>
+        (await ChampionMasteryService.Shared.GetAsync(puuid, token)).Data;
+    private Func<HttpClient, string, int, Task<Image?>> _readArtwork = (client, path, skinId) =>
+        Task.Run(
+            () => new ImageCacheService(client).GetOrDownloadImageAsync(path, "profile-backgrounds", $"{skinId}.png"),
+            CancellationToken.None
+        );
     private readonly Dictionary<Control, (Color background, Color foreground, Color? link)> _colors = new();
 
     public ProfileBackgroundPanel()
@@ -47,109 +58,187 @@ internal sealed class ProfileBackgroundPanel : Panel
         return path?.StartsWith("/lol-game-data/assets/", StringComparison.OrdinalIgnoreCase) == true ? path : null;
     }
 
-    public async void LoadPlayer(string puuid)
+    public void LoadPlayer(string puuid)
     {
-        _request?.Cancel();
-        _request?.Dispose();
-        var request = _request = new CancellationTokenSource();
+        if (_closing)
+        {
+            return;
+        }
+        RetireRequest();
+        _request = new CancellationTokenSource();
+        var token = _request.Token;
         SetArtwork(null);
+        if (!_closing && !token.IsCancellationRequested)
+        {
+            _ = TrackWork(LoadPlayerAsync(puuid, token));
+        }
+    }
+
+    private async Task LoadPlayerAsync(string puuid, CancellationToken token)
+    {
+        // Register work before a synchronous profile or cache result can update the parent controls.
+        await Task.Yield();
         try
         {
-            var client = FormMain.Globals.lcuClient.Client;
+            token.ThrowIfCancellationRequested();
+            var client = _clientProvider();
             if (client == null || string.IsNullOrWhiteSpace(puuid))
             {
                 return;
             }
-
             var service = new PlayerStatisticsService(() => client);
-            var profile = await service.GetAsync(
-                "/lol-summoner/v1/summoner-profile?puuid=" + Uri.EscapeDataString(puuid),
-                request.Token
-            );
-            if (IsDisposed || request.IsCancellationRequested)
+            int skinId = await ReadSkinAsync(service, puuid, token);
+            if (skinId == 0 || _closing || token.IsCancellationRequested)
             {
                 return;
             }
-
-            int skinId = SelectSkin(profile.Data, null);
-            if (skinId == 0)
-            {
-                var mastery = await ChampionMasteryService.Shared.GetAsync(puuid, request.Token);
-                if (IsDisposed || request.IsCancellationRequested)
-                {
-                    return;
-                }
-
-                skinId = SelectSkin(profile.Data, mastery.Data);
-            }
-            if (skinId == 0)
+            var champion = await service.GetAsync($"/lol-game-data/assets/v1/champions/{skinId / 1000}.json", token);
+            if (_closing || token.IsCancellationRequested)
             {
                 return;
             }
-
-            var champion = await service.GetAsync(
-                $"/lol-game-data/assets/v1/champions/{skinId / 1000}.json",
-                request.Token
-            );
-            if (IsDisposed || request.IsCancellationRequested)
-            {
-                return;
-            }
-
             string? path = FindSplash(champion.Data, skinId);
             if (path == null)
             {
                 return;
             }
-
-            var image = await new ImageCacheService(client).GetOrDownloadImageAsync(
-                path,
-                "profile-backgrounds",
-                $"{skinId}.png"
-            );
-            if (IsDisposed || request.IsCancellationRequested)
+            var image = await _readArtwork(client, path, skinId);
+            if (_closing || token.IsCancellationRequested)
             {
                 image?.Dispose();
                 return;
             }
             SetArtwork(image);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // A replaced player or closed background no longer owns this response.
+        }
         catch (Exception ex)
         {
+            // Background artwork is optional; the profile remains usable without it.
             System.Diagnostics.Debug.WriteLine($"Profile background: {ex.GetType().Name}");
         }
     }
 
+    private async Task<int> ReadSkinAsync(PlayerStatisticsService service, string puuid, CancellationToken token)
+    {
+        var profile = await service.GetAsync(
+            "/lol-summoner/v1/summoner-profile?puuid=" + Uri.EscapeDataString(puuid),
+            token
+        );
+        token.ThrowIfCancellationRequested();
+        int skin = SelectSkin(profile.Data, null);
+        if (skin == 0 && !_closing)
+        {
+            skin = SelectSkin(profile.Data, await _readMastery(puuid, token));
+            token.ThrowIfCancellationRequested();
+        }
+        return skin;
+    }
+
+    private Task TrackWork(Task task)
+    {
+        lock (_work)
+        {
+            _work.Add(task);
+        }
+        _ = task.ContinueWith(
+            completed =>
+            {
+                lock (_work)
+                {
+                    _work.Remove(completed);
+                }
+                _ = completed.Exception;
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default
+        );
+        return task;
+    }
+
+    private Task[] PendingWork()
+    {
+        lock (_work)
+        {
+            return _work.ToArray();
+        }
+    }
+
+    private void RetireRequest()
+    {
+        var source = _request;
+        _request = null;
+        if (source == null)
+        {
+            return;
+        }
+        var pending = PendingWork();
+        var cancellation = source.CancelAsync();
+        TrackWork(
+            Task.WhenAll(pending.Append(cancellation))
+                .ContinueWith(
+                    completed =>
+                    {
+                        _ = completed.Exception;
+                        source.Dispose();
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default
+                )
+        );
+    }
+
     private void SetArtwork(Image? image)
     {
+        if (_closing)
+        {
+            image?.Dispose();
+            return;
+        }
         var old = _artwork;
         _artwork = image;
-        old?.Dispose();
-        void UpdateColors(Control parent)
+        if (!ReferenceEquals(old, image))
         {
-            foreach (Control child in parent.Controls)
-            {
-                if (child is Label or Panel or PictureBox or RankEmblem)
-                {
-                    if (!_colors.ContainsKey(child))
-                    {
-                        _colors[child] = (child.BackColor, child.ForeColor, (child as LinkLabel)?.LinkColor);
-                    }
-
-                    var colors = _colors[child];
-                    child.BackColor = image == null ? colors.background : Color.Transparent;
-                    child.ForeColor = image == null ? colors.foreground : Color.WhiteSmoke;
-                    if (child is LinkLabel link)
-                    {
-                        link.LinkColor = image == null ? colors.link!.Value : Color.White;
-                    }
-                }
-                UpdateColors(child);
-            }
+            old?.Dispose();
         }
-        UpdateColors(this);
+        UpdateChildColors(this, image != null);
         Invalidate(true);
+    }
+
+    private void UpdateChildColors(Control parent, bool artworkVisible)
+    {
+        foreach (Control child in parent.Controls)
+        {
+            if (child is Label or Panel or PictureBox or RankEmblem)
+            {
+                if (!_colors.ContainsKey(child))
+                {
+                    _colors[child] = (child.BackColor, child.ForeColor, (child as LinkLabel)?.LinkColor);
+                    // Profile sections may be rebuilt repeatedly; do not retain their disposed controls.
+                    child.Disposed += ForgetColors;
+                }
+                var colors = _colors[child];
+                child.BackColor = artworkVisible ? Color.Transparent : colors.background;
+                child.ForeColor = artworkVisible ? Color.WhiteSmoke : colors.foreground;
+                if (child is LinkLabel link)
+                {
+                    link.LinkColor = artworkVisible ? Color.White : colors.link!.Value;
+                }
+            }
+            UpdateChildColors(child, artworkVisible);
+        }
+    }
+
+    private void ForgetColors(object? sender, EventArgs e)
+    {
+        if (sender is Control control)
+        {
+            _colors.Remove(control);
+        }
     }
 
     protected override void OnPaintBackground(PaintEventArgs e)
@@ -180,12 +269,17 @@ internal sealed class ProfileBackgroundPanel : Panel
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
+        if (disposing && !_closing)
         {
-            _request?.Cancel();
-            _request?.Dispose();
+            _closing = true;
+            RetireRequest();
+            _cleanupWork = Task.WhenAll(PendingWork());
             _artwork?.Dispose();
             _artwork = null;
+            foreach (var control in _colors.Keys)
+            {
+                control.Disposed -= ForgetColors;
+            }
             _colors.Clear();
         }
         base.Dispose(disposing);
