@@ -46,7 +46,10 @@ public sealed class ChatSendDiagnostics
             {
                 ((Action)subscriber)();
             }
-            catch { }
+            catch
+            {
+                // A closed UI subscriber must not prevent logging or notifying the remaining subscribers.
+            }
         }
     }
 

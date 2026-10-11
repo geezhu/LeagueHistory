@@ -78,7 +78,11 @@ public sealed class RoomLoadDiagnostics
 
                 File.AppendAllLines(LogPath, lines, Encoding.UTF8);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Diagnostics are optional; a locked log must not interrupt player loading.
+                System.Diagnostics.Debug.WriteLine("room log write: " + ex.GetType().Name);
+            }
         }
     }
 

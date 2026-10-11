@@ -20,7 +20,10 @@ public static class VoiceMicrophoneDevices
             using var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
             defaultName += " · " + device.FriendlyName;
         }
-        catch (COMException) { }
+        catch (COMException)
+        {
+            // No default endpoint is valid while devices are disconnected; retain the default-choice label.
+        }
         var result = new List<VoiceMicrophoneChoice> { new("", defaultName) };
         foreach (var device in enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
         {
@@ -47,7 +50,10 @@ public static class VoiceMicrophoneDevices
 
             device.Dispose();
         }
-        catch (COMException) { }
+        catch (COMException)
+        {
+            // Translate a missing/removed endpoint into the actionable error below.
+        }
         throw new VoiceRecognitionException("所选麦克风已断开或不可用，请到设置 → 消息发送重新选择麦克风。");
     }
 }
