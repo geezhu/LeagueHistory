@@ -16,67 +16,67 @@ internal sealed partial class ChampionSelectAssistant
         };
         row.Controls.Add(hint);
         row.Controls.SetChildIndex(hint, 1);
-        bool busy = false;
-        DateTime checkedAt = DateTime.MinValue;
-        int checkedMinutes = 0;
+        var lookup = new BalanceHintLookup();
         _tips.SetToolTip(hint, "正在读取平衡数据…");
-        async Task Load()
+        hint.MouseEnter += async (_, _) => await LoadBalanceHintAsync(hint, hero, lookup, token);
+        hint.Click += async (_, _) => await LoadBalanceHintAsync(hint, hero, lookup, token);
+        _ = LoadBalanceHintAsync(hint, hero, lookup, token);
+    }
+
+    private sealed class BalanceHintLookup
+    {
+        public bool Busy { get; set; }
+        public DateTime CheckedAt { get; set; } = DateTime.MinValue;
+        public int CacheMinutes { get; set; }
+    }
+
+    private async Task LoadBalanceHintAsync(Label hint, int hero, BalanceHintLookup lookup, CancellationToken token)
+    {
+        if (lookup.Busy || token.IsCancellationRequested || hint.IsDisposed)
         {
-            if (busy || token.IsCancellationRequested || hint.IsDisposed)
+            return;
+        }
+        int minutes = Math.Clamp(_owner.GetAppConfig()?.AramBalanceCacheMinutes ?? 1440, 1, 10080);
+        if (lookup.CacheMinutes == minutes && DateTime.UtcNow - lookup.CheckedAt < TimeSpan.FromMinutes(1))
+        {
+            return;
+        }
+        lookup.Busy = true;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(12));
+        try
+        {
+            string alias = FormMain.Globals.resLoading.GetChampionById(hero)?.Alias ?? "";
+            string text = await Clients.AramBalanceClient.Shared.GetAsync(
+                alias,
+                TimeSpan.FromMinutes(minutes),
+                timeout.Token
+            );
+            if (!hint.IsDisposed && !token.IsCancellationRequested)
             {
-                return;
-            }
-
-            int minutes = Math.Clamp(_owner.GetAppConfig()?.AramBalanceCacheMinutes ?? 1440, 1, 10080);
-            if (checkedMinutes == minutes && DateTime.UtcNow - checkedAt < TimeSpan.FromMinutes(1))
-            {
-                return;
-            }
-
-            busy = true;
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
-            timeout.CancelAfter(TimeSpan.FromSeconds(12));
-            try
-            {
-                string alias = FormMain.Globals.resLoading.GetChampionById(hero)?.Alias ?? "";
-                string text = await Clients.AramBalanceClient.Shared.GetAsync(
-                    alias,
-                    TimeSpan.FromMinutes(minutes),
-                    timeout.Token
-                );
-                if (hint.IsDisposed || token.IsCancellationRequested)
-                {
-                    return;
-                }
-
-                checkedAt = DateTime.UtcNow;
-                checkedMinutes = minutes;
+                lookup.CheckedAt = DateTime.UtcNow;
+                lookup.CacheMinutes = minutes;
                 _tips.SetToolTip(hint, text);
             }
-            catch (Exception ex)
+        }
+        catch (Exception error)
+        {
+            if (!hint.IsDisposed && !token.IsCancellationRequested)
             {
-                if (hint.IsDisposed || token.IsCancellationRequested)
-                {
-                    return;
-                }
-
-                checkedAt = DateTime.UtcNow;
-                checkedMinutes = minutes;
+                lookup.CheckedAt = DateTime.UtcNow;
+                lookup.CacheMinutes = minutes;
                 _tips.SetToolTip(
                     hint,
-                    ex is OperationCanceledException
+                    error is OperationCanceledException
                         ? "平衡数据读取超时，稍后悬浮重试。"
-                        : "平衡数据暂不可用，稍后悬浮重试。\n" + ex.Message
+                        : "平衡数据暂不可用，稍后悬浮重试。\n" + error.Message
                 );
             }
-            finally
-            {
-                busy = false;
-            }
         }
-        hint.MouseEnter += (_, _) => _ = Load();
-        hint.Click += (_, _) => _ = Load();
-        _ = Load();
+        finally
+        {
+            lookup.Busy = false;
+        }
     }
 
     private FlowLayoutPanel AddTierSummary(string tier, string statistics)

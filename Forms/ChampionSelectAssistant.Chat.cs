@@ -57,22 +57,14 @@ internal sealed partial class ChampionSelectAssistant
         bool deduplicate = true
     )
     {
-        var phase = (await client.GetStringAsync("/lol-gameflow/v1/gameflow-phase", token)).Trim('"');
-        if (phase != "ChampSelect")
+        string id;
+        try
         {
-            return false;
+            id = await Services.ChampionSelectVoiceChatService.CaptureRoomAsync(client, token);
         }
-
-        var rooms = JArray.Parse(await client.GetStringAsync("/lol-chat/v1/conversations", token));
-        var room = rooms
-            .OfType<JObject>()
-            .FirstOrDefault(r =>
-                string.Equals((string?)r["type"], "championSelect", StringComparison.OrdinalIgnoreCase)
-                || string.Equals((string?)r["type"], "champSelect", StringComparison.OrdinalIgnoreCase)
-            );
-        var id = (string?)room?["id"];
-        if (string.IsNullOrWhiteSpace(id))
+        catch (InvalidOperationException)
         {
+            // A missing/ambiguous room or a retired selection phase cannot receive a configuration notice.
             return false;
         }
 
