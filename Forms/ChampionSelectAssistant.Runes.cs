@@ -1,4 +1,4 @@
-﻿using League.Models;
+using League.Models;
 
 namespace League;
 
@@ -33,6 +33,52 @@ internal sealed partial class ChampionSelectAssistant
 
     private void AddRuneChoices(OpggRunes[] schemes, CancellationToken token)
     {
+        if (schemes.Length == 0)
+        {
+            return;
+        }
+        var (section, select, stats, icons) = CreateRuneChoices(schemes, token);
+        CancellationTokenSource? images = null;
+        Task imageWork = Task.CompletedTask;
+        void RetireImages()
+        {
+            var retired = images;
+            images = null;
+            if (retired != null)
+            {
+                retired.Cancel();
+                _ = ReleaseRuneImagesAsync(retired, imageWork);
+            }
+        }
+        section.Disposed += (_, _) => RetireImages();
+        void RefreshChoice()
+        {
+            if (token.IsCancellationRequested || section.IsDisposed || select.SelectedIndex < 0)
+            {
+                return;
+            }
+            RetireImages();
+            images = CancellationTokenSource.CreateLinkedTokenSource(token);
+            foreach (Control child in icons.Controls.Cast<Control>().ToArray())
+            {
+                child.Dispose();
+            }
+            _runeChoice = select.SelectedIndex;
+            _runes = schemes[_runeChoice];
+            UpdateRuneChoiceText(select, stats, _runes, schemes);
+            _apply.Enabled = !_applying;
+            _apply.Text = $"应用方案 {_runeChoice + 1}";
+            imageWork = LoadRuneIconsAsync(_runes, icons, stats, images.Token);
+        }
+        select.SelectedIndexChanged += (_, _) => RefreshChoice();
+        RefreshChoice();
+    }
+
+    private (FlowLayoutPanel Section, ComboBox Select, Label Stats, FlowLayoutPanel Icons) CreateRuneChoices(
+        OpggRunes[] schemes,
+        CancellationToken token
+    )
+    {
         var section = new FlowLayoutPanel
         {
             AutoSize = true,
@@ -46,17 +92,7 @@ internal sealed partial class ChampionSelectAssistant
         {
             Width = 276,
         };
-        foreach (var (scheme, index) in schemes.Select((scheme, index) => (scheme, index)))
-        {
-            var rune = FormMain.Globals.resLoading?.GetRuneById(scheme.Perks[0]);
-            var name = rune?.name ?? rune?.Name ?? "推荐符文";
-            var primary = FormMain.Globals.resLoading?.Runes.Styles.GetValueOrDefault(scheme.Primary)?.Name ?? "主系";
-            var highlights = RuneHighlights(scheme, schemes);
-            select.Items.Add(
-                $"方案 {index + 1} · {primary} · {name}"
-                    + (highlights.Length > 0 ? " · " + string.Join(" / ", highlights) : "")
-            );
-        }
+        PopulateRuneChoices(select, schemes);
         select.SelectedIndex = 0;
         var stats = new Label
         {
@@ -74,64 +110,74 @@ internal sealed partial class ChampionSelectAssistant
         };
         section.Controls.AddRange(new Control[] { select, stats, icons });
         _body.Controls.Add(section);
-        CancellationTokenSource? images = null;
-        section.Disposed += (_, _) =>
-        {
-            images?.Cancel();
-            images?.Dispose();
-        };
-        void RefreshChoice()
-        {
-            if (token.IsCancellationRequested || section.IsDisposed || select.SelectedIndex < 0)
-            {
-                return;
-            }
+        return (section, select, stats, icons);
+    }
 
-            images?.Cancel();
-            images?.Dispose();
-            images = CancellationTokenSource.CreateLinkedTokenSource(token);
-            foreach (Control child in icons.Controls.Cast<Control>().ToArray())
-            {
-                child.Dispose();
-            }
-
-            _runeChoice = select.SelectedIndex;
-            _runes = schemes[_runeChoice];
-            string Rate(double? value) => value.HasValue ? $"{value:P2}" : "—";
-            stats.Text = $"胜率 {Rate(_runes.WinRate)} · 使用率 {Rate(_runes.PickRate)}";
-            var highlights = RuneHighlights(_runes, schemes);
-            var recommendation = string.Join(
-                "\n",
-                highlights.Select(h =>
-                    h.StartsWith("胜率") ? h + "：当前返回方案中获胜比例最高。" : h + "：当前返回方案中采用比例最高。"
-                )
-            );
-            _tips.SetToolTip(
-                select,
-                recommendation
-                    + "\n"
-                    + $"仅比较当前英雄、模式、分路和段位下返回的方案。\n本方案样本：{(_runes.Plays.HasValue ? _runes.Plays.Value.ToString("N0") + " 场" : "未知")}。样本量较小时胜率可能波动较大。"
-            );
-            _apply.Enabled = !_applying;
-            _apply.Text = $"应用方案 {_runeChoice + 1}";
-            _ = LoadIcons(_runes, images.Token);
-        }
-        async Task LoadIcons(OpggRunes scheme, CancellationToken imageToken)
+    private static void PopulateRuneChoices(ComboBox select, OpggRunes[] schemes)
+    {
+        foreach (var (scheme, index) in schemes.Select((scheme, index) => (scheme, index)))
         {
-            try
+            var rune = FormMain.Globals.resLoading?.GetRuneById(scheme.Perks[0]);
+            var name = rune?.name ?? rune?.Name ?? "推荐符文";
+            var primary = FormMain.Globals.resLoading?.Runes.Styles.GetValueOrDefault(scheme.Primary)?.Name ?? "主系";
+            var highlights = RuneHighlights(scheme, schemes);
+            select.Items.Add(
+                $"方案 {index + 1} · {primary} · {name}"
+                    + (highlights.Length > 0 ? " · " + string.Join(" / ", highlights) : "")
+            );
+        }
+    }
+
+    private void UpdateRuneChoiceText(ComboBox select, Label stats, OpggRunes scheme, OpggRunes[] schemes)
+    {
+        static string Rate(double? value) => value.HasValue ? $"{value:P2}" : "—";
+        stats.Text = $"胜率 {Rate(scheme.WinRate)} · 使用率 {Rate(scheme.PickRate)}";
+        var highlights = RuneHighlights(scheme, schemes);
+        var recommendation = string.Join(
+            "\n",
+            highlights.Select(label =>
+                label.StartsWith("胜率")
+                    ? label + "：当前返回方案中获胜比例最高。"
+                    : label + "：当前返回方案中采用比例最高。"
+            )
+        );
+        _tips.SetToolTip(
+            select,
+            recommendation
+                + "\n"
+                + $"仅比较当前英雄、模式、分路和段位下返回的方案。\n本方案样本：{(scheme.Plays.HasValue ? scheme.Plays.Value.ToString("N0") + " 场" : "未知")}。样本量较小时胜率可能波动较大。"
+        );
+    }
+
+    private async Task LoadRuneIconsAsync(OpggRunes scheme, FlowLayoutPanel icons, Label stats, CancellationToken token)
+    {
+        try
+        {
+            await IconRow(scheme.Perks, "rune", token, icons);
+        }
+        catch (OperationCanceledException)
+        {
+            // Changing a scheme or closing its section retires this icon batch.
+        }
+        catch (Exception error)
+        {
+            System.Diagnostics.Debug.WriteLine($"Rune icons: {error}");
+            if (!icons.IsDisposed && !token.IsCancellationRequested)
             {
-                await IconRow(scheme.Perks, "rune", imageToken, icons);
-            }
-            catch (OperationCanceledException) { }
-            catch
-            {
-                if (!icons.IsDisposed && !imageToken.IsCancellationRequested)
-                {
-                    stats.Text += " · 部分图标暂不可用";
-                }
+                stats.Text += " · 部分图标暂不可用";
             }
         }
-        select.SelectedIndexChanged += (_, _) => RefreshChoice();
-        RefreshChoice();
+    }
+
+    private static async Task ReleaseRuneImagesAsync(CancellationTokenSource source, Task work)
+    {
+        try
+        {
+            await work.ConfigureAwait(false);
+        }
+        finally
+        {
+            source.Dispose();
+        }
     }
 }

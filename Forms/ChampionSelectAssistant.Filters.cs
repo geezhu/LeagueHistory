@@ -76,25 +76,30 @@ internal sealed partial class ChampionSelectAssistant
     {
         string mode = SelectedMode;
         _syncing = true;
-        if (mode != _filterMode)
+        try
         {
-            _selectedTiers[_filterMode] = FilterValue(_tier);
-            string tier = _selectedTiers.GetValueOrDefault(mode, mode == "ranked" ? "emerald_plus" : "all");
-            _tier.SelectedItem = _tier.Items.Cast<FilterChoice>().First(c => c.Value == tier);
-            _filterMode = mode;
+            if (mode != _filterMode)
+            {
+                _selectedTiers[_filterMode] = FilterValue(_tier);
+                string tier = _selectedTiers.GetValueOrDefault(mode, mode == "ranked" ? "emerald_plus" : "all");
+                _tier.SelectedItem = _tier.Items.Cast<FilterChoice>().First(c => c.Value == tier);
+                _filterMode = mode;
+            }
+            _lane.Enabled = mode == "ranked";
+            _tier.Enabled = mode is not ("arena" or "mayhem");
+            _region.Enabled = mode != "mayhem";
+            _region.Visible = !_collapsed && mode != "mayhem";
+            _tier.Visible = !_collapsed && mode is not ("arena" or "mayhem");
+            _lane.Visible = !_collapsed && mode == "ranked";
+            _apply.Visible = true;
+            if (_mode.Parent is FlowLayoutPanel toolbar)
+            {
+                toolbar.Height = _collapsed || mode == "mayhem" ? 44 : 74;
+            }
         }
-        _lane.Enabled = mode == "ranked";
-        _tier.Enabled = mode is not ("arena" or "mayhem");
-        _region.Enabled = mode != "mayhem";
-        _region.Visible = !_collapsed && mode != "mayhem";
-        _tier.Visible = !_collapsed && mode is not ("arena" or "mayhem");
-        _lane.Visible = !_collapsed && mode == "ranked";
-        _apply.Visible = true;
-        if (_mode.Parent is FlowLayoutPanel toolbar)
+        finally
         {
-            toolbar.Height = _collapsed || mode == "mayhem" ? 44 : 74;
+            _syncing = false;
         }
-
-        _syncing = false;
     }
 }
