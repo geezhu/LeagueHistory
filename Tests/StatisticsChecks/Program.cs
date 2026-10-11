@@ -17,6 +17,11 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--live-match-checks"))
+        {
+            LiveMatchChecks.Run();
+            return;
+        }
         if (args.Contains("--balance-checks"))
         {
             Task.Run(AramBalanceChecks.RunAsync).GetAwaiter().GetResult();
