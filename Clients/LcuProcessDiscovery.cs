@@ -19,7 +19,10 @@ public static class LcuProcessDiscovery
                     TryReadCommandLine(process.Id, out var commandLine, out var error)
                     && TryParse(commandLine, out port, out token)
                 )
+                {
                     return true;
+                }
+
                 Debug.WriteLine($"[LCU] PID={process.Id} 原生参数读取未成功，状态={error}，尝试 WMI");
                 try
                 {
@@ -30,8 +33,12 @@ public static class LcuProcessDiscovery
                     foreach (ManagementObject obj in results)
                     {
                         using (obj)
+                        {
                             if (TryParse(obj["CommandLine"]?.ToString() ?? "", out port, out token))
+                            {
                                 return true;
+                            }
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -49,7 +56,9 @@ public static class LcuProcessDiscovery
         finally
         {
             foreach (var process in processes)
+            {
                 process.Dispose();
+            }
         }
     }
 
@@ -113,22 +122,36 @@ public static class LcuProcessDiscovery
     {
         port = token = "";
         if (string.IsNullOrWhiteSpace(commandLine))
+        {
             return false;
+        }
+
         var argv = CommandLineToArgvW(commandLine, out int count);
         if (argv == IntPtr.Zero)
+        {
             return false;
+        }
+
         try
         {
             for (int i = 0; i < count; i++)
             {
                 string arg = Marshal.PtrToStringUni(Marshal.ReadIntPtr(argv, i * IntPtr.Size)) ?? "";
                 if (arg.StartsWith("--app-port=", StringComparison.Ordinal))
+                {
                     port = arg[11..];
+                }
+
                 if (arg.StartsWith("--remoting-auth-token=", StringComparison.Ordinal))
+                {
                     token = arg[22..];
+                }
             }
             if (int.TryParse(port, out int number) && number is > 0 and <= 65535 && !string.IsNullOrWhiteSpace(token))
+            {
                 return true;
+            }
+
             port = token = "";
             return false;
         }

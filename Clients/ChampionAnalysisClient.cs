@@ -44,7 +44,10 @@ public sealed class ChampionAnalysisClient : IDisposable
     public async Task<ChampionAnalysisSnapshot> GetAsync(string alias, TimeSpan lifetime, CancellationToken token)
     {
         if (string.IsNullOrWhiteSpace(alias) || !alias.All(char.IsAsciiLetterOrDigit))
+        {
             throw new ArgumentException("无效的英雄别名。", nameof(alias));
+        }
+
         alias = alias.ToLowerInvariant();
         var gate = _gates.GetOrAdd(alias, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(token);
@@ -79,11 +82,17 @@ public sealed class ChampionAnalysisClient : IDisposable
             }
             var now = DateTimeOffset.UtcNow;
             if (cached != null && cached.FetchedAt <= now && now - cached.FetchedAt < lifetime)
+            {
                 return Snapshot(cached, false, null);
+            }
+
             if (_failures.TryGetValue(alias, out var failed) && now - failed < TimeSpan.FromMinutes(1))
             {
                 if (cached != null)
+                {
                     return Snapshot(cached, true, "更新失败，暂用旧缓存；一分钟后可重试。");
+                }
+
                 throw new InvalidDataException("英雄数据暂不可用，一分钟后可重试。");
             }
             try
@@ -104,7 +113,9 @@ public sealed class ChampionAnalysisClient : IDisposable
                     finally
                     {
                         if (File.Exists(temp))
+                        {
                             File.Delete(temp);
+                        }
                     }
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -124,7 +135,10 @@ public sealed class ChampionAnalysisClient : IDisposable
             {
                 _failures[alias] = DateTimeOffset.UtcNow;
                 if (cached != null)
+                {
                     return Snapshot(cached, true, "更新失败，暂用旧缓存。");
+                }
+
                 throw new InvalidDataException("英雄数据暂不可用，请稍后重试。", ex);
             }
 

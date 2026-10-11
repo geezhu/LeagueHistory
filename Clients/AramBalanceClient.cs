@@ -44,11 +44,20 @@ public sealed class AramBalanceClient : IDisposable
     {
         string key = Key(alias);
         if (key == "monkeyking")
+        {
             key = "wukong";
+        }
+
         if (key == "nunu")
+        {
             key = "nunuandwillump";
+        }
+
         if (key == "renata")
+        {
             key = "renataglasc";
+        }
+
         var row = Nodes(data)
             .OfType<JObject>()
             .FirstOrDefault(r =>
@@ -61,7 +70,10 @@ public sealed class AramBalanceClient : IDisposable
                 )
             );
         if (row == null || key.Length == 0)
+        {
             return "暂未匹配到该英雄的平衡数据。";
+        }
+
         var lines = new List<string>();
         bool missing = false;
         foreach (
@@ -87,11 +99,17 @@ public sealed class AramBalanceClient : IDisposable
             bool flat = field == "aramAbilityHaste";
             double delta = flat ? value : (value - 1) * 100;
             if (Math.Abs(delta) < .00001)
+            {
                 continue;
+            }
+
             lines.Add(title + " " + delta.ToString("+0.##;-0.##;0", CultureInfo.InvariantCulture) + (flat ? "" : "%"));
         }
         if (missing)
+        {
             lines.Add("部分调整项暂无数据。");
+        }
+
         return lines.Count > 0 ? string.Join("\n", lines) : "来源列出的各项属性均无额外调整。";
     }
 
@@ -154,7 +172,9 @@ public sealed class AramBalanceClient : IDisposable
                             finally
                             {
                                 if (File.Exists(temp))
+                                {
                                     File.Delete(temp);
+                                }
                             }
                         }
                         catch
@@ -172,7 +192,10 @@ public sealed class AramBalanceClient : IDisposable
                 }
             }
             if (_data == null)
+            {
                 return "普通大乱斗平衡\n暂时无法读取数据，稍后悬浮重试。";
+            }
+
             string patch = (string?)_data.SelectToken("result.data.patchVersionJson.patchVersion") ?? "未知";
             string updated = (string?)_data.SelectToken("result.data.aramModifiersJson.timestamp") ?? "未知";
             return "普通大乱斗平衡\n"
