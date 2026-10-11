@@ -22,6 +22,18 @@ internal static class OpggChecks
 
     public static async Task RunAsync()
     {
+        await CheckLiveRequestsAsync();
+        CheckParsingAndQueries();
+        await CheckCacheAsync();
+        await CheckCancellationAsync();
+        var runes = CheckRuneSelection();
+        await CheckRuneApplicationAsync(runes, false);
+        await CheckRuneApplicationAsync(runes, true);
+        await CheckRuneVerificationAsync(runes);
+    }
+
+    private static async Task CheckLiveRequestsAsync()
+    {
         if (Environment.GetEnvironmentVariable("LEAGUE_OPGG_LIVE") == "1")
         {
             using var live = new OpggClient();
@@ -34,6 +46,10 @@ internal static class OpggChecks
                 Console.WriteLine($"PASS: live OP.GG {mode}, version {build.Version}, {tiers.Rows.Length} tier rows");
             }
         }
+    }
+
+    private static void CheckParsingAndQueries()
+    {
         foreach (var mode in new[] { "ranked", "aram", "arena" })
         {
             var query = new OpggQuery("global", mode, "all", "mid", 103).Normalize();
@@ -101,6 +117,10 @@ internal static class OpggChecks
             "Empty recommendations are supported"
         );
         Check(OpggBuild.Ratio(0, 0) == null, "Zero samples have unknown win rate");
+    }
+
+    private static async Task CheckCacheAsync()
+    {
         var calls = new List<string>();
         using var client = new OpggClient(
             new Handler(
@@ -130,6 +150,11 @@ internal static class OpggChecks
             calls.Count == 3 && calls.Last().Contains("/kr/") && calls.Last().Contains("tier=emerald_plus"),
             "Cache separates region mode and tier"
         );
+    }
+
+    private static async Task CheckCancellationAsync()
+    {
+        var aram = new OpggQuery("global", "aram", "all", "none", 103);
         using (
             var slow = new OpggClient(
                 new Handler(
@@ -154,7 +179,11 @@ internal static class OpggChecks
             }
             Check(cancelled, "Cancelled OP.GG request stops waiting");
         }
-        var runes = OpggBuild.Parse(Fixture("aram"), aram).Runes[0];
+    }
+
+    private static OpggRunes CheckRuneSelection()
+    {
+        var runes = OpggBuild.Parse(Fixture("aram"), new("global", "aram", "all", "none", 103)).Runes[0];
         Check(runes.PickRate > 0, "Rune scheme retains pick rate separately from win rate");
         var styles = RuneResourceLoader.ParseStyles(
             JObject.Parse(
@@ -174,66 +203,72 @@ internal static class OpggChecks
                 && !(bool)selected.Invoke(null, new object[] { shardPlan, 5008, 2 })!,
             "Repeated shards highlight only their selected rows"
         );
-        foreach (bool existing in new[] { false, true })
-        {
-            string? method = null,
-                path = null;
-            JObject? body = null;
-            bool switched = false;
-            using var lcu = new HttpClient(
-                new Handler(
-                    async (request, token) =>
-                    {
-                        if (request.RequestUri!.AbsolutePath == "/lol-perks/v1/currentpage")
-                        {
-                            if (request.Method == HttpMethod.Put)
-                            {
-                                Check(
-                                    await request.Content!.ReadAsStringAsync(token) == "12",
-                                    "Explicitly select the written page ID"
-                                );
-                                switched = true;
-                                return Json(new JObject());
-                            }
-                            var current = switched ? (JObject)body!.DeepClone() : new JObject();
-                            current["id"] = switched ? 12 : 99;
-                            return Json(current);
-                        }
-                        if (request.Method == HttpMethod.Get)
-                        {
-                            return Json(
-                                existing
-                                    ? JArray.Parse(
-                                        "[{\"id\":99,\"name\":\"Personal\",\"isEditable\":true,\"current\":true},{\"id\":12,\"name\":\"[League] OP.GG Ahri\",\"isEditable\":true}]"
-                                    )
-                                    : JArray.Parse(
-                                        "[{\"id\":99,\"name\":\"Personal\",\"isEditable\":true,\"current\":true}]"
-                                    )
-                            );
-                        }
+        return runes;
+    }
 
-                        method = request.Method.Method;
-                        path = request.RequestUri!.AbsolutePath;
-                        body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
-                        return Json(new JObject { ["id"] = 12 });
+    private static async Task CheckRuneApplicationAsync(OpggRunes runes, bool existing)
+    {
+        string? method = null,
+            path = null;
+        JObject? body = null;
+        bool switched = false;
+        using var lcu = new HttpClient(
+            new Handler(
+                async (request, token) =>
+                {
+                    if (request.RequestUri!.AbsolutePath == "/lol-perks/v1/currentpage")
+                    {
+                        if (request.Method == HttpMethod.Put)
+                        {
+                            Check(
+                                await request.Content!.ReadAsStringAsync(token) == "12",
+                                "Explicitly select the written page ID"
+                            );
+                            switched = true;
+                            return Json(new JObject());
+                        }
+                        var current = switched ? (JObject)body!.DeepClone() : new JObject();
+                        current["id"] = switched ? 12 : 99;
+                        return Json(current);
                     }
-                )
+                    if (request.Method == HttpMethod.Get)
+                    {
+                        return Json(
+                            existing
+                                ? JArray.Parse(
+                                    "[{\"id\":99,\"name\":\"Personal\",\"isEditable\":true,\"current\":true},{\"id\":12,\"name\":\"[League] OP.GG Ahri\",\"isEditable\":true}]"
+                                )
+                                : JArray.Parse(
+                                    "[{\"id\":99,\"name\":\"Personal\",\"isEditable\":true,\"current\":true}]"
+                                )
+                        );
+                    }
+
+                    method = request.Method.Method;
+                    path = request.RequestUri!.AbsolutePath;
+                    body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
+                    return Json(new JObject { ["id"] = 12 });
+                }
             )
-            {
-                BaseAddress = new Uri("https://localhost"),
-            };
-            await OpggRuneService.ApplyAsync(lcu, runes, "阿狸", default);
-            Check(
-                method == (existing ? "PUT" : "POST")
-                    && path == (existing ? "/lol-perks/v1/pages/12" : "/lol-perks/v1/pages"),
-                "Only tool-owned rune page is updated"
-            );
-            Check(
-                body!["selectedPerkIds"]!.Count() == 9 && (bool?)body["current"] == true,
-                "Full rune payload selects page"
-            );
-            Check(switched, "A successful write alone does not imply the page is active");
-        }
+        )
+        {
+            BaseAddress = new Uri("https://localhost"),
+        };
+        await OpggRuneService.ApplyAsync(lcu, runes, "阿狸", default);
+        Check(
+            method == (existing ? "PUT" : "POST")
+                && path == (existing ? "/lol-perks/v1/pages/12" : "/lol-perks/v1/pages"),
+            "Only tool-owned rune page is updated"
+        );
+        Check(
+            body!["selectedPerkIds"]!.Count() == 9 && (bool?)body["current"] == true,
+            "Full rune payload selects page"
+        );
+        Check(switched, "A successful write alone does not imply the page is active");
+    }
+
+    private static async Task CheckRuneVerificationAsync(OpggRunes runes)
+    {
         using var unchanged = new HttpClient(
             new Handler(
                 (request, token) =>
@@ -261,6 +296,40 @@ internal static class OpggChecks
 
     public static void Render()
     {
+        CheckTooltips();
+        var type = typeof(PlayerCardControl).Assembly.GetType("League.Controls.OpggView")!;
+        using var view = (Control)Activator.CreateInstance(type)!;
+        using var form = new Form { ClientSize = new Size(1200, 800) };
+        form.Controls.Add(view);
+        form.Show();
+        Application.DoEvents();
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        CheckNavigation(type, flags);
+        CheckFilters(view, type, flags);
+        CheckRankings(view, form, type, flags);
+        var resource = League.FormMain.Globals.resLoading.Runes;
+        var savedStyles = resource.Styles.ToArray();
+        try
+        {
+            var build = PrepareRuneStyles();
+            var content = (FlowLayoutPanel)type.GetField("_content", flags)!.GetValue(view)!;
+            RenderEquipment(view, form, type, flags, content, build);
+            CheckMatchups(view, form, type, flags, content);
+            SaveCompactPreview(form, content);
+        }
+        finally
+        {
+            resource.Styles.Clear();
+            foreach (var entry in savedStyles)
+            {
+                resource.Styles.Add(entry.Key, entry.Value);
+            }
+            form.Close();
+        }
+    }
+
+    private static void CheckTooltips()
+    {
         var tooltipType = typeof(PlayerCardControl).Assembly.GetType("League.Controls.TooltipText")!;
         var plain = (string)
             tooltipType
@@ -283,13 +352,10 @@ internal static class OpggChecks
                     == "符文" + string.Concat(Enumerable.Repeat("这是没有换行标签的长符文说明。", 20)),
             "Long tooltip wraps without dropping content"
         );
-        var type = typeof(PlayerCardControl).Assembly.GetType("League.Controls.OpggView")!;
-        using var view = (Control)Activator.CreateInstance(type)!;
-        using var form = new Form { ClientSize = new Size(1200, 800) };
-        form.Controls.Add(view);
-        form.Show();
-        Application.DoEvents();
-        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+    }
+
+    private static void CheckNavigation(Type type, BindingFlags flags)
+    {
         using (var nav = (Control)Activator.CreateInstance(type)!)
         {
             var record = type.GetMethod("RecordNavigation", flags)!;
@@ -345,6 +411,10 @@ internal static class OpggChecks
             navMode.SelectedIndex = 1;
             Check(tierBox.SelectedIndex == 2, "ARAM retains its independent rank choice");
         }
+    }
+
+    private static void CheckFilters(Control view, Type type, BindingFlags flags)
+    {
         var follow = (CheckBox)type.GetField("_follow", flags)!.GetValue(view)!;
         Check(follow.Checked, "OP.GG follows champion selection by default");
         follow.Checked = true;
@@ -360,6 +430,10 @@ internal static class OpggChecks
         Check(!((ComboBox)type.GetField("_tier", flags)!.GetValue(view)!).Visible, "Arena mode hides rank filter");
         modeBox.SelectedIndex = 1;
         filterTimer.Stop();
+    }
+
+    private static void CheckRankings(Control view, Form form, Type type, BindingFlags flags)
+    {
         var rankings = (Control)type.GetField("_tiers", flags)!.GetValue(view)!;
         var rows = OpggBuild.ParseTiers(Fixture("tiers"), "ranked").Where(r => r.Position == "MID").ToArray();
         Check(rows.Any(r => r.Counters.Length > 0), "Ranking matchup avatars parse from source");
@@ -382,9 +456,12 @@ internal static class OpggChecks
             form.DrawToBitmap(rankingImage, new Rectangle(0, 0, 1200, 800));
             rankingImage.Save(Path.Combine(AppContext.BaseDirectory, "opgg-ranking.png"));
         }
+    }
+
+    private static OpggBuild PrepareRuneStyles()
+    {
         var build = OpggBuild.Parse(Fixture("aram"), new("global", "aram", "all", "none", 103));
         var resource = League.FormMain.Globals.resLoading.Runes;
-        var savedStyles = resource.Styles.ToArray();
         var plan = build.Runes[0];
         resource.Styles[plan.Primary] = new(
             plan.Primary,
@@ -413,13 +490,21 @@ internal static class OpggChecks
                 new[] { 90014, 90015, 90016 },
             }
         );
+        return build;
+    }
+
+    private static void RenderEquipment(
+        Control view,
+        Form form,
+        Type type,
+        BindingFlags flags,
+        FlowLayoutPanel content,
+        OpggBuild build
+    )
+    {
         var task = (Task)
             type.GetMethod("RenderAsync", flags)!.Invoke(view, new object[] { build, CancellationToken.None })!;
-        while (!task.IsCompleted)
-        {
-            Application.DoEvents();
-            Thread.Sleep(5);
-        }
+        StatisticsCheckSupport.PumpUntil(() => task.IsCompleted);
         task.GetAwaiter().GetResult();
         Application.DoEvents();
         using var image = new Bitmap(1200, 800);
@@ -430,7 +515,6 @@ internal static class OpggChecks
         using var narrow = new Bitmap(820, 600);
         form.DrawToBitmap(narrow, new Rectangle(0, 0, 820, 600));
         narrow.Save(Path.Combine(AppContext.BaseDirectory, "opgg-narrow.png"));
-        var content = (FlowLayoutPanel)type.GetField("_content", flags)!.GetValue(view)!;
         var skillSection = content
             .Controls.Cast<Control>()
             .First(c => c.Controls.OfType<Label>().Any(l => l.Text == "技能加点"));
@@ -441,6 +525,10 @@ internal static class OpggChecks
             form.DrawToBitmap(equipmentImage, new Rectangle(0, 0, 820, 600));
             equipmentImage.Save(Path.Combine(AppContext.BaseDirectory, "opgg-equipment.png"));
         }
+    }
+
+    private static void CheckMatchups(Control view, Form form, Type type, BindingFlags flags, FlowLayoutPanel content)
+    {
         var longBuild = OpggBuild.Parse(Fixture("ranked"), new("global", "ranked", "emerald_plus", "mid", 103));
         longBuild.Data["counters"] = new JArray(
             Enumerable
@@ -455,11 +543,7 @@ internal static class OpggChecks
         var matchupTask = (Task)
             type.GetMethod("RenderMatchupsAsync", flags)!
                 .Invoke(view, new object[] { longBuild, CancellationToken.None })!;
-        while (!matchupTask.IsCompleted)
-        {
-            Application.DoEvents();
-            Thread.Sleep(5);
-        }
+        StatisticsCheckSupport.PumpUntil(() => matchupTask.IsCompleted);
         matchupTask.GetAwaiter().GetResult();
         Application.DoEvents();
         var matchupSection = content.Controls.Cast<Control>().Last();
@@ -475,6 +559,10 @@ internal static class OpggChecks
             form.DrawToBitmap(matchupsImage, new Rectangle(0, 0, 820, 600));
             matchupsImage.Save(Path.Combine(AppContext.BaseDirectory, "opgg-matchups.png"));
         }
+    }
+
+    private static void SaveCompactPreview(Form form, FlowLayoutPanel content)
+    {
         content.AutoScrollPosition = Point.Empty;
         form.ClientSize = new Size(640, 800);
         Application.DoEvents();
@@ -483,13 +571,6 @@ internal static class OpggChecks
             form.DrawToBitmap(compact, new Rectangle(0, 0, 640, 800));
             compact.Save(Path.Combine(AppContext.BaseDirectory, "opgg-runes-compact.png"));
         }
-        resource.Styles.Clear();
-        foreach (var entry in savedStyles)
-        {
-            resource.Styles.Add(entry.Key, entry.Value);
-        }
-
-        form.Close();
     }
 
     private static HttpResponseMessage Json(JToken value) =>
