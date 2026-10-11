@@ -104,42 +104,7 @@ public sealed class RoomPlayerLoader : IDisposable
             }
             for (int column = 0; column < normalized.Count; column++)
             {
-                var player = (JObject)normalized[column];
-                string key = TeamKey(ally, Identity(player, column));
-                if (
-                    _entries.TryGetValue(key, out var prior)
-                    && (
-                        prior.State.Player.Value<string>("__roomQueue") != player.Value<string>("__roomQueue")
-                        || (prior.State.Player.Value<string>("nameVisibilityType") ?? "UNHIDDEN")
-                            != (player.Value<string>("nameVisibilityType") ?? "UNHIDDEN")
-                        || prior.State.Player.Value<long?>("summonerId") != player.Value<long?>("summonerId")
-                    )
-                )
-                {
-                    Retire(prior);
-                    _entries.Remove(key);
-                }
-                if (_entries.TryGetValue(key, out var existing))
-                {
-                    if (existing.State.Column != column || !SameDisplay(existing.State.Player, player))
-                    {
-                        existing.State = existing.State with
-                        {
-                            Column = column,
-                            Player = player,
-                            Revision = ++_revision,
-                        };
-                        changed = true;
-                    }
-                    continue;
-                }
-                var entry = new Entry
-                {
-                    State = new(generation, key, ally, column, player, null, "正在读取战绩…", false, ++_revision),
-                };
-                _entries.Add(key, entry);
-                start.Add(entry);
-                changed = true;
+                changed |= ReconcilePlayer((JObject)normalized[column], ally, column, generation, start);
             }
             if (changed)
             {
@@ -167,11 +132,47 @@ public sealed class RoomPlayerLoader : IDisposable
                 {
                     if (IsCurrent(entry))
                     {
-                        entry.Work = Task.Run(() => LoadAsync(entry));
+                        // The worker must run its cancellation path before Retire disposes the entry token.
+                        entry.Work = Task.Run(() => LoadAsync(entry), CancellationToken.None);
                     }
                 }
             }
         }
+    }
+
+    // The caller holds _gate while reconciling roster membership and slot changes.
+    private bool ReconcilePlayer(JObject player, bool ally, int column, long generation, List<Entry> start)
+    {
+        string key = TeamKey(ally, Identity(player, column));
+        if (
+            _entries.TryGetValue(key, out var prior)
+            && (
+                prior.State.Player.Value<string>("__roomQueue") != player.Value<string>("__roomQueue")
+                || (prior.State.Player.Value<string>("nameVisibilityType") ?? "UNHIDDEN")
+                    != (player.Value<string>("nameVisibilityType") ?? "UNHIDDEN")
+                || prior.State.Player.Value<long?>("summonerId") != player.Value<long?>("summonerId")
+            )
+        )
+        {
+            Retire(prior);
+            _entries.Remove(key);
+        }
+        if (_entries.TryGetValue(key, out var existing))
+        {
+            if (existing.State.Column != column || !SameDisplay(existing.State.Player, player))
+            {
+                existing.State = existing.State with { Column = column, Player = player, Revision = ++_revision };
+                return true;
+            }
+            return false;
+        }
+        var entry = new Entry
+        {
+            State = new(generation, key, ally, column, player, null, "正在读取战绩…", false, ++_revision),
+        };
+        _entries.Add(key, entry);
+        start.Add(entry);
+        return true;
     }
 
     public async Task RetryAsync(string key, long generation)
@@ -206,7 +207,8 @@ public sealed class RoomPlayerLoader : IDisposable
             {
                 if (IsCurrent(replacement))
                 {
-                    replacement.Work = Task.Run(() => LoadAsync(replacement));
+                    // Cancellation is owned by the entry and observed inside the worker, including cleanup.
+                    replacement.Work = Task.Run(() => LoadAsync(replacement), CancellationToken.None);
                 }
             }
         }
@@ -253,44 +255,8 @@ public sealed class RoomPlayerLoader : IDisposable
                         $"column={entry.State.Column} attempt={attempt} waitMs={timer.ElapsedMilliseconds}"
                     );
                     // WaitAsync also protects UI delivery from resource loaders that do not accept cancellation.
-                    var info = await _fetch(player, deadline.Token).WaitAsync(deadline.Token);
-                    if (info?.Player == null || info.Player.GameName == "失败")
-                    {
-                        throw new InvalidOperationException("Player data unavailable");
-                    }
-
-                    string expectedPuuid = PublicPuuid(player);
-                    if (
-                        !string.IsNullOrEmpty(info.Player.Puuid)
-                        && expectedPuuid.Length > 0
-                        && info.Player.Puuid != expectedPuuid
-                    )
-                    {
-                        throw new InvalidDataException("Player identity mismatch");
-                    }
-
-                    lock (_gate)
-                    {
-                        if (!IsCurrent(entry))
-                        {
-                            return;
-                        }
-
-                        entry.State = entry.State with
-                        {
-                            Info = info,
-                            Status = "",
-                            CanRetry = false,
-                            Revision = ++_revision,
-                        };
-                    }
-                    _log.Report(
-                        entry.State.Generation,
-                        "complete",
-                        entry.State.Key,
-                        $"ms={timer.ElapsedMilliseconds} games={info.MatchItems.Count}"
-                    );
-                    await RenderAsync(entry.State.Generation);
+                    var info = await FetchPlayerAsync(player, deadline.Token);
+                    await CompleteAsync(entry, info, timer);
                     return;
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -305,31 +271,10 @@ public sealed class RoomPlayerLoader : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    bool timeout = deadline.IsCancellationRequested || ex is TimeoutException;
-                    lock (_gate)
+                    if (!await ReportFailureAsync(entry, attempt, timer, deadline.IsCancellationRequested, ex))
                     {
-                        if (!IsCurrent(entry))
-                        {
-                            return;
-                        }
-
-                        entry.State = entry.State with
-                        {
-                            Status =
-                                attempt < 2 ? "读取失败，稍后重试…"
-                                : timeout ? "读取超时"
-                                : "读取失败",
-                            CanRetry = attempt == 2,
-                            Revision = ++_revision,
-                        };
+                        return;
                     }
-                    _log.Report(
-                        entry.State.Generation,
-                        timeout ? "timeout" : "failed",
-                        entry.State.Key,
-                        $"attempt={attempt} ms={timer.ElapsedMilliseconds} error={ex.GetType().Name}"
-                    );
-                    await RenderAsync(entry.State.Generation);
                 }
                 finally
                 {
@@ -352,6 +297,73 @@ public sealed class RoomPlayerLoader : IDisposable
         {
             _log.Report(entry.State.Generation, "delivery-failed", entry.State.Key, ex.GetType().Name);
         }
+    }
+
+    private async Task<PlayerMatchInfo> FetchPlayerAsync(JObject player, CancellationToken token)
+    {
+        var info = await _fetch(player, token).WaitAsync(token);
+        if (info?.Player == null || info.Player.GameName == "失败")
+        {
+            throw new InvalidOperationException("Player data unavailable");
+        }
+
+        string expectedPuuid = PublicPuuid(player);
+        if (!string.IsNullOrEmpty(info.Player.Puuid) && expectedPuuid.Length > 0 && info.Player.Puuid != expectedPuuid)
+        {
+            throw new InvalidDataException("Player identity mismatch");
+        }
+
+        return info;
+    }
+
+    private async Task CompleteAsync(Entry entry, PlayerMatchInfo info, Stopwatch timer)
+    {
+        lock (_gate)
+        {
+            if (!IsCurrent(entry))
+            {
+                return;
+            }
+
+            entry.State = entry.State with { Info = info, Status = "", CanRetry = false, Revision = ++_revision };
+        }
+        _log.Report(
+            entry.State.Generation,
+            "complete",
+            entry.State.Key,
+            $"ms={timer.ElapsedMilliseconds} games={info.MatchItems.Count}"
+        );
+        await RenderAsync(entry.State.Generation);
+    }
+
+    private async Task<bool> ReportFailureAsync(Entry entry, int attempt, Stopwatch timer, bool timedOut, Exception ex)
+    {
+        bool timeout = timedOut || ex is TimeoutException;
+        lock (_gate)
+        {
+            if (!IsCurrent(entry))
+            {
+                return false;
+            }
+
+            entry.State = entry.State with
+            {
+                Status =
+                    attempt < 2 ? "读取失败，稍后重试…"
+                    : timeout ? "读取超时"
+                    : "读取失败",
+                CanRetry = attempt == 2,
+                Revision = ++_revision,
+            };
+        }
+        _log.Report(
+            entry.State.Generation,
+            timeout ? "timeout" : "failed",
+            entry.State.Key,
+            $"attempt={attempt} ms={timer.ElapsedMilliseconds} error={ex.GetType().Name}"
+        );
+        await RenderAsync(entry.State.Generation);
+        return true;
     }
 
     private static void Retire(Entry entry)
