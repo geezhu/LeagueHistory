@@ -81,7 +81,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     {
         bool enabled = _owner.GetAppConfig()?.EnableLoadingOverlay ?? true;
         if (enabled == _configuredEnabled && UseGameBar == _configuredGameBar)
+        {
             return;
+        }
+
         _configuredEnabled = enabled;
         bool previousGameBar = _configuredGameBar;
         _configuredGameBar = UseGameBar;
@@ -108,10 +111,16 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     public void RefreshDisplaySettings()
     {
         if (_disposed)
+        {
             return;
+        }
+
         ConfigureBackend();
         if (!(_owner.GetAppConfig()?.EnableLoadingOverlay ?? true))
+        {
             return;
+        }
+
         ObserveDisplayPhase();
         SchedulePaint();
     }
@@ -120,7 +129,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     {
         _display.ObservePhase(_phase, _owner.GetAppConfig()?.AutoShowLoadingOverlay ?? true);
         if (_display.Preview)
+        {
             return;
+        }
+
         if (UseGameBar)
         {
             _window?.Hide();
@@ -143,7 +155,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     private void EnsureWindow()
     {
         if (_window != null)
+        {
             return;
+        }
+
         _window = new LoadingOverlayForm(Champion, Details);
         _window.Dismissed += Dismiss;
         PaintSnapshot();
@@ -152,7 +167,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     public void ShowPreview()
     {
         if (_disposed || !(_owner.GetAppConfig()?.EnableLoadingOverlay ?? true))
+        {
             return;
+        }
+
         _display.RequestPreview();
         _follow.Stop();
         EnsureWindow();
@@ -167,7 +185,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     private void ReportVisibility(string reason)
     {
         if (_visibilityReason == reason)
+        {
             return;
+        }
+
         _visibilityReason = reason;
         ChatSendDiagnostics.Shared.Report("overlay", reason);
     }
@@ -184,7 +205,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
                 || player.SummonerId > 0 && p.Player?.SummonerId == player.SummonerId
             );
         if (cache?.Player == null)
+        {
             return "暂无已缓存的玩家战绩；不会因点击卡片而阻塞游戏。";
+        }
+
         string rank = cache.Player.SoloRank ?? "未定级";
         var wins = cache.WinHistory;
         return $"单双排 {rank} · 灵活组排 {cache.Player.FlexRank ?? "未定级"} · "
@@ -231,15 +255,23 @@ internal sealed partial class LoadingOverlayManager : IDisposable
             _window?.Hide();
         }
         else
+        {
             PaintSnapshot();
+        }
+
         if (UseGameBar)
+        {
             PublishGameBar();
+        }
     }
 
     private async Task PollAsync()
     {
         if (_busy || _disposed || !(_owner.GetAppConfig()?.EnableLoadingOverlay ?? true))
+        {
             return;
+        }
+
         var client = FormMain.Globals.lcuClient?.Client;
         if (client == null)
         {
@@ -256,7 +288,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
                 .Trim()
                 .Trim('"');
             if (_disposed)
+            {
                 return;
+            }
+
             _phase = phase;
             _lastPhaseRead = Environment.TickCount64;
             // Display the shell as soon as the phase is known; roster and statistics may still be loading.
@@ -309,9 +344,15 @@ internal sealed partial class LoadingOverlayManager : IDisposable
                         int normalized = PlayerChampionTier.NormalizeQueue(roster.Queue, live.Mode);
                         roster = roster with { Queue = normalized };
                         if (flow["gameData"] is not JObject)
+                        {
                             flow["gameData"] = new JObject();
+                        }
+
                         if (flow["gameData"]!["queue"] is not JObject)
+                        {
                             flow["gameData"]!["queue"] = new JObject();
+                        }
+
                         flow["gameData"]!["queue"]!["id"] = normalized;
                     }
                 }
@@ -320,7 +361,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
                 }
             }
             if (_disposed || timeout.IsCancellationRequested || !(_owner.GetAppConfig()?.EnableLoadingOverlay ?? true))
+            {
                 return;
+            }
+
             string match =
                 roster.GameId.Length > 0
                     ? roster.GameId
@@ -401,7 +445,9 @@ internal sealed partial class LoadingOverlayManager : IDisposable
         {
             _busy = false;
             if (!_disposed)
+            {
                 _poll.Interval = _wanted || UseGameBar || _phase is "ChampSelect" or "GameStart" ? 3000 : 10000;
+            }
         }
     }
 
@@ -409,7 +455,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     {
         string key = $"{player.Key}:{player.ChampionId}";
         if (_rankRetry.GetValueOrDefault(key) > Environment.TickCount64 || !_rankRequests.Add(key))
+        {
             return;
+        }
+
         try
         {
             var rank = await _tiers.GetAsync(player.ChampionId, player.Puuid, flow);
@@ -418,7 +467,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
                 || generation != _generation
                 || _roster?.Players.Any(p => p.Key == player.Key && p.ChampionId == player.ChampionId) != true
             )
+            {
                 return;
+            }
+
             _ranks[player.Key] = rank;
             SchedulePaint();
         }
@@ -429,7 +481,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
                 || generation != _generation
                 || _roster?.Players.Any(p => p.Key == player.Key && p.ChampionId == player.ChampionId) != true
             )
+            {
                 return;
+            }
+
             _rankRequests.Remove(key);
             _rankRetry[key] = Environment.TickCount64 + 30000;
             _ranks[player.Key] = new("—", "统计暂不可用", "后台稍后重试。", _roster?.Queue ?? 0, "none");
@@ -440,7 +495,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     private async Task LoadIcon(int id)
     {
         if (_icons.ContainsKey(id) || !_iconRequests.Add(id) || FormMain.Globals.resLoading == null)
+        {
             return;
+        }
+
         try
         {
             var icon = await FormMain.Globals.resLoading.GetChampionIconAsync(id);
@@ -450,7 +508,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
                 return;
             }
             if (icon != null)
+            {
                 _icons[id] = icon;
+            }
+
             SchedulePaint();
         }
         catch { }
@@ -463,7 +524,9 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     private void SchedulePaint()
     {
         if (!_disposed && (_wanted || UseGameBar) && !_paint.Enabled)
+        {
             _paint.Start();
+        }
     }
 
     private void PublishGameBar(bool? enabled = null) =>
@@ -491,10 +554,17 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     private void PaintSnapshot()
     {
         if (_disposed)
+        {
             return;
+        }
+
         if (UseGameBar)
+        {
             PublishGameBar();
+        }
+
         if (_window != null)
+        {
             _window.View.UpdateRoster(
                 _roster,
                 _ranks,
@@ -502,6 +572,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
                 _display.Preview ? "显示测试 · 此窗口可正常绘制；游戏内覆盖效果需在加载画面确认。" : _status,
                 _masteries
             );
+        }
     }
 
     private bool GameFocused()
@@ -515,9 +586,15 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     private bool FindGameWindow()
     {
         if (_gameWindow != IntPtr.Zero && IsWindow(_gameWindow) && IsWindowVisible(_gameWindow))
+        {
             return true;
+        }
+
         if (Environment.TickCount64 < _nextWindowSearch)
+        {
             return false;
+        }
+
         _nextWindowSearch = Environment.TickCount64 + 2000;
         var processes = Process.GetProcessesByName("League of Legends");
         try
@@ -547,7 +624,9 @@ internal sealed partial class LoadingOverlayManager : IDisposable
         finally
         {
             foreach (var p in processes)
+            {
                 p.Dispose();
+            }
         }
         return _gameWindow != IntPtr.Zero;
     }
@@ -555,9 +634,15 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     private void Follow()
     {
         if (UseGameBar)
+        {
             return;
+        }
+
         if (!_wanted || _display.Preview)
+        {
             return;
+        }
+
         void Suspend(string reason)
         {
             _window?.Hide();
@@ -595,7 +680,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
             Screen.FromHandle(_gameWindow).WorkingArea
         );
         if (_window.Bounds != bounds)
+        {
             _window.Bounds = bounds;
+        }
+
         if (!_window.Visible)
         {
             PaintSnapshot();
@@ -607,12 +695,18 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     public void Dispose()
     {
         if (_disposed)
+        {
             return;
+        }
+
         CancelDetail();
         _detailPoll.Dispose();
         _championDetails.Dispose();
         if (UseGameBar)
+        {
             PublishGameBar(false);
+        }
+
         _gameBar.Dispose();
         _disposed = true;
         _life.Cancel();
@@ -623,7 +717,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
         _tiers.Dispose();
         _live.Dispose();
         foreach (var image in _icons.Values)
+        {
             image.Dispose();
+        }
+
         _icons.Clear();
     }
 

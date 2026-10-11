@@ -29,23 +29,35 @@ internal sealed partial class LoadingOverlayManager
             || !(_owner.GetAppConfig()?.EnableLoadingOverlay ?? true)
             || !LoadingRoster.CanDisplay(_phase)
         )
+        {
             return;
+        }
+
         _readingDetail = true;
         try
         {
             var request = await _gameBar.ReadDetailRequestAsync();
             if (_disposed || request == null || request.Id == _lastDetailRequest || !UseGameBar)
+            {
                 return;
+            }
+
             CancelDetail();
             _lastDetailRequest = request.Id;
             if (request.Slot < 0 || _roster == null)
+            {
                 return;
+            }
+
             int own = _roster.Players.FirstOrDefault(p => p.Self)?.Team ?? 100;
             int[] teams = own == 200 ? [200, 100] : [100, 200];
             int team = teams[request.Slot / 5];
             var player = _roster.Players.Where(p => p.Team == team).Take(5).ElementAtOrDefault(request.Slot % 5);
             if (player?.ChampionId != request.ChampionId)
+            {
                 return;
+            }
+
             _detailCancellation = CancellationTokenSource.CreateLinkedTokenSource(_life.Token);
             _detailCancellation.CancelAfter(TimeSpan.FromSeconds(45));
             _ = LoadChampionDetail(

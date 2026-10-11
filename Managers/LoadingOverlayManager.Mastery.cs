@@ -12,10 +12,16 @@ internal sealed partial class LoadingOverlayManager
     {
         string requestKey = $"{generation}:{player.Key}:{player.ChampionId}";
         if (!_masteryRequests.Add(requestKey))
+        {
             return;
+        }
+
         string puuid = player.Puuid;
         if (player.Self && (string.IsNullOrWhiteSpace(puuid) || puuid == Guid.Empty.ToString()))
+        {
             puuid = _own;
+        }
+
         try
         {
             var page =
@@ -27,7 +33,10 @@ internal sealed partial class LoadingOverlayManager
                 || generation != _generation
                 || _roster?.Players.Any(p => p.Key == player.Key && p.ChampionId == player.ChampionId) != true
             )
+            {
                 return;
+            }
+
             var mastery = page?.ForChampion(player.ChampionId) ?? PlayerChampionMastery.Unavailable(player.ChampionId);
             if (_masteries.GetValueOrDefault(player.Key) != mastery)
             {

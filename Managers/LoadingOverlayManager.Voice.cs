@@ -5,7 +5,10 @@ internal sealed partial class LoadingOverlayManager
     private async Task ReadVoiceCommand()
     {
         if (_disposed)
+        {
             return;
+        }
+
         try
         {
             await _gameBar.PollVoiceAsync(

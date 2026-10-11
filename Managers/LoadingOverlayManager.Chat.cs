@@ -12,13 +12,19 @@ internal sealed partial class LoadingOverlayManager
     private async Task ReadChatCommand()
     {
         if (_disposed || _readingChat || !UseGameBar || !(_owner.GetAppConfig()?.EnableLoadingOverlay ?? true))
+        {
             return;
+        }
+
         _readingChat = true;
         try
         {
             var request = await _gameBar.ReadChatRequestAsync();
             if (_disposed || request == null || !_chatRequests.Take(request))
+            {
                 return;
+            }
+
             if (_sendingChat)
             {
                 _gameBar.PublishChatStatus(request, "busy", "上一条消息仍在处理，请稍后重试。", true);
@@ -69,7 +75,10 @@ internal sealed partial class LoadingOverlayManager
         try
         {
             if (request.Cancelled)
+            {
                 return;
+            }
+
             if (_phase != "InProgress")
             {
                 state = "phase";
@@ -83,11 +92,17 @@ internal sealed partial class LoadingOverlayManager
                 return;
             }
             if (!Current())
+            {
                 return;
+            }
+
             IReadOnlyList<string> DeathMessages()
             {
                 if (_lastDeathStreakRead == 0 || Environment.TickCount64 - _lastDeathStreakRead >= 15000)
+                {
                     throw new InvalidOperationException("未发送：本局事件数据未更新，请等待 2999 连接恢复。");
+                }
+
                 return OverlayDeathStreakChatMessage.Build(_roster!, request, _deathStreaks, Champion);
             }
             var messages = request.Kind switch
@@ -112,7 +127,10 @@ internal sealed partial class LoadingOverlayManager
                         && GameInputService.IsGameForeground()
                 );
                 if (readiness != OverlayChatReadiness.Waiting)
+                {
                     break;
+                }
+
                 await Task.Delay(200, _life.Token);
             }
             if (!Current() || readiness == OverlayChatReadiness.Cancelled)
@@ -129,7 +147,9 @@ internal sealed partial class LoadingOverlayManager
             }
             // Counts may change while the user is in Game Bar; use the latest polled events.
             if (request.Kind == "deathStreak")
+            {
                 messages = DeathMessages();
+            }
             // Keep observing cancellation / Game Bar reopening while input is in flight.
             using var monitor = CancellationTokenSource.CreateLinkedTokenSource(_life.Token);
             async Task Observe()
@@ -142,7 +162,10 @@ internal sealed partial class LoadingOverlayManager
                         currentRequest =
                             latest != null && request.SameCommand(latest) && !latest.Cancelled && latest.Dismissed;
                         if (!currentRequest)
+                        {
                             return;
+                        }
+
                         await Task.Delay(100, monitor.Token);
                     }
                 }
