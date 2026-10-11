@@ -9,19 +9,19 @@ internal static class OverlayDetailPreview
     public static void Export(string destination, string assetDirectory)
     {
         Directory.CreateDirectory(destination);
-        string Encode(string path, int width = 48, int height = 48)
-        {
-            if (!File.Exists(path))
-            {
-                return "";
-            }
+        var content = CreateContent();
+        PopulateIcons(content, assetDirectory);
+        SetPreviewMetadata(content, assetDirectory);
+        var heroIcon = Encode(Path.Combine(assetDirectory, "champion", "九尾妖狐.png"));
+        var roster = CreateRoster(heroIcon);
+        AddPlayerAnnotations(roster);
+        File.WriteAllText(Path.Combine(destination, "detail-preview-content.json"), content.ToString());
+        File.WriteAllText(Path.Combine(destination, "detail-preview-snapshot.json"), roster.ToString());
+        Console.WriteLine("Detail preview fixture exported to " + destination);
+    }
 
-            using var source = Image.FromFile(path);
-            using var small = new Bitmap(source, new Size(width, height));
-            using var stream = new MemoryStream();
-            small.Save(stream, width > 48 ? ImageFormat.Jpeg : ImageFormat.Png);
-            return Convert.ToBase64String(stream.ToArray());
-        }
+    private static JObject CreateContent()
+    {
         var index = AramMetaIndex.Parse(
             JObject.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures/AramMeta/index.json")))
         );
@@ -64,6 +64,11 @@ internal static class OverlayDetailPreview
                 )
             )
         );
+        return content;
+    }
+
+    private static void PopulateIcons(JObject content, string assetDirectory)
+    {
         foreach (var icon in content.Descendants().OfType<JObject>().Where(o => o["kind"] != null))
         {
             string kind = (string?)icon["kind"] ?? "";
@@ -101,12 +106,19 @@ internal static class OverlayDetailPreview
                 icon["image"] = Encode(path);
             }
         }
-        string heroIcon = Encode(Path.Combine(assetDirectory, "champion", "九尾妖狐.png"));
+    }
+
+    private static void SetPreviewMetadata(JObject content, string assetDirectory)
+    {
         content["art"] = Encode(Path.Combine(assetDirectory, "profile-backgrounds", "21000.png"), 560, 280);
         content["revision"] = "fixture-1";
         content["state"] = "ready";
         content["mode"] = "布局测试";
         content["source"] = "本地测试样例 · 不代表当前对局";
+    }
+
+    private static JObject CreateRoster(string heroIcon)
+    {
         var roster = new JObject
         {
             ["protocol"] = 1,
@@ -144,7 +156,11 @@ internal static class OverlayDetailPreview
                     })
             ),
         };
-        File.WriteAllText(Path.Combine(destination, "detail-preview-content.json"), content.ToString());
+        return roster;
+    }
+
+    private static void AddPlayerAnnotations(JObject roster)
+    {
         int slot = 0;
         foreach (var row in ((JArray)roster["players"]!).OfType<JObject>())
         {
@@ -174,7 +190,19 @@ internal static class OverlayDetailPreview
             row["partyDetails"] = party.Description;
             slot++;
         }
-        File.WriteAllText(Path.Combine(destination, "detail-preview-snapshot.json"), roster.ToString());
-        Console.WriteLine("Detail preview fixture exported to " + destination);
+    }
+
+    private static string Encode(string path, int width = 48, int height = 48)
+    {
+        if (!File.Exists(path))
+        {
+            return "";
+        }
+
+        using var source = Image.FromFile(path);
+        using var small = new Bitmap(source, new Size(width, height));
+        using var stream = new MemoryStream();
+        small.Save(stream, width > 48 ? ImageFormat.Jpeg : ImageFormat.Png);
+        return Convert.ToBase64String(stream.ToArray());
     }
 }
