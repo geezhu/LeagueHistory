@@ -17,6 +17,11 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--scoreboard-layout-checks"))
+        {
+            ScoreboardLayoutChecks.Run();
+            return;
+        }
         if (args.Contains("--overlay-lifecycle-checks"))
         {
             OverlayLifecycleChecks.Run();

@@ -111,6 +111,8 @@
     "Clients/LoadingRosterIdentityService.cs",
     "Clients/OpggClient.cs",
     "Clients/PlayerStatisticsService.cs",
+    "Controls/MatchDetailView.Layout.cs",
+    "Controls/PlayerCardControl.Layout.cs",
     "Managers/LoadingOverlayManager.Chat.cs",
     "Managers/LoadingOverlayManager.cs",
     "Managers/LoadingOverlayManager.Details.cs",
@@ -191,10 +193,12 @@
     "Tests/StatisticsChecks/ClientChecks.cs",
     "Tests/StatisticsChecks/ModelChecks.cs",
     "Tests/StatisticsChecks/OverlayLifecycleChecks.cs",
+    "Tests/StatisticsChecks/ScoreboardLayoutChecks.cs",
     "Tests/StatisticsChecks/SenseVoiceChecks.cs",
     "UIHelpers/AugmentIconRenderer.cs",
     "UIHelpers/PlayerNamePresentation.cs",
-    "UIHelpers/WeGameHonorIcons.cs"
+    "UIHelpers/WeGameHonorIcons.cs",
+    "UIState/DetailedViewLayoutManager.Scoreboard.cs"
   ],
   "analysisRules": [
     "IDE0011",
