@@ -118,27 +118,7 @@ public sealed class AramBalanceClient : IDisposable
         await _gate.WaitAsync(token);
         try
         {
-            if (!_loaded)
-            {
-                _loaded = true;
-                try
-                {
-                    if (_path != null && File.Exists(_path))
-                    {
-                        var cache = JObject.Parse(await File.ReadAllTextAsync(_path, token));
-                        var data = (JObject)cache["data"]!;
-                        Nodes(data);
-                        _fetched = cache["fetched"]!.Value<DateTime>().ToUniversalTime();
-                        _data = data;
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    _loaded = false;
-                    throw;
-                }
-                catch { }
-            }
+            await LoadDiskAsync(token);
             bool stale = _data == null || DateTime.UtcNow - _fetched > lifetime || _fetched > DateTime.UtcNow;
             if (stale && DateTime.UtcNow - _failed > TimeSpan.FromMinutes(1))
             {
@@ -155,32 +135,7 @@ public sealed class AramBalanceClient : IDisposable
                     _fetched = DateTime.UtcNow;
                     _failed = default;
                     stale = false;
-                    if (_path != null)
-                    {
-                        try
-                        {
-                            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-                            string temp = _path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-                            try
-                            {
-                                await File.WriteAllTextAsync(
-                                    temp,
-                                    new JObject { ["fetched"] = _fetched, ["data"] = data }.ToString()
-                                );
-                                File.Move(temp, _path, true);
-                            }
-                            finally
-                            {
-                                if (File.Exists(temp))
-                                {
-                                    File.Delete(temp);
-                                }
-                            }
-                        }
-                        catch
-                        { /* Keep the valid memory snapshot if disk is unavailable. */
-                        }
-                    }
+                    await SaveDiskAsync(data);
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
@@ -188,6 +143,7 @@ public sealed class AramBalanceClient : IDisposable
                 }
                 catch
                 {
+                    // Keep the previous snapshot; the timestamp prevents immediate retry loops.
                     _failed = DateTime.UtcNow;
                 }
             }
@@ -207,6 +163,67 @@ public sealed class AramBalanceClient : IDisposable
         finally
         {
             _gate.Release();
+        }
+    }
+
+    private async Task LoadDiskAsync(CancellationToken token)
+    {
+        if (!_loaded)
+        {
+            _loaded = true;
+            try
+            {
+                if (_path != null && File.Exists(_path))
+                {
+                    var cache = JObject.Parse(await File.ReadAllTextAsync(_path, token));
+                    var data = (JObject)cache["data"]!;
+                    Nodes(data);
+                    _fetched = cache["fetched"]!.Value<DateTime>().ToUniversalTime();
+                    _data = data;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                _loaded = false;
+                throw;
+            }
+            catch
+            {
+                // Invalid or unavailable disk cache falls back to the source request.
+            }
+        }
+    }
+
+    private async Task SaveDiskAsync(JObject data)
+    {
+        // Complete the atomic save for the already committed memory snapshot, independent of a caller leaving.
+        if (_path != null)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+                string temp = _path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                try
+                {
+                    await File.WriteAllTextAsync(
+                        temp,
+                        new JObject { ["fetched"] = _fetched, ["data"] = data }.ToString(),
+                        CancellationToken.None
+                    );
+                    File.Move(temp, _path, true);
+                }
+                finally
+                {
+                    if (File.Exists(temp))
+                    {
+                        File.Delete(temp);
+                    }
+                }
+            }
+            catch
+            {
+                // Keep the valid memory snapshot if disk is unavailable.
+            }
         }
     }
 

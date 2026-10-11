@@ -54,43 +54,18 @@ public sealed class ChampionAnalysisClient : IDisposable
         try
         {
             string file = Path.Combine(_directory, alias + ".json");
-            if (!_memory.TryGetValue(alias, out var cached))
-            {
-                try
-                {
-                    if (File.Exists(file))
-                    {
-                        cached = JsonConvert.DeserializeObject<CacheEntry>(await File.ReadAllTextAsync(file, token));
-                        if (cached != null)
-                        {
-                            Snapshot(cached, false, null);
-                            _memory[alias] = cached;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                    when (ex
-                            is IOException
-                                or UnauthorizedAccessException
-                                or JsonException
-                                or InvalidDataException
-                                or ArgumentException
-                    )
-                {
-                    cached = null;
-                }
-            }
+            var cached = await ReadCacheAsync(alias, file, token);
             var now = DateTimeOffset.UtcNow;
             if (cached != null && cached.FetchedAt <= now && now - cached.FetchedAt < lifetime)
             {
-                return Snapshot(cached, false, null);
+                return Snapshot(alias, cached, false, null);
             }
 
             if (_failures.TryGetValue(alias, out var failed) && now - failed < TimeSpan.FromMinutes(1))
             {
                 if (cached != null)
                 {
-                    return Snapshot(cached, true, "更新失败，暂用旧缓存；一分钟后可重试。");
+                    return Snapshot(alias, cached, true, "更新失败，暂用旧缓存；一分钟后可重试。");
                 }
 
                 throw new InvalidDataException("英雄数据暂不可用，一分钟后可重试。");
@@ -99,29 +74,8 @@ public sealed class ChampionAnalysisClient : IDisposable
             {
                 string json = await _http.GetStringAsync(Source(alias), token);
                 var fresh = new CacheEntry(DateTimeOffset.UtcNow, json);
-                var result = Snapshot(fresh, false, null); // Validate before replacing valid cache.
-                string? persistenceWarning = null;
-                try
-                {
-                    Directory.CreateDirectory(_directory);
-                    string temp = file + "." + Guid.NewGuid().ToString("N") + ".tmp";
-                    try
-                    {
-                        await File.WriteAllTextAsync(temp, JsonConvert.SerializeObject(fresh), token);
-                        File.Move(temp, file, true);
-                    }
-                    finally
-                    {
-                        if (File.Exists(temp))
-                        {
-                            File.Delete(temp);
-                        }
-                    }
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    persistenceWarning = "已读取数据，但磁盘缓存保存失败。";
-                }
+                var result = Snapshot(alias, fresh, false, null); // Validate before replacing valid cache.
+                string? persistenceWarning = await SaveCacheAsync(file, fresh, token);
                 _memory[alias] = fresh;
                 _failures.TryRemove(alias, out _);
                 return result with { Warning = persistenceWarning };
@@ -136,23 +90,83 @@ public sealed class ChampionAnalysisClient : IDisposable
                 _failures[alias] = DateTimeOffset.UtcNow;
                 if (cached != null)
                 {
-                    return Snapshot(cached, true, "更新失败，暂用旧缓存。");
+                    return Snapshot(alias, cached, true, "更新失败，暂用旧缓存。");
                 }
 
                 throw new InvalidDataException("英雄数据暂不可用，请稍后重试。", ex);
-            }
-
-            ChampionAnalysisSnapshot Snapshot(CacheEntry entry, bool stale, string? warning)
-            {
-                var report = ChampionAnalysisParser.Parse(JObject.Parse(entry.Json), alias, Source(alias), "latest");
-                string hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(entry.Json)));
-                return new(report, entry.FetchedAt, hash, stale, warning);
             }
         }
         finally
         {
             gate.Release();
         }
+    }
+
+    private async Task<CacheEntry?> ReadCacheAsync(string alias, string file, CancellationToken token)
+    {
+        if (_memory.TryGetValue(alias, out var cached))
+        {
+            return cached;
+        }
+        try
+        {
+            if (File.Exists(file))
+            {
+                cached = JsonConvert.DeserializeObject<CacheEntry>(await File.ReadAllTextAsync(file, token));
+                if (cached != null)
+                {
+                    Snapshot(alias, cached, false, null);
+                    _memory[alias] = cached;
+                }
+            }
+        }
+        catch (Exception ex)
+            when (ex
+                    is IOException
+                        or UnauthorizedAccessException
+                        or JsonException
+                        or InvalidDataException
+                        or ArgumentException
+            )
+        {
+            // A damaged disk snapshot must not prevent a fresh network request.
+            cached = null;
+        }
+        return cached;
+    }
+
+    private async Task<string?> SaveCacheAsync(string file, CacheEntry fresh, CancellationToken token)
+    {
+        string? persistenceWarning = null;
+        try
+        {
+            Directory.CreateDirectory(_directory);
+            string temp = file + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                await File.WriteAllTextAsync(temp, JsonConvert.SerializeObject(fresh), token);
+                File.Move(temp, file, true);
+            }
+            finally
+            {
+                if (File.Exists(temp))
+                {
+                    File.Delete(temp);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            persistenceWarning = "已读取数据，但磁盘缓存保存失败。";
+        }
+        return persistenceWarning;
+    }
+
+    private static ChampionAnalysisSnapshot Snapshot(string alias, CacheEntry entry, bool stale, string? warning)
+    {
+        var report = ChampionAnalysisParser.Parse(JObject.Parse(entry.Json), alias, Source(alias), "latest");
+        string hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(entry.Json)));
+        return new(report, entry.FetchedAt, hash, stale, warning);
     }
 
     private static string Source(string alias) =>

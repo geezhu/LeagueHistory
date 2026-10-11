@@ -153,88 +153,7 @@ public sealed class AramMetaClient : IDisposable
             var oldTime = _cache.Fetched;
             try
             {
-                var index = _cache.Index;
-                bool cached = !refresh && index != null && DateTime.UtcNow - _cache.Fetched < _cacheLifetime();
-                var indexTime = _cache.Fetched;
-                if (!cached)
-                {
-                    index = await FetchIndex(token);
-                    indexTime = DateTime.UtcNow;
-                }
-                if (champion > 0 && !index!.Champions.Any(c => c.Id == champion))
-                {
-                    throw new InvalidDataException("此英雄暂无海克斯统计，可返回英雄榜查看。");
-                }
-
-                JObject? detail = null;
-                if (champion > 0)
-                {
-                    var key = index!.Version + ":" + champion;
-                    if (!refresh && _cache.Details.TryGetValue(key, out var saved))
-                    {
-                        detail = saved;
-                    }
-                    else
-                    {
-                        for (int attempt = 0; attempt < 2; attempt++)
-                        {
-                            token.ThrowIfCancellationRequested();
-                            if (preview != null)
-                            {
-                                preview(await ClonePageAsync(index, null, cached, indexTime, token));
-                            }
-
-                            detail = JObject.Parse(
-                                await _http.GetStringAsync(
-                                    $"api/champions/{champion}.json?v={Uri.EscapeDataString(index.Version)}",
-                                    token
-                                )
-                            );
-                            var confirmed = await FetchIndex(token);
-                            indexTime = DateTime.UtcNow;
-                            if (confirmed.Version == index.Version)
-                            {
-                                break;
-                            }
-
-                            index = confirmed;
-                            detail = null;
-                        }
-                        if (detail == null)
-                        {
-                            throw new InvalidDataException("数据正在更新，请稍后刷新。");
-                        }
-
-                        if (!detail.Properties().Any(p => p.Name is "items" or "spells" or "boots" or "bot"))
-                        {
-                            throw new InvalidDataException("英雄详情数据不完整。");
-                        }
-
-                        if (_cache.Details.Count >= 200)
-                        {
-                            _cache.Details.Clear();
-                        }
-
-                        _cache.Details[index.Version + ":" + champion] = (JObject)detail.DeepClone();
-                        cached = false;
-                    }
-                }
-                if (_cache.Index?.Version != index!.Version)
-                {
-                    _cache
-                        .Details.Keys.Where(k => !k.StartsWith(index.Version + ":", StringComparison.Ordinal))
-                        .ToList()
-                        .ForEach(k => _cache.Details.Remove(k));
-                }
-
-                _cache.Index = index;
-                _cache.Fetched = indexTime;
-                if (!cached)
-                {
-                    QueueDiskSave();
-                }
-
-                return await ClonePageAsync(index, detail, cached, _cache.Fetched, token);
+                return await ReadPageAsync(champion, refresh, token, preview);
             }
             catch (Exception ex)
                 when (!token.IsCancellationRequested && ex is HttpRequestException or TaskCanceledException)
@@ -264,6 +183,116 @@ public sealed class AramMetaClient : IDisposable
         }
     }
 
+    private async Task<AramMetaPage> ReadPageAsync(
+        int champion,
+        bool refresh,
+        CancellationToken token,
+        Action<AramMetaPage>? preview
+    )
+    {
+        var index = _cache.Index;
+        bool cached = !refresh && index != null && DateTime.UtcNow - _cache.Fetched < _cacheLifetime();
+        var indexTime = _cache.Fetched;
+        if (!cached)
+        {
+            index = await FetchIndex(token);
+            indexTime = DateTime.UtcNow;
+        }
+        if (champion > 0 && !index!.Champions.Any(c => c.Id == champion))
+        {
+            throw new InvalidDataException("此英雄暂无海克斯统计，可返回英雄榜查看。");
+        }
+
+        JObject? detail = null;
+        if (champion > 0)
+        {
+            var page = await ReadDetailAsync(champion, index!, cached, indexTime, refresh, token, preview);
+            index = page.Index;
+            detail = page.Detail;
+            cached = page.Cached;
+            indexTime = page.FetchedAt;
+        }
+        if (_cache.Index?.Version != index!.Version)
+        {
+            _cache
+                .Details.Keys.Where(k => !k.StartsWith(index.Version + ":", StringComparison.Ordinal))
+                .ToList()
+                .ForEach(k => _cache.Details.Remove(k));
+        }
+
+        _cache.Index = index;
+        _cache.Fetched = indexTime;
+        if (!cached)
+        {
+            QueueDiskSave();
+        }
+
+        return await ClonePageAsync(index, detail, cached, _cache.Fetched, token);
+    }
+
+    private async Task<AramMetaPage> ReadDetailAsync(
+        int champion,
+        AramMetaIndex index,
+        bool cached,
+        DateTime indexTime,
+        bool refresh,
+        CancellationToken token,
+        Action<AramMetaPage>? preview
+    )
+    {
+        JObject? detail = null;
+        var key = index.Version + ":" + champion;
+        if (!refresh && _cache.Details.TryGetValue(key, out var saved))
+        {
+            detail = saved;
+        }
+        else
+        {
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                token.ThrowIfCancellationRequested();
+                if (preview != null)
+                {
+                    preview(await ClonePageAsync(index, null, cached, indexTime, token));
+                }
+
+                detail = JObject.Parse(
+                    await _http.GetStringAsync(
+                        $"api/champions/{champion}.json?v={Uri.EscapeDataString(index.Version)}",
+                        token
+                    )
+                );
+                var confirmed = await FetchIndex(token);
+                indexTime = DateTime.UtcNow;
+                if (confirmed.Version == index.Version)
+                {
+                    break;
+                }
+
+                index = confirmed;
+                detail = null;
+            }
+            if (detail == null)
+            {
+                throw new InvalidDataException("数据正在更新，请稍后刷新。");
+            }
+
+            if (!detail.Properties().Any(p => p.Name is "items" or "spells" or "boots" or "bot"))
+            {
+                throw new InvalidDataException("英雄详情数据不完整。");
+            }
+
+            if (_cache.Details.Count >= 200)
+            {
+                _cache.Details.Clear();
+            }
+
+            _cache.Details[index.Version + ":" + champion] = (JObject)detail.DeepClone();
+            cached = false;
+        }
+        return new(index, detail, cached, indexTime);
+    }
+
     // Keep the caller's synchronization context for previews, but copy large JSON off the UI thread.
     private static Task<AramMetaPage> ClonePageAsync(
         AramMetaIndex index,
@@ -277,10 +306,11 @@ public sealed class AramMetaClient : IDisposable
             token
         );
 
+    // Shared initialization is completed once even if the initiating view is cancelled.
     private Task LoadDiskAsync() =>
         _cachePath == null
             ? Task.CompletedTask
-            : Task.Run(() =>
+            : Task.Run(async () =>
             {
                 if (_cachePath == null || !File.Exists(_cachePath))
                 {
@@ -289,7 +319,9 @@ public sealed class AramMetaClient : IDisposable
 
                 try
                 {
-                    var saved = JObject.Parse(File.ReadAllText(_cachePath));
+                    var saved = JObject.Parse(
+                        await File.ReadAllTextAsync(_cachePath, CancellationToken.None).ConfigureAwait(false)
+                    );
                     if ((int?)saved["schema"] != 1 || saved["index"] is not JObject raw)
                     {
                         return;
@@ -390,7 +422,10 @@ public sealed class AramMetaClient : IDisposable
                     File.Delete(temporary);
                 }
             }
-            catch { }
+            catch
+            {
+                // Cleanup must not replace the cache-write diagnostic or prevent the next queued save.
+            }
         }
     }
 
