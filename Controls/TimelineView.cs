@@ -37,6 +37,7 @@ public sealed class TimelineView : UserControl
         FlatStyle = FlatStyle.Flat,
     };
     private CancellationTokenSource? _request;
+    private Task? _requestWork;
     private MatchTimeline? _data;
     private bool _started;
     private readonly TimelineKillMap _map;
@@ -107,10 +108,13 @@ public sealed class TimelineView : UserControl
         }
     }
 
-    private async void LoadTimeline()
+    private void LoadTimeline()
     {
-        _request?.Cancel();
-        _request?.Dispose();
+        if (IsDisposed)
+        {
+            return;
+        }
+        CancelRequest();
         var request = _request = new CancellationTokenSource();
         _retry.Enabled = false;
         _time.Enabled = false;
@@ -121,61 +125,94 @@ public sealed class TimelineView : UserControl
         _status.Text = "正在加载时间线…";
         _map.Data = null;
         _map.Invalidate();
+        _requestWork = LoadTimelineAsync(request.Token);
+    }
+
+    private async Task LoadTimelineAsync(CancellationToken token)
+    {
         try
         {
-            var response = await _service.GetAsync(
-                $"/lol-match-history/v1/game-timelines/{_match.GameId}",
-                request.Token
-            );
-            if (IsDisposed || request.IsCancellationRequested)
+            var response = await _service.GetAsync($"/lol-match-history/v1/game-timelines/{_match.GameId}", token);
+            if (!IsDisposed && !token.IsCancellationRequested)
             {
-                return;
+                ShowTimeline(response);
             }
-
-            if (response.Data == null)
-            {
-                _status.Text = response.Message;
-                return;
-            }
-            if (
-                response.Data is Newtonsoft.Json.Linq.JObject root
-                && root["gameId"] != null
-                && root["gameId"]!.Value<long>() != _match.GameId
-            )
-            {
-                _status.Text = "返回的时间线与当前比赛不匹配。";
-                return;
-            }
-            _data = MatchTimeline.Parse(response.Data, _match.AllParticipants);
-            if (_data.Frames.Count == 0)
-            {
-                _status.Text = "这场比赛暂无时间线数据；仍可查看基础计分板。";
-                return;
-            }
-            _chart.Data = _data;
-            _map.Data = _data;
-            _time.Maximum = _data.Frames.Count - 1;
-            _time.Value = _time.Maximum;
-            _time.Enabled = true;
-            ShowEvents();
-            UpdateFrame();
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // A retry or closing the view retires the previous request.
+        }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"时间线解析失败: {ex.GetType().Name}");
-            if (!IsDisposed && !request.IsCancellationRequested)
+            if (!IsDisposed && !token.IsCancellationRequested)
             {
                 _status.Text = "时间线格式暂不支持，请重试。";
             }
         }
         finally
         {
-            if (!IsDisposed && !request.IsCancellationRequested)
+            if (!IsDisposed && !token.IsCancellationRequested)
             {
                 _retry.Enabled = true;
             }
         }
+    }
+
+    private void ShowTimeline(StatisticsResponse response)
+    {
+        if (response.Data == null)
+        {
+            _status.Text = response.Message;
+            return;
+        }
+        if (
+            response.Data is Newtonsoft.Json.Linq.JObject root
+            && root["gameId"] != null
+            && root["gameId"]!.Value<long>() != _match.GameId
+        )
+        {
+            _status.Text = "返回的时间线与当前比赛不匹配。";
+            return;
+        }
+        _data = MatchTimeline.Parse(response.Data, _match.AllParticipants);
+        if (_data.Frames.Count == 0)
+        {
+            _status.Text = "这场比赛暂无时间线数据；仍可查看基础计分板。";
+            return;
+        }
+        _chart.Data = _data;
+        _map.Data = _data;
+        _time.Maximum = _data.Frames.Count - 1;
+        _time.Value = _time.Maximum;
+        _time.Enabled = true;
+        ShowEvents();
+        UpdateFrame();
+    }
+
+    private void CancelRequest()
+    {
+        var request = _request;
+        var work = _requestWork;
+        _request = null;
+        _requestWork = null;
+        if (request == null)
+        {
+            return;
+        }
+        // The retired worker and cancellation callbacks may still use this source.
+        var cancellation = request.CancelAsync();
+        _ = Task.WhenAll(work ?? Task.CompletedTask, cancellation)
+            .ContinueWith(
+                completed =>
+                {
+                    _ = completed.Exception;
+                    request.Dispose();
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default
+            );
     }
 
     private void UpdateFrame()
@@ -235,103 +272,8 @@ public sealed class TimelineView : UserControl
     {
         if (disposing)
         {
-            _request?.Cancel();
-            _request?.Dispose();
+            CancelRequest();
         }
         base.Dispose(disposing);
-    }
-}
-
-internal sealed class TimelineGoldChart : Control
-{
-    public MatchTimeline? Data { get; set; }
-    public int Selected { get; set; }
-
-    public TimelineGoldChart() => DoubleBuffered = true;
-
-    protected override void OnPaint(PaintEventArgs e)
-    {
-        base.OnPaint(e);
-        if (Data == null || Data.Frames.Count == 0)
-        {
-            return;
-        }
-
-        var area = new Rectangle(58, 26, Math.Max(1, Width - 82), Math.Max(1, Height - 58));
-        double max = Math.Max(
-            100,
-            Math.Ceiling(Data.Frames.Max(f => Math.Abs(Data.GoldDifference(f) ?? 0)) / 100) * 100
-        );
-        long duration = Math.Max(1, Data.Frames.Last().Timestamp);
-        using var grid = new Pen(Color.FromArgb(231, 237, 245));
-        for (int i = 0; i <= 4; i++)
-        {
-            int y = area.Bottom - area.Height * i / 4;
-            e.Graphics.DrawLine(grid, area.Left, y, area.Right, y);
-            TextRenderer.DrawText(
-                e.Graphics,
-                $"{max * (i - 2) / 2 / 1000d:0.#}k",
-                Font,
-                new Point(5, y - 8),
-                ForeColor
-            );
-        }
-        float zero = area.Top + area.Height / 2f;
-        PointF Point(GoldFrame f, double gold) =>
-            new(area.Left + area.Width * f.Timestamp / (float)duration, zero - area.Height * (float)(gold / max) / 2);
-        void Segment(PointF a, PointF b, bool positive)
-        {
-            var color = positive ? Color.FromArgb(46, 153, 190) : Color.FromArgb(191, 81, 91);
-            using var fill = new SolidBrush(Color.FromArgb(65, color));
-            using var pen = new Pen(color, 2);
-            e.Graphics.FillPolygon(fill, new[] { new PointF(a.X, zero), a, b, new PointF(b.X, zero) });
-            e.Graphics.DrawLine(pen, a, b);
-        }
-        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        for (int i = 1; i < Data.Frames.Count; i++)
-        {
-            var a = Data.Frames[i - 1];
-            var b = Data.Frames[i];
-            if (Data.FrameInterval is > 0 && b.Timestamp - a.Timestamp > Data.FrameInterval.Value * 1.5)
-            {
-                continue;
-            }
-
-            if (Data.GoldDifference(a) is not double av || Data.GoldDifference(b) is not double bv)
-            {
-                continue;
-            }
-
-            var ap = Point(a, av);
-            var bp = Point(b, bv);
-            if (av * bv < 0)
-            {
-                var crossing = new PointF(
-                    ap.X + (bp.X - ap.X) * (float)(Math.Abs(av) / (Math.Abs(av) + Math.Abs(bv))),
-                    zero
-                );
-                Segment(ap, crossing, av > 0);
-                Segment(crossing, bp, bv > 0);
-            }
-            else
-            {
-                Segment(ap, bp, av + bv >= 0);
-            }
-        }
-        using var cursor = new Pen(Color.FromArgb(111, 123, 139))
-        {
-            DashStyle = System.Drawing.Drawing2D.DashStyle.Dash,
-        };
-        float x = Point(Data.Frames[Math.Clamp(Selected, 0, Data.Frames.Count - 1)], 0).X;
-        e.Graphics.DrawLine(cursor, x, area.Top, x, area.Bottom);
-        TextRenderer.DrawText(e.Graphics, "人均经济差 · 蓝正 / 红负", Font, new Point(area.Left, 3), ForeColor);
-        TextRenderer.DrawText(e.Graphics, "00:00", Font, new Point(area.Left, area.Bottom + 6), ForeColor);
-        TextRenderer.DrawText(
-            e.Graphics,
-            TimelineView.FormatTime(duration),
-            Font,
-            new Point(area.Right - 45, area.Bottom + 6),
-            ForeColor
-        );
     }
 }

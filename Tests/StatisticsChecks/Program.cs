@@ -17,6 +17,11 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--history-presentation-checks"))
+        {
+            HistoryPresentationChecks.Run();
+            return;
+        }
         if (args.Contains("--scoreboard-layout-checks"))
         {
             ScoreboardLayoutChecks.Run();
