@@ -29,6 +29,23 @@ internal static class AramMetaChecks
 
     public static async Task RunAsync()
     {
+        CheckParsing();
+        await CheckMemoryCacheAsync();
+        await CheckCancellationAsync();
+        await CheckVersionConsistencyAsync();
+        await CheckConditionalRequestsAsync();
+        await CheckDiskCacheAsync();
+        Check(
+            Newtonsoft.Json.JsonConvert.DeserializeObject<LeagueConfig>("{}")!.AramMetaCacheMinutes == 1440,
+            "Existing settings default to one day"
+        );
+        await CheckProgressiveLoadAsync();
+        await SharedCacheChecks();
+        Console.WriteLine("PASS: arammeta models, cache, cancellation, version consistency.");
+    }
+
+    private static void CheckParsing()
+    {
         var index = AramMetaIndex.Parse(Fixture("index"));
         var ahri = index.Champions.Single(c => c.Id == 103);
         Check(
@@ -75,6 +92,10 @@ internal static class AramMetaChecks
                 && AramMetaIndex.RelativeRate(0, 0) == 0,
             "Win-rate bars normalize to the highest displayed rate"
         );
+    }
+
+    private static async Task CheckMemoryCacheAsync()
+    {
         int calls = 0;
         bool fail = false;
         using var client = new AramMetaClient(
@@ -101,6 +122,10 @@ internal static class AramMetaChecks
         fail = true;
         var fallback = await client.GetAsync(103, true, default);
         Check(fallback.Cached && fallback.Detail!.HasValues, "Offline refresh preserves complete cached data");
+    }
+
+    private static async Task CheckCancellationAsync()
+    {
         using var slow = new AramMetaClient(
             new Handler(
                 async (r, t) =>
@@ -121,6 +146,10 @@ internal static class AramMetaChecks
             cancelled = true;
         }
         Check(cancelled, "Superseded loads cancel");
+    }
+
+    private static async Task CheckVersionConsistencyAsync()
+    {
         int indices = 0,
             details = 0;
         using var changing = new AramMetaClient(
@@ -140,6 +169,10 @@ internal static class AramMetaChecks
         );
         var updated = await changing.GetAsync(103, false, default);
         Check(details == 2 && updated.Index.Version == "new", "Version change retries detail against new snapshot");
+    }
+
+    private static async Task CheckConditionalRequestsAsync()
+    {
         int indexBodies = 0,
             notModified = 0;
         string version = "one";
@@ -179,67 +212,16 @@ internal static class AramMetaChecks
             changed.Index.Version == "two" && indexBodies == 2 && notModified == 3,
             "Conditional index refresh still detects new versions"
         );
+    }
+
+    private static async Task CheckDiskCacheAsync()
+    {
         string cacheFile = Path.Combine(Path.GetTempPath(), "arammeta-" + Guid.NewGuid().ToString("N") + ".json");
         try
         {
-            using (
-                var writer = new AramMetaClient(
-                    new Handler(
-                        (r, t) =>
-                        {
-                            var response = Json(
-                                Fixture(r.RequestUri!.AbsolutePath.EndsWith("tier-list.json") ? "index" : "103")
-                            );
-                            response.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"disk\"");
-                            return Task.FromResult(response);
-                        }
-                    ),
-                    cacheFile
-                )
-            )
-            {
-                await writer.GetAsync(103, false, default);
-            }
-
-            Check(File.Exists(cacheFile), "Statistics snapshot is persisted");
-            int requests = 0;
-            var lifetime = TimeSpan.FromHours(1);
-            using (
-                var reader = new AramMetaClient(
-                    new Handler(
-                        (r, t) =>
-                        {
-                            requests++;
-                            Check(
-                                r.Headers.IfNoneMatch.Any(v => v.Tag == "\"disk\""),
-                                "Disk cache restores HTTP validators"
-                            );
-                            throw new HttpRequestException("offline");
-                        }
-                    ),
-                    cacheFile,
-                    () => lifetime
-                )
-            )
-            {
-                var restored = await reader.GetAsync(103, false, default);
-                Check(
-                    requests == 0 && restored.Cached && restored.Detail != null,
-                    "Restart reuses unexpired statistics without network"
-                );
-                Check(reader.IsCurrent(restored, 103), "Fresh visible pages can skip cache copying");
-                lifetime = TimeSpan.Zero;
-                Check(!reader.IsCurrent(restored, 103), "Changed expiry forces visible pages to reload");
-                var stale = await reader.GetAsync(103, false, default);
-                Check(
-                    requests == 1 && stale.UpdateFailed && stale.FetchedAt == restored.FetchedAt,
-                    "Lifetime changes apply immediately and failed refresh does not renew stale data"
-                );
-                lifetime = TimeSpan.FromHours(1);
-                await reader.GetAsync(103, true, default);
-                Check(requests == 2, "Manual refresh bypasses fresh disk data");
-            }
-            File.WriteAllText(cacheFile, "broken json");
+            await PersistCacheAsync(cacheFile);
+            await CheckDiskExpiryAsync(cacheFile);
+            await File.WriteAllTextAsync(cacheFile, "broken json");
             using var recovery = new AramMetaClient(
                 new Handler((r, t) => Task.FromResult(Json(Fixture("index")))),
                 cacheFile
@@ -248,7 +230,7 @@ internal static class AramMetaChecks
             await recovery.FlushAsync();
             Check(
                 recovered.Index.Champions.Length == 3
-                    && JObject.Parse(File.ReadAllText(cacheFile))["schema"]?.Value<int>() == 1,
+                    && JObject.Parse(await File.ReadAllTextAsync(cacheFile))["schema"]?.Value<int>() == 1,
                 "Corrupt cache is replaced with a valid response"
             );
         }
@@ -259,10 +241,74 @@ internal static class AramMetaChecks
                 File.Delete(cacheFile);
             }
         }
-        Check(
-            Newtonsoft.Json.JsonConvert.DeserializeObject<LeagueConfig>("{}")!.AramMetaCacheMinutes == 1440,
-            "Existing settings default to one day"
-        );
+    }
+
+    private static async Task PersistCacheAsync(string cacheFile)
+    {
+        using (
+            var writer = new AramMetaClient(
+                new Handler(
+                    (r, t) =>
+                    {
+                        var response = Json(
+                            Fixture(r.RequestUri!.AbsolutePath.EndsWith("tier-list.json") ? "index" : "103")
+                        );
+                        response.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"disk\"");
+                        return Task.FromResult(response);
+                    }
+                ),
+                cacheFile
+            )
+        )
+        {
+            await writer.GetAsync(103, false, default);
+        }
+    }
+
+    private static async Task CheckDiskExpiryAsync(string cacheFile)
+    {
+        Check(File.Exists(cacheFile), "Statistics snapshot is persisted");
+        int requests = 0;
+        var lifetime = TimeSpan.FromHours(1);
+        using (
+            var reader = new AramMetaClient(
+                new Handler(
+                    (r, t) =>
+                    {
+                        requests++;
+                        Check(
+                            r.Headers.IfNoneMatch.Any(v => v.Tag == "\"disk\""),
+                            "Disk cache restores HTTP validators"
+                        );
+                        throw new HttpRequestException("offline");
+                    }
+                ),
+                cacheFile,
+                () => lifetime
+            )
+        )
+        {
+            var restored = await reader.GetAsync(103, false, default);
+            Check(
+                requests == 0 && restored.Cached && restored.Detail != null,
+                "Restart reuses unexpired statistics without network"
+            );
+            Check(reader.IsCurrent(restored, 103), "Fresh visible pages can skip cache copying");
+            lifetime = TimeSpan.Zero;
+            Check(!reader.IsCurrent(restored, 103), "Changed expiry forces visible pages to reload");
+            var stale = await reader.GetAsync(103, false, default);
+            Check(
+                requests == 1 && stale.UpdateFailed && stale.FetchedAt == restored.FetchedAt,
+                "Lifetime changes apply immediately and failed refresh does not renew stale data"
+            );
+            lifetime = TimeSpan.FromHours(1);
+            await reader.GetAsync(103, true, default);
+            Check(requests == 2, "Manual refresh bypasses fresh disk data");
+        }
+    }
+
+    private static async Task CheckProgressiveLoadAsync()
+    {
         var detailStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseDetail = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         AramMetaPage? preview = null;
@@ -295,8 +341,6 @@ internal static class AramMetaChecks
         int repeatedPreviews = 0;
         await progressive.GetAsync(103, false, default, _ => repeatedPreviews++);
         Check(repeatedPreviews == 0, "Cached heroes render once without a loading preview");
-        await SharedCacheChecks();
-        Console.WriteLine("PASS: arammeta models, cache, cancellation, version consistency.");
     }
 
     private static async Task SharedCacheChecks()
@@ -332,26 +376,12 @@ internal static class AramMetaChecks
             {
                 var loading = first.GetAsync(103, false, default);
                 await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-                using (var cancel = new CancellationTokenSource())
-                {
-                    var waiting = second.GetAsync(157, false, cancel.Token);
-                    cancel.Cancel();
-                    bool cancelled = false;
-                    try
-                    {
-                        await waiting;
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        cancelled = true;
-                    }
-                    Check(cancelled, "Cancelling a waiting page does not cancel another page's request");
-                }
+                await CheckSharedWaitCancellationAsync(second);
                 var duplicate = second.GetAsync(103, false, default);
                 release.TrySetResult();
                 await Task.WhenAll(loading, duplicate);
                 Check(
-                    requests == 3 && duplicate.Result.Cached,
+                    requests == 3 && (await duplicate).Cached,
                     "Concurrent pages share one hero download and normalized cache path"
                 );
                 await second.GetAsync(157, false, default);
@@ -360,32 +390,13 @@ internal static class AramMetaChecks
                 var retained = await second.GetAsync(103, false, default);
                 Check(requests == 5 && retained.Detail != null, "Closing one page preserves the other page's cache");
                 await second.FlushAsync();
-                var disk = JObject.Parse(File.ReadAllText(path));
+                var disk = JObject.Parse(await File.ReadAllTextAsync(path));
                 Check(
                     ((JObject)disk["details"]!).Count == 2,
                     "Shared disk snapshot retains details fetched by both pages"
                 );
             }
-            int offlineRequests = 0;
-            using var restarted = new AramMetaClient(
-                new Handler(
-                    (r, t) =>
-                    {
-                        offlineRequests++;
-                        throw new HttpRequestException("offline");
-                    }
-                ),
-                path
-            );
-            foreach (var hero in new[] { 103, 157 })
-            {
-                Check(
-                    (await restarted.GetAsync(hero, false, default)).Detail != null,
-                    "Restart restores every shared hero detail"
-                );
-            }
-
-            Check(offlineRequests == 0, "Restarted pages use persisted statistics without network");
+            await CheckSharedRestartAsync(path);
         }
         finally
         {
@@ -397,10 +408,49 @@ internal static class AramMetaChecks
         }
     }
 
+    private static async Task CheckSharedWaitCancellationAsync(AramMetaClient second)
+    {
+        using var cancel = new CancellationTokenSource();
+        var waiting = second.GetAsync(157, false, cancel.Token);
+        await cancel.CancelAsync();
+        bool cancelled = false;
+        try
+        {
+            await waiting;
+        }
+        catch (OperationCanceledException)
+        {
+            cancelled = true;
+        }
+        Check(cancelled, "Cancelling a waiting page does not cancel another page's request");
+    }
+
+    private static async Task CheckSharedRestartAsync(string path)
+    {
+        int offlineRequests = 0;
+        using var restarted = new AramMetaClient(
+            new Handler(
+                (r, t) =>
+                {
+                    offlineRequests++;
+                    throw new HttpRequestException("offline");
+                }
+            ),
+            path
+        );
+        foreach (var hero in new[] { 103, 157 })
+        {
+            Check(
+                (await restarted.GetAsync(hero, false, default)).Detail != null,
+                "Restart restores every shared hero detail"
+            );
+        }
+
+        Check(offlineRequests == 0, "Restarted pages use persisted statistics without network");
+    }
+
     public static void Render()
     {
-        // This test pumps a real WinForms window; prior checks can leave a base context installed.
-        SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
         var client = new AramMetaClient(
             new Handler(
                 (r, t) =>
@@ -422,6 +472,21 @@ internal static class AramMetaChecks
         var type = typeof(PlayerCardControl).Assembly.GetType("League.Controls.AramMetaView")!;
         var flags = BindingFlags.Instance | BindingFlags.NonPublic;
         using var view = (Control)Activator.CreateInstance(type, flags, null, new object[] { client, images }, null)!;
+        CheckLocalImageCache(view, type, flags, () => imageRequests);
+        using var form = new Form { ClientSize = new Size(1060, 800) };
+        form.Controls.Add(view);
+        form.Show();
+        Application.DoEvents();
+        CheckRankings(view, form, type, flags);
+        var (body, tabs) = CheckDetailCompletion(view, type, flags);
+        CheckAugmentNavigation(view, form, type, flags, body, tabs);
+        CheckTravel(view, form, type, flags);
+        form.Close();
+        Console.WriteLine("PASS: arammeta navigation, filtering, desktop layouts.");
+    }
+
+    private static void CheckLocalImageCache(Control view, Type type, BindingFlags flags, Func<int> imageRequests)
+    {
         var resourceName = "arammeta-test-" + Guid.NewGuid().ToString("N");
         var champion = new Champion
         {
@@ -439,100 +504,85 @@ internal static class AramMetaChecks
         League.FormMain.Globals.resLoading.Champions.Champions.Add(champion);
         try
         {
-            var task =
-                (Task<Image?>)
-                    type.GetMethod("ImageAsync", flags)!
-                        .Invoke(
-                            view,
-                            new object[]
-                            {
-                                "https://arammeta.com/assets/icons/" + resourceName + ".png",
-                                "champion",
-                                champion.Id,
-                            }
-                        )!;
-            while (!task.IsCompleted)
-            {
-                Application.DoEvents();
-                Thread.Sleep(5);
-            }
-            var cached = task.GetAwaiter().GetResult();
-            Check(
-                cached is Bitmap bitmap && bitmap.GetPixel(0, 0).R == 255 && imageRequests == 0,
-                "arammeta reuses match-history disk images without a public image request"
-            );
-            var localTask =
-                (Task<Image?>)
-                    type.GetMethod("ImageAsync", flags)!.Invoke(view, new object?[] { null, "champion", champion.Id })!;
-            while (!localTask.IsCompleted)
-            {
-                Application.DoEvents();
-                Thread.Sleep(5);
-            }
-            Check(
-                localTask.GetAwaiter().GetResult() is Bitmap localBitmap
-                    && localBitmap.GetPixel(0, 0).R == 255
-                    && imageRequests == 0,
-                "ID-only recommendations load local images without a remote URL"
-            );
-            using var iconHost = new Panel();
-            var icon = (PictureBox)
-                type.GetMethod("Icon", flags)!
-                    .Invoke(
-                        view,
-                        new object?[] { iconHost, null, "test", CancellationToken.None, 36, "champion", champion.Id }
-                    )!;
-            Application.DoEvents();
-            Check(icon.Image != null, "Recommendation picture boxes display ID-only resources");
-            var missing =
-                (Task<Image?>)
-                    type.GetMethod("ImageAsync", flags)!.Invoke(view, new object?[] { null, "item", champion.Id })!;
-            while (!missing.IsCompleted)
-            {
-                Application.DoEvents();
-                Thread.Sleep(5);
-            }
-            Check(
-                missing.GetAwaiter().GetResult() == null && imageRequests == 0,
-                "Resource cache separates categories with the same numeric ID"
-            );
+            CheckCachedImages(view, type, flags, champion, resourceName, imageRequests);
+            CheckIdOnlyResources(view, type, flags, champion, imageRequests);
         }
         finally
         {
             League.FormMain.Globals.resLoading.Champions.Champions.Remove(champion);
             File.Delete(cacheFile);
         }
-        using var form = new Form { ClientSize = new Size(1060, 800) };
-        form.Controls.Add(view);
-        form.Show();
+    }
+
+    private static void CheckCachedImages(
+        Control view,
+        Type type,
+        BindingFlags flags,
+        Champion champion,
+        string resourceName,
+        Func<int> imageRequests
+    )
+    {
+        var task =
+            (Task<Image?>)
+                type.GetMethod("ImageAsync", flags)!
+                    .Invoke(
+                        view,
+                        new object[]
+                        {
+                            "https://arammeta.com/assets/icons/" + resourceName + ".png",
+                            "champion",
+                            champion.Id,
+                        }
+                    )!;
+        StatisticsCheckSupport.PumpUntil(() => task.IsCompleted);
+        var cached = task.GetAwaiter().GetResult();
+        Check(
+            cached is Bitmap bitmap && bitmap.GetPixel(0, 0).R == 255 && imageRequests() == 0,
+            "arammeta reuses match-history disk images without a public image request"
+        );
+        var localTask =
+            (Task<Image?>)
+                type.GetMethod("ImageAsync", flags)!.Invoke(view, new object?[] { null, "champion", champion.Id })!;
+        StatisticsCheckSupport.PumpUntil(() => localTask.IsCompleted);
+        Check(
+            localTask.GetAwaiter().GetResult() is Bitmap localBitmap
+                && localBitmap.GetPixel(0, 0).R == 255
+                && imageRequests() == 0,
+            "ID-only recommendations load local images without a remote URL"
+        );
+    }
+
+    private static void CheckIdOnlyResources(
+        Control view,
+        Type type,
+        BindingFlags flags,
+        Champion champion,
+        Func<int> imageRequests
+    )
+    {
+        using var iconHost = new Panel();
+        var icon = (PictureBox)
+            type.GetMethod("Icon", flags)!
+                .Invoke(
+                    view,
+                    new object?[] { iconHost, null, "test", CancellationToken.None, 36, "champion", champion.Id }
+                )!;
         Application.DoEvents();
-        void Run(string method, params object[] args)
-        {
-            SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
-            var task = (Task)type.GetMethod(method, flags)!.Invoke(view, args)!;
-            var deadline = DateTime.UtcNow.AddSeconds(10);
-            while (!task.IsCompleted)
-            {
-                Application.DoEvents();
-                Thread.Sleep(5);
-                if (DateTime.UtcNow > deadline)
-                {
-                    throw new Exception(
-                        "Timed out: "
-                            + method
-                            + " / "
-                            + task.Status
-                            + " / "
-                            + ((Label)type.GetField("_status", flags)!.GetValue(view)!).Text
-                            + " / "
-                            + SynchronizationContext.Current?.GetType().Name
-                    );
-                }
-            }
-            task.GetAwaiter().GetResult();
-            Application.DoEvents();
-        }
-        Run("LoadAsync", false);
+        Check(icon.Image != null, "Recommendation picture boxes display ID-only resources");
+        var missing =
+            (Task<Image?>)
+                type.GetMethod("ImageAsync", flags)!.Invoke(view, new object?[] { null, "item", champion.Id })!;
+        StatisticsCheckSupport.PumpUntil(() => missing.IsCompleted);
+        Check(
+            missing.GetAwaiter().GetResult() == null && imageRequests() == 0,
+            "Resource cache separates categories with the same numeric ID"
+        );
+    }
+
+    private static void CheckRankings(Control view, Form form, Type type, BindingFlags flags)
+    {
+        RunPageMethod(view, type, flags, "LoadAsync", false);
         var grid = (DataGridView)type.GetField("_grid", flags)!.GetValue(view)!;
         var search = (TextBox)type.GetField("_search", flags)!.GetValue(view)!;
         Check(
@@ -550,20 +600,28 @@ internal static class AramMetaChecks
             grid.Rows.Cast<DataGridViewRow>().All(r => r.Height == 56),
             "Batched ranking rows retain space for portraits, badges and win-rate bars"
         );
-        Save("arammeta-rankings", 1060, 800);
+        SavePreview(form, "arammeta-rankings", 1060, 800);
         search.Text = "Ahri";
         Check(grid.Rows.Count == 1, "Champion search filters aliases");
         Check(grid.Rows[0].Height == 56, "Filtering retains ranking row height");
-        Run("NavigateAsync", 103);
+    }
+
+    private static (Control Body, FlowLayoutPanel Tabs) CheckDetailCompletion(
+        Control view,
+        Type type,
+        BindingFlags flags
+    )
+    {
+        RunPageMethod(view, type, flags, "NavigateAsync", 103);
         var detailPanel = (FlowLayoutPanel)type.GetField("_detail", flags)!.GetValue(view)!;
         var complete = (AramMetaPage)type.GetField("_page", flags)!.GetValue(view)!;
         var retainedSummary = detailPanel.Controls[0];
-        Run("LoadAsync", false);
+        RunPageMethod(view, type, flags, "LoadAsync", false);
         Check(
             ReferenceEquals(retainedSummary, detailPanel.Controls[0]),
             "Unchanged cached detail retains controls instead of rebuilding"
         );
-        Run("LoadAsync", true);
+        RunPageMethod(view, type, flags, "LoadAsync", true);
         Check(
             !ReferenceEquals(retainedSummary, detailPanel.Controls[0]),
             "Manual refresh still rebuilds updated detail"
@@ -587,40 +645,82 @@ internal static class AramMetaChecks
             (int)type.GetField("_detailTab", flags)!.GetValue(view)! == 2,
             "Equipment and spells share a dedicated tab"
         );
+        return (detailPanel.Controls[2], tabs);
+    }
+
+    private static void CheckAugmentNavigation(
+        Control view,
+        Form form,
+        Type type,
+        BindingFlags flags,
+        Control body,
+        FlowLayoutPanel tabs
+    )
+    {
         ((Button)tabs.Controls[1]).PerformClick();
-        var body = detailPanel.Controls[2];
         ((Button)body.Controls.OfType<FlowLayoutPanel>().First().Controls[1]).PerformClick();
         Check((int)type.GetField("_rarity", flags)!.GetValue(view)! == 1, "Rarity buttons switch recommendations");
         body.Controls.OfType<FlowLayoutPanel>().SelectMany(c => c.Controls.OfType<ComboBox>()).Single().SelectedIndex =
             1;
         Check((int)type.GetField("_augmentSort", flags)!.GetValue(view)! == 1, "Augment sorting remains available");
-        Save("arammeta-detail", 1060, 800);
+        SavePreview(form, "arammeta-detail", 1060, 800);
         var comparison = body
             .Controls.OfType<FlowLayoutPanel>()
             .SelectMany(c => c.Controls.OfType<FlowLayoutPanel>())
             .First(c => c.Tag is string tag && tag == "comparison-list");
         var first = comparison.Controls.OfType<TableLayoutPanel>().Skip(1).First();
         typeof(Control).GetMethod("OnClick", flags)!.Invoke(first, new object[] { EventArgs.Empty });
-        Save("arammeta-comparison-selected", 1060, 800);
+        SavePreview(form, "arammeta-comparison-selected", 1060, 800);
         ((Button)tabs.Controls[0]).PerformClick();
-        Save("arammeta-overview", 1060, 800);
+        SavePreview(form, "arammeta-overview", 1060, 800);
         ((Button)tabs.Controls[2]).PerformClick();
-        Save("arammeta-build-comparison", 1060, 800);
+        SavePreview(form, "arammeta-build-comparison", 1060, 800);
         ((Button)tabs.Controls[1]).PerformClick();
-        Run("TravelAsync", -1);
+    }
+
+    private static void CheckTravel(Control view, Form form, Type type, BindingFlags flags)
+    {
+        var search = (TextBox)type.GetField("_search", flags)!.GetValue(view)!;
+        var grid = (DataGridView)type.GetField("_grid", flags)!.GetValue(view)!;
+        RunPageMethod(view, type, flags, "TravelAsync", -1);
         Check(search.Text == "Ahri" && grid.Rows.Count == 1 && grid.Visible, "Back restores ranking search");
-        Run("TravelAsync", 1);
+        RunPageMethod(view, type, flags, "TravelAsync", 1);
         Check((int)type.GetField("_champion", flags)!.GetValue(view)! == 103, "Forward restores hero");
         form.ClientSize = new Size(660, 700);
         Application.DoEvents();
-        Save("arammeta-narrow", 660, 700);
-        void Save(string file, int width, int height)
+        SavePreview(form, "arammeta-narrow", 660, 700);
+    }
+
+    private static void RunPageMethod(Control view, Type type, BindingFlags flags, string method, params object[] args)
+    {
+        var task = (Task)type.GetMethod(method, flags)!.Invoke(view, args)!;
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (!task.IsCompleted)
         {
-            using var bmp = new Bitmap(width, height);
-            form.DrawToBitmap(bmp, new Rectangle(0, 0, width, height));
-            bmp.Save(Path.Combine(AppContext.BaseDirectory, file + ".png"));
+            Application.DoEvents();
+            Thread.Sleep(5);
+            if (DateTime.UtcNow > deadline)
+            {
+                throw new Exception(
+                    "Timed out: "
+                        + method
+                        + " / "
+                        + task.Status
+                        + " / "
+                        + ((Label)type.GetField("_status", flags)!.GetValue(view)!).Text
+                        + " / "
+                        + SynchronizationContext.Current?.GetType().Name
+                );
+            }
         }
-        form.Close();
-        Console.WriteLine("PASS: arammeta navigation, filtering, desktop layouts.");
+        task.GetAwaiter().GetResult();
+        Application.DoEvents();
+    }
+
+    private static void SavePreview(Form form, string file, int width, int height)
+    {
+        using var bmp = new Bitmap(width, height);
+        form.DrawToBitmap(bmp, new Rectangle(0, 0, width, height));
+        bmp.Save(Path.Combine(AppContext.BaseDirectory, file + ".png"));
     }
 }
