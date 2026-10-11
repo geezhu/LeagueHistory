@@ -2,6 +2,8 @@ using System.Net;
 using System.Reflection;
 using League;
 using League.Clients;
+using League.Models;
+using Newtonsoft.Json.Linq;
 using static StatisticsCheckSupport;
 
 internal static class AssistantLifecycleChecks
@@ -13,6 +15,7 @@ internal static class AssistantLifecycleChecks
     {
         ClosePendingRecommendation();
         RetireCancellationCallback();
+        CloseEquipmentPreview();
         Console.WriteLine(
             "PASS: assistant closing waits for recommendation work and cancellation callbacks before cleanup. No live requests."
         );
@@ -104,6 +107,81 @@ internal static class AssistantLifecycleChecks
             release.TrySetResult();
             assistant.Dispose();
             PumpUntil(() => Field<Task>(assistant, "_cleanupWork").IsCompleted);
+        }
+    }
+
+    private static void CloseEquipmentPreview()
+    {
+        using var owner = HiddenForm(new Size(320, 590));
+        using var tips = new ToolTip();
+        var type = typeof(FormMain).Assembly.GetType("League.Controls.AssistantEquipmentEditor")!;
+        var core = JObject.Parse("{\"ids\":[99101,99102,99103]}");
+        var data = new JObject
+        {
+            ["core_items"] = new JArray(core),
+            ["last_items"] = new JArray(JObject.Parse("{\"ids\":[99104]}")),
+        };
+        var build = new OpggBuild(new("global", "aram", "all", "none", 103), "fixture", data, new(), []);
+        using var editor = (Form)
+            Activator.CreateInstance(
+                type,
+                new object[]
+                {
+                    build,
+                    new[] { core },
+                    0,
+                    0,
+                    0,
+                    CancellationToken.None,
+                    (Action<int, int, int>)((_, _, _) => { }),
+                    "OP.GG",
+                    owner,
+                    tips,
+                    (Func<JObject, string>)(_ => "fixture"),
+                    (Action<Form>)(_ => { }),
+                }
+            )!;
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Image? lateImage = null;
+        type.GetField("_itemLoader", Flags)!
+            .SetValue(
+                editor,
+                (Func<int, Task<(Image?, string, string)>>)(
+                    async _ =>
+                    {
+                        await release.Task;
+                        lateImage = new Bitmap(8, 8);
+                        return (lateImage, "fixture", "description");
+                    }
+                )
+            );
+        var work = (Task)type.GetMethod("RenderAsync", Flags)!.Invoke(editor, null)!;
+        type.GetMethod("Track", Flags)!.Invoke(editor, new object[] { work });
+        editor.Dispose();
+        var cleanup = (Task)type.GetField("_cleanupWork", Flags)!.GetValue(editor)!;
+        Check(!cleanup.IsCompleted, "Equipment preview retains delayed image work after closing.");
+        release.TrySetResult();
+        PumpUntil(() => cleanup.IsCompleted);
+        Check(
+            work.IsCompletedSuccessfully && cleanup.IsCompletedSuccessfully,
+            "Closing equipment preview completes cancellation normally."
+        );
+        Check(
+            lateImage != null && ImageDisposed(lateImage),
+            "The closed equipment preview disposes late item artwork."
+        );
+    }
+
+    private static bool ImageDisposed(Image image)
+    {
+        try
+        {
+            _ = image.Width;
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return true;
         }
     }
 
