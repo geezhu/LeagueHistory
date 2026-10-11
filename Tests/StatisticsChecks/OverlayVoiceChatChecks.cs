@@ -37,6 +37,16 @@ internal static class OverlayVoiceChatChecks
                 && OverlayVoiceChatText.Build(request).Single() == request.Text,
             "Confirmed edited text sends exactly one message without relying on hero statistics or account identity"
         );
+        InvalidAndBoundaryText(data, now);
+        ConfirmationReadiness(request, now);
+        Task.Run(CheckBridge).GetAwaiter().GetResult();
+        Console.WriteLine(
+            "PASS: confirmed voice text, length/Unicode validation, edited payload binding, replay prevention, cancellation, timeout and local bridge. No microphone or game input used."
+        );
+    }
+
+    private static void InvalidAndBoundaryText(JObject data, long now)
+    {
         foreach (
             var change in new (string Key, JToken Value)[]
             {
@@ -83,6 +93,10 @@ internal static class OverlayVoiceChatChecks
         data["kind"] = "tier";
         data["target"] = "own";
         Check(OverlayChatRequest.Parse(data, "game", [], now) == null, "Statistics cannot carry arbitrary text");
+    }
+
+    private static void ConfirmationReadiness(OverlayChatRequest request, long now)
+    {
         var ready = request with { Dismissed = true };
         var gate = new OverlayChatReady(request);
         Check(
@@ -116,10 +130,6 @@ internal static class OverlayVoiceChatChecks
         );
         var seen = new OverlayChatRequests();
         Check(seen.Take(request) && !seen.Take(ready), "Dismissal cannot replay the same confirmed click");
-        Task.Run(CheckBridge).GetAwaiter().GetResult();
-        Console.WriteLine(
-            "PASS: confirmed voice text, length/Unicode validation, edited payload binding, replay prevention, cancellation, timeout and local bridge. No microphone or game input used."
-        );
     }
 
     private static async Task CheckBridge()
@@ -143,8 +153,9 @@ internal static class OverlayVoiceChatChecks
                 );
             Publish("one");
             string snapshot = Path.Combine(folder, "snapshot.json");
-            Check(SpinWait.SpinUntil(() => File.Exists(snapshot), 5000), "Voice capability snapshot published");
-            var source = JObject.Parse(await File.ReadAllTextAsync(snapshot));
+            var source = JObject.Parse(
+                await BridgeCheckFiles.ReadAsync(snapshot, "Voice capability snapshot published")
+            );
             Check(
                 (bool?)source["chatVoice"] == true && (bool?)source["chatTeams"] == false,
                 "Voice works independently of an identified self or loaded hero statistics"
@@ -177,11 +188,8 @@ internal static class OverlayVoiceChatChecks
             );
             bridge.PublishChatStatus(request!, "cancelled", "未发送：请求已取消。", true);
             string status = Path.Combine(folder, "chat-status.json");
-            Check(SpinWait.SpinUntil(() => File.Exists(status), 5000), "Voice send response published");
-            Check(
-                !File.ReadAllText(status).Contains(request!.Text),
-                "Status and diagnostics do not echo a user's draft"
-            );
+            string reply = await BridgeCheckFiles.ReadAsync(status, "Voice send response published");
+            Check(!reply.Contains(request!.Text), "Status and diagnostics do not echo a user's draft");
             Publish("two");
             Check(await bridge.ReadChatRequestAsync() == null, "Match change invalidates a voice request");
             Publish("one", false);

@@ -14,6 +14,17 @@ internal static class OverlayChampionDetailChecks
 
     public static void Run()
     {
+        RequestIsolation();
+        OpggRecommendations();
+        MayhemRecommendations();
+        Task.Run(CheckBridge).GetAwaiter().GetResult();
+        Console.WriteLine(
+            "PASS: hero-detail request isolation, both teams, mode-specific recommendations, spell highlights, later equipment and response channel."
+        );
+    }
+
+    private static void RequestIsolation()
+    {
         string session = "instance:match",
             id = Guid.NewGuid().ToString("N");
         long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -55,6 +66,10 @@ internal static class OverlayChampionDetailChecks
             OverlayDetailRequest.Parse(request, session, slots, now) == null,
             "Requests only accept opaque identifiers"
         );
+    }
+
+    private static void OpggRecommendations()
+    {
         foreach (string mode in new[] { "aram", "ranked", "urf", "nexus_blitz", "arena" })
         {
             var raw = JObject.Parse(
@@ -63,38 +78,7 @@ internal static class OverlayChampionDetailChecks
             var build = OpggBuild.Parse(raw, new("global", mode, "all", mode == "ranked" ? "mid" : "none", 103));
             var data = OverlayChampionDetailService.FromOpgg(build);
             var sections = (JArray)data["sections"]!;
-            var equipment = sections.Single(s => (string?)s["layout"] == "equipment");
-            var singles = OpggItemSetService
-                .Options(build.Data, "last_items")
-                .Where(r => OpggItemSetService.Ids(r).Length == 1)
-                .DistinctBy(r => OpggItemSetService.Ids(r)[0])
-                .Take(30)
-                .ToArray();
-            Check(
-                ReferenceEquals(sections.First, equipment),
-                "The selected hero's individual recommendations appear before combinations"
-            );
-            Check(
-                equipment["rows"]!
-                    .Select(r => (int)r["icons"]![0]!["id"]!)
-                    .SequenceEqual(singles.Select(r => OpggItemSetService.Ids(r)[0])),
-                "OP.GG individual equipment comes from this hero's single-item statistics"
-            );
-            for (int i = 0; i < singles.Length; i++)
-            {
-                Check(
-                    (string?)equipment["rows"]![i]!["winRateText"]
-                        == "胜率 "
-                            + (
-                                (
-                                    (double?)singles[i]["win_rate"]
-                                    ?? OpggBuild.Ratio(singles[i]["win"], singles[i]["play"])
-                                )?.ToString("P1") ?? "—"
-                            ),
-                    "Single-item win rate must not use a build-combination win rate"
-                );
-            }
-
+            CheckSingleItemRates(build, sections);
             var coreOnly = OverlayChampionDetailService.FromOpgg(
                 build with
                 {
@@ -118,6 +102,45 @@ internal static class OverlayChampionDetailChecks
             Check(spells["rows"]!.Count() <= 2, "Only most-used and highest-win spell highlights are shown");
             Check(!data.ToString().Contains("puuid"), "Details do not carry player identifiers");
         }
+    }
+
+    private static void CheckSingleItemRates(OpggBuild build, JArray sections)
+    {
+        var equipment = sections.Single(s => (string?)s["layout"] == "equipment");
+        var singles = OpggItemSetService
+            .Options(build.Data, "last_items")
+            .Where(r => OpggItemSetService.Ids(r).Length == 1)
+            .DistinctBy(r => OpggItemSetService.Ids(r)[0])
+            .Take(30)
+            .ToArray();
+        Check(
+            ReferenceEquals(sections.First, equipment),
+            "The selected hero's individual recommendations appear before combinations"
+        );
+        Check(
+            equipment["rows"]!
+                .Select(r => (int)r["icons"]![0]!["id"]!)
+                .SequenceEqual(singles.Select(r => OpggItemSetService.Ids(r)[0])),
+            "OP.GG individual equipment comes from this hero's single-item statistics"
+        );
+        for (int i = 0; i < singles.Length; i++)
+        {
+            Check(
+                (string?)equipment["rows"]![i]!["winRateText"]
+                    == "胜率 "
+                        + (
+                            (
+                                (double?)singles[i]["win_rate"]
+                                ?? OpggBuild.Ratio(singles[i]["win"], singles[i]["play"])
+                            )?.ToString("P1") ?? "—"
+                        ),
+                "Single-item win rate must not use a build-combination win rate"
+            );
+        }
+    }
+
+    private static void MayhemRecommendations()
+    {
         var index = AramMetaIndex.Parse(
             JObject.Parse(
                 File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "AramMeta", "index.json"))
@@ -170,10 +193,6 @@ internal static class OverlayChampionDetailChecks
             ).All(s => (string?)s["tab"] == "augments"),
             "Missing detail does not discard cached augment recommendations"
         );
-        CheckBridge().GetAwaiter().GetResult();
-        Console.WriteLine(
-            "PASS: hero-detail request isolation, both teams, mode-specific recommendations, spell highlights, later equipment and response channel."
-        );
     }
 
     private static async Task CheckBridge()
@@ -195,8 +214,7 @@ internal static class OverlayChampionDetailChecks
                 true
             );
             string snapshot = Path.Combine(folder, "snapshot.json");
-            Check(SpinWait.SpinUntil(() => File.Exists(snapshot), 5000), "Snapshot becomes available");
-            var source = JObject.Parse(await File.ReadAllTextAsync(snapshot));
+            var source = JObject.Parse(await BridgeCheckFiles.ReadAsync(snapshot, "Snapshot becomes available"));
             var request = new JObject
             {
                 ["protocol"] = 1,
