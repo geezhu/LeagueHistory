@@ -87,29 +87,41 @@ public partial class PlayerCardControl
         listViewGames.MouseEnter += (_, _) =>
         {
             if (FindForm()?.ContainsFocus == true)
+            {
                 listViewGames.Focus();
+            }
         };
         listViewGames.MouseClick += async (_, e) =>
         {
             if (e.Button != MouseButtons.Left)
+            {
                 return;
+            }
+
             if (
                 listViewGames.HitTest(e.Location).Item?.Tag is League.Models.MatchMetadata metadata
                 && FindForm() is FormMain main
             )
+            {
                 await main.OpenRoomMatchAsync(metadata, CurrentPuuId);
+            }
         };
         listViewGames.KeyDown += async (_, e) =>
         {
             if (e.KeyCode != Keys.Enter || listViewGames.SelectedItems.Count == 0)
+            {
                 return;
+            }
+
             e.Handled = true;
             e.SuppressKeyPress = true;
             if (
                 listViewGames.SelectedItems[0].Tag is League.Models.MatchMetadata metadata
                 && FindForm() is FormMain main
             )
+            {
                 await main.OpenRoomMatchAsync(metadata, CurrentPuuId);
+            }
         };
         listViewGames.BackColor = Color.White;
         var rowHeight = new ImageList(components) { ImageSize = new Size(1, 48), ColorDepth = ColorDepth.Depth32Bit };
@@ -127,7 +139,10 @@ public partial class PlayerCardControl
         listViewGames.DrawItem += (_, e) =>
         {
             if (e.Item == null)
+            {
                 return;
+            }
+
             string Field(int index) => e.Item.SubItems.Count > index ? e.Item.SubItems[index].Text : "";
             bool win = e.Item.ForeColor == Color.Green;
             bool loss = e.Item.ForeColor == Color.Red;
@@ -155,12 +170,19 @@ public partial class PlayerCardControl
             if (listViewGames.SmallImageList is { } images)
             {
                 if (!string.IsNullOrEmpty(e.Item.ImageKey) && images.Images.ContainsKey(e.Item.ImageKey))
+                {
                     icon = images.Images[e.Item.ImageKey];
+                }
                 else if (e.Item.ImageIndex >= 0 && e.Item.ImageIndex < images.Images.Count)
+                {
                     icon = images.Images[e.Item.ImageIndex];
+                }
             }
             if (icon != null)
+            {
                 e.Graphics.DrawImage(icon, rect.X + 7, rect.Y + (rect.Height - 32) / 2, 32, 32);
+            }
+
             string date = DateTime.TryParse(Field(3), out var parsed) ? parsed.ToString("MM-dd") : Field(3);
             var flags = TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter;
             TextRenderer.DrawText(

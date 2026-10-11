@@ -61,7 +61,10 @@ internal sealed partial class OpggView
                 }
             );
             if (group.Rows.Length == 0)
+            {
                 column.Controls.Add(TextLabel("暂无符合条件的对局"));
+            }
+
             foreach (var opponent in group.Rows)
             {
                 token.ThrowIfCancellationRequested();
@@ -198,6 +201,7 @@ internal sealed partial class OpggView
                 _tips.SetToolTip(chip, priority ? "技能升级优先级" : $"第 {i + 1} 级：{value}");
                 row.Controls.Add(chip);
                 if (priority && i < values.Length - 1)
+                {
                     row.Controls.Add(
                         new Label
                         {
@@ -208,6 +212,7 @@ internal sealed partial class OpggView
                             Margin = new Padding(2),
                         }
                     );
+                }
             }
         }
         Chips(mastery?["ids"], true);
@@ -245,7 +250,10 @@ internal sealed partial class OpggView
             );
             var options = (build.Data[key] as JArray ?? new()).OfType<JObject>().Take(3).ToArray();
             if (options.Length == 0)
+            {
                 column.Controls.Add(TextLabel("暂无数据"));
+            }
+
             foreach (var option in options)
             {
                 var ids = (option["ids"] as JArray ?? new()).Values<int>().ToArray();
@@ -262,7 +270,10 @@ internal sealed partial class OpggView
                 };
                 row.Controls.Add(icons);
                 foreach (var id in ids)
+                {
                     await AddIconAsync(icons, id, "item", token);
+                }
+
                 token.ThrowIfCancellationRequested();
                 var stats = RecommendationStats(option);
                 stats.Location = new Point(iconWidth, 0);

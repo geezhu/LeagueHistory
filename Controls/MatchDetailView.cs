@@ -74,11 +74,19 @@ public partial class MatchDetailView : UserControl
             }
             _scoreboard.Visible = selected == basic;
             if (_timeline != null)
+            {
                 _timeline.Visible = selected == timeline;
+            }
+
             if (_statistics != null)
+            {
                 _statistics.Visible = selected == statistics;
+            }
+
             if (_charts != null)
+            {
                 _charts.Visible = selected == charts;
+            }
         }
         basic.Click += (_, _) => SelectTab(basic);
         charts.Click += (_, _) =>
@@ -130,7 +138,10 @@ public partial class MatchDetailView : UserControl
     private async Task PrepareCoreAsync()
     {
         if (_started)
+        {
             return;
+        }
+
         _started = true;
         if (_match.AllParticipants == null || _match.AllParticipants.Count == 0)
         {
@@ -154,7 +165,10 @@ public partial class MatchDetailView : UserControl
             foreach (var popup in _banPopups.ToArray())
             {
                 foreach (var host in popup.Items.OfType<ToolStripControlHost>())
+                {
                     DisposeImagesInControls(host.Control.Controls);
+                }
+
                 popup.Dispose();
             }
             _banPopups.Clear();

@@ -54,7 +54,10 @@ public sealed class LoadingOverlayView : UserControl
         _teams.ColumnStyles.Add(new(SizeType.Percent, 50));
         _teams.RowStyles.Add(new(SizeType.Absolute, 30));
         for (int i = 0; i < 5; i++)
+        {
             _teams.RowStyles.Add(new(SizeType.Percent, 20));
+        }
+
         for (int side = 0; side < 2; side++)
         {
             _teams.Controls.Add(
@@ -134,7 +137,10 @@ public sealed class LoadingOverlayView : UserControl
                     }
                 }
                 foreach (Control c in new Control[] { panel, icon, rank, text, name, hero, rates, mastery })
+                {
                     c.Click += Select;
+                }
+
                 _teams.Controls.Add(panel, side, row + 1);
                 _rows.Add((panel, icon, name, hero, rank, rates, mastery));
             }
@@ -180,17 +186,25 @@ public sealed class LoadingOverlayView : UserControl
                 ui.Rank.ForeColor = AramMetaView.TierColor(rank?.Tier ?? "—");
                 ui.Rates.Text = rank == null ? "统计读取中…" : rank.Rate + " · 选 " + rank.PickRate;
                 if (p == null)
+                {
                     ui.Rates.Text = "";
+                }
+
                 var achievement = p != null ? masteries?.GetValueOrDefault(p.Key) : null;
                 if (achievement?.ChampionId != p?.ChampionId)
+                {
                     achievement = null;
+                }
+
                 ui.Mastery.Text = p?.ChampionId > 0 ? achievement?.Text ?? "成就读取中…" : "";
                 _masteryTips.SetToolTip(ui.Mastery, achievement?.Description ?? "");
             }
         }
         var selected = roster?.Players.FirstOrDefault(p => p.Key == _selected);
         if (selected != null)
+        {
             ShowDetails(selected);
+        }
         else
         {
             _selected = null;
@@ -216,7 +230,10 @@ public sealed class LoadingOverlayView : UserControl
     protected override void Dispose(bool disposing)
     {
         if (disposing)
+        {
             _masteryTips.Dispose();
+        }
+
         base.Dispose(disposing);
     }
 }

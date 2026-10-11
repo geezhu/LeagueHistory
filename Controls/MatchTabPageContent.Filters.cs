@@ -26,7 +26,10 @@ public partial class MatchTabPageContent
         Task<JArray> Fetch(int offset, int count)
         {
             if (IsDisposed || _disposed)
+            {
                 throw new OperationCanceledException();
+            }
+
             return LoadDataRequested(_puuid, offset, count, _selectedQueueId);
         }
         var result = await _outcomePager.LoadPage(_puuid, _selectedWin!.Value, _currentPage, _pageSize, Fetch);

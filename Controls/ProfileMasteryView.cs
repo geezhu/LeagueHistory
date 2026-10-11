@@ -83,7 +83,10 @@ public sealed class ProfileMasteryView : UserControl
         _all.FlatAppearance.BorderSize = 0;
         _all.Click += (_, _) => AllRequested?.Invoke(_records);
         for (int i = 0; i < 5; i++)
+        {
             _cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20f));
+        }
+
         _cards.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Controls.Add(_cards);
         Controls.Add(_status);
@@ -125,7 +128,10 @@ public sealed class ProfileMasteryView : UserControl
     public async void LoadPlayer(string puuid, bool refresh = false)
     {
         if (string.IsNullOrWhiteSpace(puuid) || IsDisposed)
+        {
             return;
+        }
+
         _puuid = puuid;
         _request?.Cancel();
         _request?.Dispose();
@@ -152,12 +158,18 @@ public sealed class ProfileMasteryView : UserControl
                 stale = page.Stale;
             }
             else
+            {
                 response = await _service.GetAsync(
                     $"/lol-champion-mastery/v1/{Uri.EscapeDataString(puuid)}/champion-mastery",
                     request.Token
                 );
+            }
+
             if (IsDisposed || request.IsCancellationRequested)
+            {
                 return;
+            }
+
             _records = SelectAll(response.Data);
             _all.Enabled = _records.Length > 0;
             _masteryAvailable = response.Data is JArray;
@@ -180,7 +192,10 @@ public sealed class ProfileMasteryView : UserControl
                 int championId = (int)mastery["championId"]!;
                 var resource = await _champion(championId);
                 if (IsDisposed || request.IsCancellationRequested)
+                {
                     return;
+                }
+
                 var card = new Panel
                 {
                     Dock = DockStyle.Fill,
@@ -214,12 +229,16 @@ public sealed class ProfileMasteryView : UserControl
         {
             System.Diagnostics.Debug.WriteLine($"成就加载失败: {ex.GetType().Name}");
             if (!IsDisposed && !request.IsCancellationRequested)
+            {
                 _status.Text = "英雄成就加载失败，请重试。";
+            }
         }
         finally
         {
             if (!IsDisposed && !request.IsCancellationRequested)
+            {
                 _refresh.Enabled = true;
+            }
         }
     }
 
@@ -232,9 +251,15 @@ public sealed class ProfileMasteryView : UserControl
                 cancellationToken
             );
             if (!IsDisposed && !cancellationToken.IsCancellationRequested && profile.Data is JObject summoner)
+            {
                 ProfileLoaded?.Invoke(summoner);
+            }
+
             if (IsDisposed || cancellationToken.IsCancellationRequested)
+            {
                 return;
+            }
+
             var catalogTask = _service.GetAsync("/lol-game-data/assets/v1/champion-summary.json", cancellationToken);
             var inventoryTask =
                 profile.Data?["summonerId"]?.Type == JTokenType.Integer
@@ -245,7 +270,10 @@ public sealed class ProfileMasteryView : UserControl
                     : Task.FromResult(new StatisticsResponse(null, ""));
             await Task.WhenAll(catalogTask, inventoryTask);
             if (IsDisposed || cancellationToken.IsCancellationRequested)
+            {
                 return;
+            }
+
             var catalog = StandardChampions(catalogTask.Result.Data);
             var inventory = StandardChampions(inventoryTask.Result.Data);
             string total = catalog.Length > 0 ? catalog.Length.ToString() : "—";

@@ -20,15 +20,27 @@ internal sealed partial class AramMetaView
             && uri.Scheme == "https"
             && new[] { "arammeta.com", "ddragon.leagueoflegends.com" }.Contains(uri.Host)
         )
+        {
             fallback = uri.AbsoluteUri;
+        }
+
         bool local = id > 0 && kind is "champion" or "item" or "spell" or "augment";
         if (!local && fallback == null)
+        {
             return Task.FromResult<Image?>(null);
+        }
+
         string key = local ? $"{kind}:{id}" : fallback!;
         if (_images.TryGetValue(key, out var cached))
+        {
             return Task.FromResult<Image?>(cached);
+        }
+
         if (_imageLoads.TryGetValue(key, out var pending))
+        {
             return pending;
+        }
+
         return _imageLoads[key] = FetchImageAsync(key, fallback, kind, id);
     }
 
@@ -38,7 +50,10 @@ internal sealed partial class AramMetaView
         try
         {
             if (IsDisposed)
+            {
                 return null;
+            }
+
             var resources = FormMain.Globals.resLoading;
             Image? image = null;
             if (resources != null)
@@ -86,7 +101,10 @@ internal sealed partial class AramMetaView
                 return null;
             }
             if (image != null)
+            {
                 _images[key] = image;
+            }
+
             return image;
         }
         catch
@@ -105,7 +123,9 @@ internal sealed partial class AramMetaView
         {
             var image = await ImageAsync((string?)champion.Data["image"], "champion", champion.Id).WaitAsync(token);
             if (image != null && !IsDisposed && !token.IsCancellationRequested && row.DataGridView == _grid)
+            {
                 row.Cells[0].Value = image;
+            }
         }
         catch (OperationCanceledException) { }
     }
@@ -137,7 +157,9 @@ internal sealed partial class AramMetaView
             {
                 var image = await ImageAsync(url, kind, id).WaitAsync(token);
                 if (!picture.IsDisposed && !token.IsCancellationRequested)
+                {
                     picture.Image = image;
+                }
             }
             catch (OperationCanceledException) { }
         }
@@ -177,10 +199,18 @@ internal sealed partial class AramMetaView
             section.MaximumSize = new Size(width, 0);
             section.Width = width;
             foreach (Control child in section.Controls)
+            {
                 if (child is FlowLayoutPanel || child is Label)
+                {
                     child.MaximumSize = new Size(width - 24, 0);
+                }
+            }
+
             foreach (var table in section.Controls.OfType<TableLayoutPanel>())
+            {
                 table.Width = Math.Max(510, width - 24);
+            }
+
             ResizeComparison(section, width - 24);
         }
     }

@@ -6,7 +6,10 @@ internal static class PlayerTeamsLayout
     {
         Control surface = table.Parent is Panel panel && panel.Name == "PlayerTeamsSurface" ? panel : table;
         if (surface.Parent != parent)
+        {
             parent.Controls.Add(surface);
+        }
+
         surface.Dock = DockStyle.Fill;
         surface.Visible = true;
         table.Visible = true;
@@ -16,7 +19,10 @@ internal static class PlayerTeamsLayout
     public static void Hide(TableLayoutPanel table)
     {
         if (table.Parent is Panel panel && panel.Name == "PlayerTeamsSurface")
+        {
             panel.Visible = false;
+        }
+
         table.Visible = false;
     }
 
@@ -24,7 +30,10 @@ internal static class PlayerTeamsLayout
     {
         var parent = table.Parent;
         if (parent == null)
+        {
             return;
+        }
+
         var host = new Panel
         {
             Name = "PlayerTeamsSurface",
@@ -42,16 +51,27 @@ internal static class PlayerTeamsLayout
         table.ColumnStyles.Clear();
         table.RowStyles.Clear();
         for (int i = 0; i < 5; i++)
+        {
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+        }
+
         for (int i = 0; i < 2; i++)
+        {
             table.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        }
+
         void ResizeGrid()
         {
             if (table.IsDisposed)
+            {
                 return;
+            }
+
             var size = new Size(Math.Max(1100, host.ClientSize.Width), Math.Max(600, host.ClientSize.Height));
             if (table.Size != size)
+            {
                 table.Size = size;
+            }
         }
         host.SizeChanged += (_, _) => ResizeGrid();
         table.ControlAdded += (_, _) => table.Invalidate();
@@ -59,7 +79,10 @@ internal static class PlayerTeamsLayout
         table.CellPaint += (_, e) =>
         {
             if (table.GetControlFromPosition(e.Column, e.Row) != null)
+            {
                 return;
+            }
+
             var bounds = Rectangle.Inflate(e.CellBounds, -5, -5);
             using var fill = new SolidBrush(Color.FromArgb(249, 251, 253));
             using var border = new Pen(Color.FromArgb(226, 233, 241));

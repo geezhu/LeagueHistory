@@ -18,7 +18,9 @@ internal sealed partial class AramMetaView
     {
         _detailFailed = true;
         if (_detailTab != 1)
+        {
             RenderDetailBody();
+        }
     }
 
     private void RenderDetail(AramMetaPage page, int id, CancellationToken token, bool equipmentOnly = false)
@@ -29,9 +31,14 @@ internal sealed partial class AramMetaView
         if (equipmentOnly && _detailHero == id && _detailBody is { IsDisposed: false })
         {
             if (_detailTab == 0 && _overviewEquipment is { IsDisposed: false })
+            {
                 RenderOverviewEquipment();
+            }
             else if (_detailTab == 2)
+            {
                 RenderDetailBody();
+            }
+
             return;
         }
         if (_detailHero != id)
@@ -46,7 +53,10 @@ internal sealed partial class AramMetaView
         try
         {
             foreach (Control control in _detail.Controls.Cast<Control>().ToArray())
+            {
                 control.Dispose();
+            }
+
             var champion = page.Index.Champions.FirstOrDefault(c => c.Id == id);
             if (champion == null)
             {
@@ -141,18 +151,31 @@ internal sealed partial class AramMetaView
     private void RenderDetailBody()
     {
         if (_detailBody == null || _detailBody.IsDisposed || _detailData == null)
+        {
             return;
+        }
+
         _detailBody.SuspendLayout();
         try
         {
             foreach (Control control in _detailBody.Controls.Cast<Control>().ToArray())
+            {
                 control.Dispose();
+            }
+
             if (_detailTab == 0)
+            {
                 RenderOverview();
+            }
             else if (_detailTab == 1)
+            {
                 RenderAugmentComparison();
+            }
             else
+            {
                 RenderBuildComparison();
+            }
+
             ResizeSections();
         }
         finally
@@ -185,10 +208,14 @@ internal sealed partial class AramMetaView
         row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48));
         row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         for (int i = 0; i < 3; i++)
+        {
             row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 94));
+        }
+
         row.Controls.Add(icon ?? new Panel(), 0, 0);
         int column = 1;
         foreach (var text in new[] { name, win, pick, games })
+        {
             row.Controls.Add(
                 new Label
                 {
@@ -201,6 +228,8 @@ internal sealed partial class AramMetaView
                 column++,
                 0
             );
+        }
+
         host.Controls.Add(row);
         return row;
     }

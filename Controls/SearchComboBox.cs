@@ -26,7 +26,10 @@ public sealed class SearchComboBox : ComboBox
     private void PaintChrome(Graphics graphics)
     {
         if (Width < 24 || Height < 8)
+        {
             return;
+        }
+
         using var border = new Pen(BackColor, 2);
         graphics.DrawRectangle(border, 1, 1, Width - 2, Height - 2);
         int arrowWidth = SystemInformation.VerticalScrollBarWidth;

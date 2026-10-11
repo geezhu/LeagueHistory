@@ -11,7 +11,10 @@ public partial class MatchDetailView
     private void ReflowScoreboard()
     {
         if (_reflowing || _buildingScoreboard || IsDisposed)
+        {
             return;
+        }
+
         _reflowing = true;
         _scoreboard.SuspendLayout();
         try
@@ -64,37 +67,57 @@ public partial class MatchDetailView
                 foreach (var header in section.Controls.OfType<Button>())
                 {
                     if (header.Name == "MetricPage")
+                    {
                         continue;
+                    }
+
                     if (header.Name == "TeamBans")
                     {
                         header.Left = width - 76;
                         continue;
                     }
                     if (!_originalBounds.TryGetValue(header, out var bounds))
+                    {
                         _originalBounds[header] = bounds = header.Bounds;
+                    }
+
                     header.Bounds = bounds;
                     if (compact)
                     {
                         header.Visible = bounds.X < 592 || MetricVisible(bounds.X);
                         if (bounds.X >= 592)
+                        {
                             header.SetBounds(
                                 520 + MetricIndex(bounds.X) * metricWidth,
                                 bounds.Y,
                                 metricWidth,
                                 bounds.Height
                             );
+                        }
                         else if (bounds.X >= 242)
+                        {
                             header.Left = bounds.X - 64;
+                        }
                         else if (bounds.X == 58)
+                        {
                             header.Width = 116;
+                        }
                     }
                     else
+                    {
                         header.Visible = true;
+                    }
                 }
                 foreach (var title in section.Controls.OfType<Label>())
+                {
                     title.Width = width - (section.Controls.ContainsKey("TeamBans") ? 100 : 24);
+                }
+
                 foreach (var title in section.Controls.OfType<TeamSummaryHeader>())
+                {
                     title.Width = width - (section.Controls.ContainsKey("TeamBans") ? 100 : 24);
+                }
+
                 int rowY = 64;
                 foreach (var row in section.Controls.OfType<Panel>().OrderBy(r => r.Top))
                 {
@@ -102,25 +125,42 @@ public partial class MatchDetailView
                     foreach (Control cell in row.Controls)
                     {
                         if (!_originalBounds.TryGetValue(cell, out var bounds))
+                        {
                             _originalBounds[cell] = bounds = cell.Bounds;
+                        }
+
                         if (!_originalTexts.TryGetValue(cell, out var text))
+                        {
                             _originalTexts[cell] = text = cell.Text;
+                        }
+
                         cell.Bounds = bounds;
                         cell.Text = text;
                         cell.Visible = true;
                         if (!compact)
+                        {
                             continue;
+                        }
+
                         if (cell is LinkLabel)
+                        {
                             cell.Width = Math.Min(
                                 bounds.Width,
                                 row.Controls.ContainsKey("PlayerRankEmblem") ? 84 : 118
                             );
+                        }
                         else if (cell.Name == "PlayerRankEmblem")
+                        {
                             cell.SetBounds(146, 1, 28, 22);
+                        }
                         else if (cell.Name.StartsWith("Honor_", StringComparison.Ordinal))
+                        {
                             cell.Left = 58 + (bounds.X - 58) / 16 * 14;
+                        }
                         else if (bounds.X >= 242 && bounds.X < 592)
+                        {
                             cell.Left = bounds.X - 64;
+                        }
                         else if (bounds.X >= 592)
                         {
                             cell.Visible = MetricVisible(bounds.X);
@@ -128,7 +168,9 @@ public partial class MatchDetailView
                             cell.Width = Math.Min(bounds.Width, metricWidth - 4);
                         }
                         if (bounds.Width == 3 && bounds.X == 0)
+                        {
                             cell.Height = row.Height;
+                        }
                     }
                     rowY += row.Height;
                 }
@@ -136,7 +178,9 @@ public partial class MatchDetailView
                 sectionY += rowY + 10;
             }
             if (_scoreboard.Controls["MatchHighlights"] is Control highlights)
+            {
                 highlights.SetBounds(12, sectionY + _scoreboard.AutoScrollPosition.Y, width, 86);
+            }
         }
         finally
         {
@@ -148,14 +192,20 @@ public partial class MatchDetailView
     private void ToggleMetricPage(Panel section)
     {
         if (section.IsDisposed || section.Controls["MetricPage"] is not Button button || !button.Visible)
+        {
             return;
+        }
+
         bool secondary = !_secondaryMetrics.GetValueOrDefault(section);
         _secondaryMetrics[section] = secondary;
         // Both pages already occupy their final positions. Only this team's visibility changes.
         var rows = section.Controls.OfType<Panel>().ToArray();
         section.SuspendLayout();
         foreach (var row in rows)
+        {
             row.SuspendLayout();
+        }
+
         try
         {
             foreach (
@@ -165,10 +215,15 @@ public partial class MatchDetailView
             )
             {
                 if (!_originalBounds.TryGetValue(control, out var bounds) || bounds.X < 592)
+                {
                     continue;
+                }
+
                 bool visible = secondary ? bounds.X >= 880 : bounds.X < 880;
                 if (control.Visible != visible)
+                {
                     control.Visible = visible;
+                }
             }
             button.Text = secondary ? "‹" : "›";
             _toolTip.SetToolTip(button, secondary ? "查看 KDA / 经济 / 造成伤害" : "查看参团率 / 补刀 / 承受伤害");
@@ -176,7 +231,10 @@ public partial class MatchDetailView
         finally
         {
             foreach (var row in rows)
+            {
                 row.ResumeLayout(false);
+            }
+
             section.ResumeLayout(false);
         }
     }

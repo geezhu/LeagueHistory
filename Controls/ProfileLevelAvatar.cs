@@ -46,7 +46,10 @@ public sealed class ProfileLevelAvatar : PictureBox
         g.InterpolationMode = InterpolationMode.HighQualityBicubic;
         float size = Math.Min(ClientSize.Width, ClientSize.Height);
         if (size < 16)
+        {
             return;
+        }
+
         var ring = new RectangleF(4, 4, size - 8, size - 8);
         using var track = new Pen(Color.FromArgb(207, 219, 234), 5)
         {
@@ -60,14 +63,20 @@ public sealed class ProfileLevelAvatar : PictureBox
         };
         g.DrawArc(track, ring, 120, 300);
         if (_progress is > 0)
+        {
             g.DrawArc(progress, ring, 120, (float)(_progress.Value * 300));
+        }
+
         var portrait = new RectangleF(size * .15f, size * .15f, size * .7f, size * .7f);
         using var clip = new GraphicsPath();
         clip.AddEllipse(portrait);
         var state = g.Save();
         g.SetClip(clip);
         if (Image != null)
+        {
             g.DrawImage(Image, portrait);
+        }
+
         g.Restore(state);
         using var font = new Font(Font.FontFamily, 9f, FontStyle.Bold);
         using var ink = new SolidBrush(Color.FromArgb(0, 143, 161));

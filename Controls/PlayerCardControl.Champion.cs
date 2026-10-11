@@ -57,7 +57,9 @@ public partial class PlayerCardControl
                 && _tierLoader != null
                 && (_currentTier == null || _currentTier.ReferencePosition)
             )
+            {
                 _ = RefreshChampionAsync();
+            }
         };
         retry.Start();
         _championBar.Resize += (_, _) => _heroTier.Width = _heroName.Width = Math.Max(30, _championBar.Width - 52);
@@ -67,7 +69,9 @@ public partial class PlayerCardControl
             control.Click += (_, _) =>
             {
                 if (CurrentChampionId > 0 && _currentTier is { Queue: > 0 } tier && tier.Rate != "暂无梯队")
+                {
                     _openHero?.Invoke(CurrentChampionId, tier);
+                }
             };
         }
         Disposed += (_, _) =>
@@ -81,7 +85,10 @@ public partial class PlayerCardControl
     private async Task RefreshChampionAsync()
     {
         if (IsDisposed)
+        {
             return;
+        }
+
         int id = CurrentChampionId,
             generation = ++_heroGeneration;
         _currentTier = null;
@@ -94,9 +101,15 @@ public partial class PlayerCardControl
         _heroName.Text = id > 0 ? FormMain.Globals.resLoading?.GetChampionById(id)?.Name ?? $"英雄 {id}" : "尚未选择";
         _heroTier.Text = id > 0 ? "梯队读取中…" : "";
         foreach (Control child in _championBar.Controls)
+        {
             _statisticsTips?.SetToolTip(child, "");
+        }
+
         if (id <= 0)
+        {
             return;
+        }
+
         if (_iconHero != id)
         {
             _iconHero = id;
@@ -111,17 +124,24 @@ public partial class PlayerCardControl
         {
             var tier = await _tierLoader(id);
             if (IsDisposed || generation != _heroGeneration)
+            {
                 return;
+            }
+
             _currentTier = tier;
             _heroTier.Text = tier.Tier + " · " + tier.Rate;
             _heroTier.ForeColor = AramMetaView.TierColor(tier.Tier);
             foreach (Control c in _championBar.Controls)
+            {
                 _statisticsTips?.SetToolTip(c, tier.Note);
+            }
         }
         catch
         {
             if (!IsDisposed && generation == _heroGeneration)
+            {
                 _heroTier.Text = "梯队暂不可用";
+            }
         }
         async Task LoadIcon()
         {
@@ -138,7 +158,9 @@ public partial class PlayerCardControl
             catch
             {
                 if (CurrentChampionId == id)
+                {
                     _iconHero = 0;
+                }
             }
         }
     }

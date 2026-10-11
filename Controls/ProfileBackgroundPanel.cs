@@ -21,7 +21,10 @@ internal sealed class ProfileBackgroundPanel : Panel
     public static int SelectSkin(JToken? profile, JToken? mastery)
     {
         if (int.TryParse(profile?["backgroundSkinId"]?.ToString(), out int skinId) && skinId > 0)
+        {
             return skinId;
+        }
+
         var champion = ProfileMasteryView.SelectTop(mastery).FirstOrDefault();
         int championId = (int?)champion?["championId"] ?? 0;
         return championId > 0 && championId <= int.MaxValue / 1000 ? championId * 1000 : 0;
@@ -37,7 +40,10 @@ internal sealed class ProfileBackgroundPanel : Panel
             .FirstOrDefault(s => (int?)s["id"] == skinId);
         var path = (string?)skin?["uncenteredSplashPath"];
         if (string.IsNullOrWhiteSpace(path))
+        {
             path = (string?)skin?["splashPath"];
+        }
+
         return path?.StartsWith("/lol-game-data/assets/", StringComparison.OrdinalIgnoreCase) == true ? path : null;
     }
 
@@ -51,33 +57,51 @@ internal sealed class ProfileBackgroundPanel : Panel
         {
             var client = FormMain.Globals.lcuClient.Client;
             if (client == null || string.IsNullOrWhiteSpace(puuid))
+            {
                 return;
+            }
+
             var service = new PlayerStatisticsService(() => client);
             var profile = await service.GetAsync(
                 "/lol-summoner/v1/summoner-profile?puuid=" + Uri.EscapeDataString(puuid),
                 request.Token
             );
             if (IsDisposed || request.IsCancellationRequested)
+            {
                 return;
+            }
+
             int skinId = SelectSkin(profile.Data, null);
             if (skinId == 0)
             {
                 var mastery = await ChampionMasteryService.Shared.GetAsync(puuid, request.Token);
                 if (IsDisposed || request.IsCancellationRequested)
+                {
                     return;
+                }
+
                 skinId = SelectSkin(profile.Data, mastery.Data);
             }
             if (skinId == 0)
+            {
                 return;
+            }
+
             var champion = await service.GetAsync(
                 $"/lol-game-data/assets/v1/champions/{skinId / 1000}.json",
                 request.Token
             );
             if (IsDisposed || request.IsCancellationRequested)
+            {
                 return;
+            }
+
             string? path = FindSplash(champion.Data, skinId);
             if (path == null)
+            {
                 return;
+            }
+
             var image = await new ImageCacheService(client).GetOrDownloadImageAsync(
                 path,
                 "profile-backgrounds",
@@ -109,12 +133,17 @@ internal sealed class ProfileBackgroundPanel : Panel
                 if (child is Label or Panel or PictureBox or RankEmblem)
                 {
                     if (!_colors.ContainsKey(child))
+                    {
                         _colors[child] = (child.BackColor, child.ForeColor, (child as LinkLabel)?.LinkColor);
+                    }
+
                     var colors = _colors[child];
                     child.BackColor = image == null ? colors.background : Color.Transparent;
                     child.ForeColor = image == null ? colors.foreground : Color.WhiteSmoke;
                     if (child is LinkLabel link)
+                    {
                         link.LinkColor = image == null ? colors.link!.Value : Color.White;
+                    }
                 }
                 UpdateColors(child);
             }
@@ -127,7 +156,10 @@ internal sealed class ProfileBackgroundPanel : Panel
     {
         base.OnPaintBackground(e);
         if (_artwork == null || Width <= 0 || Height <= 0)
+        {
             return;
+        }
+
         float scale = Math.Max(Width / (float)_artwork.Width, Height / (float)_artwork.Height);
         e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
         e.Graphics.DrawImage(

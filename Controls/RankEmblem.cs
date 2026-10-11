@@ -48,7 +48,10 @@ public sealed class RankEmblem : Control
     public void SetTier(string tier)
     {
         if (_tier == tier)
+        {
             return;
+        }
+
         _tier = tier;
         _image = null;
         string key = tier.ToLowerInvariant();
@@ -64,7 +67,10 @@ public sealed class RankEmblem : Control
     {
         base.OnPaint(e);
         if (_image == null || _source.IsEmpty || Width <= 0 || Height <= 0)
+        {
             return;
+        }
+
         float scale = Math.Min((float)Width / _source.Width, (float)Height / _source.Height);
         var target = new RectangleF(
             (Width - _source.Width * scale) / 2,
@@ -80,7 +86,10 @@ public sealed class RankEmblem : Control
     {
         // The ten small cached images are shared for the application lifetime.
         if (disposing)
+        {
             _image = null;
+        }
+
         base.Dispose(disposing);
     }
 }

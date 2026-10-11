@@ -147,7 +147,10 @@ internal sealed partial class AramMetaView
     {
         var host = _overviewEquipment!;
         foreach (Control child in host.Controls.Cast<Control>().ToArray())
+        {
             child.Dispose();
+        }
+
         if (_detailData!.Detail == null)
         {
             host.Controls.Add(Text(_detailFailed ? "出装推荐暂不可用，可刷新重试。" : "正在加载出装与召唤师技能…"));
@@ -210,6 +213,7 @@ internal sealed partial class AramMetaView
             }
             var icons = Row(card);
             foreach (int id in entry.Ids)
+            {
                 Icon(
                     icons,
                     null,
@@ -222,6 +226,8 @@ internal sealed partial class AramMetaView
                     "spell",
                     id
                 );
+            }
+
             card.Controls.Add(
                 Text($"胜率 {entry.WinRate:P1} · 使用率 {entry.PickRate:P1}", Color.FromArgb(0, 144, 153))
             );
@@ -293,7 +299,10 @@ internal sealed partial class AramMetaView
             try
             {
                 foreach (Control child in list.Controls.Cast<Control>().ToArray())
+                {
                     child.Dispose();
+                }
+
                 AddStatsRow(list, null, "强化", "调整后胜率", "选取率", "样本量", true);
                 var entries = AramMetaRecommendation
                     .Sort(Recommendations(RarityKeys[_rarity]), _augmentSort)
@@ -316,7 +325,10 @@ internal sealed partial class AramMetaView
                     void Select()
                     {
                         foreach (Control sibling in list.Controls)
+                        {
                             sibling.BackColor = Color.FromArgb(247, 250, 252);
+                        }
+
                         row.BackColor = Color.FromArgb(218, 241, 243);
                         string desc =
                             FormMain.Globals.resLoading.GetAugmentById(entry.Ids[0])?.Description ?? entry.Description;
@@ -331,12 +343,16 @@ internal sealed partial class AramMetaView
                         c.Cursor = Cursors.Hand;
                         c.Click += (_, _) => Select();
                         foreach (Control child in c.Controls)
+                        {
                             Clickable(child);
+                        }
                     }
                     Clickable(row);
                 }
                 if (entries.Length == 0)
+                {
                     list.Controls.Add(Text("没有匹配的强化"));
+                }
             }
             finally
             {
@@ -383,7 +399,10 @@ internal sealed partial class AramMetaView
             try
             {
                 foreach (Control child in later.Controls.Cast<Control>().ToArray())
+                {
                     child.Dispose();
+                }
+
                 if (cores.Length == 0)
                 {
                     later.Controls.Add(Text("暂无装备组合"));
@@ -398,7 +417,9 @@ internal sealed partial class AramMetaView
                     var item in Recommendations("singleItems")
                         .Where(r => r.Ids.All(id => !excluded.Contains(id)) && seen.Add(r.Ids[0]))
                 )
+                {
                     RecommendationRow(later, item);
+                }
             }
             finally
             {
@@ -453,7 +474,9 @@ internal sealed partial class AramMetaView
                 child.MaximumSize = new Size(listWidth, 0);
                 child.Width = listWidth;
                 foreach (var row in child.Controls.OfType<TableLayoutPanel>())
+                {
                     row.Width = Math.Max(510, listWidth - 6);
+                }
             }
             else if (child.Tag is string infoTag && infoTag == "comparison-info")
             {

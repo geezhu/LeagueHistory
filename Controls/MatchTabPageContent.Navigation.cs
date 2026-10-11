@@ -22,7 +22,10 @@ public partial class MatchTabPageContent
     {
         _profileRanks[name] = stats;
         if (Controls.Find(name.Replace("History", "Emblem"), true).FirstOrDefault() is RankEmblem emblem)
+        {
             emblem.SetTier(stats.Tier);
+        }
+
         var highest = _profileRanks.Values.OrderByDescending(rank => rank.HighestTierOrder).First();
         _highestRank.Text = highest.HighestTierOrder > 0 ? highest.HighestTierDisplay : "—";
         if (Controls.Find(name, true).FirstOrDefault() is Label label)
@@ -84,7 +87,10 @@ public partial class MatchTabPageContent
     private void ConfigureCompactMatch(Control? control)
     {
         if (control is not MatchListPanel card)
+        {
             return;
+        }
+
         card.Compact = true;
         card.DetailsClicked -= OpenInlineMatch;
         card.DetailsClicked += OpenInlineMatch;
@@ -97,7 +103,10 @@ public partial class MatchTabPageContent
             .Controls.OfType<MatchListPanel>()
             .FirstOrDefault(c => ReferenceEquals(c.MatchInfo, match));
         if (card == null)
+        {
             return;
+        }
+
         if (card == _selectedCard)
         {
             _pendingDetail?.Dispose();
@@ -122,14 +131,20 @@ public partial class MatchTabPageContent
         {
             System.Diagnostics.Debug.WriteLine($"详情准备失败：{ex.GetType().Name}");
             if (ReferenceEquals(_pendingDetail, next))
+            {
                 _pendingDetail = null;
+            }
+
             next.Dispose();
             return;
         }
         if (IsDisposed || next.IsDisposed || !ReferenceEquals(_pendingDetail, next) || card.IsDisposed)
         {
             if (ReferenceEquals(_pendingDetail, next))
+            {
                 _pendingDetail = null;
+            }
+
             next.Dispose();
             return;
         }
@@ -141,7 +156,10 @@ public partial class MatchTabPageContent
         try
         {
             if (_detailView == null)
+            {
                 _profileHistoryScroll = new Point(0, -flowLayoutPanelRight.AutoScrollPosition.Y);
+            }
+
             if (_selectedCard != null)
             {
                 _selectedCard.SelectedMatch = false;
@@ -159,7 +177,9 @@ public partial class MatchTabPageContent
             _detailView.PlayerProfileRequested += async id =>
             {
                 if (FindForm() is FormMain main)
+                {
                     await main.OpenPlayerProfileAsync(id);
+                }
             };
             _detailView.ReplayRequested += () => card.RequestReplay();
             _detailView.BringToFront();
@@ -195,7 +215,10 @@ public partial class MatchTabPageContent
             }
             _selectedCard = null;
             if (_historySurface == null || _historySurface.IsDisposed)
+            {
                 return;
+            }
+
             _historySurface.Dock = DockStyle.Right;
             _historySurface.Width = 300;
             _contentSurface.Padding = new Padding(0, 0, 12, 0);

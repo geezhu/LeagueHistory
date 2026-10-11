@@ -37,7 +37,9 @@ public sealed partial class ChampionCompositionView
     private void QueueDashboardRefresh()
     {
         if (!_dashboardDisposed && !_refreshTimer.Enabled)
+        {
             _refreshTimer.Start();
+        }
     }
 
     private static readonly (string Title, string Tag, string Note)[] Capabilities =
@@ -54,7 +56,9 @@ public sealed partial class ChampionCompositionView
         {
             _refreshTimer.Stop();
             if (!_dashboardDisposed)
+            {
                 Render();
+            }
         };
         _summary.Height = 78;
         _basic.Controls.Add(_details);
@@ -69,7 +73,9 @@ public sealed partial class ChampionCompositionView
                 _basic.Visible = title != "阵容总览";
                 _overview.Visible = !_basic.Visible;
                 foreach (Button tab in tabs.Controls)
+                {
                     tab.BackColor = tab == button ? Color.FromArgb(0, 126, 142) : Color.FromArgb(16, 45, 57);
+                }
             };
         }
         tabs.Controls[0].BackColor = Color.FromArgb(0, 126, 142);
@@ -156,14 +162,20 @@ public sealed partial class ChampionCompositionView
         _selectedHero = id;
         var row = _grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => (int?)r.Tag == id);
         if (row != null)
+        {
             _grid.CurrentCell = row.Cells[0];
+        }
+
         RenderDashboard();
     }
 
     private void RenderDashboard()
     {
         if (_dashboardDisposed)
+        {
             return;
+        }
+
         if (_renderingDashboard)
         {
             QueueDashboardRefresh();
@@ -173,15 +185,24 @@ public sealed partial class ChampionCompositionView
         var scroll = _overview.AutoScrollPosition;
         var team = Team();
         if (_selectedHero <= 0 || !team.Any(e => e.ChampionId == _selectedHero))
+        {
             _selectedHero = team.FirstOrDefault(e => e.ChampionId > 0)?.ChampionId ?? 0;
+        }
+
         _heroes.SuspendLayout();
         _overview.SuspendLayout();
         try
         {
             foreach (Control control in _heroes.Controls.Cast<Control>().ToArray())
+            {
                 control.Dispose();
+            }
+
             foreach (Control control in _overview.Controls.Cast<Control>().ToArray())
+            {
                 control.Dispose();
+            }
+
             foreach (var entry in team)
             {
                 int id = entry.ChampionId;
@@ -200,7 +221,10 @@ public sealed partial class ChampionCompositionView
                     SizeMode = PictureBoxSizeMode.Zoom,
                 };
                 if (_portraits.TryGetValue(id, out var image))
+                {
                     portrait.Image = image;
+                }
+
                 card.Tag = id;
                 card.Controls.Add(portrait);
                 var name = new Label
@@ -238,14 +262,22 @@ public sealed partial class ChampionCompositionView
                 card.Controls.Add(status);
                 card.Click += (_, _) => SelectHero(id);
                 foreach (Control child in card.Controls)
+                {
                     child.Click += (_, _) => SelectHero(id);
+                }
+
                 _heroes.Controls.Add(card);
                 if (id > 0)
+                {
                     _ = LoadPortraitAsync(id);
+                }
             }
             RenderWeaknesses();
             if ((_replacement.SelectedItem as Choice)?.Id > 0)
+            {
                 RenderSwap();
+            }
+
             int loaded = team.Count(e => _snapshots.ContainsKey(e.ChampionId));
             var coverage = Card(
                 "能力覆盖",
@@ -278,6 +310,7 @@ public sealed partial class ChampionCompositionView
                     group.Controls.Add(button);
                 }
                 if (providers.Length == 0)
+                {
                     group.Controls.Add(
                         new Label
                         {
@@ -286,10 +319,15 @@ public sealed partial class ChampionCompositionView
                             Margin = new Padding(0, 7, 0, 0),
                         }
                     );
+                }
+
                 coverage.Controls.Add(group);
             }
             if (((_replacement.SelectedItem as Choice)?.Id ?? 0) == 0)
+            {
                 RenderSwap();
+            }
+
             var selected = Card(
                 _selectedHero > 0 ? _champion(_selectedHero).Name + " · 能力来源" : "能力来源",
                 "点击英雄切换；技能标签不用于推算控制链、必中概率或实战伤害。"
@@ -354,9 +392,11 @@ public sealed partial class ChampionCompositionView
                 );
             }
             else
+            {
                 selected.Controls.Add(
                     new Label { Text = _errors.GetValueOrDefault(_selectedHero) ?? "等待英雄数据", AutoSize = true }
                 );
+            }
         }
         finally
         {
@@ -373,13 +413,18 @@ public sealed partial class ChampionCompositionView
                 .Where(id => id > 0)
                 .Distinct()
         )
+        {
             _ = LoadSkillsAsync(id);
+        }
     }
 
     private void ResizeDashboard()
     {
         if (_resizingDashboard || _dashboardDisposed)
+        {
             return;
+        }
+
         _resizingDashboard = true;
         _overview.SuspendLayout();
         try
@@ -392,7 +437,9 @@ public sealed partial class ChampionCompositionView
             {
                 hero.Width = heroWidth;
                 foreach (var label in hero.Controls.OfType<Label>().Where(l => !l.AutoSize))
+                {
                     label.Width = heroWidth - 10;
+                }
             }
             int width = Math.Max(280, _overview.ClientSize.Width - 24);
             foreach (Control card in _overview.Controls)
@@ -407,7 +454,9 @@ public sealed partial class ChampionCompositionView
                     {
                         child.MaximumSize = new Size(width - 24, 0);
                         if (child is CompositionRadar)
+                        {
                             child.Width = width - 24;
+                        }
                     }
                 }
                 finally
@@ -434,7 +483,10 @@ public sealed partial class ChampionCompositionView
                 : _champion(original).Name + " → " + _champion(next).Name + "（只预览，不操作客户端）"
         );
         if (next == 0)
+        {
             return;
+        }
+
         if (!_snapshots.ContainsKey(original) || !_snapshots.ContainsKey(next))
         {
             card.Controls.Add(new Label { Text = "等待双方数据后比较", AutoSize = true });
@@ -447,7 +499,10 @@ public sealed partial class ChampionCompositionView
                 Reports()
             )
         )
+        {
             WeaknessLine(card, change, true);
+        }
+
         foreach (var category in Capabilities)
         {
             bool before = Sources(original, category.Tag).Length > 0,
@@ -479,12 +534,18 @@ public sealed partial class ChampionCompositionView
     private async Task LoadPortraitAsync(int id)
     {
         if (FormMain.Globals.resLoading == null || _portraits.ContainsKey(id) || !_portraitLoads.Add(id))
+        {
             return;
+        }
+
         try
         {
             var image = await FormMain.Globals.resLoading.GetChampionIconAsync(id);
             if (image == null)
+            {
                 return;
+            }
+
             if (_dashboardDisposed)
             {
                 image.Dispose();
@@ -492,8 +553,12 @@ public sealed partial class ChampionCompositionView
             }
             _portraits[id] = image;
             foreach (Panel card in _heroes.Controls)
+            {
                 if (card.Tag is int hero && hero == id)
+                {
                     card.Controls.OfType<PictureBox>().First().Image = image;
+                }
+            }
         }
         catch { }
         finally
@@ -506,12 +571,18 @@ public sealed partial class ChampionCompositionView
     {
         var client = FormMain.Globals.lcuClient?.Client;
         if (client == null || _skillRetryAfter.GetValueOrDefault(id) > DateTime.UtcNow || !_skillRequests.Add(id))
+        {
             return;
+        }
+
         try
         {
             var document = JObject.Parse(await client.GetStringAsync($"/lol-game-data/assets/v1/champions/{id}.json"));
             if (_dashboardDisposed || (int?)document["id"] != id)
+            {
                 return;
+            }
+
             var skills = ChampionSelectAssistant.ParseSkills(document);
             _skills[id] = skills;
             QueueDashboardRefresh();
@@ -519,19 +590,29 @@ public sealed partial class ChampionCompositionView
             foreach (var skill in skills.Where(s => !string.IsNullOrWhiteSpace(s.Icon)))
             {
                 if (_skillIcons.ContainsKey(skill.Icon))
+                {
                     continue;
+                }
+
                 using var source = await cache.GetOrDownloadImageAsync(
                     skill.Icon,
                     "champion-abilities",
                     $"{id}-{skill.Key}.png"
                 );
                 if (_dashboardDisposed)
+                {
                     return;
+                }
+
                 if (source != null && !_skillIcons.ContainsKey(skill.Icon))
+                {
                     _skillIcons[skill.Icon] = new Bitmap(source, new Size(28, 28));
+                }
             }
             if (!_dashboardDisposed && _selectedHero == id)
+            {
                 QueueDashboardRefresh();
+            }
         }
         catch
         {
@@ -547,10 +628,16 @@ public sealed partial class ChampionCompositionView
         _refreshTimer.Dispose();
         _abilityTips.Dispose();
         foreach (var icon in _skillIcons.Values)
+        {
             icon.Dispose();
+        }
+
         _skillIcons.Clear();
         foreach (var image in _portraits.Values)
+        {
             image.Dispose();
+        }
+
         _portraits.Clear();
     }
 }

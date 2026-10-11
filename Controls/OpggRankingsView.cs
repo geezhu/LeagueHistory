@@ -69,6 +69,7 @@ internal sealed class OpggRankingsView : UserControl
                 ("劣势对局", 130, 112),
             }
         )
+        {
             _grid.Columns.Add(
                 new DataGridViewTextBoxColumn
                 {
@@ -78,11 +79,15 @@ internal sealed class OpggRankingsView : UserControl
                     SortMode = DataGridViewColumnSortMode.Programmatic,
                 }
             );
+        }
+
         _grid.CellPainting += PaintCell;
         _grid.CellClick += (_, e) =>
         {
             if (e.RowIndex >= 0 && _grid.Rows[e.RowIndex].Tag is OpggTier row)
+            {
                 ChampionRequested?.Invoke(row);
+            }
         };
         _grid.KeyDown += (_, e) =>
         {
@@ -96,7 +101,10 @@ internal sealed class OpggRankingsView : UserControl
         _grid.ColumnHeaderMouseClick += (_, e) =>
         {
             if (e.ColumnIndex == 6)
+            {
                 return;
+            }
+
             _descending = _sortColumn == e.ColumnIndex ? !_descending : e.ColumnIndex is 3 or 4 or 5;
             _sortColumn = e.ColumnIndex;
             FillRows();
@@ -104,11 +112,13 @@ internal sealed class OpggRankingsView : UserControl
         _grid.CellToolTipTextNeeded += (_, e) =>
         {
             if (e.RowIndex >= 0 && _grid.Rows[e.RowIndex].Tag is OpggTier row)
+            {
                 e.ToolTipText =
                     e.ColumnIndex == 6
                         ? "劣势对局："
                             + (row.Counters.Length > 0 ? string.Join("、", row.Counters.Select(Name)) : "暂无数据")
                         : "点击查看 " + Name(row.ChampionId) + " 的攻略";
+            }
         };
         _grid.Cursor = Cursors.Hand;
         Controls.Add(_grid);
@@ -163,15 +173,21 @@ internal sealed class OpggRankingsView : UserControl
             _grid.Rows[index].Tag = row;
         }
         foreach (DataGridViewColumn col in _grid.Columns)
+        {
             col.HeaderCell.SortGlyphDirection =
                 col.Index == _sortColumn ? (_descending ? SortOrder.Descending : SortOrder.Ascending) : SortOrder.None;
+        }
+
         _grid.ClearSelection();
     }
 
     private void PaintCell(object? sender, DataGridViewCellPaintingEventArgs e)
     {
         if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not OpggTier row || e.ColumnIndex is not (1 or 2 or 6))
+        {
             return;
+        }
+
         e.PaintBackground(e.ClipBounds, true);
         var g = e.Graphics!;
         g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -220,6 +236,7 @@ internal sealed class OpggRankingsView : UserControl
             );
         }
         else if (row.Counters.Length == 0)
+        {
             TextRenderer.DrawText(
                 g,
                 "—",
@@ -228,9 +245,15 @@ internal sealed class OpggRankingsView : UserControl
                 Color.Gray,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
             );
+        }
         else
+        {
             for (int i = 0; i < row.Counters.Length; i++)
+            {
                 DrawHero(g, row.Counters[i], new Rectangle(e.CellBounds.X + 8 + i * 30, e.CellBounds.Y + 13, 26, 26));
+            }
+        }
+
         e.Handled = true;
     }
 
@@ -241,7 +264,9 @@ internal sealed class OpggRankingsView : UserControl
         var state = g.Save();
         g.SetClip(path);
         if (_icons.TryGetValue(id, out var icon) && icon != null)
+        {
             g.DrawImage(icon, rect);
+        }
         else
         {
             using var brush = new SolidBrush(Color.FromArgb(219, 229, 241));
@@ -249,7 +274,9 @@ internal sealed class OpggRankingsView : UserControl
         }
         g.Restore(state);
         if (!_icons.ContainsKey(id) && _pending.Add(id))
+        {
             _ = LoadIconAsync(id);
+        }
     }
 
     private async Task LoadIconAsync(int id)
@@ -262,7 +289,10 @@ internal sealed class OpggRankingsView : UserControl
             entered = true;
             var resources = FormMain.Globals.resLoading;
             if (resources != null)
+            {
                 image = await resources.GetChampionIconAsync(id);
+            }
+
             if (IsDisposed)
             {
                 image?.Dispose();
@@ -278,13 +308,17 @@ internal sealed class OpggRankingsView : UserControl
         catch
         {
             if (!IsDisposed)
+            {
                 _icons[id] = null;
+            }
         }
         finally
         {
             _pending.Remove(id);
             if (entered)
+            {
                 _imageGate.Release();
+            }
         }
     }
 
@@ -294,7 +328,10 @@ internal sealed class OpggRankingsView : UserControl
         {
             _lifetime.Cancel();
             foreach (var icon in _icons.Values)
+            {
                 icon?.Dispose();
+            }
+
             _icons.Clear();
         }
         base.Dispose(disposing);

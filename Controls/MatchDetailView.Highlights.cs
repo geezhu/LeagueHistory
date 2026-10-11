@@ -24,7 +24,10 @@ public partial class MatchDetailView
         )
         {
             if (match.AllParticipants.Any(p => p[field]?.Type != JTokenType.Integer))
+            {
                 continue;
+            }
+
             int maximum = match.AllParticipants.Max(p => (int)p[field]!);
             var leaders = match.AllParticipants.Where(p => (int)p[field]! == maximum).ToArray();
             strip.Controls.Add(

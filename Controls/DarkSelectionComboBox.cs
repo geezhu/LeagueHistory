@@ -7,7 +7,10 @@ internal class DarkSelectionComboBox : ComboBox
         base.WndProc(ref message);
         // OwnerDraw only paints the item; replace the native light frame and arrow too.
         if (IsDisposed || Width <= 0 || Height <= 0)
+        {
             return;
+        }
+
         if (message.Msg == 0x000F)
         {
             using var graphics = Graphics.FromHwnd(Handle);

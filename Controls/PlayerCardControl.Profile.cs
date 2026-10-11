@@ -13,27 +13,41 @@ public partial class PlayerCardControl
     private async Task OpenProfileAsync()
     {
         if (CurrentSummonerId <= 0 || IsDisposed)
+        {
             return;
+        }
+
         if (SummaryPanel.FindForm() is FormMain main)
+        {
             await main.OpenPlayerProfileAsync(CurrentSummonerId.ToString());
+        }
     }
 
     public async Task LoadSummonerProfileAsync()
     {
         long summonerId = CurrentSummonerId;
         if (summonerId <= 0)
+        {
             return;
+        }
+
         try
         {
             var profile = await new PlayerMatchDataFetcher().GetGameNameBySummonerIdAsync(summonerId.ToString());
             if (IsDisposed || CurrentSummonerId != summonerId || profile == null)
+            {
                 return;
+            }
+
             int level = profile["summonerLevel"]?.Value<int>() ?? 0;
             _summonerAvatar.SetProfile(null, level);
             int iconId = profile["profileIconId"]?.Value<int>() ?? 0;
             using var image = await Profileicon.GetProfileIconAsync(iconId);
             if (IsDisposed || CurrentSummonerId != summonerId)
+            {
                 return;
+            }
+
             _summonerAvatar.SetProfile(image, level);
         }
         catch (Exception ex)
@@ -78,7 +92,9 @@ public partial class PlayerCardControl
             var state = g.Save();
             g.SetClip(clip);
             if (_image != null)
+            {
                 g.DrawImage(_image, circle);
+            }
             else
             {
                 using var background = new SolidBrush(Color.FromArgb(216, 227, 237));
@@ -89,6 +105,7 @@ public partial class PlayerCardControl
             }
             g.Restore(state);
             if (_level > 0)
+            {
                 TextRenderer.DrawText(
                     g,
                     _level.ToString(),
@@ -98,12 +115,16 @@ public partial class PlayerCardControl
                     BackColor,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
                 );
+            }
         }
 
         protected override void Dispose(bool disposing)
         {
             if (disposing)
+            {
                 _image?.Dispose();
+            }
+
             base.Dispose(disposing);
         }
     }

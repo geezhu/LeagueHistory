@@ -52,7 +52,10 @@ public sealed class CompositionRadar : Control
     {
         base.OnPaint(e);
         if (_axes.Length != 5)
+        {
             return;
+        }
+
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         float unit = Font.Height / 15f;
@@ -74,9 +77,15 @@ public sealed class CompositionRadar : Control
         using var pointBrush = new SolidBrush(accent.Color);
         using var fill = new SolidBrush(Color.FromArgb(48, 45, 208, 203));
         for (int ring = 1; ring <= 4; ring++)
+        {
             g.DrawPolygon(grid, Enumerable.Range(0, 5).Select(i => Point(i, ring / 4f)).ToArray());
+        }
+
         for (int i = 0; i < 5; i++)
+        {
             g.DrawLine(spoke, center, Point(i, 1));
+        }
+
         var values = _axes
             .Select((a, i) => a.Score is double score ? Point(i, (float)Math.Clamp(score / 100, 0, 1)) : (PointF?)null)
             .ToArray();
@@ -87,9 +96,16 @@ public sealed class CompositionRadar : Control
             g.DrawPolygon(accent, polygon);
         }
         else
+        {
             for (int i = 0; i < 5; i++)
+            {
                 if (values[i].HasValue && values[(i + 1) % 5].HasValue)
+                {
                     g.DrawLine(accent, values[i]!.Value, values[(i + 1) % 5]!.Value);
+                }
+            }
+        }
+
         _targets.Clear();
         using var format = new StringFormat
         {
@@ -128,7 +144,10 @@ public sealed class CompositionRadar : Control
     protected override void Dispose(bool disposing)
     {
         if (disposing)
+        {
             _tips.Dispose();
+        }
+
         base.Dispose(disposing);
     }
 }

@@ -31,7 +31,9 @@ internal sealed class TimelineKillMap : Control
                     ? ""
                     : $"{TimelineView.FormatTime(hit.Event.Timestamp)} {hit.Event.Actor} · {hit.Event.Description}";
             if (_tip.GetToolTip(this) != text)
+            {
                 _tip.SetToolTip(this, text);
+            }
         };
     }
 
@@ -44,7 +46,10 @@ internal sealed class TimelineKillMap : Control
             _ => (0d, 0d, 0d, 0d),
         };
         if (bounds.Item3 == 0 || x < bounds.Item1 || x > bounds.Item3 || y < bounds.Item2 || y > bounds.Item4)
+        {
             return null;
+        }
+
         return new PointF(
             (float)((x - bounds.Item1) / (bounds.Item3 - bounds.Item1)),
             1 - (float)((y - bounds.Item2) / (bounds.Item4 - bounds.Item2))

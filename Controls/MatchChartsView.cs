@@ -39,7 +39,10 @@ public sealed class MatchChartsView : UserControl
                 .Metrics.Where(m => players.Any(p => MatchMetricCatalog.Number(p, m.Key).HasValue))
                 .ToArray();
             if (metrics.Length == 0)
+            {
                 continue;
+            }
+
             var group = new CheckBox
             {
                 Text = category.Title,
@@ -72,16 +75,24 @@ public sealed class MatchChartsView : UserControl
         Controls.Add(sidebar);
         var first = _items.FirstOrDefault(i => i.Metric.Key == "totalDamageDealtToChampions");
         if (first.Metric != null)
+        {
             _selection.Set(new[] { first.Metric.Key }, true);
+        }
         else if (_items.Count > 0)
+        {
             _selection.Set(new[] { _items[0].Metric.Key }, true);
+        }
+
         RefreshSelection();
     }
 
     private void UpdateSelection(string[] keys, bool selected, bool group = false)
     {
         if (_updating)
+        {
             return;
+        }
+
         if (!(group ? _selection.SetGroup(keys, selected) : _selection.Set(keys, selected)))
         {
             _selectionTip.Show("最多选择 6 个小项，请先取消部分小项", this, 8, 8, 2500);
@@ -114,7 +125,10 @@ public sealed class MatchChartsView : UserControl
     protected override void Dispose(bool disposing)
     {
         if (disposing)
+        {
             _selectionTip.Dispose();
+        }
+
         base.Dispose(disposing);
     }
 
@@ -181,12 +195,18 @@ public sealed class MatchChartsView : UserControl
         {
             base.OnVisibleChanged(e);
             if (!Visible || _loaded)
+            {
                 return;
+            }
+
             _loaded = true;
             for (int i = 0; i < _players.Length; i++)
             {
                 if (IsDisposed)
+                {
                     return;
+                }
+
                 try
                 {
                     var image = await FormMain.Globals.resLoading.GetChampionIconAsync(
@@ -259,7 +279,10 @@ public sealed class MatchChartsView : UserControl
             {
                 int y = top + i * RowHeight;
                 if (y + RowHeight < 0 || y > ClientSize.Height)
+                {
                     continue;
+                }
+
                 bool blue = (int?)_players[i]["teamId"] == 100;
                 if (_self[i])
                 {
@@ -277,6 +300,7 @@ public sealed class MatchChartsView : UserControl
                     g.Restore(state);
                 }
                 else
+                {
                     TextRenderer.DrawText(
                         g,
                         (i + 1).ToString(),
@@ -285,6 +309,8 @@ public sealed class MatchChartsView : UserControl
                         ForeColor,
                         TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
                     );
+                }
+
                 using var ring = new Pen(blue ? Color.FromArgb(0, 161, 183) : Color.FromArgb(215, 72, 96), 2);
                 g.DrawEllipse(ring, portrait);
                 string player =
@@ -313,10 +339,14 @@ public sealed class MatchChartsView : UserControl
                             )
                         );
                         if (length > 0)
+                        {
                             g.FillRectangle(brush, lane.X, lane.Y, length, 6);
+                        }
                     }
                     else
+                    {
                         TextRenderer.DrawText(g, "—", Font, new Rectangle(lane.X, lane.Y - 4, 20, 16), Color.Gray);
+                    }
                 }
             }
         }
@@ -327,7 +357,9 @@ public sealed class MatchChartsView : UserControl
             {
                 _tip.Dispose();
                 foreach (var image in _images)
+                {
                     image?.Dispose();
+                }
             }
             base.Dispose(disposing);
         }

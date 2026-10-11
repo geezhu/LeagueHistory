@@ -60,6 +60,7 @@ internal sealed class OpggRuneTree : Control
                 int size = row == 0 ? 36 : 28,
                     step = row == 0 ? 39 : 38;
                 for (int col = 0; col < ids.Length; col++)
+                {
                     Add(
                         ids[col],
                         (166 - ids.Length * step) / 2 + col * step,
@@ -67,29 +68,42 @@ internal sealed class OpggRuneTree : Control
                         size,
                         IsSelected(plan, ids[col])
                     );
+                }
             }
             for (int row = 1; row < Math.Min(4, secondary.Slots.Length); row++)
             {
                 var ids = secondary.Slots[row];
                 for (int col = 0; col < ids.Length; col++)
+                {
                     Add(ids[col], 190 + col * 36, 46 + row * 40, 28, IsSelected(plan, ids[col]));
+                }
             }
             for (int row = 0; row < Math.Min(3, primary.Slots.Length - 4); row++)
-            for (int col = 0; col < primary.Slots[row + 4].Length; col++)
             {
-                int id = primary.Slots[row + 4][col];
-                Add(id, 314 + col * 33, 88 + row * 40, 24, IsSelected(plan, id, row));
+                for (int col = 0; col < primary.Slots[row + 4].Length; col++)
+                {
+                    int id = primary.Slots[row + 4][col];
+                    Add(id, 314 + col * 33, 88 + row * 40, 24, IsSelected(plan, id, row));
+                }
             }
         }
         else
+        {
             for (int i = 0; i < plan.Perks.Length; i++)
+            {
                 Add(plan.Perks[i], 20 + (i % 5) * 60, 65 + (i / 5) * 50, 32, true);
+            }
+        }
+
         Invalidate();
         foreach (var node in _nodes.ToArray())
         {
             token.ThrowIfCancellationRequested();
             if (resources == null || _images.ContainsKey(node.Id))
+            {
                 continue;
+            }
+
             var task = resources.GetIconAsync(node.Path);
             Image? image;
             try
@@ -102,7 +116,9 @@ internal sealed class OpggRuneTree : Control
                     t =>
                     {
                         if (t.Status == TaskStatus.RanToCompletion)
+                        {
                             t.Result?.Dispose();
+                        }
                     },
                     TaskScheduler.Default
                 );
@@ -124,7 +140,10 @@ internal sealed class OpggRuneTree : Control
         base.OnPaint(e);
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         if (_notice != null)
+        {
             TextRenderer.DrawText(e.Graphics, _notice, Font, new Rectangle(8, 8, 400, 35), Color.SlateGray);
+        }
+
         foreach (var node in _nodes)
         {
             var rect = node.Bounds;
@@ -159,7 +178,10 @@ internal sealed class OpggRuneTree : Control
         base.OnMouseMove(e);
         int index = _nodes.FindIndex(n => n.Bounds.Contains(e.Location));
         if (index == _hover)
+        {
             return;
+        }
+
         _hover = index;
         _tips.SetToolTip(this, index < 0 ? null : TooltipText.Format(_nodes[index].Name, _nodes[index].Description));
     }
@@ -170,7 +192,10 @@ internal sealed class OpggRuneTree : Control
         {
             _tips.Dispose();
             foreach (var image in _images.Values)
+            {
                 image?.Dispose();
+            }
+
             _images.Clear();
         }
         base.Dispose(disposing);

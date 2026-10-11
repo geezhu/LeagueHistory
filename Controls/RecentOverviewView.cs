@@ -26,7 +26,9 @@ internal sealed class RecentOverviewView : Control
         {
             var text = _hits.FirstOrDefault(h => h.bounds.Contains(e.Location)).text ?? _status;
             if (_tip.GetToolTip(this) != text)
+            {
                 _tip.SetToolTip(this, text);
+            }
         };
     }
 
@@ -58,7 +60,10 @@ internal sealed class RecentOverviewView : Control
         {
             int size = (int)Math.Min(108, cell - 10);
             if (size < 35)
+            {
                 continue;
+            }
+
             int x = 12 + (int)((i % columns) * cell + (cell - size) / 2),
                 y = 46 + (i / columns) * 124;
             var rect = new Rectangle(x, y, size, size);
@@ -117,7 +122,10 @@ internal sealed class RecentOverviewView : Control
                 );
             }
             else
+            {
                 Text($"{_data.Modes[i - 1].Games} 场", Font, size * 3 / 4, 21);
+            }
+
             string kdaSource = _data.UsesAramKda
                 ? "无匹配/排位场次，使用极地大乱斗和海克斯大乱斗（紫色）"
                 : "优先使用匹配、单双排和灵活排位（金色）";
@@ -135,7 +143,10 @@ internal sealed class RecentOverviewView : Control
     protected override void Dispose(bool disposing)
     {
         if (disposing)
+        {
             _tip.Dispose();
+        }
+
         base.Dispose(disposing);
     }
 }

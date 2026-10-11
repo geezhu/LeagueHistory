@@ -84,54 +84,80 @@ public sealed class MatchStatisticsView : UserControl
                     player["riotIdGameName"]?.ToString() ?? player["summonerName"]?.ToString() ?? $"玩家 {i + 1}",
             };
             if (self)
+            {
                 column.DefaultCellStyle = new DataGridViewCellStyle
                 {
                     BackColor = Color.FromArgb(232, 241, 253),
                     ForeColor = Color.FromArgb(46, 103, 190),
                     Font = _bold,
                 };
+            }
+
             if (i > 0 && !JToken.DeepEquals(player["teamId"], _players[i - 1]["teamId"]))
+            {
                 _grid.Columns[i].DividerWidth = 6;
+            }
+
             _grid.Columns.Add(column);
         }
         void Group(string name, params (string Title, string Key)[] metrics)
         {
             var available = metrics.Where(m => _players.Any(p => Value(p, m.Key) != "—")).ToArray();
             if (available.Length == 0)
+            {
                 return;
+            }
+
             int start = _grid.Rows.Add("▾  " + name);
             var group = _grid.Rows[start];
             group.Tag = name;
             group.DefaultCellStyle.BackColor = Color.FromArgb(232, 239, 248);
             group.DefaultCellStyle.Font = _bold;
             foreach (var metric in available)
+            {
                 _grid.Rows.Add(
                     new object[] { metric.Title }
                         .Concat(_players.Select(p => (object)Value(p, metric.Key)))
                         .ToArray()
                 );
+            }
         }
         foreach (var category in MatchMetricCatalog.Categories)
+        {
             Group(category.Title, category.Metrics.Select(m => (m.Title, m.Key)).ToArray());
+        }
+
         _grid.CellClick += (_, e) =>
         {
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not string name)
+            {
                 return;
+            }
+
             int next = e.RowIndex + 1;
             if (next >= _grid.Rows.Count)
+            {
                 return;
+            }
+
             bool show = !_grid.Rows[next].Visible;
             _grid.CurrentCell = _grid.Rows[e.RowIndex].Cells[0];
             _grid.SuspendLayout();
             for (int r = next; r < _grid.Rows.Count && _grid.Rows[r].Tag == null; r++)
+            {
                 _grid.Rows[r].Visible = show;
+            }
+
             _grid.Rows[e.RowIndex].Cells[0].Value = (show ? "▾  " : "▸  ") + name;
             _grid.ResumeLayout();
         };
         _grid.CellPainting += (_, e) =>
         {
             if (e.RowIndex != -1 || e.ColumnIndex <= 0)
+            {
                 return;
+            }
+
             e.PaintBackground(e.ClipBounds, false);
             var box = new Rectangle(e.CellBounds.Left + (e.CellBounds.Width - 34) / 2, e.CellBounds.Top + 7, 34, 34);
             if (_headers.TryGetValue(e.ColumnIndex, out var image))
@@ -165,8 +191,12 @@ public sealed class MatchStatisticsView : UserControl
         {
             int width = Math.Max(76, (_grid.ClientSize.Width - 210) / Math.Max(1, _players.Length));
             foreach (DataGridViewColumn column in _grid.Columns)
+            {
                 if (column.Index > 0)
+                {
                     column.Width = width;
+                }
+            }
         };
     }
 
@@ -174,9 +204,12 @@ public sealed class MatchStatisticsView : UserControl
     {
         var data = player["stats"] as JObject ?? player;
         if (key == "kda")
+        {
             return new[] { "kills", "deaths", "assists" }.All(k => data[k]?.Type == JTokenType.Integer)
                 ? $"{data["kills"]}/{data["deaths"]}/{data["assists"]}"
                 : "—";
+        }
+
         return data[key]?.Type switch
         {
             JTokenType.Boolean => (bool)data[key]! ? "●" : "○",
@@ -189,12 +222,18 @@ public sealed class MatchStatisticsView : UserControl
     {
         base.OnLoad(e);
         if (_loaded)
+        {
             return;
+        }
+
         _loaded = true;
         for (int i = 0; i < _players.Length; i++)
         {
             if (IsDisposed)
+            {
                 return;
+            }
+
             try
             {
                 var image = await FormMain.Globals.resLoading.GetChampionIconAsync(
@@ -224,7 +263,10 @@ public sealed class MatchStatisticsView : UserControl
         if (disposing)
         {
             foreach (var image in _portraits)
+            {
                 image.Dispose();
+            }
+
             _portraits.Clear();
             _bold.Dispose();
         }

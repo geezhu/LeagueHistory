@@ -65,7 +65,9 @@ internal sealed class TeamSummaryHeader : Control
             $"全队累计获得金币：{Count(_summary.Gold)}"
         );
         foreach (var objective in _summary.Objectives)
+        {
             Metric(objective.Key, Count(objective.Count), objective.Name + "：" + Count(objective.Count));
+        }
     }
 
     private static void DrawIcon(Graphics g, Pen p, string kind, Rectangle r)
@@ -103,6 +105,7 @@ internal sealed class TeamSummaryHeader : Control
             g.DrawLine(p, x + 7, y, x + 7, y + 4);
         }
         else if (kind == "inhibitor")
+        {
             g.DrawPolygon(
                 p,
                 new[]
@@ -113,6 +116,7 @@ internal sealed class TeamSummaryHeader : Control
                     new Point(x + 1, y + 7),
                 }
             );
+        }
         else
         {
             g.DrawPolygon(
@@ -130,9 +134,13 @@ internal sealed class TeamSummaryHeader : Control
                 }
             );
             if (kind == "dragon")
+            {
                 g.DrawLine(p, x, y + 7, x + 14, y + 7);
+            }
             else if (kind == "riftHerald")
+            {
                 g.DrawEllipse(p, x + 5, y + 6, 4, 4);
+            }
             else
             {
                 g.DrawLine(p, x + 4, y + 7, x + 5, y + 9);
@@ -146,7 +154,10 @@ internal sealed class TeamSummaryHeader : Control
         base.OnMouseMove(e);
         var tip = _targets.FirstOrDefault(t => t.Bounds.Contains(e.Location)).Tip;
         if (tip == _currentTip)
+        {
             return;
+        }
+
         _currentTip = tip;
         _tips.SetToolTip(this, tip);
     }

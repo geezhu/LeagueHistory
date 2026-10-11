@@ -24,14 +24,19 @@ public sealed class PlayerNameLink : LinkLabel
     {
         base.OnLinkClicked(e);
         if (!string.IsNullOrWhiteSpace(SummonerId) && SummonerId != "0")
+        {
             ProfileRequested?.Invoke(SummonerId);
+        }
     }
 
     protected override async void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
         if (_loaded)
+        {
             return;
+        }
+
         _loaded = true;
         Text = PlayerName;
         bool canNavigate = !string.IsNullOrWhiteSpace(SummonerId) && SummonerId != "0";
@@ -42,15 +47,24 @@ public sealed class PlayerNameLink : LinkLabel
             return;
         }
         if (ResolveProfile == null)
+        {
             return;
+        }
+
         try
         {
             var profile = await ResolveProfile(SummonerId);
             if (IsDisposed || Disposing)
+            {
                 return;
+            }
+
             League.UIHelpers.PlayerNamePresentation.Apply(this, PlayerName, PlayerPrivacy.IsPublic(profile));
             foreach (Label badge in Controls.OfType<Label>())
+            {
                 badge.Click += (_, _) => ProfileRequested?.Invoke(SummonerId);
+            }
+
             AccessibleDescription = $"{PlayerName}，隐私：{PlayerPrivacy.Describe(profile)}，点击查看主页";
         }
         catch (Exception ex)

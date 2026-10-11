@@ -17,7 +17,10 @@ internal sealed class IdentityIcon : Label
     {
         float size = Math.Min(Math.Min(Width - 6, Height - 6), Font.Height * .68f);
         if (size <= 0)
+        {
             return;
+        }
+
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         float x = (Width - size) / 2,
@@ -45,7 +48,9 @@ internal sealed class IdentityIcon : Label
             g.DrawLine(pen, x + size * .5f, y + size * .55f, x + size * .5f, y + size * .75f);
         }
         if (Focused && IsCopy)
+        {
             ControlPaint.DrawFocusRectangle(g, ClientRectangle);
+        }
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

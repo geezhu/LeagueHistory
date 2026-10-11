@@ -40,7 +40,10 @@ internal sealed partial class OpggView
         var top = Inline(summary);
         await AddIconAsync(top, build.Query.ChampionId, "champion", token);
         if (top.Controls.OfType<PictureBox>().FirstOrDefault() is { } hero)
+        {
             hero.Size = new Size(52, 52);
+        }
+
         var stats = build.Stats;
         double? win = (double?)stats["win_rate"] ?? OpggBuild.Ratio(stats["win"], stats["play"]);
         top.Controls.Add(TextLabel($"胜率\n{Percent(win)}", Color.FromArgb(0, 148, 165)));
@@ -49,14 +52,19 @@ internal sealed partial class OpggView
         top.Controls.Add(TextLabel($"梯队\nT{stats["tier_data"]?["tier"] ?? stats["tier"]}"));
         top.Controls.Add(TextLabel($"统计场次\n{stats["play"]?.ToString() ?? "—"}"));
         if (build.Query.Mode == "arena")
+        {
             top.Controls.Add(
                 TextLabel(
                     $"第一名 {Percent(OpggBuild.Ratio(stats["first_place"], stats["play"]))}\n平均名次 {OpggBuild.Ratio(stats["total_place"], stats["play"]):0.00}"
                 )
             );
+        }
 
         if (build.Query.Mode != "arena")
+        {
             await RenderOptionsAsync(Section("召唤师技能"), build.Data["summoner_spells"], "spell", 2, token);
+        }
+
         await RenderRunesAsync(build, token);
 
         RenderSkills(build);
@@ -70,7 +78,10 @@ internal sealed partial class OpggView
                 .Select(o => (int?)o["ids"]?.First ?? 0)
                 .Where(id => id > 0)
         )
+        {
             await AddIconAsync(strip, id, "item", token);
+        }
+
         await RenderOptionsAsync(Section("核心装备组合"), build.Data["core_items"], "item", 5, token);
         await RenderMatchupsAsync(build, token);
         if (build.Query.Mode == "arena")
@@ -88,15 +99,17 @@ internal sealed partial class OpggView
             }
             var augments = Section("竞技场强化符文");
             foreach (var group in (build.Data["augment_group"] as JArray ?? new()).OfType<JObject>())
-            foreach (var aug in (group["augments"] as JArray ?? new()).OfType<JObject>().Take(5))
             {
-                var row = Inline(augments);
-                await AddIconAsync(row, (int?)aug["id"] ?? 0, "augment", token);
-                row.Controls.Add(
-                    TextLabel(
-                        $"胜率 {Percent(OpggBuild.Ratio(aug["win"], aug["play"]))} · 第一名 {Percent(OpggBuild.Ratio(aug["first_place"], aug["play"]))}"
-                    )
-                );
+                foreach (var aug in (group["augments"] as JArray ?? new()).OfType<JObject>().Take(5))
+                {
+                    var row = Inline(augments);
+                    await AddIconAsync(row, (int?)aug["id"] ?? 0, "augment", token);
+                    row.Controls.Add(
+                        TextLabel(
+                            $"胜率 {Percent(OpggBuild.Ratio(aug["win"], aug["play"]))} · 第一名 {Percent(OpggBuild.Ratio(aug["first_place"], aug["play"]))}"
+                        )
+                    );
+                }
             }
         }
     }
@@ -111,13 +124,19 @@ internal sealed partial class OpggView
     {
         var options = (data as JArray ?? new()).OfType<JObject>().Take(limit).ToArray();
         if (options.Length == 0)
+        {
             section.Controls.Add(TextLabel("暂无数据"));
+        }
+
         foreach (var option in options)
         {
             token.ThrowIfCancellationRequested();
             var row = Inline(section);
             foreach (var id in (option["ids"] as JArray ?? new()).Values<int>())
+            {
                 await AddIconAsync(row, id, kind, token);
+            }
+
             token.ThrowIfCancellationRequested();
             row.Controls.Add(
                 TextLabel(
@@ -188,7 +207,10 @@ internal sealed partial class OpggView
                     return;
                 }
                 foreach (Control old in preview.Controls.Cast<Control>().ToArray())
+                {
                     old.Dispose();
+                }
+
                 preview.Controls.Add(tree);
                 apply.Enabled = !applying;
             }
@@ -196,7 +218,9 @@ internal sealed partial class OpggView
             {
                 tree.Dispose();
                 if (!token.IsCancellationRequested)
+                {
                     throw;
+                }
             }
         }
         for (int i = 0; i < plans.Length; i++)
@@ -227,7 +251,9 @@ internal sealed partial class OpggView
                         t =>
                         {
                             if (t.Status == TaskStatus.RanToCompletion)
+                            {
                                 t.Result.image?.Dispose();
+                            }
                         },
                         TaskScheduler.Default
                     );
@@ -238,7 +264,10 @@ internal sealed partial class OpggView
             button.Paint += (_, e) =>
             {
                 if (icon != null)
+                {
                     e.Graphics.DrawImage(icon, new Rectangle(8, 11, 32, 32));
+                }
+
                 TextRenderer.DrawText(
                     e.Graphics,
                     Percent(plan.WinRate),
@@ -274,7 +303,9 @@ internal sealed partial class OpggView
                 catch (Exception ex)
                 {
                     if (!IsDisposed)
+                    {
                         _status.Text = "符文预览加载失败：" + ex.Message;
+                    }
                 }
             };
             buttons.Add(button);
@@ -284,12 +315,18 @@ internal sealed partial class OpggView
         apply.Click += async (_, _) =>
         {
             if (_displayed != build || applying)
+            {
                 return;
+            }
+
             var runes = plans[selected];
             applying = true;
             apply.Enabled = false;
             foreach (var button in buttons)
+            {
                 button.Enabled = false;
+            }
+
             try
             {
                 var client =
@@ -299,25 +336,36 @@ internal sealed partial class OpggView
                 timeout.CancelAfter(TimeSpan.FromSeconds(10));
                 await OpggRuneService.ApplyAsync(client, runes, ChampionName(build.Query.ChampionId), timeout.Token);
                 if (!apply.IsDisposed)
+                {
                     apply.Text = "已应用到工具专用符文页";
+                }
             }
             catch (Exception ex)
             {
                 if (!IsDisposed && !token.IsCancellationRequested)
+                {
                     MessageBox.Show(
                         FindForm(),
                         ex is OperationCanceledException ? "请求超时，请在客户端确认是否生效。" : ex.Message,
                         "应用符文"
                     );
+                }
             }
             finally
             {
                 applying = false;
                 if (!apply.IsDisposed)
+                {
                     apply.Enabled = true;
+                }
+
                 foreach (var button in buttons)
+                {
                     if (!button.IsDisposed)
+                    {
                         button.Enabled = true;
+                    }
+                }
             }
         };
         await SelectPlan(0);
