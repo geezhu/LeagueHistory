@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using League.Clients;
 using League.Models;
@@ -9,6 +9,10 @@ namespace League;
 
 internal sealed partial class ChampionSelectAssistant : Form
 {
+    private readonly HashSet<Task> _assistantWork = new();
+    private Task _cleanupWork = Task.CompletedTask;
+    private bool _closing;
+    private Font? _assistantFont;
     private readonly FormMain _owner;
     private readonly AssistantWindowLayer _windowLayer;
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 750 };
@@ -85,9 +89,29 @@ internal sealed partial class ChampionSelectAssistant : Form
         DoubleBuffered = true;
         BackColor = Color.FromArgb(8, 29, 40);
         ForeColor = Color.FromArgb(215, 225, 226);
-        Font = new Font("Microsoft YaHei UI", 9);
+        Font = _assistantFont = new Font("Microsoft YaHei UI", 9);
         ClientSize = new Size(320, 590);
         _status.ForeColor = Color.FromArgb(135, 162, 173);
+        var toolbar = CreateAssistantToolbar();
+        var (footer, guide, retry) = CreateAssistantFooter();
+        var statusBar = CreateAssistantStatusBar();
+        Controls.Add(_body);
+        Controls.Add(statusBar);
+        Controls.Add(toolbar);
+        Controls.Add(footer);
+        StyleAssistantButtons(toolbar, footer);
+        BindAssistantFilters();
+        BindAssistantFold(toolbar, statusBar, footer);
+        BindAssistantActions(guide, retry);
+        BindAssistantClosing();
+        ResizeBegin += (_, _) => _moving = true;
+        ResizeEnd += (_, _) => _moving = false;
+        _timer.Tick += async (_, _) => await TickAsync();
+        _timer.Start();
+    }
+
+    private FlowLayoutPanel CreateAssistantToolbar()
+    {
         var toolbar = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
@@ -104,6 +128,11 @@ internal sealed partial class ChampionSelectAssistant : Form
         toolbar.SetFlowBreak(_mode, true);
         _lane.Items.AddRange(new object[] { "自动分路", "上路", "打野", "中路", "下路", "辅助" });
         _lane.SelectedIndex = 0;
+        return toolbar;
+    }
+
+    private (FlowLayoutPanel Footer, Button Guide, Button Retry) CreateAssistantFooter()
+    {
         var footer = new FlowLayoutPanel
         {
             Dock = DockStyle.Bottom,
@@ -122,7 +151,12 @@ internal sealed partial class ChampionSelectAssistant : Form
         }
 
         _tips.SetToolTip(_voiceButton, "中文录音后编辑确认，直接发送到选人聊天；也可以手动输入。");
-        _voiceButton.Click += async (_, _) => await ShowVoiceInputAsync();
+        _voiceButton.Click += async (_, _) => await TrackAssistantWork(ShowVoiceInputAsync());
+        return (footer, guide, retry);
+    }
+
+    private Panel CreateAssistantStatusBar()
+    {
         var statusBar = new Panel { Dock = DockStyle.Top, Height = 26 };
         _status.Dock = DockStyle.Fill;
         _status.AutoEllipsis = true;
@@ -134,10 +168,11 @@ internal sealed partial class ChampionSelectAssistant : Form
         _rosterButton.Click += (_, _) => ShowRoster();
         statusBar.Controls.Add(_status);
         statusBar.Controls.Add(_rosterButton);
-        Controls.Add(_body);
-        Controls.Add(statusBar);
-        Controls.Add(toolbar);
-        Controls.Add(footer);
+        return statusBar;
+    }
+
+    private void StyleAssistantButtons(FlowLayoutPanel toolbar, FlowLayoutPanel footer)
+    {
         foreach (var button in toolbar.Controls.OfType<Button>().Concat(footer.Controls.OfType<Button>()))
         {
             button.FlatStyle = FlatStyle.Flat;
@@ -146,6 +181,10 @@ internal sealed partial class ChampionSelectAssistant : Form
             button.ForeColor = Color.FromArgb(220, 230, 226);
         }
         _apply.BackColor = Color.FromArgb(0, 126, 139);
+    }
+
+    private void BindAssistantFilters()
+    {
         foreach (var box in new[] { _mode, _region, _tier, _lane })
         {
             box.BackColor = Color.FromArgb(16, 45, 57);
@@ -167,6 +206,10 @@ internal sealed partial class ChampionSelectAssistant : Form
         _tips.SetToolTip(_mode, "默认跟随选人模式，也可以手动切换攻略模式。英雄仍自动跟随当前选人。");
         _tips.SetToolTip(_region, "OP.GG 统计地区，与登录账号大区无关。");
         _tips.SetToolTip(_tier, "统计段位；各模式分别保留选择。");
+    }
+
+    private void BindAssistantFold(FlowLayoutPanel toolbar, Panel statusBar, FlowLayoutPanel footer)
+    {
         _fold.Click += (_, _) =>
         {
             _collapsed = !_collapsed;
@@ -184,6 +227,10 @@ internal sealed partial class ChampionSelectAssistant : Form
             Height = _collapsed ? 84 : 630;
             SyncFilters();
         };
+    }
+
+    private void BindAssistantActions(Button guide, Button retry)
+    {
         guide.Click += (_, _) =>
         {
             if (_hero > 0)
@@ -203,7 +250,11 @@ internal sealed partial class ChampionSelectAssistant : Form
                 _ = LoadHeroAsync();
             }
         };
-        _apply.Click += async (_, _) => await ApplyAsync();
+        _apply.Click += async (_, _) => await TrackAssistantWork(ApplyAsync());
+    }
+
+    private void BindAssistantClosing()
+    {
         FormClosing += (_, e) =>
         {
             if (e.CloseReason == CloseReason.UserClosing)
@@ -215,10 +266,6 @@ internal sealed partial class ChampionSelectAssistant : Form
                 }
             }
         };
-        ResizeBegin += (_, _) => _moving = true;
-        ResizeEnd += (_, _) => _moving = false;
-        _timer.Tick += async (_, _) => await TickAsync();
-        _timer.Start();
     }
 
     internal static Rectangle Placement(Rectangle client, Rectangle screen, Size size)
@@ -322,8 +369,14 @@ internal sealed partial class ChampionSelectAssistant : Form
         }
     }
 
-    private async Task TickAsync()
+    private Task TickAsync() => TrackAssistantWork(PollChampionSessionAsync());
+
+    private async Task PollChampionSessionAsync()
     {
+        if (_closing)
+        {
+            return;
+        }
         if (!(_owner.GetAppConfig()?.EnableChampionSelectAssistant ?? false))
         {
             Reset();
@@ -342,94 +395,29 @@ internal sealed partial class ChampionSelectAssistant : Form
             return;
         }
         _busy = true;
-        _poll?.Dispose();
-        _poll = new(TimeSpan.FromSeconds(3));
+        RetireAssistantSource(_poll);
+        var request = _poll = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        var token = request.Token;
         try
         {
-            var phase = (await client.GetStringAsync("/lol-gameflow/v1/gameflow-phase", _poll.Token)).Trim('"');
+            var phase = (await client.GetStringAsync("/lol-gameflow/v1/gameflow-phase", token)).Trim('"');
+            if (_closing || token.IsCancellationRequested)
+            {
+                return;
+            }
             if (phase != "ChampSelect")
             {
                 Reset();
                 return;
             }
-            var flow = JObject.Parse(await client.GetStringAsync("/lol-gameflow/v1/session", _poll.Token));
-            var session = JObject.Parse(await client.GetStringAsync("/lol-champ-select/v1/session", _poll.Token));
+            var flow = JObject.Parse(await client.GetStringAsync("/lol-gameflow/v1/session", token));
+            var session = JObject.Parse(await client.GetStringAsync("/lol-champ-select/v1/session", token));
             if (IsDisposed)
             {
                 return;
             }
 
-            _pollFailures = 0;
-            _lastSessionRead = Environment.TickCount64;
-            _selecting = true;
-            _voiceButton.Enabled = !_openingVoice;
-            int queue = (int?)flow["gameData"]?["queue"]?["id"] ?? 0;
-            _queue = queue;
-            UpdateRoster(session, queue);
-            var own = (session["myTeam"] as JArray)
-                ?.OfType<JObject>()
-                .FirstOrDefault(p => (int?)p["cellId"] == (int?)session["localPlayerCellId"]);
-            _masteryPuuid = (string?)own?["puuid"] ?? "";
-            if (string.IsNullOrWhiteSpace(_masteryPuuid) || _masteryPuuid == Guid.Empty.ToString())
-            {
-                _masteryPuuid = _owner.GetCurrentPuuid() ?? "";
-            }
-
-            int hero = (int?)own?["championId"] ?? 0;
-            if (hero <= 0)
-            {
-                hero = (session["actions"] as JArray ?? new())
-                    .OfType<JArray>()
-                    .SelectMany(a => a.OfType<JObject>())
-                    .Where(a =>
-                        (int?)a["actorCellId"] == (int?)session["localPlayerCellId"] && (string?)a["type"] == "pick"
-                    )
-                    .Select(a => (int?)a["championId"] ?? 0)
-                    .LastOrDefault(id => id > 0);
-            }
-
-            if (hero <= 0)
-            {
-                if (_hero != 0)
-                {
-                    _load?.Cancel();
-                    _hero = 0;
-                    _key = "";
-                    _runes = null;
-                    _apply.Enabled = false;
-                    ClearBody();
-                }
-                _status.Text = "等待选择英雄…";
-                PositionWindow();
-                return;
-            }
-            string? lane = ((string?)own?["assignedPosition"])?.ToLowerInvariant() switch
-            {
-                "middle" => "mid",
-                "bottom" => "adc",
-                "utility" => "support",
-                "top" => "top",
-                "jungle" => "jungle",
-                _ => null,
-            };
-            string key = $"{_masteryPuuid}:{hero}:{queue}:{lane}";
-            if (key != _key)
-            {
-                bool differentHero = hero != _hero;
-                _hero = hero;
-                _queue = queue;
-                _position = lane;
-                _key = key;
-                if (differentHero)
-                {
-                    _syncing = true;
-                    _lane.SelectedIndex = 0;
-                    _syncing = false;
-                }
-                _ = LoadHeroAsync();
-            }
-            _ = RefreshMastery();
-            PositionWindow();
+            ApplyChampionSession(flow, session);
         }
         catch (Exception ex)
         {
@@ -446,13 +434,100 @@ internal sealed partial class ChampionSelectAssistant : Form
         }
     }
 
+    private void ApplyChampionSession(JObject flow, JObject session)
+    {
+        _pollFailures = 0;
+        _lastSessionRead = Environment.TickCount64;
+        _selecting = true;
+        _voiceButton.Enabled = !_openingVoice;
+        int queue = (int?)flow["gameData"]?["queue"]?["id"] ?? 0;
+        _queue = queue;
+        UpdateRoster(session, queue);
+        var own = (session["myTeam"] as JArray)
+            ?.OfType<JObject>()
+            .FirstOrDefault(p => (int?)p["cellId"] == (int?)session["localPlayerCellId"]);
+        _masteryPuuid = (string?)own?["puuid"] ?? "";
+        if (string.IsNullOrWhiteSpace(_masteryPuuid) || _masteryPuuid == Guid.Empty.ToString())
+        {
+            _masteryPuuid = _owner.GetCurrentPuuid() ?? "";
+        }
+
+        int hero = SelectedChampion(session, own);
+        if (hero <= 0)
+        {
+            if (_hero != 0)
+            {
+                CancelHeroRequest();
+                _hero = 0;
+                _key = "";
+                _runes = null;
+                _apply.Enabled = false;
+                ClearBody();
+            }
+            _status.Text = "等待选择英雄…";
+            PositionWindow();
+            return;
+        }
+        string? lane = ((string?)own?["assignedPosition"])?.ToLowerInvariant() switch
+        {
+            "middle" => "mid",
+            "bottom" => "adc",
+            "utility" => "support",
+            "top" => "top",
+            "jungle" => "jungle",
+            _ => null,
+        };
+        string key = $"{_masteryPuuid}:{hero}:{queue}:{lane}";
+        if (key != _key)
+        {
+            bool differentHero = hero != _hero;
+            _hero = hero;
+            _queue = queue;
+            _position = lane;
+            _key = key;
+            if (differentHero)
+            {
+                _syncing = true;
+                try
+                {
+                    _lane.SelectedIndex = 0;
+                }
+                finally
+                {
+                    _syncing = false;
+                }
+            }
+            _ = LoadHeroAsync();
+        }
+        TrackAssistantWork(RefreshMastery());
+        PositionWindow();
+    }
+
+    private static int SelectedChampion(JObject session, JObject? own)
+    {
+        int hero = (int?)own?["championId"] ?? 0;
+        if (hero <= 0)
+        {
+            hero = (session["actions"] as JArray ?? new())
+                .OfType<JArray>()
+                .SelectMany(a => a.OfType<JObject>())
+                .Where(a =>
+                    (int?)a["actorCellId"] == (int?)session["localPlayerCellId"] && (string?)a["type"] == "pick"
+                )
+                .Select(a => (int?)a["championId"] ?? 0)
+                .LastOrDefault(id => id > 0);
+        }
+
+        return hero;
+    }
+
     private void Reset()
     {
         _selecting = false;
         CloseVoiceInput();
         _key = "";
         _hero = 0;
-        _load?.Cancel();
+        CancelHeroRequest();
         _runes = null;
         _apply.Enabled = false;
         ClearRoster();
@@ -488,98 +563,47 @@ internal sealed partial class ChampionSelectAssistant : Form
             }
         );
 
-    private async Task LoadHeroAsync()
+    private Task LoadHeroAsync() => TrackAssistantWork(LoadHeroRecommendationsAsync());
+
+    private async Task LoadHeroRecommendationsAsync()
     {
-        _load?.Cancel();
-        _load?.Dispose();
+        if (_closing)
+        {
+            return;
+        }
+        RetireAssistantSource(_load);
         var request = _load = new CancellationTokenSource();
-        int hero = _hero,
-            queue = _queue;
+        int hero = _hero;
         var token = request.Token;
         _runes = null;
         _runeChoice = 0;
         _apply.Text = "应用符文";
         _apply.Enabled = false;
         ClearBody();
-        var name = FormMain.Globals.resLoading?.GetChampionById(hero)?.Name ?? $"英雄 {hero}";
         _status.Text = "正在加载推荐…";
         SyncFilters();
         string mode = SelectedMode;
         try
         {
-            _ = LoadSkillsAsync(hero, token);
+            TrackAssistantWork(LoadSkillsAsync(hero, token));
             AddMasterySummary();
             if (mode == "mayhem")
             {
-                var page = await _am.GetAsync(0, false, token);
-                token.ThrowIfCancellationRequested();
-                AddMayhemRecommendations(page, hero, token);
-                _status.Text =
-                    $"arammeta · 海克斯大乱斗 · 版本 {page.Index.Patch}" + (page.UpdateFailed ? " · 旧缓存" : "");
+                await LoadMayhemRecommendationsAsync(hero, token);
             }
             else
             {
-                string? selected = new string?[] { null, "top", "jungle", "mid", "adc", "support" }[
-                    _lane.SelectedIndex
-                ];
-                var query = SelectedQuery;
-                if (mode == "ranked" && selected == null)
-                {
-                    var tiers = await _opgg.GetTiersAsync(query, false, token);
-                    query = query with
-                    {
-                        Position = OpggQuery.PositionForChampion(tiers.Rows, hero, _position) ?? "mid",
-                    };
-                }
+                var query = await ResolveRecommendationQueryAsync(mode, hero, token);
                 var build = await _opgg.GetBuildAsync(query, false, token);
                 token.ThrowIfCancellationRequested();
-                _position = query.Position;
-                _runes = build.Runes.FirstOrDefault();
-                string laneName = query.Position switch
-                {
-                    "top" => "上路",
-                    "jungle" => "打野",
-                    "mid" => "中路",
-                    "adc" => "下路",
-                    "support" => "辅助",
-                    _ => "",
-                };
-                var tier = (int?)(build.Stats["tier_data"]?["tier"] ?? build.Stats["tier"]);
-                var summary = AddTierSummary(
-                    tier.HasValue ? "T" + tier : "—",
-                    $"胜率 {((double?)build.Stats["win_rate"] ?? OpggBuild.Ratio(build.Stats["win"], build.Stats["play"])):P2} · {laneName}"
-                );
-                if (mode == "aram")
-                {
-                    AddBalanceHint(summary, hero, token);
-                }
-
-                if (_runes != null)
-                {
-                    Line("推荐符文", true);
-                    AddRuneChoices(build.Runes, token);
-                }
-                var skills = build.Data["skill_masteries"]?.First?["ids"] as JArray;
-                Line(
-                    "核心装备" + (skills != null ? "  ·  加点 " + string.Join(" → ", skills.Values<string>()) : ""),
-                    true
-                );
-                AddEquipmentChoices(build, token);
-                Line("召唤师技能", true);
-                await AddSpellRecommendations(build.Data["summoner_spells"] as JArray ?? new(), token);
-                string modeName = mode switch
-                {
-                    "ranked" => "召唤师峡谷",
-                    "aram" => "极地大乱斗",
-                    "arena" => "斗魂竞技场",
-                    "urf" => "无限火力",
-                    _ => "极限闪击",
-                };
-                _status.Text = $"OP.GG · {modeName} · {build.Version}";
-                _apply.Enabled = _runes != null && !_applying;
+                RenderOpggTierAndRunes(build, query, mode, hero, token);
+                await RenderOpggEquipmentAndSpellsAsync(build, mode, token);
             }
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            // A newer hero selection owns the replacement controls and status.
+        }
         catch (Exception ex)
         {
             if (!token.IsCancellationRequested && !IsDisposed)
@@ -587,6 +611,81 @@ internal sealed partial class ChampionSelectAssistant : Form
                 _status.Text = "加载失败：" + ex.Message;
             }
         }
+    }
+
+    private async Task LoadMayhemRecommendationsAsync(int hero, CancellationToken token)
+    {
+        var page = await _am.GetAsync(0, false, token);
+        token.ThrowIfCancellationRequested();
+        AddMayhemRecommendations(page, hero, token);
+        _status.Text = $"arammeta · 海克斯大乱斗 · 版本 {page.Index.Patch}" + (page.UpdateFailed ? " · 旧缓存" : "");
+    }
+
+    private async Task<OpggQuery> ResolveRecommendationQueryAsync(string mode, int hero, CancellationToken token)
+    {
+        string? selected = new string?[] { null, "top", "jungle", "mid", "adc", "support" }[_lane.SelectedIndex];
+        var query = SelectedQuery;
+        if (mode == "ranked" && selected == null)
+        {
+            var tiers = await _opgg.GetTiersAsync(query, false, token);
+            query = query with { Position = OpggQuery.PositionForChampion(tiers.Rows, hero, _position) ?? "mid" };
+        }
+        return query;
+    }
+
+    private void RenderOpggTierAndRunes(
+        OpggBuild build,
+        OpggQuery query,
+        string mode,
+        int hero,
+        CancellationToken token
+    )
+    {
+        _position = query.Position;
+        _runes = build.Runes.FirstOrDefault();
+        string laneName = query.Position switch
+        {
+            "top" => "上路",
+            "jungle" => "打野",
+            "mid" => "中路",
+            "adc" => "下路",
+            "support" => "辅助",
+            _ => "",
+        };
+        var tier = (int?)(build.Stats["tier_data"]?["tier"] ?? build.Stats["tier"]);
+        var summary = AddTierSummary(
+            tier.HasValue ? "T" + tier : "—",
+            $"胜率 {((double?)build.Stats["win_rate"] ?? OpggBuild.Ratio(build.Stats["win"], build.Stats["play"])):P2} · {laneName}"
+        );
+        if (mode == "aram")
+        {
+            AddBalanceHint(summary, hero, token);
+        }
+
+        if (_runes != null)
+        {
+            Line("推荐符文", true);
+            AddRuneChoices(build.Runes, token);
+        }
+    }
+
+    private async Task RenderOpggEquipmentAndSpellsAsync(OpggBuild build, string mode, CancellationToken token)
+    {
+        var skills = build.Data["skill_masteries"]?.First?["ids"] as JArray;
+        Line("核心装备" + (skills != null ? "  ·  加点 " + string.Join(" → ", skills.Values<string>()) : ""), true);
+        AddEquipmentChoices(build, token);
+        Line("召唤师技能", true);
+        await AddSpellRecommendations(build.Data["summoner_spells"] as JArray ?? new(), token);
+        string modeName = mode switch
+        {
+            "ranked" => "召唤师峡谷",
+            "aram" => "极地大乱斗",
+            "arena" => "斗魂竞技场",
+            "urf" => "无限火力",
+            _ => "极限闪击",
+        };
+        _status.Text = $"OP.GG · {modeName} · {build.Version}";
+        _apply.Enabled = _runes != null && !_applying;
     }
 
     private async Task IconRow(IEnumerable<int> ids, string kind, CancellationToken token, Control? parent = null)
@@ -667,42 +766,12 @@ internal sealed partial class ChampionSelectAssistant : Form
         _apply.Enabled = false;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_load?.Token ?? default);
         timeout.CancelAfter(TimeSpan.FromSeconds(8));
-        string map = SelectedMode switch
-        {
-            "ranked" => "召唤师峡谷",
-            "aram" => "极地大乱斗",
-            "arena" => "斗魂竞技场",
-            "urf" => "无限火力",
-            "nexus_blitz" => "极限闪击",
-            "mayhem" => "海克斯大乱斗",
-            _ => "召唤师峡谷",
-        };
+        string map = CurrentMapName();
         _status.Text = "正在应用并校验符文…";
         try
         {
             var client = FormMain.Globals.lcuClient?.Client ?? throw new InvalidOperationException("客户端已断开。");
-            var session = JObject.Parse(await client.GetStringAsync("/lol-champ-select/v1/session", timeout.Token));
-            var own = (session["myTeam"] as JArray)
-                ?.OfType<JObject>()
-                .FirstOrDefault(p => (int?)p["cellId"] == (int?)session["localPlayerCellId"]);
-            int selectedHero = (int?)own?["championId"] ?? 0;
-            if (selectedHero <= 0)
-            {
-                selectedHero = (session["actions"] as JArray ?? new())
-                    .OfType<JArray>()
-                    .SelectMany(a => a.OfType<JObject>())
-                    .Where(a =>
-                        (int?)a["actorCellId"] == (int?)session["localPlayerCellId"] && (string?)a["type"] == "pick"
-                    )
-                    .Select(a => (int?)a["championId"] ?? 0)
-                    .LastOrDefault(id => id > 0);
-            }
-
-            if (selectedHero != hero)
-            {
-                throw new InvalidOperationException("英雄已变化，请等待推荐更新。");
-            }
-
+            await VerifySelectedChampionAsync(client, hero, timeout.Token);
             string champion = FormMain.Globals.resLoading?.GetChampionById(hero)?.Name ?? hero.ToString();
             string keystone = FormMain.Globals.resLoading?.GetRuneById(runes.Perks[0])?.name ?? "推荐符文";
             await OpggRuneService.ApplyAsync(client, runes, champion, timeout.Token);
@@ -711,38 +780,7 @@ internal sealed partial class ChampionSelectAssistant : Form
                 _status.Text = $"符文方案 {choice} 已应用。";
             }
 
-            try
-            {
-                var rates = new List<string>();
-                if (runes.WinRate is double win && double.IsFinite(win) && win >= 0 && win <= 1)
-                {
-                    rates.Add($"胜率 {win:P2}");
-                }
-
-                if (runes.PickRate is double pick && double.IsFinite(pick) && pick >= 0 && pick <= 1)
-                {
-                    rates.Add($"使用率 {pick:P2}");
-                }
-
-                string statistics = rates.Count > 0 ? "（" + string.Join(" / ", rates) + "）" : "";
-                bool sent = await AnnounceRunesAsync(
-                    client,
-                    $"【{map}】{champion} · {keystone}{statistics}符文已配置成功——数据来自 OP.GG",
-                    timeout.Token
-                );
-                if (!sent && !IsDisposed)
-                {
-                    _status.Text = $"方案 {choice} 已应用，聊天提示未发送。";
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("符文应用后的聊天提示未发送：" + ex.GetType().Name);
-                if (!IsDisposed)
-                {
-                    _status.Text = $"方案 {choice} 已应用，聊天提示未发送。";
-                }
-            }
+            await AnnounceAppliedRunesAsync(client, runes, champion, keystone, map, choice, timeout.Token);
         }
         catch (Exception ex)
         {
@@ -762,19 +800,171 @@ internal sealed partial class ChampionSelectAssistant : Form
         }
     }
 
+    private string CurrentMapName()
+    {
+        return SelectedMode switch
+        {
+            "ranked" => "召唤师峡谷",
+            "aram" => "极地大乱斗",
+            "arena" => "斗魂竞技场",
+            "urf" => "无限火力",
+            "nexus_blitz" => "极限闪击",
+            "mayhem" => "海克斯大乱斗",
+            _ => "召唤师峡谷",
+        };
+    }
+
+    private static async Task VerifySelectedChampionAsync(HttpClient client, int hero, CancellationToken token)
+    {
+        var session = JObject.Parse(await client.GetStringAsync("/lol-champ-select/v1/session", token));
+        var own = (session["myTeam"] as JArray)
+            ?.OfType<JObject>()
+            .FirstOrDefault(p => (int?)p["cellId"] == (int?)session["localPlayerCellId"]);
+        int selectedHero = SelectedChampion(session, own);
+        if (selectedHero != hero)
+        {
+            throw new InvalidOperationException("英雄已变化，请等待推荐更新。");
+        }
+    }
+
+    private async Task AnnounceAppliedRunesAsync(
+        HttpClient client,
+        OpggRunes runes,
+        string champion,
+        string keystone,
+        string map,
+        int choice,
+        CancellationToken token
+    )
+    {
+        try
+        {
+            var rates = new List<string>();
+            if (runes.WinRate is double win && double.IsFinite(win) && win >= 0 && win <= 1)
+            {
+                rates.Add($"胜率 {win:P2}");
+            }
+
+            if (runes.PickRate is double pick && double.IsFinite(pick) && pick >= 0 && pick <= 1)
+            {
+                rates.Add($"使用率 {pick:P2}");
+            }
+
+            string statistics = rates.Count > 0 ? "（" + string.Join(" / ", rates) + "）" : "";
+            bool sent = await AnnounceRunesAsync(
+                client,
+                $"【{map}】{champion} · {keystone}{statistics}符文已配置成功——数据来自 OP.GG",
+                token
+            );
+            if (!sent && !IsDisposed)
+            {
+                _status.Text = $"方案 {choice} 已应用，聊天提示未发送。";
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine("符文应用后的聊天提示未发送：" + ex.GetType().Name);
+            if (!IsDisposed)
+            {
+                _status.Text = $"方案 {choice} 已应用，聊天提示未发送。";
+            }
+        }
+    }
+
+    private Task TrackAssistantWork(Task task)
+    {
+        lock (_assistantWork)
+        {
+            _assistantWork.Add(task);
+        }
+        _ = task.ContinueWith(
+            completed =>
+            {
+                lock (_assistantWork)
+                {
+                    _assistantWork.Remove(completed);
+                }
+                if (completed.Exception is { } error)
+                {
+                    Debug.WriteLine("Assistant work: " + error.GetBaseException().GetType().Name);
+                }
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default
+        );
+        return task;
+    }
+
+    private Task[] PendingAssistantWork()
+    {
+        lock (_assistantWork)
+        {
+            return _assistantWork.ToArray();
+        }
+    }
+
+    private void RetireAssistantSource(CancellationTokenSource? source)
+    {
+        if (source == null)
+        {
+            return;
+        }
+        var pending = PendingAssistantWork();
+        var cancellation = source.CancelAsync();
+        TrackAssistantWork(
+            Task.WhenAll(pending.Append(cancellation))
+                .ContinueWith(
+                    completed =>
+                    {
+                        _ = completed.Exception;
+                        source.Dispose();
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default
+                )
+        );
+    }
+
+    private void CancelHeroRequest()
+    {
+        var source = _load;
+        _load = null;
+        RetireAssistantSource(source);
+    }
+
+    private async Task CleanupAssistantResourcesAsync(Task[] pending)
+    {
+        try
+        {
+            await Task.WhenAll(pending).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Work faults are observed; client cleanup must still complete.
+            Debug.WriteLine("Assistant cleanup: " + ex.GetType().Name);
+        }
+        _opgg.Dispose();
+        _am.Dispose();
+    }
+
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
+        if (disposing && !_closing)
         {
+            _closing = true;
             CloseVoiceInput();
             _timer.Stop();
             _timer.Dispose();
-            _load?.Cancel();
-            _poll?.Cancel();
+            CancelHeroRequest();
+            RetireAssistantSource(_poll);
+            _poll = null;
             _windowLayer.Dispose();
-            _opgg.Dispose();
-            _am.Dispose();
+            var pending = PendingAssistantWork();
+            _cleanupWork = Task.Run(() => CleanupAssistantResourcesAsync(pending), CancellationToken.None);
             _tips.Dispose();
+            _assistantFont?.Dispose();
         }
         base.Dispose(disposing);
     }

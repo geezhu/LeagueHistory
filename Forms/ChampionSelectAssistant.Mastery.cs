@@ -46,7 +46,7 @@ internal sealed partial class ChampionSelectAssistant
             Padding = Padding.Empty,
         };
         _sendMastery.FlatAppearance.BorderColor = Color.FromArgb(49, 83, 95);
-        _sendMastery.Click += async (_, _) => await SendMasteryAsync();
+        _sendMastery.Click += async (_, _) => await TrackAssistantWork(SendMasteryAsync());
         _tips.SetToolTip(
             _sendMastery,
             "将自己当前英雄的成就等级和点数发送到选人聊天；缓存数据会标注。英雄成就不区分游戏模式。"
@@ -55,7 +55,7 @@ internal sealed partial class ChampionSelectAssistant
         _masteryRow.Controls.Add(_sendMastery);
         _body.Controls.Add(_masteryRow);
         _masteryNextCheck = 0;
-        _ = RefreshMastery();
+        TrackAssistantWork(RefreshMastery());
     }
 
     private async Task RefreshMastery()
