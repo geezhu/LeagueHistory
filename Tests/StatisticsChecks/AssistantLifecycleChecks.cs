@@ -17,6 +17,7 @@ internal static class AssistantLifecycleChecks
         RetireCancellationCallback();
         CloseEquipmentPreview();
         CloseMayhemDetails();
+        CloseRosterRequests();
         Console.WriteLine(
             "PASS: assistant closing waits for recommendation work and cancellation callbacks before cleanup. No live requests."
         );
@@ -208,6 +209,69 @@ internal static class AssistantLifecycleChecks
         release.TrySetResult(page with { Detail = new JObject() });
         PumpUntil(() => completion.IsCompleted);
         Check(completion.IsCompletedSuccessfully, "Late mayhem detail is cancelled before replacing closed rows.");
+    }
+
+    private static void CloseRosterRequests()
+    {
+        using var owner = new FormMain();
+        using var assistant = Create(owner);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var handler = new WaitingHandler(release.Task);
+        Field<OpggClient>(assistant, "_opgg").Dispose();
+        Set(assistant, "_opgg", new OpggClient(handler));
+        Set(assistant, "_queue", 450);
+        var session = JObject.Parse("{\"myTeam\":[{\"cellId\":0,\"championId\":0}],\"benchEnabled\":true}");
+        Assistant.GetMethod("UpdateRoster", Flags)!.Invoke(assistant, new object[] { session, 450 });
+        Assistant.GetMethod("ShowRoster", Flags)!.Invoke(assistant, null);
+        using var window = Field<Form>(assistant, "_rosterWindow");
+        var type = window.GetType();
+        var source = (CancellationTokenSource)type.GetField("_lifetime", Flags)!.GetValue(window)!;
+        using var icon = new PictureBox();
+        window.Controls.Add(icon);
+        Image? lateImage = null;
+        type.GetField("_portraitLoader", Flags)!
+            .SetValue(
+                window,
+                (Func<int, Task<Image?>>)(
+                    async _ =>
+                    {
+                        await release.Task;
+                        lateImage = new Bitmap(8, 8);
+                        return lateImage;
+                    }
+                )
+            );
+        var portrait = (Task)
+            type.GetMethod("LoadHeroIconAsync", Flags)!.Invoke(window, new object[] { icon, 103, source.Token })!;
+        type.GetMethod("Track", Flags)!.Invoke(window, new object[] { portrait });
+        try
+        {
+            PumpUntil(() => handler.Started);
+            assistant.Dispose();
+            var completion = (Task)type.GetProperty("Completion")!.GetValue(window)!;
+            Check(
+                window.IsDisposed && !completion.IsCompleted,
+                "Closing the roster retains delayed ranking and portrait work."
+            );
+            Check(
+                source.IsCancellationRequested && !handler.Closed,
+                "Roster cancellation precedes shared client cleanup."
+            );
+            release.TrySetResult();
+            PumpUntil(() => Field<Task>(assistant, "_cleanupWork").IsCompleted);
+            Check(
+                completion.IsCompletedSuccessfully && handler.Closed,
+                "Roster work finishes before its assistant releases the client."
+            );
+            Check(lateImage != null && ImageDisposed(lateImage), "Closed roster disposes late champion portraits.");
+            Check(Disposed(source), "The closed roster releases its cancellation source after pending work.");
+        }
+        finally
+        {
+            release.TrySetResult();
+            assistant.Dispose();
+            PumpUntil(() => Field<Task>(assistant, "_cleanupWork").IsCompleted);
+        }
     }
 
     private static bool ImageDisposed(Image image)
