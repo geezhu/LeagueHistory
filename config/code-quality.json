@@ -102,6 +102,15 @@
     "UIState/ProgressForm.cs"
   ],
   "adoptedFiles": [
+    "Clients/AramBalanceClient.cs",
+    "Clients/AramMetaClient.cs",
+    "Clients/ChampionAnalysisClient.cs",
+    "Clients/ChampionMasteryService.cs",
+    "Clients/LcuProcessDiscovery.cs",
+    "Clients/LiveMatchClient.cs",
+    "Clients/LoadingRosterIdentityService.cs",
+    "Clients/OpggClient.cs",
+    "Clients/PlayerStatisticsService.cs",
     "Models/AramMetaData.cs",
     "Models/AramMetaRecommendation.cs",
     "Models/AssistantVisibility.cs",
@@ -143,6 +152,7 @@
     "Services/SenseVoiceTranscriber.cs",
     "Services/VoiceCaptureState.cs",
     "Services/VoicePcmBuffer.cs",
+    "Tests/StatisticsChecks/ClientChecks.cs",
     "Tests/StatisticsChecks/ModelChecks.cs",
     "Tests/StatisticsChecks/SenseVoiceChecks.cs",
     "UIHelpers/AugmentIconRenderer.cs",
