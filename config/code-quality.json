@@ -151,6 +151,8 @@
     "Services/IVoiceAudioCapture.cs",
     "Services/IVoiceTranscriber.cs",
     "Services/MicrophoneVoiceCapture.cs",
+    "Services/OpggRuneService.cs",
+    "Services/RoomPlayerLoader.cs",
     "Services/SenseVoiceSession.cs",
     "Services/SenseVoiceTranscriber.cs",
     "Services/VoiceCaptureState.cs",
