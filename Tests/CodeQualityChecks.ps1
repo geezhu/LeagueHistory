@@ -9,6 +9,12 @@ function Assert-QualityCheck {
 }
 
 & (Join-Path $repository 'Scripts/Update-CodeQualityScope.ps1') -Check
+$editor = Get-Content -LiteralPath (Join-Path $repository '.editorconfig') -Raw
+foreach ($path in $configuration.upstreamFiles | Where-Object { $_ -notmatch '/' }) {
+    $sections = @([regex]::Matches($editor, '(?m)^\[([^\r\n]+)\]') | ForEach-Object { $_.Groups[1].Value })
+    $rootSections = @($sections | Where-Object { $_ -match [regex]::Escape($path) })
+    Assert-QualityCheck ($rootSections.Count -eq 1 -and $rootSections[0].StartsWith('/')) "Root exclusion must be anchored: $path"
+}
 foreach ($path in $configuration.upstreamFiles) {
     $rejected = $false
     try {

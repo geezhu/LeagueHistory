@@ -65,7 +65,9 @@ foreach ($path in ($configuration.upstreamFiles | Where-Object { $_ -like '*.cs'
 foreach ($directory in $groups.Keys) {
     $names = @($groups[$directory])
     $pattern = if ($names.Count -eq 1) { $names[0] } else { '{' + ($names -join ',') + '}' }
-    if ($directory) { $pattern = $directory.Replace('\', '/') + '/' + $pattern }
+    # A basename-only EditorConfig glob also matches files in descendant directories.
+    # Anchor root files so, for example, upstream Program.cs does not exempt Tests/.../Program.cs.
+    $pattern = if ($directory) { $directory.Replace('\', '/') + '/' + $pattern } else { '/' + $pattern }
     $editor.Add('')
     $editor.Add("[$pattern]")
     foreach ($entry in $style.GetEnumerator()) {

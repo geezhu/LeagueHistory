@@ -290,7 +290,7 @@ dotnet_diagnostic.MA0054.severity = none
 MA0051.maximum_lines_per_method = unset
 MA0051.maximum_statements_per_method = unset
 
-[Program.cs]
+[/Program.cs]
 charset = unset
 indent_style = unset
 indent_size = unset
