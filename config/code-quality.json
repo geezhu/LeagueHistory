@@ -178,6 +178,7 @@
     "Controls/VoiceSettingsController.cs",
     "Forms/ChampionSelectAssistant.Chat.cs",
     "Forms/ChampionSelectAssistant.Filters.cs",
+    "Forms/ChampionSelectAssistant.Mastery.cs",
     "Forms/ChampionSelectAssistant.Runes.cs",
     "Forms/ChampionSelectAssistant.Skills.cs",
     "Forms/ChampionSelectAssistant.Spells.cs",

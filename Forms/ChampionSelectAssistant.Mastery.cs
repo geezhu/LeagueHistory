@@ -101,7 +101,10 @@ internal sealed partial class ChampionSelectAssistant
 
             _masteryNextCheck = Environment.TickCount64 + (mastery.Stale ? 3000 : 15000);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            // A replaced hero request must not change the new mastery row.
+        }
         catch (Exception)
         {
             if (!label.IsDisposed && hero == _hero && puuid == _masteryPuuid)
@@ -127,13 +130,7 @@ internal sealed partial class ChampionSelectAssistant
 
         int hero = _hero;
         string puuid = _masteryPuuid;
-        bool Current() =>
-            !IsDisposed
-            && _selecting
-            && _hero == hero
-            && _masteryPuuid == puuid
-            && button is { IsDisposed: false }
-            && button == _sendMastery;
+        bool Current() => IsCurrentMasterySend(hero, puuid, button);
         _sendingMastery = true;
         button!.Enabled = false;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_load?.Token ?? default);
@@ -141,30 +138,8 @@ internal sealed partial class ChampionSelectAssistant
         try
         {
             client ??= FormMain.Globals.lcuClient?.Client ?? throw new InvalidOperationException("客户端未连接。");
-            var session = JObject.Parse(await client.GetStringAsync("/lol-champ-select/v1/session", timeout.Token));
-            var own = (session["myTeam"] as JArray)
-                ?.OfType<JObject>()
-                .FirstOrDefault(p => (int?)p["cellId"] == (int?)session["localPlayerCellId"]);
-            int selected = (int?)own?["championId"] ?? 0;
-            if (selected <= 0)
-            {
-                selected = (session["actions"] as JArray ?? new())
-                    .OfType<JArray>()
-                    .SelectMany(a => a.OfType<JObject>())
-                    .Where(a =>
-                        (int?)a["actorCellId"] == (int?)session["localPlayerCellId"] && (string?)a["type"] == "pick"
-                    )
-                    .Select(a => (int?)a["championId"] ?? 0)
-                    .LastOrDefault(id => id > 0);
-            }
-
-            string identity = (string?)own?["puuid"] ?? "";
-            if (
-                !Current()
-                || own == null
-                || selected != hero
-                || (!string.IsNullOrWhiteSpace(identity) && identity != Guid.Empty.ToString() && identity != puuid)
-            )
+            var selection = await ReadMasterySelectionAsync(client, timeout.Token);
+            if (!Current() || !selection.Present || selection.Hero != hero || !MatchesPuuid(selection.Puuid, puuid))
             {
                 if (Current())
                 {
@@ -173,6 +148,7 @@ internal sealed partial class ChampionSelectAssistant
 
                 return;
             }
+
             string name = FormMain.Globals.resLoading?.GetChampionById(hero)?.Name ?? $"英雄 {hero}";
             var messages = ChampionMasteryChatMessage.Build(
                 OverlayChampionDetailService.ModeName(PlayerChampionTier.NormalizeQueue(_queue, "")),
@@ -207,5 +183,41 @@ internal sealed partial class ChampionSelectAssistant
                 _sendMastery.Enabled = _selecting && _mastery?.Available == true && _mastery.ChampionId == _hero;
             }
         }
+    }
+
+    private bool IsCurrentMasterySend(int hero, string puuid, Button? button) =>
+        !IsDisposed
+        && _selecting
+        && _hero == hero
+        && _masteryPuuid == puuid
+        && button is { IsDisposed: false }
+        && button == _sendMastery;
+
+    private static bool MatchesPuuid(string identity, string expected) =>
+        string.IsNullOrWhiteSpace(identity) || identity == Guid.Empty.ToString() || identity == expected;
+
+    private static async Task<(int Hero, string Puuid, bool Present)> ReadMasterySelectionAsync(
+        HttpClient client,
+        CancellationToken token
+    )
+    {
+        var session = JObject.Parse(await client.GetStringAsync("/lol-champ-select/v1/session", token));
+        var own = (session["myTeam"] as JArray)
+            ?.OfType<JObject>()
+            .FirstOrDefault(p => (int?)p["cellId"] == (int?)session["localPlayerCellId"]);
+        int selected = (int?)own?["championId"] ?? 0;
+        if (selected <= 0)
+        {
+            selected = (session["actions"] as JArray ?? new())
+                .OfType<JArray>()
+                .SelectMany(a => a.OfType<JObject>())
+                .Where(a =>
+                    (int?)a["actorCellId"] == (int?)session["localPlayerCellId"] && (string?)a["type"] == "pick"
+                )
+                .Select(a => (int?)a["championId"] ?? 0)
+                .LastOrDefault(id => id > 0);
+        }
+
+        return (selected, (string?)own?["puuid"] ?? "", own != null);
     }
 }
