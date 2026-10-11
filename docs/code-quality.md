@@ -12,7 +12,7 @@
 - `-All`：调查全部新增源码的待整理问题，不会扩大到官方原有源码。
 - 纯格式整理不能修改原有文件。功能开发必须修改原有文件时，保留它的局部风格。
 
-`AGENTS.md` 规定职责、状态、异常与异步资源管理要求。`.editorconfig` 对原有路径逐项取消设置；`.csharpierignore` 排除原有文件、生成文件和项目 XML。配置由范围更新脚本生成，不手改生成结果。
+`AGENTS.md` 规定职责、状态、异常与异步资源管理要求。`.editorconfig` 对原有路径逐项取消设置；根目录文件的规则以 `/` 开头，避免误排除子目录里同名的新增文件。`.csharpierignore` 排除原有文件、生成文件和项目 XML。配置由范围更新脚本生成，不手改生成结果。
 
 ## 使用
 
@@ -54,6 +54,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Update-CodeQualitySc
 范围变化后审查 `config/code-quality.json`、`.editorconfig`、`.csharpierignore`。新样板加入 `adoptedFiles` 前先完成整理并验证，删除或重命名样板时同步维护清单。
 
 ## 当前样板与验证
+
+样板已扩展到全部新增模型、英雄分析解析器和图标／名称辅助代码，以及独立模型回归入口；共 46 个源码文件。阵容分析的证据提取与结论生成分开，实时对局按玩家和事件解析，时间轴按帧、金币和事件处理。模型回归可独立运行，避免受界面测试上下文影响：
+
+```powershell
+dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --model-checks
+```
+
+全部 204 个原待整理文件已经完成工具排版，并分模块提交；控制流括号也已补齐。未列入样板的模块仍需处理过长方法、异步调用和资源边界，不能把排版完成视为全部结构整理完成。
 
 语音核心已分为会话编排、模型识别、麦克风采集和 PCM 缓冲，接口分别保存，状态使用具名枚举。保持模型与麦克风并行准备、设备返回音频后才提示开口、取消后不发布结果，以及等待工作结束再释放模型和录音锁。
 
