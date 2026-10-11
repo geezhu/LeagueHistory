@@ -50,15 +50,25 @@ public sealed class AramMetaClient : IDisposable
                     : null
             );
         if (_cachePath != null)
+        {
             _cachePath = Path.GetFullPath(_cachePath);
+        }
+
         lock (SharedCaches)
         {
             if (_cachePath == null)
+            {
                 _cache = new();
+            }
             else if (SharedCaches.TryGetValue(_cachePath, out var shared))
+            {
                 _cache = shared;
+            }
             else
+            {
                 SharedCaches[_cachePath] = _cache = new();
+            }
+
             _cache.Users++;
         }
         _cacheLifetime = cacheLifetime ?? (() => TimeSpan.FromDays(1));
@@ -70,7 +80,10 @@ public sealed class AramMetaClient : IDisposable
     public bool IsCurrent(AramMetaPage page, int champion)
     {
         if (_disposed != 0 || !_cache.Gate.Wait(0))
+        {
             return false;
+        }
+
         try
         {
             return !page.UpdateFailed
@@ -95,13 +108,20 @@ public sealed class AramMetaClient : IDisposable
         if (_cache.ValidatedIndex != null)
         {
             if (_cache.IndexTag != null)
+            {
                 request.Headers.IfNoneMatch.Add(_cache.IndexTag);
+            }
             else if (_cache.IndexModified.HasValue)
+            {
                 request.Headers.IfModifiedSince = _cache.IndexModified;
+            }
         }
         using var response = await _http.SendAsync(request, token).ConfigureAwait(false);
         if (response.StatusCode == HttpStatusCode.NotModified && _cache.ValidatedIndex != null)
+        {
             return _cache.ValidatedIndex;
+        }
+
         response.EnsureSuccessStatusCode();
         var index = AramMetaIndex.Parse(
             JObject.Parse(await response.Content.ReadAsStringAsync(token).ConfigureAwait(false))
@@ -142,20 +162,28 @@ public sealed class AramMetaClient : IDisposable
                     indexTime = DateTime.UtcNow;
                 }
                 if (champion > 0 && !index!.Champions.Any(c => c.Id == champion))
+                {
                     throw new InvalidDataException("此英雄暂无海克斯统计，可返回英雄榜查看。");
+                }
+
                 JObject? detail = null;
                 if (champion > 0)
                 {
                     var key = index!.Version + ":" + champion;
                     if (!refresh && _cache.Details.TryGetValue(key, out var saved))
+                    {
                         detail = saved;
+                    }
                     else
                     {
                         for (int attempt = 0; attempt < 2; attempt++)
                         {
                             token.ThrowIfCancellationRequested();
                             if (preview != null)
+                            {
                                 preview(await ClonePageAsync(index, null, cached, indexTime, token));
+                            }
+
                             detail = JObject.Parse(
                                 await _http.GetStringAsync(
                                     $"api/champions/{champion}.json?v={Uri.EscapeDataString(index.Version)}",
@@ -165,35 +193,54 @@ public sealed class AramMetaClient : IDisposable
                             var confirmed = await FetchIndex(token);
                             indexTime = DateTime.UtcNow;
                             if (confirmed.Version == index.Version)
+                            {
                                 break;
+                            }
+
                             index = confirmed;
                             detail = null;
                         }
                         if (detail == null)
+                        {
                             throw new InvalidDataException("数据正在更新，请稍后刷新。");
+                        }
+
                         if (!detail.Properties().Any(p => p.Name is "items" or "spells" or "boots" or "bot"))
+                        {
                             throw new InvalidDataException("英雄详情数据不完整。");
+                        }
+
                         if (_cache.Details.Count >= 200)
+                        {
                             _cache.Details.Clear();
+                        }
+
                         _cache.Details[index.Version + ":" + champion] = (JObject)detail.DeepClone();
                         cached = false;
                     }
                 }
                 if (_cache.Index?.Version != index!.Version)
+                {
                     _cache
                         .Details.Keys.Where(k => !k.StartsWith(index.Version + ":", StringComparison.Ordinal))
                         .ToList()
                         .ForEach(k => _cache.Details.Remove(k));
+                }
+
                 _cache.Index = index;
                 _cache.Fetched = indexTime;
                 if (!cached)
+                {
                     QueueDiskSave();
+                }
+
                 return await ClonePageAsync(index, detail, cached, _cache.Fetched, token);
             }
             catch (Exception ex)
                 when (!token.IsCancellationRequested && ex is HttpRequestException or TaskCanceledException)
             {
                 if (old != null && (champion == 0 || _cache.Details.ContainsKey(old.Version + ":" + champion)))
+                {
                     return (
                         await ClonePageAsync(
                             old,
@@ -206,6 +253,8 @@ public sealed class AramMetaClient : IDisposable
                     {
                         UpdateFailed = true,
                     };
+                }
+
                 throw;
             }
         }
@@ -234,16 +283,25 @@ public sealed class AramMetaClient : IDisposable
             : Task.Run(() =>
             {
                 if (_cachePath == null || !File.Exists(_cachePath))
+                {
                     return;
+                }
+
                 try
                 {
                     var saved = JObject.Parse(File.ReadAllText(_cachePath));
                     if ((int?)saved["schema"] != 1 || saved["index"] is not JObject raw)
+                    {
                         return;
+                    }
+
                     var index = AramMetaIndex.Parse(raw);
                     var fetched = (DateTime?)saved["fetchedUtc"] ?? DateTime.MinValue;
                     if (fetched.Kind != DateTimeKind.Utc || fetched > DateTime.UtcNow.AddMinutes(1))
+                    {
                         return;
+                    }
+
                     var details = (saved["details"] as JObject ?? new())
                         .Properties()
                         .Where(p =>
@@ -256,10 +314,15 @@ public sealed class AramMetaClient : IDisposable
                     _cache.Index = _cache.ValidatedIndex = index;
                     _cache.Fetched = fetched;
                     if (EntityTagHeaderValue.TryParse((string?)saved["etag"], out var tag))
+                    {
                         _cache.IndexTag = tag;
+                    }
+
                     _cache.IndexModified = (DateTimeOffset?)saved["lastModified"];
                     foreach (var entry in details)
+                    {
                         _cache.Details[entry.Name] = (JObject)entry.Value;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -270,7 +333,9 @@ public sealed class AramMetaClient : IDisposable
     private void QueueDiskSave()
     {
         if (_cachePath == null || _cache.Index == null)
+        {
             return;
+        }
         // Stored documents are immutable internally. Capture references while holding _cache.Gate;
         // serialize and write on the worker, without blocking rendering or the next request.
         var raw = _cache.Index.Raw;
@@ -321,7 +386,9 @@ public sealed class AramMetaClient : IDisposable
             try
             {
                 if (File.Exists(temporary))
+                {
                     File.Delete(temporary);
+                }
             }
             catch { }
         }
@@ -330,13 +397,18 @@ public sealed class AramMetaClient : IDisposable
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
             return;
+        }
+
         _http.Dispose();
         lock (SharedCaches)
         {
             _cache.SaveTask.GetAwaiter().GetResult();
             if (--_cache.Users == 0 && _cachePath != null)
+            {
                 SharedCaches.Remove(_cachePath);
+            }
         }
     }
 }

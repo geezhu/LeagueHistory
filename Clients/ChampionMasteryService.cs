@@ -61,18 +61,25 @@ public sealed class ChampionMasteryService
     {
         token.ThrowIfCancellationRequested();
         if (!PublicIdentity(puuid))
+        {
             return new(null, null, "尚未取得玩家身份，等待对局名单匹配；不代表玩家隐藏了成就。");
+        }
+
         string key = Key(puuid);
         Entry entry;
         Task disk;
         lock (_gate)
         {
             if (!_entries.TryGetValue(key, out entry!))
+            {
                 _entries[key] = entry = new();
+            }
+
             entry.Access = Environment.TickCount64;
             int version = entry.Version;
             disk = entry.Disk ??= Task.Run(() => LoadDisk(key, entry, version));
             if (_entries.Count > 256)
+            {
                 foreach (
                     var old in _entries
                         .Where(e =>
@@ -83,11 +90,17 @@ public sealed class ChampionMasteryService
                         .Select(e => e.Key)
                         .ToArray()
                 )
+                {
                     _entries.Remove(old);
+                }
+            }
         }
         await disk.WaitAsync(token).ConfigureAwait(false);
         if (key != Key(puuid))
+        {
             return new(null, null, "客户端账号或区服已变化，请重新查询。");
+        }
+
         Task<ChampionMasteryPage> request;
         lock (_gate)
         {
@@ -98,16 +111,24 @@ public sealed class ChampionMasteryService
                 && page?.Data != null
                 && DateTimeOffset.UtcNow - page.FetchedAt < CacheLifetime
             )
+            {
                 return Copy(page);
+            }
+
             if (!refresh && entry.RetryAt > Environment.TickCount64 && page != null)
+            {
                 return Copy(page);
+            }
+
             int version = entry.Version;
             request = entry.Request is { IsCompleted: false }
                 ? entry.Request
                 : entry.Request = Task.Run(() => Fetch(key, puuid, entry, version));
             // Expired successful data remains immediately visible while a single background refresh runs.
             if (!refresh && page?.Data != null)
+            {
                 return Copy(page with { Stale = true });
+            }
         }
         return Copy(await request.WaitAsync(token).ConfigureAwait(false));
     }
@@ -121,13 +142,19 @@ public sealed class ChampionMasteryService
     public void Invalidate(string puuid)
     {
         if (!PublicIdentity(puuid))
+        {
             return;
+        }
+
         string key = Key(puuid);
         Entry entry;
         lock (_gate)
         {
             if (!_entries.TryGetValue(key, out entry!))
+            {
                 _entries[key] = entry = new();
+            }
+
             entry.Version++;
             entry.Expired = true;
             entry.Page = entry.Page is { Data: not null } page ? page with { Stale = true } : null;
@@ -144,16 +171,29 @@ public sealed class ChampionMasteryService
         {
             string path = PathFor(key);
             if (!File.Exists(path) || new FileInfo(path).Length > 1024 * 1024)
+            {
                 return;
+            }
+
             var stored = JObject.Parse(await File.ReadAllTextAsync(path).ConfigureAwait(false));
             if ((int?)stored["schema"] != 1 || !TryNormalize(stored["champions"], out var data))
+            {
                 return;
+            }
+
             var fetched = DateTimeOffset.FromUnixTimeMilliseconds((long?)stored["fetchedAt"] ?? 0);
             if (fetched <= DateTimeOffset.UnixEpoch || fetched > DateTimeOffset.UtcNow.AddMinutes(5))
+            {
                 return;
+            }
+
             lock (_gate)
+            {
                 if (entry.Version == version)
+                {
                     entry.Page = new(data, fetched);
+                }
+            }
         }
         catch (Exception e)
             when (e
@@ -183,11 +223,14 @@ public sealed class ChampionMasteryService
                 .ConfigureAwait(false);
             denied = response.Status is 401 or 403;
             if (TryNormalize(response.Data, out var data))
+            {
                 result = new(data, DateTimeOffset.UtcNow);
+            }
             else
             {
                 string message = response.Message.Length > 0 ? response.Message : "客户端未返回有效英雄成就。";
                 lock (_gate)
+                {
                     result =
                         !denied && entry.Page?.Data != null
                             ? entry.Page with
@@ -196,14 +239,18 @@ public sealed class ChampionMasteryService
                                 Message = message,
                             }
                             : new(null, null, message);
+                }
             }
             // Reconnection/account changes must not populate or display a response from the old client.
             if (!ReferenceEquals(client, _client()) || key != Key(puuid))
+            {
                 return new(null, null, "客户端账号或连接已变化，请重新查询。");
+            }
         }
         catch (OperationCanceledException)
         {
             lock (_gate)
+            {
                 result =
                     entry.Page?.Data != null
                         ? entry.Page with
@@ -212,6 +259,7 @@ public sealed class ChampionMasteryService
                             Message = "请求超时，后台稍后重试。",
                         }
                         : new(null, null, "英雄成就读取超时，后台稍后重试。");
+            }
         }
         catch (Exception e) when (e is HttpRequestException or InvalidOperationException or JsonException)
         {
@@ -224,16 +272,26 @@ public sealed class ChampionMasteryService
         lock (_gate)
         {
             if (entry.Version != version)
+            {
                 return new(null, null, "英雄成就已更新，请重新查询。");
+            }
+
             entry.Page = result;
             entry.RetryAt = result.Data != null && !result.Stale ? 0 : Environment.TickCount64 + 60000;
             if (result.Data != null && !result.Stale)
+            {
                 entry.Expired = false;
+            }
         }
         if (result.Data != null && !result.Stale)
+        {
             await SaveDisk(key, entry, version, result).ConfigureAwait(false);
+        }
         else if (denied)
+        {
             await DeleteDisk(key, entry, version).ConfigureAwait(false);
+        }
+
         return result;
     }
 
@@ -241,7 +299,10 @@ public sealed class ChampionMasteryService
     {
         data = new();
         if (value is not JArray array)
+        {
             return false;
+        }
+
         long? Number(JToken? token) =>
             token?.Type == JTokenType.Integer && long.TryParse(token.ToString(), out var number) ? number : null;
         foreach (
@@ -258,9 +319,15 @@ public sealed class ChampionMasteryService
                 ["championPoints"] = record["championPoints"],
             };
             if (Number(record["championLevel"]) is >= 0 and <= int.MaxValue)
+            {
                 row["championLevel"] = record["championLevel"];
+            }
+
             if (Number(record["lastPlayTime"]) is > 0 and <= 253402300799999)
+            {
                 row["lastPlayTime"] = record["lastPlayTime"];
+            }
+
             data.Add(row);
         }
         return array.Count == 0 || data.Count > 0;
@@ -273,8 +340,13 @@ public sealed class ChampionMasteryService
         try
         {
             lock (_gate)
+            {
                 if (entry.Version != version)
+                {
                     return;
+                }
+            }
+
             Directory.CreateDirectory(_directory);
             var data = new JObject
             {
@@ -287,7 +359,10 @@ public sealed class ChampionMasteryService
             lock (_gate)
             {
                 if (entry.Version != version)
+                {
                     return;
+                }
+
                 File.Move(temporary, PathFor(key), true);
             }
             foreach (
@@ -296,7 +371,9 @@ public sealed class ChampionMasteryService
                     .OrderByDescending(f => f.LastWriteTimeUtc)
                     .Skip(256)
             )
+            {
                 old.Delete();
+            }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         finally
@@ -304,7 +381,9 @@ public sealed class ChampionMasteryService
             try
             {
                 if (File.Exists(temporary))
+                {
                     File.Delete(temporary);
+                }
             }
             catch (IOException) { }
             _disk.Release();
@@ -317,8 +396,12 @@ public sealed class ChampionMasteryService
         try
         {
             lock (_gate)
+            {
                 if (entry.Version == version)
+                {
                     File.Delete(PathFor(key));
+                }
+            }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         finally

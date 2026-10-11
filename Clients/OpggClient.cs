@@ -36,7 +36,9 @@ public sealed class OpggClient : IDisposable
             }.Contains(query.Tier)
             || (query.Mode == "ranked" && !new[] { "top", "jungle", "mid", "adc", "support" }.Contains(query.Position))
         )
+        {
             throw new InvalidOperationException("该模式或筛选条件暂不支持 OP.GG 攻略。");
+        }
     }
 
     public async Task<OpggBuild> GetBuildAsync(OpggQuery query, bool refresh, CancellationToken token)
@@ -44,7 +46,10 @@ public sealed class OpggClient : IDisposable
         query = query.Normalize();
         Validate(query);
         if (query.ChampionId <= 0)
+        {
             throw new InvalidOperationException("请选择英雄。");
+        }
+
         string path =
             $"/api/{query.Region}/champions/{query.Mode}/{query.ChampionId}"
             + (query.Mode == "arena" ? "" : "/" + query.Position)
@@ -75,7 +80,10 @@ public sealed class OpggClient : IDisposable
                 && _cache.TryGetValue(path, out var entry)
                 && DateTime.UtcNow - entry.Time < TimeSpan.FromMinutes(15)
             )
+            {
                 return (JObject)entry.Data.DeepClone();
+            }
+
             for (int attempt = 0; attempt < 2; attempt++)
             {
                 using var response = await _http.GetAsync(path, token);
@@ -85,11 +93,17 @@ public sealed class OpggClient : IDisposable
                     continue;
                 }
                 if (response.StatusCode == System.Net.HttpStatusCode.NotFound || (int)response.StatusCode == 422)
+                {
                     throw new InvalidDataException("当前英雄、模式或分路暂无可用数据。");
+                }
+
                 response.EnsureSuccessStatusCode();
                 var data = JObject.Parse(await response.Content.ReadAsStringAsync(token));
                 if (_cache.Count >= 128)
+                {
                     _cache.Remove(_cache.MinBy(e => e.Value.Time).Key);
+                }
+
                 _cache[path] = (DateTime.UtcNow, data);
                 return (JObject)data.DeepClone();
             }

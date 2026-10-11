@@ -45,7 +45,10 @@ public sealed class LoadingRosterIdentityService(Func<HttpClient?> client)
         {
             string puuid = (string?)pick["puuid"] ?? "";
             if (!HasPuuid(puuid) || candidates.Any(p => p.Puuid == puuid))
+            {
                 continue;
+            }
+
             candidates.Add(
                 new(puuid, "", puuid, (long?)pick["summonerId"] ?? 0, (int?)pick["championId"] ?? 0, 0, puuid == own)
             );
@@ -55,14 +58,19 @@ public sealed class LoadingRosterIdentityService(Func<HttpClient?> client)
                 candidates.Select(async player =>
                 {
                     if (!HasPuuid(player.Puuid) && player.SummonerId <= 0)
+                    {
                         return player;
+                    }
                     // Already confirmed full Riot IDs need no extra request.
                     if (
                         HasPuuid(player.Puuid)
                         && player.Name.Contains('#')
                         && live.Players.Count(p => p.Name == player.Name) == 1
                     )
+                    {
                         return player;
+                    }
+
                     var identity = await Resolve(player, roster.GameId + "|" + own, connection, token)
                         .ConfigureAwait(false);
                     return identity == null
@@ -79,7 +87,10 @@ public sealed class LoadingRosterIdentityService(Func<HttpClient?> client)
             .ConfigureAwait(false);
         token.ThrowIfCancellationRequested();
         if (!ReferenceEquals(connection, client()))
+        {
             return (roster with { Players = [] }).FromLive(live, champion);
+        }
+
         return (roster with { Players = resolved }).FromLive(live, champion);
     }
 
@@ -91,7 +102,10 @@ public sealed class LoadingRosterIdentityService(Func<HttpClient?> client)
     )
     {
         if (connection == null)
+        {
             return null;
+        }
+
         string key = own + "|" + (HasPuuid(player.Puuid) ? player.Puuid : "id:" + player.SummonerId);
         Task<Identity?> request;
         lock (_gate)
@@ -102,14 +116,21 @@ public sealed class LoadingRosterIdentityService(Func<HttpClient?> client)
                 _entries.Clear();
             }
             if (!_entries.TryGetValue(key, out var entry))
+            {
                 _entries[key] = entry = new();
+            }
+
             entry.Access = Environment.TickCount64;
             if (entry.RetryAt > Environment.TickCount64)
+            {
                 return entry.Value;
+            }
+
             request = entry.Request is { IsCompleted: false }
                 ? entry.Request
                 : entry.Request = Fetch(player, entry, connection);
             if (_entries.Count > 256)
+            {
                 foreach (
                     string old in _entries
                         .Where(p => p.Key != key && p.Value.Request?.IsCompleted != false)
@@ -118,7 +139,10 @@ public sealed class LoadingRosterIdentityService(Func<HttpClient?> client)
                         .Select(p => p.Key)
                         .ToArray()
                 )
+                {
                     _entries.Remove(old);
+                }
+            }
         }
         return await request.WaitAsync(token).ConfigureAwait(false);
     }
@@ -150,9 +174,14 @@ public sealed class LoadingRosterIdentityService(Func<HttpClient?> client)
                     string name = (string?)row["gameName"] ?? "",
                         tag = (string?)row["tagLine"] ?? "";
                     if (name.Length > 0 && tag.Length > 0)
+                    {
                         name += "#" + tag;
+                    }
                     else
+                    {
                         name = (string?)row["displayName"] ?? "";
+                    }
+
                     identity = new(puuid, id, name);
                 }
             }

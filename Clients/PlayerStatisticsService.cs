@@ -15,7 +15,10 @@ public sealed class PlayerStatisticsService
     {
         var client = _client();
         if (client == null)
+        {
             return new(null, "客户端尚未连接，请登录后重试。");
+        }
+
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(12));
         try
@@ -23,6 +26,7 @@ public sealed class PlayerStatisticsService
             using var response = await client.GetAsync(path, timeout.Token);
             int status = (int)response.StatusCode;
             if (!response.IsSuccessStatusCode)
+            {
                 return new(
                     null,
                     status switch
@@ -34,9 +38,14 @@ public sealed class PlayerStatisticsService
                     },
                     status
                 );
+            }
+
             var data = JToken.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
             if (data is JObject error && error["errorCode"] != null)
+            {
                 return new(null, "客户端未返回有效统计数据。", status);
+            }
+
             return new(data, "", status);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
