@@ -43,10 +43,12 @@ namespace League.UIHelpers
                 _ => throw new ArgumentOutOfRangeException(nameof(key)),
             };
             lock (Sprite)
+            {
                 return Sprite.Value.Clone(
                     new Rectangle(position, new Size(16, 16)),
                     System.Drawing.Imaging.PixelFormat.Format32bppArgb
                 );
+            }
         }
 
         public static List<(string Key, string Hint)> Select(JObject player, List<JObject> all)
@@ -84,10 +86,15 @@ namespace League.UIHelpers
                 // Missing data must not produce an award. These are explicitly match-wide comparisons,
                 // not an attempt to reproduce WeGame's unpublished server-side battle_tag rules.
                 if (all.Count == 0 || all.Any(p => p[field]?.Type != JTokenType.Integer))
+                {
                     continue;
+                }
+
                 int value = player[field]?.Value<int>() ?? 0;
                 if (value > 0 && value == all.Max(p => p[field]!.Value<int>()))
+                {
                     result.Add((key, $"全场{name}最多：{value:N0}（并列均显示；按本场数据统计）"));
+                }
             }
             return result;
         }

@@ -18,7 +18,9 @@ namespace League.UIHelpers
                 _ => null,
             };
             if (!tint.HasValue)
+            {
                 return source is Bitmap bitmap ? (Bitmap)bitmap.Clone() : new Bitmap(source);
+            }
 
             var result = new Bitmap(source.Width, source.Height, PixelFormat.Format32bppArgb);
             try
@@ -53,7 +55,10 @@ namespace League.UIHelpers
                     float width = result.Width - inset * 2,
                         height = result.Height - inset * 2;
                     if (width <= 0 || height <= 0)
+                    {
                         return;
+                    }
+
                     graphics.FillRectangle(brush, inset, inset, width, stroke);
                     graphics.FillRectangle(brush, inset, result.Height - inset - stroke, width, stroke);
                     graphics.FillRectangle(brush, inset, inset, stroke, height);
