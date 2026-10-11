@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Development-only download; the League project and release have no new dependency. -->
+    <PackageDownload Include="Meziantou.Analyzer" Version="[3.0.294]" />
+  </ItemGroup>
+</Project>
