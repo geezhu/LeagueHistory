@@ -44,6 +44,9 @@ public sealed partial class ChampionCompositionView : UserControl
     private readonly Dictionary<int, string> _errors = new();
     private ChampionSelectRoster? _roster;
     private CancellationTokenSource? _request;
+    private readonly CancellationTokenSource _viewLifetime = new();
+    private readonly HashSet<Task> _pendingLoads = new();
+    private Task _cleanupWork = Task.CompletedTask;
     private bool _changing;
 
     private sealed record Choice(int Id, string Name)
@@ -123,6 +126,10 @@ public sealed partial class ChampionCompositionView : UserControl
 
     public void SetRoster(ChampionSelectRoster roster)
     {
+        if (_dashboardDisposed)
+        {
+            return;
+        }
         bool changed = _roster?.Signature != roster.Signature;
         _roster = roster;
         if (!changed)
@@ -156,68 +163,141 @@ public sealed partial class ChampionCompositionView : UserControl
             ?? [];
     }
 
-    private async Task LoadAsync()
+    private Task LoadAsync()
     {
-        _request?.Cancel();
-        _request?.Dispose();
+        if (_dashboardDisposed)
+        {
+            return Task.CompletedTask;
+        }
+        RetireSource(_request);
         _request = new CancellationTokenSource();
-        var token = _request.Token;
+        return TrackLoad(LoadTeamAsync(AnalysisChampions(), _request.Token));
+    }
+
+    private int[] AnalysisChampions() =>
         // Keep the actual self for comparison; never download the entire bench.
-        var ids = Team()
+        Team()
             .Concat(_roster?.Team.Where(e => e.IsSelf) ?? [])
             .Where(e => e.ChampionId > 0)
             .Select(e => e.ChampionId)
             .Distinct()
             .ToArray();
+
+    private async Task LoadTeamAsync(int[] ids, CancellationToken token)
+    {
+        // Register work before synchronous cache results can schedule a dashboard refresh.
+        await Task.Yield();
         using var concurrency = new SemaphoreSlim(3);
-        await Task.WhenAll(
-            ids.Select(async id =>
+        await Task.WhenAll(ids.Select(id => LoadHeroAnalysisAsync(id, concurrency, token)));
+    }
+
+    private async Task LoadHeroAnalysisAsync(int id, SemaphoreSlim concurrency, CancellationToken token)
+    {
+        bool entered = false;
+        try
+        {
+            await concurrency.WaitAsync(token);
+            entered = true;
+            var champion = _champion(id);
+            if (string.IsNullOrWhiteSpace(champion.Alias))
             {
-                bool entered = false;
-                try
-                {
-                    await concurrency.WaitAsync(token);
-                    entered = true;
-                    var champion = _champion(id);
-                    if (string.IsNullOrWhiteSpace(champion.Alias))
-                    {
-                        throw new InvalidDataException("本地英雄别名尚未加载。");
-                    }
+                throw new InvalidDataException("本地英雄别名尚未加载。");
+            }
+            var result = await _client.GetAsync(champion.Alias, _lifetime(), token);
+            if (token.IsCancellationRequested || _dashboardDisposed)
+            {
+                return;
+            }
+            _snapshots[id] = result;
+            _errors.Remove(id);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // A changed roster or closed view no longer owns this analysis result.
+            return;
+        }
+        catch (Exception ex)
+        {
+            if (token.IsCancellationRequested || _dashboardDisposed)
+            {
+                return;
+            }
+            _errors[id] = ex.Message;
+        }
+        finally
+        {
+            if (entered)
+            {
+                concurrency.Release();
+            }
+        }
+        if (!token.IsCancellationRequested && !_dashboardDisposed)
+        {
+            QueueDashboardRefresh();
+        }
+    }
 
-                    var result = await _client.GetAsync(champion.Alias, _lifetime(), token);
-                    if (token.IsCancellationRequested || IsDisposed)
-                    {
-                        return;
-                    }
+    private string DataStatus(int id) =>
+        _errors.ContainsKey(id) ? "读取失败"
+        : _snapshots.TryGetValue(id, out var data)
+            ? data.Stale ? "旧缓存"
+                : "已读取"
+        : id > 0 ? "读取中"
+        : "未选择";
 
-                    _snapshots[id] = result;
-                    _errors.Remove(id);
-                }
-                catch (OperationCanceledException)
+    private Task TrackLoad(Task work)
+    {
+        lock (_pendingLoads)
+        {
+            _pendingLoads.Add(work);
+        }
+        _ = work.ContinueWith(
+            completed =>
+            {
+                lock (_pendingLoads)
                 {
-                    return;
+                    _pendingLoads.Remove(completed);
                 }
-                catch (Exception ex)
+                if (completed.Exception is { } error)
                 {
-                    if (token.IsCancellationRequested || IsDisposed)
-                    {
-                        return;
-                    }
+                    System.Diagnostics.Debug.WriteLine($"composition view: {error.GetBaseException().GetType().Name}");
+                }
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default
+        );
+        return work;
+    }
 
-                    _errors[id] = ex.Message;
-                }
-                finally
-                {
-                    if (entered)
+    private Task[] PendingLoads()
+    {
+        lock (_pendingLoads)
+        {
+            return _pendingLoads.ToArray();
+        }
+    }
+
+    private void RetireSource(CancellationTokenSource? source)
+    {
+        if (source == null)
+        {
+            return;
+        }
+        var pending = PendingLoads();
+        var cancellation = source.CancelAsync();
+        TrackLoad(
+            Task.WhenAll(pending.Append(cancellation))
+                .ContinueWith(
+                    completed =>
                     {
-                        concurrency.Release();
-                    }
-                }
-                if (!token.IsCancellationRequested && !IsDisposed)
-                {
-                    QueueDashboardRefresh();
-                }
-            })
+                        _ = completed.Exception;
+                        source.Dispose();
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default
+                )
         );
     }
 
@@ -228,6 +308,10 @@ public sealed partial class ChampionCompositionView : UserControl
 
     private void Render()
     {
+        if (_dashboardDisposed)
+        {
+            return;
+        }
         int? selected = _grid.CurrentRow?.Tag as int?;
         var team = Team();
         _grid.Rows.Clear();
@@ -236,11 +320,7 @@ public sealed partial class ChampionCompositionView : UserControl
             int id = entry.ChampionId;
             _snapshots.TryGetValue(id, out var snapshot);
             var r = snapshot?.Report;
-            string data =
-                _errors.ContainsKey(id) ? "读取失败"
-                : snapshot == null ? (id > 0 ? "读取中" : "未选择")
-                : snapshot.Stale ? "旧缓存"
-                : "已读取";
+            string data = DataStatus(id);
             string name = id > 0 ? _champion(id).Name : "等待选择";
             var row = _grid.Rows[
                 _grid.Rows.Add(
@@ -324,12 +404,13 @@ public sealed partial class ChampionCompositionView : UserControl
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
+        if (disposing && !_dashboardDisposed)
         {
             DisposeDashboard();
-            _request?.Cancel();
-            _request?.Dispose();
+            RetireSource(_request);
             _request = null;
+            RetireSource(_viewLifetime);
+            _cleanupWork = Task.WhenAll(PendingLoads());
         }
         base.Dispose(disposing);
     }
