@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using League.Models;
 using Newtonsoft.Json.Linq;
 
@@ -14,6 +14,16 @@ internal static class MayhemAssistantChecks
         ((ComboBox)type.GetField("_mode", flags)!.GetValue(assistant)!).SelectedIndex = 3;
         var body = (FlowLayoutPanel)type.GetField("_body", flags)!.GetValue(assistant)!;
         body.Controls.Add(new Panel { Size = new Size(282, 84), Margin = new Padding(0, 0, 0, 4) });
+        var page = CreatePage();
+        type.GetMethod("AddMayhemBrowser", flags)!
+            .Invoke(assistant, new object[] { page, 103, CancellationToken.None, body, 0, 0 });
+        CheckBrowser(assistant, body, type, flags);
+        CheckOverview(assistant, body, type, flags, page);
+        Console.WriteLine("PASS: mayhem tabs, pagination, recommendations, and message-only action label.");
+    }
+
+    private static AramMetaPage CreatePage()
+    {
         var augments = new JArray(
             Enumerable
                 .Range(1, 7)
@@ -62,19 +72,11 @@ internal static class MayhemAssistantChecks
             detail[key] = new JObject { ["top"] = recommendations.DeepClone() };
         }
 
-        type.GetMethod("AddMayhemBrowser", flags)!
-            .Invoke(
-                assistant,
-                new object[]
-                {
-                    new AramMetaPage(index, detail, true, DateTime.UtcNow),
-                    103,
-                    CancellationToken.None,
-                    body,
-                    0,
-                    0,
-                }
-            );
+        return new AramMetaPage(index, detail, true, DateTime.UtcNow);
+    }
+
+    private static void CheckBrowser(Form assistant, FlowLayoutPanel body, Type type, BindingFlags flags)
+    {
         assistant.Show();
         Application.DoEvents();
         var action = (Button)type.GetField("_apply", flags)!.GetValue(assistant)!;
@@ -117,6 +119,16 @@ internal static class MayhemAssistantChecks
             assistant.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
             bitmap.Save(Path.Combine(AppContext.BaseDirectory, $"assistant-mayhem-tab-{tab}.png"));
         }
+    }
+
+    private static void CheckOverview(
+        Form assistant,
+        FlowLayoutPanel body,
+        Type type,
+        BindingFlags flags,
+        AramMetaPage page
+    )
+    {
         foreach (Control child in body.Controls.Cast<Control>().ToArray())
         {
             child.Dispose();
@@ -126,10 +138,7 @@ internal static class MayhemAssistantChecks
         type.GetField("_hero", flags)!.SetValue(assistant, 103);
         type.GetMethod("AddMasterySummary", flags)!.Invoke(assistant, null);
         type.GetMethod("AddMayhemRecommendations", flags)!
-            .Invoke(
-                assistant,
-                new object[] { new AramMetaPage(index, detail, true, DateTime.UtcNow), 103, CancellationToken.None }
-            );
+            .Invoke(assistant, new object[] { page, 103, CancellationToken.None });
         Application.DoEvents();
         bool ContainsConfigure(Control c) =>
             c is Button b && b.Text == "配置出装" || c.Controls.Cast<Control>().Any(ContainsConfigure);
@@ -149,7 +158,5 @@ internal static class MayhemAssistantChecks
                 $"Mayhem overview must fit one screen: {body.DisplayRectangle}, viewport {body.ClientSize}"
             );
         }
-
-        Console.WriteLine("PASS: mayhem tabs, pagination, recommendations, and message-only action label.");
     }
 }
