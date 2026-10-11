@@ -19,6 +19,8 @@ internal static class ScoreboardLayoutChecks
         TeamSorting();
         BanSlots();
         RequestRetirement();
+        StatisticsTable();
+        ChartSelectionAndRendering();
         Console.WriteLine(
             "PASS: scoreboard values, metric pages, player cards, lazy tabs, team sorting, bans and request retirement."
         );
@@ -352,6 +354,107 @@ internal static class ScoreboardLayoutChecks
             // Token access confirms that retirement released the source after its worker.
             return true;
         }
+    }
+
+    private static MatchInfo StatisticsMatch()
+    {
+        var blue = Player(3, 5);
+        blue["teamId"] = 100;
+        blue["puuid"] = "self";
+        blue["riotIdGameName"] = "蓝队玩家";
+        var red = Player(8, 2);
+        red["teamId"] = 200;
+        red["riotIdGameName"] = "红队玩家";
+        red.Remove("goldEarned");
+        return new MatchInfo
+        {
+            CurrPuuid = "self",
+            AllParticipants = new() { red, blue },
+            RawGameData = new JObject(),
+        };
+    }
+
+    private static void StatisticsTable()
+    {
+        using var match = StatisticsMatch();
+        using var host = new Form { ClientSize = new Size(700, 480) };
+        using var view = new MatchStatisticsView(match);
+        // Portrait loading is unrelated to this layout fixture; do not contact the live resource client.
+        typeof(MatchStatisticsView).GetField("_loaded", PrivateInstance)!.SetValue(view, true);
+        host.Controls.Add(view);
+        host.Show();
+        Application.DoEvents();
+        var grid = view.Controls.OfType<DataGridView>().Single();
+        Check(
+            grid.Columns.Count == 3 && grid.Columns[1].ToolTipText == "蓝队玩家",
+            "Statistics columns must remain ordered by team"
+        );
+        Check(
+            grid.Columns[1].DefaultCellStyle.Font?.Bold == true && grid.Columns[1].DividerWidth == 6,
+            "The current player's column and team boundary must retain their emphasis"
+        );
+        string goldTitle = MatchMetricCatalog
+            .Categories.SelectMany(c => c.Metrics)
+            .Single(m => m.Key == "goldEarned")
+            .Title;
+        var gold = grid.Rows.Cast<DataGridViewRow>().Single(r => (string?)r.Cells[0].Value == goldTitle);
+        Check(
+            (string?)gold.Cells[1].Value == 12345L.ToString("N0") && (string?)gold.Cells[2].Value == "—",
+            "Statistics must distinguish a formatted amount from missing data"
+        );
+        var group = grid.Rows.Cast<DataGridViewRow>().First(r => r.Tag is string);
+        Invoke(view, "ToggleMetricGroup", group.Index);
+        Check(
+            !grid.Rows[group.Index + 1].Visible && ((string)group.Cells[0].Value!).StartsWith("▸"),
+            "Clicking a group must collapse only its metric rows"
+        );
+        Invoke(view, "ToggleMetricGroup", group.Index);
+        Check(grid.Rows[group.Index + 1].Visible, "Clicking a collapsed group must restore its metrics");
+        using var image = new Bitmap(700, 480);
+        view.DrawToBitmap(image, new Rectangle(0, 0, 700, 480));
+        image.Save(Path.Combine(AppContext.BaseDirectory, "statistics-quality.png"));
+    }
+
+    private static void ChartSelectionAndRendering()
+    {
+        using var match = StatisticsMatch();
+        using var host = new Form { ClientSize = new Size(800, 480) };
+        using var view = new MatchChartsView(match);
+        var chart = (Control)typeof(MatchChartsView).GetField("_chart", PrivateInstance)!.GetValue(view)!;
+        chart.GetType().GetField("_loaded", PrivateInstance)!.SetValue(chart, true);
+        host.Controls.Add(view);
+        host.Show();
+        Application.DoEvents();
+        var metricsField = chart.GetType().GetField("_metrics", PrivateInstance)!;
+        var initial = (MatchMetricCatalog.Metric[])metricsField.GetValue(chart)!;
+        Check(
+            initial.Length == 1 && initial[0].Key == "totalDamageDealtToChampions",
+            "Charts must initially select champion damage"
+        );
+        Invoke(view, "UpdateSelection", new[] { "goldEarned" }, true, false);
+        Check(
+            ((MatchMetricCatalog.Metric[])metricsField.GetValue(chart)!).Length == 2,
+            "Chart selection must retain existing metrics"
+        );
+        using var image = new Bitmap(chart.Width, chart.Height);
+        chart.DrawToBitmap(image, chart.ClientRectangle);
+        image.Save(Path.Combine(AppContext.BaseDirectory, "comparison-quality.png"));
+        var hits =
+            (List<(Rectangle Bounds, string Text)>)chart.GetType().GetField("_hits", PrivateInstance)!.GetValue(chart)!;
+        Check(
+            hits.Count == 6 && hits.Any(h => h.Text.Contains("红队玩家") && h.Text.Contains("未提供")),
+            "Chart tooltips must preserve player identity and missing metric information"
+        );
+        var blueLane = hits.First(h => h.Text.Contains("蓝队玩家") && h.Text.Contains(initial[0].Title)).Bounds;
+        var redLane = hits.First(h => h.Text.Contains("红队玩家") && h.Text.Contains(initial[0].Title)).Bounds;
+        Check(
+            image.GetPixel(blueLane.X + 10, blueLane.Y + 2).ToArgb() == Color.FromArgb(0, 161, 183).ToArgb(),
+            "Blue team bars must retain their color"
+        );
+        Check(
+            image.GetPixel(redLane.X + 10, redLane.Y + 2).ToArgb() == Color.FromArgb(215, 72, 96).ToArgb(),
+            "Red team bars must retain their color"
+        );
     }
 
     private static void PlayerCardLayout()
