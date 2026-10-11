@@ -15,6 +15,7 @@
 #include <winrt/Windows.UI.Xaml.Media.h>
 #include <winrt/Windows.UI.Xaml.Media.Imaging.h>
 #include <winrt/Microsoft.Gaming.XboxGameBar.h>
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <memory>
@@ -64,6 +65,7 @@ static void LogError(hstring const &message) noexcept
     }
     catch (...)
     {
+        // Logging must remain best effort when the app-local directory is unavailable.
     }
 }
 static void Trace(hstring const &message) noexcept
@@ -81,6 +83,7 @@ static void Trace(hstring const &message) noexcept
     }
     catch (...)
     {
+        // Diagnostics must not interrupt the Game Bar window when its directory is unavailable.
     }
 }
 
@@ -152,6 +155,13 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
 
     WidgetView()
     {
+        InitializeRoot();
+        InitializeRoster();
+        InitializeDetails();
+        InitializeChat();
+    }
+    void InitializeRoot()
+    {
         root.RequestedTheme(ElementTheme::Dark);
         root.Background(MakeBrush(0x071e29));
         root.Padding({16, 10, 16, 12});
@@ -167,6 +177,9 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         hint.Margin({0, 0, 0, 10});
         Grid::SetRow(hint, 1);
         root.Children().Append(hint);
+    }
+    void InitializeRoster()
+    {
         for (int col = 0; col < 2; ++col)
             list.ColumnDefinitions().Append(ColumnDefinition());
         for (int row = 0; row < 6; ++row)
@@ -184,77 +197,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         }
         for (int i = 0; i < 10; ++i)
         {
-            auto &card = cards[i];
-            card.button.Background(MakeBrush(0x112f3c));
-            card.button.BorderThickness({0});
-            card.button.Padding({10, 6, 10, 6});
-            card.button.Margin({0, 0, i < 5 ? 8.0 : 0.0, 6});
-            card.button.HorizontalAlignment(HorizontalAlignment::Stretch);
-            card.button.VerticalAlignment(VerticalAlignment::Stretch);
-            card.button.HorizontalContentAlignment(HorizontalAlignment::Stretch);
-            Grid body;
-            ColumnDefinition iconCol;
-            iconCol.Width({54, GridUnitType::Pixel});
-            body.ColumnDefinitions().Append(iconCol);
-            body.ColumnDefinitions().Append(ColumnDefinition());
-            card.icon.Width(44);
-            card.icon.Height(44);
-            card.icon.VerticalAlignment(VerticalAlignment::Center);
-            body.Children().Append(card.icon);
-            StackPanel labels;
-            Grid::SetColumn(labels, 1);
-            Grid heading;
-            ColumnDefinition tierColumn;
-            tierColumn.Width({34, GridUnitType::Pixel});
-            heading.ColumnDefinitions().Append(tierColumn);
-            heading.ColumnDefinitions().Append(ColumnDefinition());
-            ColumnDefinition streakColumn;
-            streakColumn.Width({1, GridUnitType::Auto});
-            heading.ColumnDefinitions().Append(streakColumn);
-            card.tier = MakeText(L"—", 14, 0x91acbb);
-            card.tier.Width(34);
-            card.champion = MakeText(L"等待英雄", 15);
-            heading.Children().Append(card.tier);
-            Grid::SetColumn(card.champion, 1);
-            heading.Children().Append(card.champion);
-            card.deathStreak = MakeText(L"", 11, 0xf3b37e);
-            card.deathStreak.Margin({6, 3, 0, 0});
-            Grid::SetColumn(card.deathStreak, 2);
-            heading.Children().Append(card.deathStreak);
-            labels.Children().Append(heading);
-            Grid account;
-            ColumnDefinition partyColumn;
-            partyColumn.Width({1, GridUnitType::Auto});
-            account.ColumnDefinitions().Append(partyColumn);
-            account.ColumnDefinitions().Append(ColumnDefinition());
-            ColumnDefinition masteryColumn;
-            masteryColumn.Width({1, GridUnitType::Auto});
-            account.ColumnDefinitions().Append(masteryColumn);
-            card.party = MakeText(L"", 10);
-            card.partyBadge.Child(card.party);
-            card.partyBadge.Padding({4, 0, 4, 0});
-            card.partyBadge.CornerRadius({2});
-            card.partyBadge.Background(MakeBrush(0x253e4c));
-            card.partyBadge.Margin({0, 0, 6, 0});
-            card.partyBadge.VerticalAlignment(VerticalAlignment::Center);
-            card.partyBadge.Visibility(Visibility::Collapsed);
-            account.Children().Append(card.partyBadge);
-            card.player = MakeText(L"空缺位置", 12, 0x91acbb);
-            Grid::SetColumn(card.player, 1);
-            account.Children().Append(card.player);
-            card.mastery = MakeText(L"", 12, 0xdbc47f);
-            card.mastery.Margin({8, 0, 0, 0});
-            Grid::SetColumn(card.mastery, 2);
-            account.Children().Append(card.mastery);
-            labels.Children().Append(account);
-            card.stats = MakeText(L"胜率 —    选用率 —", 12, 0x45c7ce);
-            labels.Children().Append(card.stats);
-            body.Children().Append(labels);
-            card.button.Content(body);
-            card.button.Click([this, i](auto &&, auto &&) { OpenDetails(i); });
-            Grid::SetRow(card.button, i % 5 + 1);
-            Grid::SetColumn(card.button, i / 5);
-            list.Children().Append(card.button);
+            InitializeCard(i);
         }
         rosterScroll.Content(list);
         rosterScroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
@@ -266,61 +209,95 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         details.MinHeight(40);
         Grid::SetRow(details, 3);
         root.Children().Append(details);
-        InitializeDetails();
-        InitializeChat();
+    }
+    void InitializeCard(int i)
+    {
+        auto &card = cards[i];
+        card.button.Background(MakeBrush(0x112f3c));
+        card.button.BorderThickness({0});
+        card.button.Padding({10, 6, 10, 6});
+        card.button.Margin({0, 0, i < 5 ? 8.0 : 0.0, 6});
+        card.button.HorizontalAlignment(HorizontalAlignment::Stretch);
+        card.button.VerticalAlignment(VerticalAlignment::Stretch);
+        card.button.HorizontalContentAlignment(HorizontalAlignment::Stretch);
+        Grid body;
+        ColumnDefinition iconCol;
+        iconCol.Width({54, GridUnitType::Pixel});
+        body.ColumnDefinitions().Append(iconCol);
+        body.ColumnDefinitions().Append(ColumnDefinition());
+        card.icon.Width(44);
+        card.icon.Height(44);
+        card.icon.VerticalAlignment(VerticalAlignment::Center);
+        body.Children().Append(card.icon);
+        StackPanel labels;
+        Grid::SetColumn(labels, 1);
+        labels.Children().Append(CreateCardHeading(card));
+        labels.Children().Append(CreateCardAccount(card));
+        card.stats = MakeText(L"胜率 —    选用率 —", 12, 0x45c7ce);
+        labels.Children().Append(card.stats);
+        body.Children().Append(labels);
+        card.button.Content(body);
+        card.button.Click([this, i](auto &&, auto &&) { OpenDetails(i); });
+        Grid::SetRow(card.button, i % 5 + 1);
+        Grid::SetColumn(card.button, i / 5);
+        list.Children().Append(card.button);
+    }
+    Grid CreateCardHeading(Card &card)
+    {
+        Grid heading;
+        ColumnDefinition tierColumn;
+        tierColumn.Width({34, GridUnitType::Pixel});
+        heading.ColumnDefinitions().Append(tierColumn);
+        heading.ColumnDefinitions().Append(ColumnDefinition());
+        ColumnDefinition streakColumn;
+        streakColumn.Width({1, GridUnitType::Auto});
+        heading.ColumnDefinitions().Append(streakColumn);
+        card.tier = MakeText(L"—", 14, 0x91acbb);
+        card.tier.Width(34);
+        card.champion = MakeText(L"等待英雄", 15);
+        heading.Children().Append(card.tier);
+        Grid::SetColumn(card.champion, 1);
+        heading.Children().Append(card.champion);
+        card.deathStreak = MakeText(L"", 11, 0xf3b37e);
+        card.deathStreak.Margin({6, 3, 0, 0});
+        Grid::SetColumn(card.deathStreak, 2);
+        heading.Children().Append(card.deathStreak);
+        return heading;
+    }
+    Grid CreateCardAccount(Card &card)
+    {
+        Grid account;
+        ColumnDefinition partyColumn;
+        partyColumn.Width({1, GridUnitType::Auto});
+        account.ColumnDefinitions().Append(partyColumn);
+        account.ColumnDefinitions().Append(ColumnDefinition());
+        ColumnDefinition masteryColumn;
+        masteryColumn.Width({1, GridUnitType::Auto});
+        account.ColumnDefinitions().Append(masteryColumn);
+        card.party = MakeText(L"", 10);
+        card.partyBadge.Child(card.party);
+        card.partyBadge.Padding({4, 0, 4, 0});
+        card.partyBadge.CornerRadius({2});
+        card.partyBadge.Background(MakeBrush(0x253e4c));
+        card.partyBadge.Margin({0, 0, 6, 0});
+        card.partyBadge.VerticalAlignment(VerticalAlignment::Center);
+        card.partyBadge.Visibility(Visibility::Collapsed);
+        account.Children().Append(card.partyBadge);
+        card.player = MakeText(L"空缺位置", 12, 0x91acbb);
+        Grid::SetColumn(card.player, 1);
+        account.Children().Append(card.player);
+        card.mastery = MakeText(L"", 12, 0xdbc47f);
+        card.mastery.Margin({8, 0, 0, 0});
+        Grid::SetColumn(card.mastery, 2);
+        account.Children().Append(card.mastery);
+        return account;
     }
     void Start(XboxGameBarWidget const &value)
     {
         widget = value;
         if (widget)
         {
-            widget.GameBarDisplayModeChanged(
-                [weak = weak_from_this()](auto &&, auto &&)
-                {
-                    if (auto self = weak.lock())
-                        self->root.Dispatcher().RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
-                                                         [self]
-                                                         {
-                                                             if (!self->stopped)
-                                                             {
-                                                                 if (self->widget.GameBarDisplayMode() ==
-                                                                     XboxGameBarDisplayMode::PinnedOnly)
-                                                                     self->RequestVoiceStop();
-                                                                 self->SaveChatRequest();
-                                                                 self->UpdateChatButtons();
-                                                             }
-                                                         });
-                });
-            widget.PinnedChanged(
-                [weak = weak_from_this()](auto &&, auto &&)
-                {
-                    if (auto self = weak.lock())
-                        self->root.Dispatcher().RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
-                                                         [self]
-                                                         {
-                                                             if (self->stopped || !self->widget)
-                                                                 return;
-                                                             self->UpdateHint();
-                                                             Trace(self->widget.Pinned() ? L"widget-pinned"
-                                                                                         : L"widget-unpinned");
-                                                         });
-                });
-            widget.VisibleChanged(
-                [weak = weak_from_this()](auto &&, auto &&)
-                {
-                    if (auto self = weak.lock())
-                        self->root.Dispatcher().RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
-                                                         [self]
-                                                         {
-                                                             if (!self->stopped && self->widget)
-                                                             {
-                                                                 if (!self->widget.Visible())
-                                                                     self->RequestVoiceStop();
-                                                                 Trace(self->widget.Visible() ? L"widget-visible"
-                                                                                              : L"widget-hidden");
-                                                             }
-                                                         });
-                });
+            BindWidgetEvents();
         }
         timer.Interval(std::chrono::milliseconds(500));
         timer.Tick(
@@ -342,6 +319,66 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                 if (auto self = weak.lock())
                     Trace(L"view-loaded " + to_hstring(self->root.ActualWidth()) + L"x" +
                           to_hstring(self->root.ActualHeight()));
+            });
+    }
+    void DispatchWidgetUpdate(std::function<void(WidgetView &)> update)
+    {
+        root.Dispatcher().RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
+                                   [weak = weak_from_this(), update = std::move(update)]
+                                   {
+                                       if (auto self = weak.lock(); self && !self->stopped && self->widget)
+                                       {
+                                           update(*self);
+                                       }
+                                   });
+    }
+    void BindWidgetEvents()
+    {
+        widget.GameBarDisplayModeChanged(
+            [weak = weak_from_this()](auto &&, auto &&)
+            {
+                if (auto self = weak.lock())
+                {
+                    self->DispatchWidgetUpdate(
+                        [](WidgetView &view)
+                        {
+                            if (view.widget.GameBarDisplayMode() == XboxGameBarDisplayMode::PinnedOnly)
+                            {
+                                view.RequestVoiceStop();
+                            }
+                            view.SaveChatRequest();
+                            view.UpdateChatButtons();
+                        });
+                }
+            });
+        widget.PinnedChanged(
+            [weak = weak_from_this()](auto &&, auto &&)
+            {
+                if (auto self = weak.lock())
+                {
+                    self->DispatchWidgetUpdate(
+                        [](WidgetView &view)
+                        {
+                            view.UpdateHint();
+                            Trace(view.widget.Pinned() ? L"widget-pinned" : L"widget-unpinned");
+                        });
+                }
+            });
+        widget.VisibleChanged(
+            [weak = weak_from_this()](auto &&, auto &&)
+            {
+                if (auto self = weak.lock())
+                {
+                    self->DispatchWidgetUpdate(
+                        [](WidgetView &view)
+                        {
+                            if (!view.widget.Visible())
+                            {
+                                view.RequestVoiceStop();
+                            }
+                            Trace(view.widget.Visible() ? L"widget-visible" : L"widget-hidden");
+                        });
+                }
             });
     }
     void Stop()
@@ -373,13 +410,18 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     }
     fire_and_forget SetVisible(bool visible)
     {
+        if (stopped || !widget)
+        {
+            co_return;
+        }
         auto lifetime = shared_from_this();
+        auto owner = widget;
         try
         {
             if (visible)
-                co_await widget.RestoreAsync();
+                co_await owner.RestoreAsync();
             else
-                co_await widget.MinimizeAsync();
+                co_await owner.MinimizeAsync();
         }
         catch (hresult_error const &e)
         {
@@ -445,154 +487,219 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         }
         details.Text(L"等待当前对局数据。");
     }
+    IAsyncOperation<JsonObject> ReadSnapshotFileAsync()
+    {
+        auto folder = ApplicationData::Current().LocalFolder();
+        auto file = co_await folder.GetFileAsync(fixturePreview ? L"detail-preview-snapshot.json" : L"snapshot.json");
+        auto properties = co_await file.GetBasicPropertiesAsync();
+        if (properties.Size() > 2000000)
+            throw hresult_invalid_argument();
+        auto contents = co_await FileIO::ReadTextAsync(file);
+        co_return JsonObject::Parse(contents);
+    }
+    void ValidateSnapshot(JsonObject const &data, hstring &connectionMessage)
+    {
+        double age = fixturePreview ? 0 : Now() - data.GetNamedNumber(L"updatedAt", 0);
+        if (data.GetNamedNumber(L"protocol", 0) != 1)
+        {
+            connectionMessage = L"主程序与组件版本不兼容，请更新对局速览组件。";
+            throw hresult_invalid_argument();
+        }
+        if (age < 0 || age > 15000)
+        {
+            connectionMessage = L"主程序数据已超过 15 秒未更新；请确认 League 正在运行，且对局速览已选择 Game Bar。";
+            throw hresult_error(HRESULT_FROM_WIN32(ERROR_TIMEOUT), connectionMessage);
+        }
+    }
+    void ApplySnapshot(JsonObject const &data)
+    {
+        bool previouslyActive = active;
+        // Re-reading an old file must not extend its connection lifetime.
+        lastGood = fixturePreview ? Now() : static_cast<int64_t>(data.GetNamedNumber(L"updatedAt", 0));
+        enabled = data.GetNamedBoolean(L"enabled", false);
+        active = data.GetNamedBoolean(L"active", false);
+        supportsDetails = data.GetNamedNumber(L"detailProtocol", 0) == 1;
+        supportsChat = data.GetNamedNumber(L"chatProtocol", 0) == 1;
+        supportsMasteryChat = data.GetNamedBoolean(L"chatMastery", false);
+        supportsDeathStreakChat = data.GetNamedBoolean(L"chatDeathStreak", false);
+        chatTeams = data.GetNamedBoolean(L"chatTeams", false);
+        supportsVoiceChat = data.GetNamedBoolean(L"chatVoice", false);
+        supportsVoiceRecording = data.GetNamedNumber(L"voiceProtocol", 0) == 2;
+        if (!enabled || !active)
+            CloseVoice();
+        detailQueue = static_cast<int>(data.GetNamedNumber(L"queue", 0));
+        auto next = data.GetNamedString(L"revision", L"");
+        if (next != revision)
+        {
+            revision = next;
+            auto nextSession = data.GetNamedString(L"session", L"");
+            if (session != nextSession)
+            {
+                Clear();
+                session = nextSession;
+            }
+            ApplyRoster(data);
+            ApplyVisibilityCommand(data, previouslyActive);
+        }
+    }
+    void ApplyRoster(JsonObject const &data)
+    {
+        status.Text(
+            data.GetNamedString(L"status", active ? L"读取当前对局…" : L"暂无进行中的对局，等待进入加载界面。"));
+        UpdateHint();
+        auto teamNames = data.GetNamedArray(L"teams", JsonArray());
+        for (uint32_t i = 0; i < 2 && i < teamNames.Size(); ++i)
+            teams[i].Text(teamNames.GetStringAt(i));
+        auto rows = data.GetNamedArray(L"players", JsonArray());
+        populatedCards = 0;
+        bool marked = false;
+        for (uint32_t i = 0; i < 10; ++i)
+        {
+            UpdateCard(i, i < rows.Size() ? rows.GetObjectAt(i) : JsonObject());
+            if (cards[i].button.IsEnabled())
+            {
+                ++populatedCards;
+            }
+            marked = marked || cards[i].partyColor != 0;
+        }
+        if (selectedCard >= 0)
+            RefreshDetailHeader();
+        else if (populatedCards > 0)
+            details.Text(L"点击英雄卡片查看技能、出装与模式推荐；详情胜率属于英雄统计。" +
+                         hstring(marked ? L"\n同色与人数标记：根据近期共同战绩推测的疑似组队。" : L""));
+        if (fixturePreview && !fixtureOpened && populatedCards > 0)
+        {
+            fixtureOpened = true;
+            if (detailTab == L"voice")
+                ConfigureVoicePreview();
+            else if (detailTab != L"roster")
+                OpenDetails(0);
+        }
+    }
+    void UpdateCard(uint32_t i, JsonObject const &row)
+    {
+        auto &card = cards[i];
+        card.champion.Text(row.GetNamedString(L"champion", L"等待英雄"));
+        int hero = static_cast<int>(row.GetNamedNumber(L"championId", 0));
+        if (selectedCard == static_cast<int>(i) && card.hero != hero)
+            CloseDetails(false);
+        card.hero = hero;
+        auto playerName = row.GetNamedString(L"name", L"空缺位置");
+        card.player.Text(playerName.empty() ? L"玩家名称尚未提供" : playerName);
+        card.tier.Text(row.GetNamedString(L"tier", L"—"));
+        int partySize = static_cast<int>(row.GetNamedNumber(L"partySize", 0));
+        card.partyColor = partySize >= 2 && partySize <= 5
+                              ? static_cast<uint32_t>(row.GetNamedNumber(L"partyColor", 0)) & 0xffffff
+                              : 0;
+        card.partyLabel = card.partyColor ? row.GetNamedString(L"partyLabel", L"") : L"";
+        card.partyDetails = card.partyColor ? row.GetNamedString(L"partyDetails", L"") : L"";
+        card.party.Text(card.partyColor ? row.GetNamedString(L"party", L"") : L"");
+        card.party.Foreground(MakeBrush(card.partyColor));
+        card.partyBadge.Visibility(card.partyColor ? Visibility::Visible : Visibility::Collapsed);
+        card.player.Foreground(MakeBrush(card.partyColor ? card.partyColor : 0x91acbb));
+        card.button.BorderBrush(MakeBrush(card.partyColor ? card.partyColor : 0x315662));
+        card.button.BorderThickness({card.partyColor ? 3.0 : 0.0, 0, 0, 0});
+        ToolTip partyTip;
+        auto partyText = MakeText(card.partyDetails, 12);
+        partyText.TextWrapping(TextWrapping::Wrap);
+        partyText.MaxWidth(320);
+        partyTip.Content(partyText);
+        ToolTipService::SetToolTip(card.partyBadge, partyTip);
+        ToolTipService::SetToolTip(
+            card.player, box_value(playerName + (card.partyDetails.empty() ? L"" : L"\n" + card.partyDetails)));
+        card.tier.Foreground(MakeBrush(static_cast<uint32_t>(row.GetNamedNumber(L"color", 0x91acbb))));
+        card.stats.Text(row.GetNamedString(L"stats", L"胜率 —    选用率 —"));
+        card.mastery.Text(row.GetNamedString(L"mastery", L""));
+        card.masteryDetails = row.GetNamedString(L"masteryDetails", L"");
+        ToolTipService::SetToolTip(card.mastery, box_value(card.masteryDetails));
+        card.deathStreak.Text(row.GetNamedString(L"deathStreak", L""));
+        card.deathStreakDetails = row.GetNamedString(L"deathStreakDetails", L"");
+        ToolTipService::SetToolTip(card.deathStreak, box_value(card.deathStreakDetails));
+        card.details = row.GetNamedString(L"details", L"等待当前对局数据。");
+        card.button.IsEnabled(row.HasKey(L"name"));
+        // Image decoding must never block the other nine players or the connection heartbeat.
+        auto image = row.GetNamedString(L"icon", L"");
+        if (card.imageData != image)
+            SetImage(i, image);
+    }
+    void ApplyVisibilityCommand(JsonObject const &data, bool previouslyActive)
+    {
+        auto nextCommand = data.GetNamedString(L"command", L"");
+        if (widget && command != nextCommand)
+        {
+            bool firstCommand = command.empty();
+            command = nextCommand;
+            if (enabled && active && data.GetNamedBoolean(L"show", false))
+                SetVisible(true);
+            else if (!firstCommand && (previouslyActive || !enabled))
+                SetVisible(false);
+        }
+    }
+    IAsyncAction WriteHeartbeat()
+    {
+        if (stopped || Now() - lastHeartbeat <= 5000)
+        {
+            co_return;
+        }
+        auto lifetime = shared_from_this();
+        lastHeartbeat = Now();
+        try
+        {
+            JsonObject state;
+            state.Insert(L"protocol", JsonValue::CreateNumberValue(1));
+            state.Insert(L"updatedAt", JsonValue::CreateNumberValue(double(Now())));
+            state.Insert(L"pinned", JsonValue::CreateBooleanValue(widget && widget.Pinned()));
+            state.Insert(L"windowState", JsonValue::CreateNumberValue(widget ? int(widget.WindowState()) : -1));
+            state.Insert(L"error", JsonValue::CreateStringValue(error));
+            state.Insert(L"readError", JsonValue::CreateStringValue(readError));
+            state.Insert(L"connected", JsonValue::CreateBooleanValue(lastGood > 0 && Now() - lastGood <= 15000));
+            state.Insert(L"active", JsonValue::CreateBooleanValue(active));
+            state.Insert(L"revision", JsonValue::CreateStringValue(revision));
+            state.Insert(L"players", JsonValue::CreateNumberValue(populatedCards));
+            state.Insert(L"width", JsonValue::CreateNumberValue(root.ActualWidth()));
+            state.Insert(L"height", JsonValue::CreateNumberValue(root.ActualHeight()));
+            state.Insert(L"visible", JsonValue::CreateBooleanValue(widget ? widget.Visible() : root.IsLoaded()));
+            auto file = co_await ApplicationData::Current().LocalFolder().CreateFileAsync(
+                widget ? L"widget-status.json" : L"preview-status.json", CreationCollisionOption::ReplaceExisting);
+            co_await FileIO::WriteTextAsync(file, state.Stringify());
+        }
+        catch (...)
+        {
+            // A heartbeat is diagnostic only; transient storage failures do not disconnect the roster.
+        }
+    }
+    void CaptureWhenReady()
+    {
+        if (capturePending && root.ActualWidth() > 0 && root.ActualHeight() > 0 && populatedCards > 0 &&
+            (!fixturePreview || detailTab == L"roster" || detailTab == L"voice" ||
+             (!detailRevision.empty() && pendingDetailImages == 0)))
+        {
+            capturePending = false;
+            CapturePreview();
+        }
+    }
     fire_and_forget Read()
     {
         if (busy || stopped)
+        {
             co_return;
+        }
         auto lifetime = shared_from_this();
         busy = true;
         hstring connectionMessage = L"尚未收到主程序数据；请启动 League，并在对局速览设置中选择 Game Bar。";
         try
         {
-            auto folder = ApplicationData::Current().LocalFolder();
-            auto file =
-                co_await folder.GetFileAsync(fixturePreview ? L"detail-preview-snapshot.json" : L"snapshot.json");
-            auto properties = co_await file.GetBasicPropertiesAsync();
-            if (properties.Size() > 2000000)
-                throw hresult_invalid_argument();
-            auto contents = co_await FileIO::ReadTextAsync(file);
-            if (stopped)
+            auto data = co_await ReadSnapshotFileAsync();
+            if (!stopped)
             {
-                busy = false;
-                co_return;
-            }
-            auto data = JsonObject::Parse(contents);
-            if (fixturePreview)
-            {
-                root.Width(std::clamp(data.GetNamedNumber(L"width", 820), 640.0, 1100.0));
-                root.Height(std::clamp(data.GetNamedNumber(L"height", 560), 500.0, 800.0));
-            }
-            readError = L"";
-            double age = fixturePreview ? 0 : Now() - data.GetNamedNumber(L"updatedAt", 0);
-            if (data.GetNamedNumber(L"protocol", 0) != 1)
-            {
-                connectionMessage = L"主程序与组件版本不兼容，请更新对局速览组件。";
-                throw hresult_invalid_argument();
-            }
-            if (age < 0 || age > 15000)
-            {
-                connectionMessage =
-                    L"主程序数据已超过 15 秒未更新；请确认 League 正在运行，且对局速览已选择 Game Bar。";
-                throw hresult_error(HRESULT_FROM_WIN32(ERROR_TIMEOUT), connectionMessage);
-            }
-            bool previouslyActive = active;
-            // Re-reading an old file must not extend its connection lifetime.
-            lastGood = fixturePreview ? Now() : static_cast<int64_t>(data.GetNamedNumber(L"updatedAt", 0));
-            enabled = data.GetNamedBoolean(L"enabled", false);
-            active = data.GetNamedBoolean(L"active", false);
-            supportsDetails = data.GetNamedNumber(L"detailProtocol", 0) == 1;
-            supportsChat = data.GetNamedNumber(L"chatProtocol", 0) == 1;
-            supportsMasteryChat = data.GetNamedBoolean(L"chatMastery", false);
-            supportsDeathStreakChat = data.GetNamedBoolean(L"chatDeathStreak", false);
-            chatTeams = data.GetNamedBoolean(L"chatTeams", false);
-            supportsVoiceChat = data.GetNamedBoolean(L"chatVoice", false);
-            supportsVoiceRecording = data.GetNamedNumber(L"voiceProtocol", 0) == 2;
-            if (!enabled || !active)
-                CloseVoice();
-            detailQueue = static_cast<int>(data.GetNamedNumber(L"queue", 0));
-            auto next = data.GetNamedString(L"revision", L"");
-            if (next != revision)
-            {
-                revision = next;
-                auto nextSession = data.GetNamedString(L"session", L"");
-                if (session != nextSession)
+                if (fixturePreview)
                 {
-                    Clear();
-                    session = nextSession;
+                    root.Width(std::clamp(data.GetNamedNumber(L"width", 820), 640.0, 1100.0));
+                    root.Height(std::clamp(data.GetNamedNumber(L"height", 560), 500.0, 800.0));
                 }
-                status.Text(data.GetNamedString(L"status",
-                                                active ? L"读取当前对局…" : L"暂无进行中的对局，等待进入加载界面。"));
-                UpdateHint();
-                auto teamNames = data.GetNamedArray(L"teams", JsonArray());
-                for (uint32_t i = 0; i < 2 && i < teamNames.Size(); ++i)
-                    teams[i].Text(teamNames.GetStringAt(i));
-                auto rows = data.GetNamedArray(L"players", JsonArray());
-                populatedCards = 0;
-                bool marked = false;
-                for (uint32_t i = 0; i < 10; ++i)
-                {
-                    auto row = i < rows.Size() ? rows.GetObjectAt(i) : JsonObject();
-                    auto &card = cards[i];
-                    card.champion.Text(row.GetNamedString(L"champion", L"等待英雄"));
-                    int hero = static_cast<int>(row.GetNamedNumber(L"championId", 0));
-                    if (selectedCard == static_cast<int>(i) && card.hero != hero)
-                        CloseDetails(false);
-                    card.hero = hero;
-                    auto playerName = row.GetNamedString(L"name", L"空缺位置");
-                    card.player.Text(playerName.empty() ? L"玩家名称尚未提供" : playerName);
-                    card.tier.Text(row.GetNamedString(L"tier", L"—"));
-                    int partySize = static_cast<int>(row.GetNamedNumber(L"partySize", 0));
-                    card.partyColor = partySize >= 2 && partySize <= 5
-                                          ? static_cast<uint32_t>(row.GetNamedNumber(L"partyColor", 0)) & 0xffffff
-                                          : 0;
-                    card.partyLabel = card.partyColor ? row.GetNamedString(L"partyLabel", L"") : L"";
-                    card.partyDetails = card.partyColor ? row.GetNamedString(L"partyDetails", L"") : L"";
-                    card.party.Text(card.partyColor ? row.GetNamedString(L"party", L"") : L"");
-                    card.party.Foreground(MakeBrush(card.partyColor));
-                    card.partyBadge.Visibility(card.partyColor ? Visibility::Visible : Visibility::Collapsed);
-                    marked = marked || card.partyColor != 0;
-                    card.player.Foreground(MakeBrush(card.partyColor ? card.partyColor : 0x91acbb));
-                    card.button.BorderBrush(MakeBrush(card.partyColor ? card.partyColor : 0x315662));
-                    card.button.BorderThickness({card.partyColor ? 3.0 : 0.0, 0, 0, 0});
-                    ToolTip partyTip;
-                    auto partyText = MakeText(card.partyDetails, 12);
-                    partyText.TextWrapping(TextWrapping::Wrap);
-                    partyText.MaxWidth(320);
-                    partyTip.Content(partyText);
-                    ToolTipService::SetToolTip(card.partyBadge, partyTip);
-                    ToolTipService::SetToolTip(
-                        card.player,
-                        box_value(playerName + (card.partyDetails.empty() ? L"" : L"\n" + card.partyDetails)));
-                    card.tier.Foreground(MakeBrush(static_cast<uint32_t>(row.GetNamedNumber(L"color", 0x91acbb))));
-                    card.stats.Text(row.GetNamedString(L"stats", L"胜率 —    选用率 —"));
-                    card.mastery.Text(row.GetNamedString(L"mastery", L""));
-                    card.masteryDetails = row.GetNamedString(L"masteryDetails", L"");
-                    ToolTipService::SetToolTip(card.mastery, box_value(card.masteryDetails));
-                    card.deathStreak.Text(row.GetNamedString(L"deathStreak", L""));
-                    card.deathStreakDetails = row.GetNamedString(L"deathStreakDetails", L"");
-                    ToolTipService::SetToolTip(card.deathStreak, box_value(card.deathStreakDetails));
-                    card.details = row.GetNamedString(L"details", L"等待当前对局数据。");
-                    card.button.IsEnabled(row.HasKey(L"name"));
-                    if (row.HasKey(L"name"))
-                        ++populatedCards;
-                    // Image decoding must never block the other nine players or the connection heartbeat.
-                    auto image = row.GetNamedString(L"icon", L"");
-                    if (card.imageData != image)
-                        SetImage(i, image);
-                }
-                if (selectedCard >= 0)
-                    RefreshDetailHeader();
-                else if (populatedCards > 0)
-                    details.Text(L"点击英雄卡片查看技能、出装与模式推荐；详情胜率属于英雄统计。" +
-                                 hstring(marked ? L"\n同色与人数标记：根据近期共同战绩推测的疑似组队。" : L""));
-                if (fixturePreview && !fixtureOpened && populatedCards > 0)
-                {
-                    fixtureOpened = true;
-                    if (detailTab == L"voice")
-                        ConfigureVoicePreview();
-                    else if (detailTab != L"roster")
-                        OpenDetails(0);
-                }
-                auto nextCommand = data.GetNamedString(L"command", L"");
-                if (widget && command != nextCommand)
-                {
-                    bool firstCommand = command.empty();
-                    command = nextCommand;
-                    if (enabled && active && data.GetNamedBoolean(L"show", false))
-                        SetVisible(true);
-                    else if (!firstCommand && (previouslyActive || !enabled))
-                        SetVisible(false);
-                }
+                ValidateSnapshot(data, connectionMessage);
+                readError = L"";
+                ApplySnapshot(data);
             }
         }
         catch (hresult_error const &exception)
@@ -608,41 +715,15 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                 details.Text(L"连接恢复后会自动更新，无需重新打开组件。");
             }
         }
-        if (!stopped && Now() - lastHeartbeat > 5000)
+        if (!stopped)
         {
-            lastHeartbeat = Now();
-            try
-            {
-                JsonObject state;
-                state.Insert(L"protocol", JsonValue::CreateNumberValue(1));
-                state.Insert(L"updatedAt", JsonValue::CreateNumberValue(double(Now())));
-                state.Insert(L"pinned", JsonValue::CreateBooleanValue(widget && widget.Pinned()));
-                state.Insert(L"windowState", JsonValue::CreateNumberValue(widget ? int(widget.WindowState()) : -1));
-                state.Insert(L"error", JsonValue::CreateStringValue(error));
-                state.Insert(L"readError", JsonValue::CreateStringValue(readError));
-                state.Insert(L"connected", JsonValue::CreateBooleanValue(lastGood > 0 && Now() - lastGood <= 15000));
-                state.Insert(L"active", JsonValue::CreateBooleanValue(active));
-                state.Insert(L"revision", JsonValue::CreateStringValue(revision));
-                state.Insert(L"players", JsonValue::CreateNumberValue(populatedCards));
-                state.Insert(L"width", JsonValue::CreateNumberValue(root.ActualWidth()));
-                state.Insert(L"height", JsonValue::CreateNumberValue(root.ActualHeight()));
-                state.Insert(L"visible", JsonValue::CreateBooleanValue(widget ? widget.Visible() : root.IsLoaded()));
-                auto file = co_await ApplicationData::Current().LocalFolder().CreateFileAsync(
-                    widget ? L"widget-status.json" : L"preview-status.json", CreationCollisionOption::ReplaceExisting);
-                co_await FileIO::WriteTextAsync(file, state.Stringify());
-            }
-            catch (...)
-            {
-            }
+            co_await WriteHeartbeat();
         }
         busy = false;
-        UpdateChatButtons();
-        if (capturePending && root.ActualWidth() > 0 && root.ActualHeight() > 0 && populatedCards > 0 &&
-            (!fixturePreview || detailTab == L"roster" || detailTab == L"voice" ||
-             (!detailRevision.empty() && pendingDetailImages == 0)))
+        if (!stopped)
         {
-            capturePending = false;
-            CapturePreview();
+            UpdateChatButtons();
+            CaptureWhenReady();
         }
     }
 };

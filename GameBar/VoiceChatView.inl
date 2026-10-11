@@ -69,6 +69,18 @@ void InitializeVoice()
     voicePanel.Margin({0, 6, 0, 0});
     voicePanel.Visibility(Visibility::Collapsed);
     StackPanel body;
+    body.Children().Append(CreateVoiceHeader());
+    ConfigureVoiceEditor();
+    body.Children().Append(voiceEditor);
+    body.Children().Append(CreateVoiceFooter());
+    voiceHint.TextWrapping(TextWrapping::Wrap);
+    voiceHint.Margin({0, 5, 0, 0});
+    voiceHint.Visibility(Visibility::Collapsed);
+    body.Children().Append(voiceHint);
+    voicePanel.Child(body);
+}
+Grid CreateVoiceHeader()
+{
     Grid header;
     header.ColumnDefinitions().Append(ColumnDefinition());
     ColumnDefinition buttons;
@@ -97,7 +109,10 @@ void InitializeVoice()
     voiceClose.Click([this](auto &&, auto &&) { CloseVoice(); });
     actions.Children().Append(voiceClose);
     header.Children().Append(actions);
-    body.Children().Append(header);
+    return header;
+}
+void ConfigureVoiceEditor()
+{
     voiceEditor.MaxLength(180);
     voiceEditor.AcceptsReturn(false);
     voiceEditor.TextWrapping(TextWrapping::Wrap);
@@ -110,7 +125,9 @@ void InitializeVoice()
     voiceEditor.Foreground(MakeBrush(0xe2eef3));
     voiceEditor.BorderBrush(MakeBrush(0x315662));
     voiceEditor.TextChanged([this](auto &&, auto &&) { UpdateVoiceButtons(); });
-    body.Children().Append(voiceEditor);
+}
+Grid CreateVoiceFooter()
+{
     Grid footer;
     footer.ColumnDefinitions().Append(ColumnDefinition());
     ColumnDefinition sendColumn;
@@ -137,12 +154,7 @@ void InitializeVoice()
     voiceSend.Click([this](auto &&, auto &&) { ConfirmVoice(); });
     controls.Children().Append(voiceSend);
     footer.Children().Append(controls);
-    body.Children().Append(footer);
-    voiceHint.TextWrapping(TextWrapping::Wrap);
-    voiceHint.Margin({0, 5, 0, 0});
-    voiceHint.Visibility(Visibility::Collapsed);
-    body.Children().Append(voiceHint);
-    voicePanel.Child(body);
+    return footer;
 }
 bool VoiceAvailable() const
 {
@@ -160,12 +172,7 @@ void UpdateVoiceButtons()
     voiceEditor.IsReadOnly(voiceRunning || chatPending || chatCleanup);
     voiceRecord.IsEnabled(available && supportsVoiceRecording &&
                           (!voiceRunning || (voiceReady && !voiceStopRequested)));
-    hstring recordLabel = voiceRunning                 ? (voiceDecoding        ? L"识别中…"
-                                                          : voiceStopRequested ? L"停止中…"
-                                                          : voiceReady         ? L"停止录音"
-                                                                               : L"准备中…")
-                          : voiceEditor.Text().empty() ? L"开始录音"
-                                                       : L"重新录音";
+    hstring recordLabel = VoiceRecordLabel();
     auto label = voiceRecord.Content().try_as<TextBlock>();
     if (label && label.Text() != recordLabel)
         label.Text(recordLabel);
@@ -173,6 +180,15 @@ void UpdateVoiceButtons()
     voiceClear.IsEnabled(!voiceRunning && !chatPending && !chatCleanup && !voiceEditor.Text().empty());
     voiceClose.IsEnabled(!chatPending && !chatCleanup);
     voiceCount.Text(to_hstring(voiceEditor.Text().size()) + L" / 180");
+}
+hstring VoiceRecordLabel() const
+{
+    return voiceRunning                 ? (voiceDecoding        ? L"识别中…"
+                                           : voiceStopRequested ? L"停止中…"
+                                           : voiceReady         ? L"停止录音"
+                                                                : L"准备中…")
+           : voiceEditor.Text().empty() ? L"开始录音"
+                                        : L"重新录音";
 }
 void OpenVoice()
 {
@@ -310,6 +326,7 @@ fire_and_forget ReadVoiceStatus()
     }
     catch (...)
     {
+        // The main process atomically replaces status files; a missing or partial reply is retried by the next poll.
     }
     if (VoiceCurrent(generation) && voiceRunning && Now() - voiceCreated > 55000)
     {
@@ -391,11 +408,13 @@ fire_and_forget ForgetRecording()
             }
             catch (...)
             {
+                // The main process may already have removed this completed recording's files.
             }
         }
     }
     catch (...)
     {
+        Trace(L"voice-local-cleanup-error");
     }
     if (voiceId == id)
         voiceId = L"";
