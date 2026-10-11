@@ -10,8 +10,10 @@ public partial class PlayerCardControl
 
     public void ClearRecentStatistics()
     {
-        _recentKda.Text = "KDA  —"; _recentWinRate.Text = "胜率  —";
-        _statisticsTips?.SetToolTip(_recentKda, ""); _statisticsTips?.SetToolTip(_recentWinRate, "");
+        _recentKda.Text = "KDA  —";
+        _recentWinRate.Text = "胜率  —";
+        _statisticsTips?.SetToolTip(_recentKda, "");
+        _statisticsTips?.SetToolTip(_recentWinRate, "");
     }
 
     public void SetRecentStatistics(PlayerMatchInfo info)
