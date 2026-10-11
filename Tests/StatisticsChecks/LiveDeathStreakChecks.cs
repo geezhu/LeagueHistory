@@ -102,6 +102,19 @@ internal static class LiveDeathStreakChecks
 
     public static void Run()
     {
+        CounterAndIdentity();
+        RepeatedEventsAndExecution();
+        HistoryCompleteness();
+        InvalidIdentityAndScores();
+        NewMatchReset();
+        RosterMapping();
+        Console.WriteLine(
+            "PASS: death streak reset, assists, execution, highest, late-open recovery, duplicates, sorting, partial history, hidden identities, score verification and new-match reset."
+        );
+    }
+
+    private static void CounterAndIdentity()
+    {
         var data = Fixture();
         var snapshot = LiveMatchSnapshot.Parse(data);
         Check(
@@ -142,6 +155,12 @@ internal static class LiveDeathStreakChecks
             Streak(LiveMatchSnapshot.Parse(bot), 0) is { Current: 2, Highest: 3, Complete: true },
             "Bots without Riot IDs use their explicit unique summoner names, rather than being treated as hidden humans"
         );
+    }
+
+    private static void RepeatedEventsAndExecution()
+    {
+        var data = Fixture();
+        var snapshot = LiveMatchSnapshot.Parse(data);
         for (int i = 0; i < 10; i++)
         {
             Check(
@@ -180,6 +199,11 @@ internal static class LiveDeathStreakChecks
             Streak(LiveMatchSnapshot.Parse(selfDeath), 0) is { Current: 3, Highest: 3 },
             "Legacy and Riot-ID aliases of the same player cannot turn self-death into a kill reset"
         );
+    }
+
+    private static void HistoryCompleteness()
+    {
+        var data = Fixture();
         var partial = (JObject)data.DeepClone();
         partial["events"]!["Events"] = new JArray(
             partial["events"]!["Events"]![8]!.DeepClone(),
@@ -208,6 +232,11 @@ internal static class LiveDeathStreakChecks
             Streak(LiveMatchSnapshot.Parse(noStart), 0).Complete,
             "Matching kill/death totals can verify complete per-player history without the start event"
         );
+    }
+
+    private static void InvalidIdentityAndScores()
+    {
+        var data = Fixture();
         var hidden = (JObject)data.DeepClone();
         hidden["allPlayers"]![0]!["riotId"] = "#";
         Check(
@@ -232,6 +261,10 @@ internal static class LiveDeathStreakChecks
             Streak(LiveMatchSnapshot.Parse(lag), 0).Current == null,
             "A scoreboard behind the events waits for synchronization"
         );
+    }
+
+    private static void NewMatchReset()
+    {
         var next = Fixture();
         next["gameData"]!["gameTime"] = 1;
         next["events"]!["Events"] = new JArray(
@@ -251,6 +284,11 @@ internal static class LiveDeathStreakChecks
             Streak(LiveMatchSnapshot.Parse(next), 0) is { Current: 0, Highest: 0, Complete: true },
             "A new match resets both current and highest without retained state"
         );
+    }
+
+    private static void RosterMapping()
+    {
+        var snapshot = LiveMatchSnapshot.Parse(Fixture());
         var roster = new LoadingRoster(
             "game",
             450,
@@ -271,9 +309,6 @@ internal static class LiveDeathStreakChecks
                 .ForRoster(roster with { Players = [roster.Players[0] with { Team = 200 }] }, snapshot)["account-A"]
                 .Current == null,
             "A mismatched team cannot reuse another roster's event statistics"
-        );
-        Console.WriteLine(
-            "PASS: death streak reset, assists, execution, highest, late-open recovery, duplicates, sorting, partial history, hidden identities, score verification and new-match reset."
         );
     }
 }

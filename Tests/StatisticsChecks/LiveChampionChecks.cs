@@ -56,6 +56,18 @@ internal static class LiveChampionChecks
 
     public static void Run()
     {
+        RawChampionKeys();
+        ExactResourceNames();
+        var roster = RosterFallback();
+        TierMessages();
+        Task.Run(() => CheckBridge(roster)).GetAwaiter().GetResult();
+        Console.WriteLine(
+            "PASS: Seraphine raw formats, exact name fallback, LCU pick retention, ambiguity, hidden identities, Game Bar detail selection and tier chat. No game input sent."
+        );
+    }
+
+    private static void RawChampionKeys()
+    {
         foreach (
             string raw in new[]
             {
@@ -92,7 +104,10 @@ internal static class LiveChampionChecks
         {
             Check(LiveChampionIdentity.ReadAlias(raw) == "", "Malformed keys must not use substring guesses");
         }
+    }
 
+    private static void ExactResourceNames()
+    {
         Check(
             LiveChampionIdentity.Resolve(Sample("changed-key").Players.Single(), Heroes)?.Id == 147,
             "Exact localized resource names recover omitted or changed keys"
@@ -119,6 +134,10 @@ internal static class LiveChampionChecks
             ) == null,
             "Ambiguous resource names remain unknown"
         );
+    }
+
+    private static LoadingRoster RosterFallback()
+    {
         var roster = new LoadingRoster(
             "match",
             450,
@@ -137,6 +156,13 @@ internal static class LiveChampionChecks
             roster.FromLive(missing, _ => 0).Players.Single().ChampionId == 147,
             "Temporary missing resource keys cannot erase a confirmed LCU pick"
         );
+        InvalidRosterFallbacks(roster, live, missing);
+        return merged;
+    }
+
+    private static void InvalidRosterFallbacks(LoadingRoster roster, LiveMatchSnapshot live, LiveMatchSnapshot missing)
+    {
+        int Resolve(LiveMatchPlayer player) => LiveChampionIdentity.Resolve(player, Heroes)?.Id ?? 0;
         Check(
             (roster with { Players = [roster.Players[0] with { Team = 200 }] })
                 .FromLive(missing, _ => 0)
@@ -177,6 +203,11 @@ internal static class LiveChampionChecks
             roster.FromLive(hidden, _ => 0).Players.Single() is { ChampionId: 0, IdentityHidden: true, Puuid: "" },
             "Hidden identities cannot inherit another player's pick"
         );
+    }
+
+    private static void TierMessages()
+    {
+        var live = Sample("Character_Seraphine_Name");
         string message = string.Join(
             "",
             LiveTierChatService.BuildMessages(
@@ -189,10 +220,6 @@ internal static class LiveChampionChecks
             )
         );
         Check(message.Contains("星籁歌姬 T1 53.0%/7.0%"), "In-game tier messages use the same identity resolver");
-        Task.Run(() => CheckBridge(merged)).GetAwaiter().GetResult();
-        Console.WriteLine(
-            "PASS: Seraphine raw formats, exact name fallback, LCU pick retention, ambiguity, hidden identities, Game Bar detail selection and tier chat. No game input sent."
-        );
     }
 
     private static async Task CheckBridge(LoadingRoster roster)
@@ -218,7 +245,12 @@ internal static class LiveChampionChecks
                 new Dictionary<string, PlayerChampionMastery> { { "account", new(147, 12, 100000, null, true) } }
             );
             string file = Path.Combine(folder, "snapshot.json");
-            Check(SpinWait.SpinUntil(() => File.Exists(file), 5000), "Game Bar snapshot is published");
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (!File.Exists(file) && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(10);
+            }
+            Check(File.Exists(file), "Game Bar snapshot is published");
             var snapshot = JObject.Parse(await File.ReadAllTextAsync(file));
             Check(
                 (int?)snapshot["players"]![0]!["championId"] == 147

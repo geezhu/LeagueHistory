@@ -17,6 +17,21 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--roster-identity-checks"))
+        {
+            Task.Run(LoadingRosterIdentityChecks.Run).GetAwaiter().GetResult();
+            return;
+        }
+        if (args.Contains("--live-champion-checks"))
+        {
+            LiveChampionChecks.Run();
+            return;
+        }
+        if (args.Contains("--death-streak-checks"))
+        {
+            LiveDeathStreakChecks.Run();
+            return;
+        }
         if (args.Contains("--live-match-checks"))
         {
             LiveMatchChecks.Run();
