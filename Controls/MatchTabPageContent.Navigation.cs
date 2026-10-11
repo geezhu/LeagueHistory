@@ -1,4 +1,5 @@
 ﻿using League.Models;
+using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
 
@@ -17,6 +18,8 @@ public partial class MatchTabPageContent
     private ProfileBackgroundPanel _profileBackground = null!;
     private readonly Dictionary<string, RankedStats> _profileRanks = new();
     private Label _highestRank = null!;
+    private bool _navigationClosing;
+    private Func<MatchDetailView, Task> _prepareInlineDetail = detail => detail.PrepareAsync();
 
     private void SetRankHistory(string name, RankedStats stats)
     {
@@ -45,25 +48,49 @@ public partial class MatchTabPageContent
     private void ConfigureProfileNavigation(Control profile, Control toolbar)
     {
         _profileSurface = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true };
+        ConfigureProfileSections(profile);
+        _contentSurface = new BufferedPanel { Dock = DockStyle.Fill, Padding = new Padding(0, 0, 12, 0) };
+        _contentSurface.Controls.Add(_profileSurface);
+        _historySurface = new BufferedPanel { Dock = DockStyle.Right, Width = 300 };
+        ConfigureReturnButton();
+        _historySurface.Controls.Add(flowLayoutPanelRight);
+        _historySurface.Controls.Add(toolbar);
+        _historySurface.Controls.Add(_backToProfile);
+        Controls.Add(_contentSurface);
+        Controls.Add(_historySurface);
+        // The upstream public cleanup path disposes the history flow without disposing this UserControl.
+        flowLayoutPanelRight.Disposed += (_, _) => CloseProfileNavigation();
+        Disposed += (_, _) => CloseProfileNavigation();
+    }
+
+    private void ConfigureProfileSections(Control profile)
+    {
         _masteryView = new ProfileMasteryView { Dock = DockStyle.Top };
         _recentActivity = new RecentActivityView { Dock = DockStyle.Top };
         var overview = new RecentOverviewView { Dock = DockStyle.Top };
         _recentActivity.OverviewLoaded += overview.SetGames;
         _masteryView.ProfileLoaded += picChampionId.SetExperience;
-        _masteryView.AllRequested += records =>
-        {
-            var gallery = new MasteryGalleryView(records, _masteryView.OwnershipText) { Dock = DockStyle.Fill };
-            gallery.CloseRequested += () => gallery.Dispose();
-            Controls.Add(gallery);
-            gallery.BringToFront();
-        };
+        _masteryView.AllRequested += OpenMasteryGallery;
         _profileSurface.Controls.Add(_masteryView);
         _profileSurface.Controls.Add(_recentActivity);
         _profileSurface.Controls.Add(overview);
         _profileSurface.Controls.Add(profile);
-        _contentSurface = new BufferedPanel { Dock = DockStyle.Fill, Padding = new Padding(0, 0, 12, 0) };
-        _contentSurface.Controls.Add(_profileSurface);
-        _historySurface = new BufferedPanel { Dock = DockStyle.Right, Width = 300 };
+    }
+
+    private void OpenMasteryGallery(JObject[] records)
+    {
+        if (_navigationClosing || _disposed || IsDisposed)
+        {
+            return;
+        }
+        var gallery = new MasteryGalleryView(records, _masteryView.OwnershipText) { Dock = DockStyle.Fill };
+        gallery.CloseRequested += () => gallery.Dispose();
+        Controls.Add(gallery);
+        gallery.BringToFront();
+    }
+
+    private void ConfigureReturnButton()
+    {
         _backToProfile = new Button
         {
             Text = "← 返回玩家主页",
@@ -77,16 +104,11 @@ public partial class MatchTabPageContent
         _backToProfile.TextAlign = ContentAlignment.MiddleLeft;
         _backToProfile.ForeColor = Color.FromArgb(89, 115, 151);
         _backToProfile.FlatAppearance.MouseOverBackColor = Color.FromArgb(225, 237, 253);
-        _historySurface.Controls.Add(flowLayoutPanelRight);
-        _historySurface.Controls.Add(toolbar);
-        _historySurface.Controls.Add(_backToProfile);
-        Controls.Add(_contentSurface);
-        Controls.Add(_historySurface);
     }
 
     private void ConfigureCompactMatch(Control? control)
     {
-        if (control is not MatchListPanel card)
+        if (_navigationClosing || control is not MatchListPanel card)
         {
             return;
         }
@@ -99,18 +121,29 @@ public partial class MatchTabPageContent
 
     private async void OpenInlineMatch(MatchInfo match)
     {
+        try
+        {
+            await OpenInlineMatchAsync(match);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"详情切换失败：{ex.GetType().Name}");
+        }
+    }
+
+    private async Task OpenInlineMatchAsync(MatchInfo match)
+    {
         var card = flowLayoutPanelRight
             .Controls.OfType<MatchListPanel>()
             .FirstOrDefault(c => ReferenceEquals(c.MatchInfo, match));
-        if (card == null)
+        if (_navigationClosing || _disposed || IsDisposed || card == null || card.IsDisposed)
         {
             return;
         }
 
         if (card == _selectedCard)
         {
-            _pendingDetail?.Dispose();
-            _pendingDetail = null;
+            DiscardPendingDetail();
             return;
         }
         if (match.AllParticipants == null || !match.AllParticipants.Any(p => (int?)p["teamId"] is 100 or 200))
@@ -118,36 +151,45 @@ public partial class MatchTabPageContent
             MessageBox.Show("这场比赛暂不支持计分板详情。");
             return;
         }
-        _pendingDetail?.Dispose();
+        DiscardPendingDetail();
         var next = new MatchDetailView(match) { Dock = DockStyle.Fill, Visible = false };
         _pendingDetail = next;
         _contentSurface.Controls.Add(next);
         next.Bounds = _contentSurface.DisplayRectangle;
         try
         {
-            await next.PrepareAsync();
+            await _prepareInlineDetail(next);
+        }
+        catch (OperationCanceledException) when (next.IsDisposed || _navigationClosing)
+        {
+            // A replaced detail owns its cancellation and cannot publish into the current selection.
+            DiscardDetail(next);
+            return;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"详情准备失败：{ex.GetType().Name}");
-            if (ReferenceEquals(_pendingDetail, next))
-            {
-                _pendingDetail = null;
-            }
-
-            next.Dispose();
+            DiscardDetail(next);
             return;
         }
-        if (IsDisposed || next.IsDisposed || !ReferenceEquals(_pendingDetail, next) || card.IsDisposed)
+        if (
+            _navigationClosing
+            || _disposed
+            || IsDisposed
+            || next.IsDisposed
+            || !ReferenceEquals(_pendingDetail, next)
+            || card.IsDisposed
+            || card.Parent != flowLayoutPanelRight
+        )
         {
-            if (ReferenceEquals(_pendingDetail, next))
-            {
-                _pendingDetail = null;
-            }
-
-            next.Dispose();
+            DiscardDetail(next);
             return;
         }
+        PublishInlineDetail(next, card);
+    }
+
+    private void PublishInlineDetail(MatchDetailView next, MatchListPanel card)
+    {
         _pendingDetail = null;
         var previous = _detailView;
         SuspendLayout();
@@ -160,28 +202,21 @@ public partial class MatchTabPageContent
                 _profileHistoryScroll = new Point(0, -flowLayoutPanelRight.AutoScrollPosition.Y);
             }
 
-            if (_selectedCard != null)
-            {
-                _selectedCard.SelectedMatch = false;
-                _selectedCard.Invalidate();
-            }
-            _selectedCard = card;
-            card.SelectedMatch = true;
-            card.Invalidate();
+            SelectHistoryCard(card);
             _historySurface.Dock = DockStyle.Left;
             _historySurface.Width = 230;
             _contentSurface.Padding = new Padding(12, 0, 0, 0);
             _profileSurface.Visible = false;
             _backToProfile.Visible = true;
             _detailView = next;
-            _detailView.PlayerProfileRequested += async id =>
+            _detailView.PlayerProfileRequested += OpenRequestedPlayer;
+            _detailView.ReplayRequested += () =>
             {
-                if (FindForm() is FormMain main)
+                if (!card.IsDisposed)
                 {
-                    await main.OpenPlayerProfileAsync(id);
+                    card.RequestReplay();
                 }
             };
-            _detailView.ReplayRequested += () => card.RequestReplay();
             _detailView.BringToFront();
             ResizeMatchCards();
         }
@@ -197,10 +232,72 @@ public partial class MatchTabPageContent
         previous?.Dispose();
     }
 
+    private async void OpenRequestedPlayer(string id)
+    {
+        try
+        {
+            if (!_navigationClosing && FindForm() is FormMain main)
+            {
+                await main.OpenPlayerProfileAsync(id);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"玩家主页打开失败：{ex.GetType().Name}");
+        }
+    }
+
+    private void SelectHistoryCard(MatchListPanel? card)
+    {
+        if (_selectedCard is { IsDisposed: false })
+        {
+            _selectedCard.SelectedMatch = false;
+            _selectedCard.Invalidate();
+        }
+        _selectedCard = card;
+        if (card is { IsDisposed: false })
+        {
+            card.SelectedMatch = true;
+            card.Invalidate();
+        }
+    }
+
+    private void DiscardDetail(MatchDetailView detail)
+    {
+        if (ReferenceEquals(_pendingDetail, detail))
+        {
+            _pendingDetail = null;
+        }
+        detail.Dispose();
+    }
+
+    private void DiscardPendingDetail()
+    {
+        var pending = _pendingDetail;
+        _pendingDetail = null;
+        pending?.Dispose();
+    }
+
+    private void CloseProfileNavigation()
+    {
+        if (_navigationClosing)
+        {
+            return;
+        }
+        _navigationClosing = true;
+        DiscardPendingDetail();
+        _detailView?.Dispose();
+        _detailView = null;
+        _selectedCard = null;
+    }
+
     private void ReturnToProfile()
     {
-        _pendingDetail?.Dispose();
-        _pendingDetail = null;
+        DiscardPendingDetail();
+        if (_navigationClosing || IsDisposed)
+        {
+            return;
+        }
         SuspendLayout();
         _contentSurface?.SuspendLayout();
         _historySurface?.SuspendLayout();
@@ -208,12 +305,7 @@ public partial class MatchTabPageContent
         {
             _detailView?.Dispose();
             _detailView = null;
-            if (_selectedCard != null && !_selectedCard.IsDisposed)
-            {
-                _selectedCard.SelectedMatch = false;
-                _selectedCard.Invalidate();
-            }
-            _selectedCard = null;
+            SelectHistoryCard(null);
             if (_historySurface == null || _historySurface.IsDisposed)
             {
                 return;

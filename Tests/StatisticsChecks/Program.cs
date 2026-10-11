@@ -17,6 +17,11 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--history-navigation-checks"))
+        {
+            WinFormsCheckHost.Run(HistoryNavigationChecks.Run);
+            return;
+        }
         if (args.Contains("--profile-surface-checks"))
         {
             WinFormsCheckHost.Run(ProfileSurfaceChecks.Run);
