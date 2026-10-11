@@ -41,10 +41,17 @@ internal sealed class LolLauncherPanel : UserControl
     private readonly ToolTip _tips = new();
     private LolInstallation? _installation;
     private bool _selected;
+    private bool _closing;
+    private readonly Font _panelFont = new("Microsoft YaHei UI", 9);
+    private Func<Task<LolInstallation?>> _detectInstallation = LOLHelper.Shared.DetectAsync;
+    private Func<string, Task<LolInstallation>> _saveInstallation = path =>
+        Task.Run(() => LOLHelper.Shared.SaveInstallation(path), CancellationToken.None);
+    private Func<string, Task> _startLauncher = path =>
+        Task.Run(() => LOLHelper.Shared.StartValidatedLauncher(path), CancellationToken.None);
 
     public LolLauncherPanel()
     {
-        Font = new Font("Microsoft YaHei UI", 9);
+        Font = _panelFont;
         Size = new Size(580, 156);
         var choose = new Button { Text = "选择安装目录", AutoSize = true };
         foreach (var button in new[] { choose, _official, _wegame })
@@ -61,63 +68,91 @@ internal sealed class LolLauncherPanel : UserControl
         _pathFrame.Controls.Add(_path);
         Controls.AddRange(new Control[] { _status, _pathFrame, _buttons, _hint });
         Arrange();
-        _official.Click += (_, _) => Start(_installation?.OfficialPath);
-        _wegame.Click += (_, _) => Start(_installation?.WeGamePath);
-        choose.Click += async (_, _) =>
-        {
-            using var dialog = new FolderBrowserDialog
-            {
-                Description = "选择英雄联盟安装目录（包含 LeagueClient 文件夹）",
-                UseDescriptionForTitle = true,
-                SelectedPath = _installation?.Root ?? "",
-            };
-            if (dialog.ShowDialog(FindForm()) != DialogResult.OK)
-            {
-                return;
-            }
-
-            _selected = true;
-            choose.Enabled = false;
-            try
-            {
-                var installation = await Task.Run(() => LOLHelper.Shared.SaveInstallation(dialog.SelectedPath));
-                if (!IsDisposed)
-                {
-                    ShowInstallation(installation);
-                }
-            }
-            catch (Exception ex)
-            {
-                if (!IsDisposed)
-                {
-                    ShowInstallation(_installation);
-                    MessageBox.Show(FindForm(), ex.Message, "无法保存安装目录");
-                }
-            }
-            finally
-            {
-                if (!IsDisposed)
-                {
-                    choose.Enabled = true;
-                }
-            }
-        };
+        _official.Click += async (_, _) => await StartAsync(_installation?.OfficialPath);
+        _wegame.Click += async (_, _) => await StartAsync(_installation?.WeGamePath);
+        choose.Click += async (_, _) => await ChooseInstallationAsync(choose);
     }
 
-    protected override async void OnLoad(EventArgs e)
+    private async Task ChooseInstallationAsync(Button choose)
     {
-        base.OnLoad(e);
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "选择英雄联盟安装目录（包含 LeagueClient 文件夹）",
+            UseDescriptionForTitle = true,
+            SelectedPath = _installation?.Root ?? "",
+        };
+        if (dialog.ShowDialog(FindForm()) != DialogResult.OK || _closing)
+        {
+            return;
+        }
+        await SaveInstallationAsync(dialog.SelectedPath, choose);
+    }
+
+    private async Task SaveInstallationAsync(string path, Button choose)
+    {
+        if (_closing)
+        {
+            return;
+        }
+        _selected = true;
+        choose.Enabled = false;
         try
         {
-            var installation = await LOLHelper.Shared.DetectAsync().WaitAsync(TimeSpan.FromSeconds(8));
-            if (!IsDisposed && !_selected)
+            var installation = await _saveInstallation(path);
+            if (!_closing)
             {
                 ShowInstallation(installation);
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            if (!IsDisposed && !_selected)
+            if (!_closing)
+            {
+                ShowInstallation(_installation);
+                MessageBox.Show(FindForm(), ex.Message, "无法保存安装目录");
+            }
+        }
+        finally
+        {
+            if (!_closing)
+            {
+                choose.Enabled = true;
+            }
+        }
+    }
+
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+        _ = DetectInstallationAsync();
+    }
+
+    private async Task DetectInstallationAsync()
+    {
+        if (_closing)
+        {
+            return;
+        }
+        var detection = _detectInstallation();
+        try
+        {
+            var installation = await detection.WaitAsync(TimeSpan.FromSeconds(8));
+            if (!_closing && !_selected)
+            {
+                ShowInstallation(installation);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Detection is shared by launch panels. It may continue after our timeout; observe a later failure too.
+            _ = detection.ContinueWith(
+                completed => _ = completed.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default
+            );
+            System.Diagnostics.Debug.WriteLine($"LOL path detection: {ex.GetType().Name}");
+            if (!_closing && !_selected)
             {
                 ShowInstallation(null);
                 _status.Text = "识别暂不可用 · 请手动选择目录";
@@ -147,7 +182,7 @@ internal sealed class LolLauncherPanel : UserControl
 
     private void Arrange()
     {
-        if (_buttons == null || _buttons.Controls.Count == 0)
+        if (_closing || _buttons == null || _buttons.Controls.Count == 0)
         {
             return;
         }
@@ -181,9 +216,9 @@ internal sealed class LolLauncherPanel : UserControl
         }
     }
 
-    private async void Start(string? path)
+    private async Task StartAsync(string? path)
     {
-        if (path == null)
+        if (path == null || _closing)
         {
             return;
         }
@@ -191,18 +226,18 @@ internal sealed class LolLauncherPanel : UserControl
         _official.Enabled = _wegame.Enabled = false;
         try
         {
-            await Task.Run(() => LOLHelper.Shared.StartValidatedLauncher(path));
+            await _startLauncher(path);
         }
         catch (Exception ex)
         {
-            if (!IsDisposed)
+            if (!_closing)
             {
                 MessageBox.Show(FindForm(), ex.Message, "启动失败");
             }
         }
         finally
         {
-            if (!IsDisposed)
+            if (!_closing)
             {
                 ShowInstallation(_installation);
             }
@@ -211,9 +246,11 @@ internal sealed class LolLauncherPanel : UserControl
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
+        if (disposing && !_closing)
         {
+            _closing = true;
             _tips.Dispose();
+            _panelFont.Dispose();
         }
 
         base.Dispose(disposing);
