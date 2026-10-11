@@ -55,7 +55,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Update-CodeQualitySc
 
 ## 当前样板与验证
 
-样板已扩展到全部新增客户端、模型、英雄分析解析器和图标／名称辅助代码，以及全部新增服务和管理器，并开始覆盖战绩界面、arammeta 与 OP.GG 页面、阵容分析、英雄成就、主页背景、启动面板、缓存设置与基础控件；共 173 个源码文件。
+样板已扩展到全部新增客户端、模型、英雄分析解析器和图标／名称辅助代码，以及全部新增服务和管理器，并开始覆盖战绩界面、arammeta 与 OP.GG 页面、阵容分析、英雄成就、主页背景、启动面板、缓存设置与基础控件；共 176 个源码文件。
 
 阵容分析的证据提取与结论生成分开，实时对局按玩家和事件解析，时间轴按帧、金币和事件处理。客户端分别处理缓存读取、网络刷新和原子保存；共享初始化不因单个视图取消而中止，等待方仍可取消。玩家加载分离名单核对、请求与结果投递；符文应用分离保存与当前页面校验。
 
@@ -89,6 +89,8 @@ OP.GG 页面分别处理筛选、浏览历史、排行榜、分路解析与完�
 
 梯队聊天检查分别验证来源与缺失数据、五人消息长度和分段、实际模式及阵营选择。日志检查分开前台进程身份、持久化与轮转和禁止输入的保护逻辑；快捷键检查使用隔离的接收器直接派发原生消息，验证后释放注册，并在断言失败时也恢复调用方界面上下文。不模拟用户键盘输入、不发送聊天。
 
+数据回归按明确场景组织：平衡样本与单位、持久化及离线刷新；配置默认值、原目录迁移、换目录升级和损坏配置保留；英雄样本读取、证据路径、技能范围与时长、未确认护盾公式和未知节点递归。原有断言与样本导出保留，取消检查等待取消回调结束再释放测试取消源。
+
 回归可独立运行，避免受界面测试上下文影响：
 
 ```powershell
@@ -110,6 +112,7 @@ dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --
 dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --loading-view-checks
 dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --settings-surface-checks
 dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --tier-chat-checks
+dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --balance-checks
 ```
 
 全部 204 个原待整理文件已经完成工具排版，并分模块提交；控制流括号也已补齐。未列入样板的模块仍需处理过长方法、异步调用和资源边界，不能把排版完成视为全部结构整理完成。

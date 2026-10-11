@@ -17,6 +17,11 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--balance-checks"))
+        {
+            Task.Run(AramBalanceChecks.RunAsync).GetAwaiter().GetResult();
+            return;
+        }
         if (args.Contains("--tier-chat-checks"))
         {
             ChampionTierChatChecks.Run();
