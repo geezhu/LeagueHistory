@@ -71,6 +71,7 @@ public partial class PlayerCardControl
         public void SetProfile(Image? image, int level)
         {
             var previous = _image;
+            // Keep an owned copy; profile loaders dispose the image they pass to this control.
             _image = image == null ? null : new Bitmap(image);
             previous?.Dispose();
             _level = level;

@@ -67,6 +67,10 @@ public sealed class PlayerNameLink : LinkLabel
 
             AccessibleDescription = $"{PlayerName}，隐私：{PlayerPrivacy.Describe(profile)}，点击查看主页";
         }
+        catch (OperationCanceledException) when (IsDisposed || Disposing)
+        {
+            // The host cancels profile lookup when its player view closes.
+        }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"玩家隐私查询失败: {ex.Message}");
