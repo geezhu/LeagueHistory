@@ -86,6 +86,7 @@ internal static class Program
     {
         checks["--settings-surface-checks"] = () => Ui(SettingsSurfaceChecks.Run);
         checks["--loading-view-checks"] = () => Ui(LoadingViewChecks.Run);
+        checks["--main-navigation-checks"] = () => Ui(MainNavigationChecks.Run);
         checks["--history-navigation-checks"] = () => Ui(HistoryNavigationChecks.Run);
         checks["--profile-surface-checks"] = () => Ui(ProfileSurfaceChecks.Run);
         checks["--opgg-lifecycle-checks"] = () => Ui(OpggViewLifecycleChecks.Run);
