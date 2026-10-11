@@ -17,6 +17,11 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--overlay-lifecycle-checks"))
+        {
+            OverlayLifecycleChecks.Run();
+            return;
+        }
         if (args.Contains("--client-checks"))
         {
             Task.Run(ClientChecks.RunAsync).GetAwaiter().GetResult();
