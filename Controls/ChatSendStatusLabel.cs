@@ -35,7 +35,10 @@ public sealed class ChatSendStatusLabel : Label
                 UpdateText();
             }
         }
-        catch (InvalidOperationException) { }
+        catch (InvalidOperationException)
+        {
+            // The window handle may be destroyed between the check and the queued UI update.
+        }
     }
 
     private void UpdateText()

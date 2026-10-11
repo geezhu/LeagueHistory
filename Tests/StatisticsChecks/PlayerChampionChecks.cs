@@ -4,7 +4,26 @@ using League.Services;
 
 internal static class PlayerChampionChecks
 {
+    private const BindingFlags PrivateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
+
     public static void Run()
+    {
+        ModelSelection();
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+        try
+        {
+            ChampionSwitching();
+            IconOrdering();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+        Console.WriteLine("PASS: player champion bar, tier/image response ordering, unknown selection and layout.");
+    }
+
+    private static void ModelSelection()
     {
         var rows = new[]
         {
@@ -51,11 +70,15 @@ internal static class PlayerChampionChecks
         {
             throw new Exception("Queue and custom-mode normalization");
         }
+    }
 
-        var previous = SynchronizationContext.Current;
-        SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+    private static void ChampionSwitching()
+    {
         using var form = new Form { ClientSize = new Size(265, 430) };
         using var card = new PlayerCardControl { Dock = DockStyle.Fill };
+        typeof(PlayerCardControl)
+            .GetField("_championIconLoader", PrivateInstance)!
+            .SetValue(card, (Func<int, Task<Image?>>)(_ => Task.FromResult<Image?>(null)));
         form.Controls.Add(card);
         form.Show();
         var first = new TaskCompletionSource<PlayerChampionTier>();
@@ -93,15 +116,73 @@ internal static class PlayerChampionChecks
         }
 
         form.Close();
-        SynchronizationContext.SetSynchronizationContext(previous);
-        Console.WriteLine("PASS: player champion bar, response ordering, unknown selection and layout.");
-        void Pump()
+    }
+
+    private static void IconOrdering()
+    {
+        using var card = new PlayerCardControl();
+        var first = new TaskCompletionSource<Image?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var second = new TaskCompletionSource<Image?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var current = new TaskCompletionSource<Image?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        int aRequests = 0;
+        typeof(PlayerCardControl)
+            .GetField("_championIconLoader", PrivateInstance)!
+            .SetValue(
+                card,
+                (Func<int, Task<Image?>>)(id => id == 99 ? (++aRequests == 1 ? first.Task : current.Task) : second.Task)
+            );
+        card.CurrentChampionId = 99;
+        card.CurrentChampionId = 25;
+        card.CurrentChampionId = 99;
+        var selected = new Bitmap(8, 8);
+        var staleA = new Bitmap(8, 8);
+        var staleB = new Bitmap(8, 8);
+        var picture = (PictureBox)typeof(PlayerCardControl).GetField("_currentHero", PrivateInstance)!.GetValue(card)!;
+        current.SetResult(selected);
+        PumpUntil(() => ReferenceEquals(picture.Image, selected));
+        first.SetResult(staleA);
+        second.SetResult(staleB);
+        PumpUntil(() => ImageDisposed(staleA) && ImageDisposed(staleB));
+        if (!ReferenceEquals(picture.Image, selected))
         {
-            for (int i = 0; i < 10; i++)
-            {
-                Application.DoEvents();
-                Thread.Sleep(5);
-            }
+            throw new Exception("An A-to-B-to-A image response overwrote the current A icon");
+        }
+    }
+
+    private static bool ImageDisposed(Image image)
+    {
+        try
+        {
+            _ = image.Width;
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            // GDI+ rejects width access once the retired result's native image has been released.
+            return true;
+        }
+    }
+
+    private static void PumpUntil(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            Application.DoEvents();
+            Thread.Sleep(1);
+        }
+        if (!condition())
+        {
+            throw new Exception("Champion image update or retired image cleanup did not finish");
+        }
+    }
+
+    private static void Pump()
+    {
+        for (int i = 0; i < 10; i++)
+        {
+            Application.DoEvents();
+            Thread.Sleep(5);
         }
     }
 }

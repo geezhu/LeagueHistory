@@ -33,8 +33,10 @@ public partial class PlayerCardControl
     private Func<int, Task<PlayerChampionTier>>? _tierLoader;
     private Action<int, PlayerChampionTier>? _openHero;
     private PlayerChampionTier? _currentTier;
-    private int _heroGeneration,
+    private int _tierGeneration,
+        _iconGeneration,
         _iconHero;
+    private Func<int, Task<Image?>> _championIconLoader = id => FormMain.Globals.resLoading.GetChampionIconAsync(id);
 
     public void BindChampionInfo(Func<int, Task<PlayerChampionTier>> load, Action<int, PlayerChampionTier> open)
     {
@@ -76,7 +78,8 @@ public partial class PlayerCardControl
         }
         Disposed += (_, _) =>
         {
-            _heroGeneration++;
+            _tierGeneration++;
+            _iconGeneration++;
             _currentHero.Image?.Dispose();
             _currentHero.Image = null;
         };
@@ -90,10 +93,11 @@ public partial class PlayerCardControl
         }
 
         int id = CurrentChampionId,
-            generation = ++_heroGeneration;
+            generation = ++_tierGeneration;
         _currentTier = null;
         if (_iconHero != id)
         {
+            _iconGeneration++;
             _currentHero.Image?.Dispose();
             _currentHero.Image = null;
             _iconHero = 0;
@@ -113,7 +117,7 @@ public partial class PlayerCardControl
         if (_iconHero != id)
         {
             _iconHero = id;
-            _ = LoadIcon();
+            _ = LoadChampionIconAsync(id, ++_iconGeneration);
         }
         if (_tierLoader == null)
         {
@@ -123,7 +127,7 @@ public partial class PlayerCardControl
         try
         {
             var tier = await _tierLoader(id);
-            if (IsDisposed || generation != _heroGeneration)
+            if (IsDisposed || generation != _tierGeneration)
             {
                 return;
             }
@@ -136,31 +140,41 @@ public partial class PlayerCardControl
                 _statisticsTips?.SetToolTip(c, tier.Note);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            if (!IsDisposed && generation == _heroGeneration)
+            // A failed optional recommendation keeps the player card usable and can be retried.
+            System.Diagnostics.Debug.WriteLine($"Champion tier: {ex.GetType().Name}");
+            if (!IsDisposed && generation == _tierGeneration)
             {
                 _heroTier.Text = "梯队暂不可用";
             }
         }
-        async Task LoadIcon()
+    }
+
+    private async Task LoadChampionIconAsync(int id, int generation)
+    {
+        try
         {
-            try
+            var image = await _championIconLoader(id);
+            if (IsDisposed || CurrentChampionId != id || generation != _iconGeneration)
             {
-                var image = await FormMain.Globals.resLoading.GetChampionIconAsync(id);
-                if (IsDisposed || CurrentChampionId != id)
-                {
-                    image?.Dispose();
-                    return;
-                }
-                _currentHero.Image = image;
+                image?.Dispose();
+                return;
             }
-            catch
+            var previous = _currentHero.Image;
+            _currentHero.Image = image;
+            if (!ReferenceEquals(previous, image))
             {
-                if (CurrentChampionId == id)
-                {
-                    _iconHero = 0;
-                }
+                previous?.Dispose();
+            }
+        }
+        catch (Exception ex)
+        {
+            // The icon is optional; release its active marker so a later refresh can retry.
+            System.Diagnostics.Debug.WriteLine($"Champion icon: {ex.GetType().Name}");
+            if (!IsDisposed && CurrentChampionId == id && generation == _iconGeneration)
+            {
+                _iconHero = 0;
             }
         }
     }

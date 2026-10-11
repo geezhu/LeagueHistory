@@ -55,7 +55,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Update-CodeQualitySc
 
 ## 当前样板与验证
 
-样板已扩展到全部新增客户端、模型、英雄分析解析器和图标／名称辅助代码，以及全部新增服务和管理器，并开始覆盖战绩界面及基础控件；共 119 个源码文件。
+样板已扩展到全部新增客户端、模型、英雄分析解析器和图标／名称辅助代码，以及全部新增服务和管理器，并开始覆盖战绩界面及基础控件；共 128 个源码文件。
 
 阵容分析的证据提取与结论生成分开，实时对局按玩家和事件解析，时间轴按帧、金币和事件处理。客户端分别处理缓存读取、网络刷新和原子保存；共享初始化不因单个视图取消而中止，等待方仍可取消。玩家加载分离名单核对、请求与结果投递；符文应用分离保存与当前页面校验。
 
@@ -65,6 +65,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Update-CodeQualitySc
 
 近期战绩分开处理分批历史、角色与成就资料，以及结果通知；通知发出前先登记工作，订阅方在通知中关闭页面也能安全取消。总览的圆环、数值与说明分别绘制；雷达图的网格、已知证据与标签分别绘制，缺失证据保留为未知。
 
+玩家卡片分别展示加载状态、近期统计、身份头像和所选英雄。梯队与图标请求各自记录先后顺序，快速切换 A→B→A 时旧图片也不会覆盖当前图片；每个过期或替换的自有图片都释放。等待槽位、紧凑历史滚动和聊天状态控件也纳入持续检查。
+
 回归可独立运行，避免受界面测试上下文影响：
 
 ```powershell
@@ -73,6 +75,7 @@ dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --
 dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --overlay-lifecycle-checks
 dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --scoreboard-layout-checks
 dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --history-presentation-checks
+dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --player-champion-checks
 ```
 
 全部 204 个原待整理文件已经完成工具排版，并分模块提交；控制流括号也已补齐。未列入样板的模块仍需处理过长方法、异步调用和资源边界，不能把排版完成视为全部结构整理完成。

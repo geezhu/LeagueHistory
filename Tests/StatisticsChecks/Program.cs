@@ -17,6 +17,11 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--player-champion-checks"))
+        {
+            PlayerChampionChecks.Run();
+            return;
+        }
         if (args.Contains("--history-presentation-checks"))
         {
             HistoryPresentationChecks.Run();
