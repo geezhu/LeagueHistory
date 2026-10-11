@@ -80,12 +80,7 @@ internal static class LoadingRosterIdentityChecks
             BaseAddress = new Uri("https://test.invalid/"),
         };
         var service = new LoadingRosterIdentityService(() => client);
-        var roster = new LoadingRoster(
-            "game",
-            450,
-            "ARAM",
-            [new("a", "旧名称甲", "a", 1, 99, 100, true), new("b", "旧名称乙", "b", 2, 99, 200, false)]
-        );
+        var roster = CreateRoster();
         var flow = new JObject
         {
             ["gameData"] = new JObject
@@ -101,6 +96,32 @@ internal static class LoadingRosterIdentityChecks
         );
         await service.MergeAsync(roster, flow, "a", live, _ => 99, CancellationToken.None);
         Check(calls == 3, "Repeated overlay polls reuse public identity metadata");
+        await HiddenAndPendingIdentityAsync(service, roster, () => calls);
+        await ZeroAndAmbiguousIdentityAsync(roster);
+        await MetadataBackoffAsync(roster);
+        await CancellationAndReconnectionAsync(client, roster, () => calls);
+        IdentityLabels();
+        Console.WriteLine(
+            "PASS: LCU/Live identity recovery, same-champion players, hidden slots, selection-only public players, ambiguity, cache, backoff and cancellation."
+        );
+    }
+
+    private static LoadingRoster CreateRoster()
+    {
+        return new LoadingRoster(
+            "game",
+            450,
+            "ARAM",
+            [new("a", "旧名称甲", "a", 1, 99, 100, true), new("b", "旧名称乙", "b", 2, 99, 200, false)]
+        );
+    }
+
+    private static async Task HiddenAndPendingIdentityAsync(
+        LoadingRosterIdentityService service,
+        LoadingRoster roster,
+        Func<int> requestCount
+    )
+    {
         var hiddenFlow = new JObject
         {
             ["gameData"] = new JObject
@@ -108,7 +129,7 @@ internal static class LoadingRosterIdentityChecks
                 ["playerChampionSelections"] = new JArray(new JObject { ["puuid"] = "hidden", ["championId"] = 99 }),
             },
         };
-        merged = await service.MergeAsync(
+        var merged = await service.MergeAsync(
             roster,
             hiddenFlow,
             "a",
@@ -117,7 +138,7 @@ internal static class LoadingRosterIdentityChecks
             CancellationToken.None
         );
         Check(
-            calls == 3
+            requestCount() == 3
                 && merged.Players[0].Puuid == "a"
                 && merged.Players[1].Puuid == "b"
                 && merged.Players[2] is { Puuid: "", IdentityHidden: true, Name: "隐藏玩家" },
@@ -135,7 +156,10 @@ internal static class LoadingRosterIdentityChecks
             merged.Players[1].Puuid == "" && !merged.Players[1].IdentityHidden,
             "A missing name match is pending identity, not hidden and never inferred from the champion"
         );
+    }
 
+    private static async Task ZeroAndAmbiguousIdentityAsync(LoadingRoster roster)
+    {
         var zeroFlow = new JObject
         {
             ["gameData"] = new JObject
@@ -170,9 +194,9 @@ internal static class LoadingRosterIdentityChecks
             )
         )
         {
-            BaseAddress = client.BaseAddress,
+            BaseAddress = new Uri("https://test.invalid/"),
         };
-        merged = await new LoadingRosterIdentityService(() => ambiguousClient).MergeAsync(
+        var merged = await new LoadingRosterIdentityService(() => ambiguousClient).MergeAsync(
             roster,
             new(),
             "a",
@@ -181,6 +205,10 @@ internal static class LoadingRosterIdentityChecks
             CancellationToken.None
         );
         Check(merged.Players.All(p => p.Puuid == ""), "Ambiguous full names cannot assign mastery to the wrong player");
+    }
+
+    private static async Task MetadataBackoffAsync(LoadingRoster roster)
+    {
         int failures = 0;
         using var badClient = new HttpClient(
             new Handler(
@@ -192,14 +220,22 @@ internal static class LoadingRosterIdentityChecks
             )
         )
         {
-            BaseAddress = client.BaseAddress,
+            BaseAddress = new Uri("https://test.invalid/"),
         };
         var failedService = new LoadingRosterIdentityService(() => badClient);
         var one = roster with { Players = [roster.Players[0]] };
         await failedService.MergeAsync(one, new(), "a", Live("玩家甲#01"), _ => 99, CancellationToken.None);
         await failedService.MergeAsync(one, new(), "a", Live("玩家甲#01"), _ => 99, CancellationToken.None);
         Check(failures == 1, "Failed metadata requests back off instead of repeating every three seconds");
+    }
 
+    private static async Task CancellationAndReconnectionAsync(
+        HttpClient client,
+        LoadingRoster roster,
+        Func<int> requestCount
+    )
+    {
+        var one = roster with { Players = [roster.Players[0]] };
         int delayedCalls = 0;
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -222,16 +258,19 @@ internal static class LoadingRosterIdentityChecks
         using var cancellation = new CancellationTokenSource();
         var cancelled = delayed.MergeAsync(one, new(), "a", Live("玩家甲#01"), _ => 99, cancellation.Token);
         var continuing = delayed.MergeAsync(one, new(), "a", Live("玩家甲#01"), _ => 99, CancellationToken.None);
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        cancellation.Cancel();
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None);
+        await cancellation.CancelAsync();
         try
         {
             await cancelled;
             throw new Exception("Cancelled merge completed");
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            // One caller cancels its wait without cancelling the shared request.
+        }
         release.TrySetResult();
-        merged = await continuing;
+        var merged = await continuing;
         Check(
             delayedCalls == 1 && merged.Players[0].Puuid == "a",
             "Cancelling one view preserves a coalesced metadata lookup"
@@ -239,16 +278,17 @@ internal static class LoadingRosterIdentityChecks
         current = client;
         merged = await delayed.MergeAsync(one, new(), "a", Live("玩家甲#01"), _ => 99, CancellationToken.None);
         Check(
-            merged.Players[0].Puuid == "a" && calls == 4,
+            merged.Players[0].Puuid == "a" && requestCount() == 4,
             "Client reconnection refreshes identity metadata rather than using the previous client's cache"
         );
+    }
+
+    private static void IdentityLabels()
+    {
         var page = new ChampionMasteryPage(null, null, "尚未取得玩家身份，等待名单匹配。");
         Check(
             page.ForChampion(99).Text == "成就待确认" && PlayerChampionMastery.Unavailable(99).Text == "成就未公开",
             "Pending identity and explicitly hidden identity have distinct labels"
-        );
-        Console.WriteLine(
-            "PASS: LCU/Live identity recovery, same-champion players, hidden slots, selection-only public players, ambiguity, cache, backoff and cancellation."
         );
     }
 }

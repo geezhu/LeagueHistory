@@ -55,7 +55,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Update-CodeQualitySc
 
 ## 当前样板与验证
 
-样板已扩展到全部新增客户端、模型、英雄分析解析器和图标／名称辅助代码，以及全部新增服务和管理器，并开始覆盖战绩界面、arammeta 与 OP.GG 页面、阵容分析、英雄成就、主页背景、启动面板、缓存设置与基础控件；共 176 个源码文件。
+样板已扩展到全部新增客户端、模型、英雄分析解析器和图标／名称辅助代码，以及全部新增服务和管理器，并开始覆盖战绩界面、arammeta 与 OP.GG 页面、阵容分析、英雄成就、主页背景、启动面板、缓存设置与基础控件；共 182 个源码文件。
 
 阵容分析的证据提取与结论生成分开，实时对局按玩家和事件解析，时间轴按帧、金币和事件处理。客户端分别处理缓存读取、网络刷新和原子保存；共享初始化不因单个视图取消而中止，等待方仍可取消。玩家加载分离名单核对、请求与结果投递；符文应用分离保存与当前页面校验。
 
@@ -137,3 +137,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Tests/CodeQualityChecks.ps1
 - [CSharpier](https://github.com/belav/csharpier)：统一源码排版。
 - [Meziantou.Analyzer](https://github.com/meziantou/Meziantou.Analyzer)：选择与本项目异步和可读性问题相关的规则。
 - [microsoft/wil 的 clang-format 配置](https://github.com/microsoft/wil/blob/master/.clang-format)：参考 Windows C++ 排版，采用简化配置。
+
+实时对局分别构建队伍列、保留的玩家卡片、所选英雄摘要和推荐区；请求取消后等待工作结束，再释放取消源、客户实例和图标缓存。关闭后的晚到图标与原画副本会释放，旧模式请求不会覆盖当前提示。英雄识别、连续死亡和速览身份验证按场景组织，覆盖同英雄玩家、隐藏或待确认身份、取消共享等待、缓存重连与新对局重置。
