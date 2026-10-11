@@ -11,7 +11,10 @@ public partial class FormMain
     public async Task OpenPlayerProfileAsync(string summonerId)
     {
         if (_openingPlayerProfile || string.IsNullOrWhiteSpace(summonerId) || summonerId == "0")
+        {
             return;
+        }
+
         _openingPlayerProfile = true;
         _uiManager!.ShowLoadingIndicator();
         try
@@ -38,7 +41,9 @@ public partial class FormMain
                 Activate();
             }
             else
+            {
                 MessageBox.Show("无法获取该玩家的资料，请确认客户端已连接后重试。");
+            }
         }
         catch (Exception ex)
         {

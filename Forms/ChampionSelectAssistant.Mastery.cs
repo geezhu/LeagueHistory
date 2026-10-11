@@ -20,7 +20,10 @@ internal sealed partial class ChampionSelectAssistant
     private void AddMasterySummary()
     {
         if (_hero <= 0)
+        {
             return;
+        }
+
         _mastery = null;
         _masteryRow = new Panel { Size = new Size(282, 22), Margin = Padding.Empty };
         _masteryLabel = new Label
@@ -65,7 +68,10 @@ internal sealed partial class ChampionSelectAssistant
             || Environment.TickCount64 < _masteryNextCheck
             || _hero <= 0
         )
+        {
             return;
+        }
+
         int hero = _hero;
         string puuid = _masteryPuuid;
         var token = _load?.Token ?? default;
@@ -80,13 +86,19 @@ internal sealed partial class ChampionSelectAssistant
                 || hero != _hero
                 || puuid != _masteryPuuid
             )
+            {
                 return;
+            }
+
             var mastery = page.ForChampion(hero);
             _mastery = mastery;
             label.Text = mastery.Text;
             _tips.SetToolTip(label, mastery.Description);
             if (_sendMastery is { IsDisposed: false })
+            {
                 _sendMastery.Enabled = mastery.Available && _selecting && !_sendingMastery;
+            }
+
             _masteryNextCheck = Environment.TickCount64 + (mastery.Stale ? 3000 : 15000);
         }
         catch (OperationCanceledException) { }
@@ -109,7 +121,10 @@ internal sealed partial class ChampionSelectAssistant
         var mastery = _mastery;
         var button = _sendMastery;
         if (_sendingMastery || !_selecting || mastery is not { Available: true } || mastery.ChampionId != _hero)
+        {
             return;
+        }
+
         int hero = _hero;
         string puuid = _masteryPuuid;
         bool Current() =>
@@ -132,6 +147,7 @@ internal sealed partial class ChampionSelectAssistant
                 .FirstOrDefault(p => (int?)p["cellId"] == (int?)session["localPlayerCellId"]);
             int selected = (int?)own?["championId"] ?? 0;
             if (selected <= 0)
+            {
                 selected = (session["actions"] as JArray ?? new())
                     .OfType<JArray>()
                     .SelectMany(a => a.OfType<JObject>())
@@ -140,6 +156,8 @@ internal sealed partial class ChampionSelectAssistant
                     )
                     .Select(a => (int?)a["championId"] ?? 0)
                     .LastOrDefault(id => id > 0);
+            }
+
             string identity = (string?)own?["puuid"] ?? "";
             if (
                 !Current()
@@ -149,7 +167,10 @@ internal sealed partial class ChampionSelectAssistant
             )
             {
                 if (Current())
+                {
                     _status.Text = "未发送：所选英雄已变化，请等待更新。";
+                }
+
                 return;
             }
             string name = FormMain.Globals.resLoading?.GetChampionById(hero)?.Name ?? $"英雄 {hero}";
@@ -160,23 +181,31 @@ internal sealed partial class ChampionSelectAssistant
             );
             bool sent = await AnnounceRunesAsync(client, messages[0], timeout.Token, Current, deduplicate: false);
             if (Current())
+            {
                 _status.Text = sent ? "熟练度已发送到选人聊天。" : "未发送：请确认仍在选人阶段且聊天已连接。";
+            }
         }
         catch (OperationCanceledException)
         {
             if (Current())
+            {
                 _status.Text = "熟练度发送超时，请重试。";
+            }
         }
         catch (Exception)
         {
             if (Current())
+            {
                 _status.Text = "熟练度发送失败，请检查客户端连接。";
+            }
         }
         finally
         {
             _sendingMastery = false;
             if (_sendMastery is { IsDisposed: false })
+            {
                 _sendMastery.Enabled = _selecting && _mastery?.Available == true && _mastery.ChampionId == _hero;
+            }
         }
     }
 }

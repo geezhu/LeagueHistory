@@ -11,7 +11,10 @@ public partial class FormMain
     public async Task OpenRoomMatchAsync(MatchMetadata metadata, string puuid)
     {
         if (metadata.GameData == null || metadata.GameId <= 0)
+        {
             return;
+        }
+
         _roomMatchSurface?.Dispose();
         var surface = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(244, 247, 251) };
         _roomMatchSurface = surface;
@@ -38,12 +41,16 @@ public partial class FormMain
         surface.ParentChanged += (_, _) =>
         {
             if (surface.Parent == null && !surface.IsDisposed)
+            {
                 surface.Dispose();
+            }
         };
         surface.Disposed += (_, _) =>
         {
             if (ReferenceEquals(_roomMatchSurface, surface))
+            {
                 _roomMatchSurface = null;
+            }
         };
         MatchListPanel? source = null;
         MatchDetailView? detail = null;
@@ -70,11 +77,17 @@ public partial class FormMain
             {
                 parsed?.Dispose();
                 if (!surface.IsDisposed)
+                {
                     status.Text = "这场比赛暂时无法加载详情。";
+                }
+
                 return;
             }
             if (surface.IsDisposed)
+            {
                 return;
+            }
+
             if (
                 source.MatchInfo.AllParticipants == null
                 || !source.MatchInfo.AllParticipants.Any(p => (int?)p["teamId"] is 100 or 200)
@@ -91,7 +104,10 @@ public partial class FormMain
             detail.ReplayRequested += replaySource.RequestReplay;
             await detail.PrepareAsync();
             if (surface.IsDisposed || detail.IsDisposed)
+            {
                 return;
+            }
+
             status.Dispose();
             detail.Visible = true;
             // Keep the parsed match alive for replay and detail tabs until the page closes.
@@ -103,7 +119,9 @@ public partial class FormMain
         {
             System.Diagnostics.Debug.WriteLine($"Room match detail: {ex}");
             if (!surface.IsDisposed)
+            {
                 status.Text = "加载详情失败，请返回后重试。";
+            }
         }
         finally
         {

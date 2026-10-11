@@ -66,9 +66,12 @@ internal sealed class VoiceInputDialog : Form
             RowCount = 4,
         };
         foreach (int height in new[] { 26, 0, 48, 38 })
+        {
             layout.RowStyles.Add(
                 new RowStyle(height == 0 ? SizeType.Percent : SizeType.Absolute, height == 0 ? 100 : height)
             );
+        }
+
         var heading = new Panel { Dock = DockStyle.Fill };
         heading.Controls.Add(new Label { Text = "聊天文字", AutoSize = true });
         heading.Controls.Add(_count);
@@ -81,15 +84,19 @@ internal sealed class VoiceInputDialog : Form
         {
             UpdateActions();
             if (!_recording && !_sending)
+            {
                 _status.Text =
                     _draft.TextLength == 0 || OverlayVoiceChatText.TryNormalize(_draft.Text, out _)
                         ? ""
                         : "请使用单行聊天文字，最多 180 字符；不支持斜杠命令。";
+            }
         };
         _draft.KeyDown += (_, e) =>
         {
             if (e.KeyCode == Keys.Enter)
+            {
                 e.SuppressKeyPress = true;
+            }
         };
         layout.Controls.Add(_draft, 0, 1);
         _status.Padding = new Padding(0, 6, 0, 0);
@@ -108,9 +115,13 @@ internal sealed class VoiceInputDialog : Form
         _record.Click += async (_, _) =>
         {
             if (_recording)
+            {
                 StopRecording();
+            }
             else
+            {
                 await RecordAsync();
+            }
         };
         _send.Click += async (_, _) => await SendAsync();
         _clear.Click += (_, _) => _draft.Clear();
@@ -138,7 +149,10 @@ internal sealed class VoiceInputDialog : Form
     private void UpdateActions()
     {
         if (IsDisposed)
+        {
             return;
+        }
+
         bool current = !_lifetime.IsCancellationRequested && _current();
         _draft.ReadOnly = _recording || _sending;
         _record.Text =
@@ -160,7 +174,10 @@ internal sealed class VoiceInputDialog : Form
     private void StopRecording()
     {
         if (!_recording)
+        {
             return;
+        }
+
         _stopping = true;
         _session?.Stop();
         UpdateActions();
@@ -169,7 +186,10 @@ internal sealed class VoiceInputDialog : Form
     private async Task RecordAsync()
     {
         if (_recording || _sending || !_current())
+        {
             return;
+        }
+
         int generation = ++_generation;
         _recording = true;
         _stopping = false;
@@ -185,7 +205,10 @@ internal sealed class VoiceInputDialog : Form
         void Receive(VoiceRecognitionUpdate update)
         {
             if (IsDisposed || !IsHandleCreated)
+            {
                 return;
+            }
+
             pending.Enqueue(update);
             try
             {
@@ -216,7 +239,9 @@ internal sealed class VoiceInputDialog : Form
                 _draft.Text = Clip((_draft.Text.Length > 0 ? _draft.Text + " " : "") + chunk, 180);
                 _status.Text = update.Confidence < .3f ? "请检查识别文字。" : "";
                 if (_draft.TextLength >= 180)
+                {
                     StopRecording();
+                }
             }
         }
         try
@@ -229,36 +254,46 @@ internal sealed class VoiceInputDialog : Form
             // Drain final callbacks before unlocking the editable draft.
             Drain();
             if (Current())
+            {
                 _status.Text =
                     outcome.Message.Length > 0 ? outcome.Message
                     : outcome.Cancelled ? "录音已取消。"
                     : _draft.TextLength == 0 ? "没有识别到文字，请重录或直接输入。"
                     : "";
+            }
         }
         catch (OperationCanceledException)
         {
             if (Current())
+            {
                 _status.Text = "录音已取消。";
+            }
         }
         catch (VoiceRecognitionException exception)
         {
             ReportError(exception);
             if (Current())
+            {
                 _status.Text = exception.Message;
+            }
         }
         catch (InvalidOperationException exception)
         {
             ReportError(exception);
             if (Current())
+            {
                 _status.Text = exception.Message.StartsWith("当前没有可用")
                     ? exception.Message
                     : "中文语音引擎或麦克风不可用，请检查语音组件和麦克风权限；也可直接输入。";
+            }
         }
         catch (Exception exception)
         {
             ReportError(exception);
             if (Current())
+            {
                 _status.Text = "麦克风或本机中文模型不可用，请在设置中检查模型和麦克风权限，或直接输入。";
+            }
         }
         finally
         {
@@ -274,7 +309,9 @@ internal sealed class VoiceInputDialog : Form
             _decoding = false;
             _ready = false;
             if (!IsDisposed)
+            {
                 UpdateActions();
+            }
         }
     }
 
@@ -287,7 +324,10 @@ internal sealed class VoiceInputDialog : Form
     private static string Clip(string text, int length)
     {
         if (text.Length <= length)
+        {
             return text;
+        }
+
         int count = char.IsHighSurrogate(text[length - 1]) ? length - 1 : length;
         return text[..count];
     }
@@ -295,7 +335,10 @@ internal sealed class VoiceInputDialog : Form
     private async Task SendAsync()
     {
         if (_sending || _recording || !_current())
+        {
             return;
+        }
+
         if (!OverlayVoiceChatText.TryNormalize(_draft.Text, out string text))
         {
             _status.Text = "请输入一条不超过 180 字符的聊天文字；不支持换行或斜杠命令。";
@@ -318,23 +361,31 @@ internal sealed class VoiceInputDialog : Form
         catch (OperationCanceledException)
         {
             if (!IsDisposed)
+            {
                 _status.Text = "发送取消或超时，消息可能已经送达，请先检查选人聊天。";
+            }
         }
         catch (InvalidOperationException exception)
         {
             if (!IsDisposed)
+            {
                 _status.Text = exception.Message;
+            }
         }
         catch (Exception)
         {
             if (!IsDisposed)
+            {
                 _status.Text = "发送失败，请检查客户端聊天连接。";
+            }
         }
         finally
         {
             _sending = false;
             if (!IsDisposed)
+            {
                 UpdateActions();
+            }
         }
     }
 

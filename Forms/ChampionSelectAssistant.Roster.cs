@@ -21,7 +21,10 @@ internal sealed partial class ChampionSelectAssistant
     private void UpdateRoster(JObject session, int queue)
     {
         if (_rosterQueue != queue)
+        {
             _rosterWindow?.Close();
+        }
+
         _rosterQueue = queue;
         bool supported =
             queue is 450 or 2400 || (bool?)session["benchEnabled"] == true || SelectedMode is "aram" or "mayhem";
@@ -38,7 +41,9 @@ internal sealed partial class ChampionSelectAssistant
         _tips.SetToolTip(_rosterButton, "查看我方阵容与交换池的英雄梯队");
         _rosterButton.Text = $"可选英雄 · {next.Team.Count(t => t.ChampionId > 0) + next.Bench.Length}";
         if (changed)
+        {
             _rosterChanged?.Invoke();
+        }
     }
 
     private void ClearRoster()
@@ -53,7 +58,10 @@ internal sealed partial class ChampionSelectAssistant
     private void ShowRoster()
     {
         if (_roster == null)
+        {
             return;
+        }
+
         if (_rosterWindow is { IsDisposed: false })
         {
             _rosterWindow.Activate();
@@ -80,7 +88,9 @@ internal sealed partial class ChampionSelectAssistant
         masteryTimer.Tick += (_, _) =>
         {
             foreach (var update in masteryRefresh.ToArray())
+            {
                 _ = update();
+            }
         };
         masteryTimer.Start();
         window.Disposed += (_, _) => masteryTimer.Dispose();
@@ -185,7 +195,9 @@ internal sealed partial class ChampionSelectAssistant
             retry.Visible = !analysis.Visible;
             analysisButton.Text = analysis.Visible ? "返回英雄梯队" : "阵容分析";
             if (analysis.Visible && _roster != null)
+            {
                 analysis.SetRoster(_roster);
+            }
         };
         var ranks = new Dictionary<int, (string Tier, double? Win, double? Pick)>();
         bool loading = false,
@@ -194,7 +206,10 @@ internal sealed partial class ChampionSelectAssistant
         async Task SendTiers(bool? selection)
         {
             if (sending || loading || _roster == null || ranks.Count == 0)
+            {
                 return;
+            }
+
             var messages = new List<string>();
             foreach (bool bench in selection.HasValue ? new[] { selection.Value } : new[] { false, true })
             {
@@ -243,7 +258,10 @@ internal sealed partial class ChampionSelectAssistant
                 foreach (string message in messages)
                 {
                     if (!await AnnounceRunesAsync(client, message, timeout.Token))
+                    {
                         break;
+                    }
+
                     sent++;
                 }
                 if (!window.IsDisposed)
@@ -275,7 +293,9 @@ internal sealed partial class ChampionSelectAssistant
             {
                 sending = false;
                 if (!window.IsDisposed)
+                {
                     sendTier.Enabled = !loading && ranks.Count > 0;
+                }
             }
         }
         sendAll.Click += (_, _) => _ = SendTiers(null);
@@ -289,7 +309,10 @@ internal sealed partial class ChampionSelectAssistant
         void Render()
         {
             if (window.IsDisposed || _roster == null)
+            {
                 return;
+            }
+
             if (queue != _queue)
             {
                 window.Close();
@@ -302,7 +325,10 @@ internal sealed partial class ChampionSelectAssistant
             masteryRefresh.Clear();
             content.SuspendLayout();
             foreach (Control c in content.Controls.Cast<Control>().ToArray())
+            {
                 c.Dispose();
+            }
+
             void Group(string title, IEnumerable<ChampionSelectRosterEntry> entries, string empty)
             {
                 content.Controls.Add(
@@ -402,18 +428,27 @@ internal sealed partial class ChampionSelectAssistant
                         card.Controls.Add(achievement);
                         string puuid = entry.CellId < 0 ? _owner.GetCurrentPuuid() ?? "" : entry.Puuid;
                         if (entry.IsSelf && (string.IsNullOrWhiteSpace(puuid) || puuid == Guid.Empty.ToString()))
+                        {
                             puuid = _owner.GetCurrentPuuid() ?? "";
+                        }
+
                         bool masteryBusy = false;
                         async Task Mastery()
                         {
                             if (masteryBusy || achievement.IsDisposed || token.IsCancellationRequested)
+                            {
                                 return;
+                            }
+
                             masteryBusy = true;
                             try
                             {
                                 var page = await _masteryService.GetAsync(puuid, token);
                                 if (achievement.IsDisposed || token.IsCancellationRequested)
+                                {
                                     return;
+                                }
+
                                 var value = page.ForChampion(id);
                                 achievement.Text = value.Text;
                                 _tips.SetToolTip(
@@ -425,7 +460,9 @@ internal sealed partial class ChampionSelectAssistant
                             catch (Exception)
                             {
                                 if (!achievement.IsDisposed && !token.IsCancellationRequested)
+                                {
                                     achievement.Text = "成就暂不可用";
+                                }
                             }
                             finally
                             {
@@ -455,7 +492,10 @@ internal sealed partial class ChampionSelectAssistant
                             c.Click += (_, _) =>
                             {
                                 if (token.IsCancellationRequested)
+                                {
                                     return;
+                                }
+
                                 _owner.OpenAssistantGuide(
                                     id,
                                     mayhem ? 2400 : 0,
@@ -464,13 +504,17 @@ internal sealed partial class ChampionSelectAssistant
                                 );
                             };
                             foreach (Control child in c.Controls)
+                            {
                                 Clickable(child);
+                            }
                         }
                         Clickable(card);
                     }
                 }
                 if (grid.Controls.Count == 0)
+                {
                     grid.Controls.Add(new Label { Text = empty, AutoSize = true });
+                }
             }
             Group("我方阵容", _roster.Team, "尚未读取到我方阵容");
             Group(
@@ -483,7 +527,10 @@ internal sealed partial class ChampionSelectAssistant
         async Task Load()
         {
             if (loading)
+            {
                 return;
+            }
+
             loading = true;
             retry.Enabled = false;
             sendTier.Enabled = false;
@@ -495,17 +542,24 @@ internal sealed partial class ChampionSelectAssistant
                     var page = await _am.GetAsync(0, false, lifetime.Token);
                     version = page.Index.Patch + (page.UpdateFailed ? " · 旧缓存" : "");
                     foreach (var r in page.Index.Champions)
+                    {
                         ranks[r.Id] = (r.Tier, r.WinRate, page.Index.PickRate(r));
+                    }
                 }
                 else
                 {
                     var page = await _opgg.GetTiersAsync(query, false, lifetime.Token);
                     version = page.Version;
                     foreach (var r in page.Rows)
+                    {
                         ranks[r.ChampionId] = (r.Tier.HasValue ? "T" + r.Tier : "—", r.WinRate, r.PickRate);
+                    }
                 }
                 if (window.IsDisposed)
+                {
                     return;
+                }
+
                 loadedVersion = version;
                 status.Text =
                     $"{(mayhem ? "arammeta · 调整后胜率" : "OP.GG · 胜率")} · {version}\n点击英雄查看攻略；队友英雄仅供查看，助手继续跟随自己的选人。";
@@ -535,14 +589,18 @@ internal sealed partial class ChampionSelectAssistant
         {
             Render();
             if (analysis.Visible && _roster != null)
+            {
                 analysis.SetRoster(_roster);
+            }
         };
         sort.SelectedIndexChanged += (_, _) => Render();
         retry.Click += (_, _) => _ = Load();
         content.SizeChanged += (_, _) =>
         {
             foreach (var grid in content.Controls.OfType<FlowLayoutPanel>())
+            {
                 grid.MaximumSize = new Size(Math.Max(260, content.ClientSize.Width - 36), 0);
+            }
         };
         window.FormClosed += (_, _) =>
         {

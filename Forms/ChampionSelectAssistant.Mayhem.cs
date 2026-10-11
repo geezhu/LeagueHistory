@@ -110,29 +110,43 @@ internal sealed partial class ChampionSelectAssistant
         async Task Render()
         {
             if (token.IsCancellationRequested || rows.IsDisposed)
+            {
                 return;
+            }
+
             painting?.Cancel();
             painting?.Dispose();
             painting = CancellationTokenSource.CreateLinkedTokenSource(token);
             var paintToken = painting.Token;
             foreach (Control child in rows.Controls.Cast<Control>().ToArray())
+            {
                 child.Dispose();
+            }
+
             previous.Enabled = next.Enabled = false;
             count.Text = "加载中…";
             for (int i = 0; i < 3; i++)
+            {
                 tabButtons[i].BackColor = i == tab ? Color.FromArgb(0, 126, 139) : Color.FromArgb(16, 45, 57);
+            }
+
             try
             {
                 if (tab != 0 && page.Detail == null)
                 {
                     rows.Controls.Add(new Label { Text = "正在读取装备与技能推荐…", AutoSize = true });
                     if (detailTask == null || detailTask.IsFaulted || detailTask.IsCanceled)
+                    {
                         detailTask = _am.GetAsync(hero, false, token);
+                    }
+
                     var detailed = await detailTask;
                     paintToken.ThrowIfCancellationRequested();
                     page = detailed;
                     foreach (Control child in rows.Controls.Cast<Control>().ToArray())
+                    {
                         child.Dispose();
+                    }
                 }
                 string key =
                     tab == 0 ? new[] { "kPrismatic", "kGold", "kSilver" }[group.SelectedIndex]
@@ -166,7 +180,10 @@ internal sealed partial class ChampionSelectAssistant
                             ?? $"强化 {id}"
                         : (string?)entry["name_zh"] ?? (string?)entry["name_en"] ?? "推荐组合";
                     if (spell)
+                    {
                         name = highlights.Where(h => h.Entry != null).ElementAt(spellIndex++).Title;
+                    }
+
                     var ids = augment
                         ? new[] { id }
                         : (entry["items"] as JArray ?? new())
@@ -244,6 +261,7 @@ internal sealed partial class ChampionSelectAssistant
                             picture = image;
                         }
                         else
+                        {
                             picture = new Label
                             {
                                 Text = "?",
@@ -252,6 +270,8 @@ internal sealed partial class ChampionSelectAssistant
                                 BackColor = Color.FromArgb(38, 64, 75),
                                 Margin = new Padding(2),
                             };
+                        }
+
                         _tips.SetToolTip(picture, League.Controls.TooltipText.Format(info.name, info.description));
                         icons.Controls.Add(picture);
                     }
@@ -262,14 +282,18 @@ internal sealed partial class ChampionSelectAssistant
                             control.Cursor = Cursors.Hand;
                             control.Click += async (_, _) => await ApplySpellsAsync(ids, hero, token);
                             foreach (Control child in control.Controls)
+                            {
                                 Clickable(child);
+                            }
                         }
                         Clickable(card);
                         _tips.SetToolTip(title, name + "\n点击配置这组召唤师技能");
                     }
                 }
                 if (all.Length == 0)
+                {
                     rows.Controls.Add(new Label { Text = "当前分类暂无推荐数据", AutoSize = true });
+                }
             }
             catch (OperationCanceledException) { }
             catch (Exception)

@@ -34,7 +34,10 @@ public partial class FormMain
         void RoundSearch()
         {
             if (search.Width < 16 || search.Height < 16)
+            {
                 return;
+            }
+
             using var path = new System.Drawing.Drawing2D.GraphicsPath();
             const int diameter = 12;
             path.AddArc(0, 0, diameter, diameter, 180, 90);
@@ -68,7 +71,9 @@ public partial class FormMain
         toolbar.SizeChanged += (_, _) =>
         {
             if (search.Parent == toolbar)
+            {
                 search.Location = new Point(Math.Max(0, toolbar.ClientSize.Width - search.Width - 8), 2);
+            }
         };
         panelMatchList.Dock = DockStyle.Fill;
         tabPage1.BackColor = toolbar.BackColor;
@@ -87,7 +92,10 @@ public partial class FormMain
         txtGameName.KeyDown += async (_, e) =>
         {
             if (e.KeyCode != Keys.Enter)
+            {
                 return;
+            }
+
             e.Handled = true;
             e.SuppressKeyPress = true;
             txtGameName.DroppedDown = false;
@@ -103,7 +111,9 @@ public partial class FormMain
             (_, _) =>
             {
                 if (txtGameName.SelectedText.Length > 0)
+                {
                     Clipboard.SetText(txtGameName.SelectedText);
+                }
             }
         );
         menu.Items.Add(
@@ -112,7 +122,9 @@ public partial class FormMain
             (_, _) =>
             {
                 if (Clipboard.ContainsText())
+                {
                     txtGameName.SelectedText = Clipboard.GetText();
+                }
             }
         );
         menu.Items.Add(new ToolStripSeparator());
@@ -150,14 +162,20 @@ public partial class FormMain
     private void AttachSearchToPlayerTabs()
     {
         if (_matchTabContent == null)
+        {
             return;
+        }
+
         var content = _matchTabContent;
         var tabs = content.MainTabControl;
         tabs.Padding = new Point(20, 6);
         void Arrange()
         {
             if (content.IsDisposed || _searchBox.IsDisposed || !ReferenceEquals(content, _matchTabContent))
+            {
                 return;
+            }
+
             int lastRight = tabs.TabCount == 0 ? 0 : tabs.GetTabRect(tabs.TabCount - 1).Right;
             bool fits = content.ClientSize.Width - lastRight >= _searchBox.Width + 16;
             if (fits)
@@ -165,7 +183,10 @@ public partial class FormMain
                 _searchBox.BackColor = txtGameName.BackColor = SearchBackground;
                 _searchToolbar.Visible = false;
                 if (_searchBox.Parent != content)
+                {
                     content.Controls.Add(_searchBox);
+                }
+
                 _searchBox.Location = new Point(Math.Max(0, content.ClientSize.Width - _searchBox.Width - 6), 0);
                 _searchBox.BringToFront();
             }
@@ -174,7 +195,10 @@ public partial class FormMain
                 _searchBox.BackColor = txtGameName.BackColor = SearchBackground;
                 // Keep every tab accessible when the strip has no spare room.
                 if (_searchBox.Parent != _searchToolbar)
+                {
                     _searchToolbar.Controls.Add(_searchBox);
+                }
+
                 _searchToolbar.Visible = true;
                 _searchBox.Location = new Point(Math.Max(0, _searchToolbar.ClientSize.Width - _searchBox.Width - 8), 2);
             }
@@ -182,7 +206,9 @@ public partial class FormMain
         void Schedule()
         {
             if (!IsDisposed && IsHandleCreated)
+            {
                 BeginInvoke(new Action(Arrange));
+            }
         }
         content.SizeChanged += (_, _) => Arrange();
         tabs.ControlAdded += (_, _) => Schedule();

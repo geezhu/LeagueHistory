@@ -18,10 +18,15 @@ internal sealed partial class ChampionSelectAssistant
         {
             var available = values.Where(Valid).Select(v => v!.Value).ToArray();
             if (!Valid(value) || available.Length == 0)
+            {
                 continue;
+            }
+
             double maximum = available.Max();
             if (Math.Abs(value!.Value - maximum) < 1e-9)
+            {
                 labels.Add(name + (available.Count(v => Math.Abs(v - maximum) < 1e-9) > 1 ? "（并列）" : ""));
+            }
         }
         return labels.ToArray();
     }
@@ -78,12 +83,18 @@ internal sealed partial class ChampionSelectAssistant
         void RefreshChoice()
         {
             if (token.IsCancellationRequested || section.IsDisposed || select.SelectedIndex < 0)
+            {
                 return;
+            }
+
             images?.Cancel();
             images?.Dispose();
             images = CancellationTokenSource.CreateLinkedTokenSource(token);
             foreach (Control child in icons.Controls.Cast<Control>().ToArray())
+            {
                 child.Dispose();
+            }
+
             _runeChoice = select.SelectedIndex;
             _runes = schemes[_runeChoice];
             string Rate(double? value) => value.HasValue ? $"{value:P2}" : "—";
@@ -115,7 +126,9 @@ internal sealed partial class ChampionSelectAssistant
             catch
             {
                 if (!icons.IsDisposed && !imageToken.IsCancellationRequested)
+                {
                     stats.Text += " · 部分图标暂不可用";
+                }
             }
         }
         select.SelectedIndexChanged += (_, _) => RefreshChoice();
