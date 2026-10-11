@@ -17,6 +17,11 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--loading-view-checks"))
+        {
+            WinFormsCheckHost.Run(LoadingViewChecks.Run);
+            return;
+        }
         if (args.Contains("--history-navigation-checks"))
         {
             WinFormsCheckHost.Run(HistoryNavigationChecks.Run);

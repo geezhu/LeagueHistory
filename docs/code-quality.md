@@ -55,7 +55,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Update-CodeQualitySc
 
 ## 当前样板与验证
 
-样板已扩展到全部新增客户端、模型、英雄分析解析器和图标／名称辅助代码，以及全部新增服务和管理器，并开始覆盖战绩界面、arammeta 与 OP.GG 页面、阵容分析、英雄成就、主页背景、启动面板与基础控件；共 165 个源码文件。
+样板已扩展到全部新增客户端、模型、英雄分析解析器和图标／名称辅助代码，以及全部新增服务和管理器，并开始覆盖战绩界面、arammeta 与 OP.GG 页面、阵容分析、英雄成就、主页背景、启动面板与基础控件；共 167 个源码文件。
 
 阵容分析的证据提取与结论生成分开，实时对局按玩家和事件解析，时间轴按帧、金币和事件处理。客户端分别处理缓存读取、网络刷新和原子保存；共享初始化不因单个视图取消而中止，等待方仍可取消。玩家加载分离名单核对、请求与结果投递；符文应用分离保存与当前页面校验。
 
@@ -83,6 +83,8 @@ OP.GG 页面分别处理筛选、浏览历史、排行榜、分路解析与完�
 
 玩家战绩页将身份、段位、筛选弹窗、分页与历史列表的构建分别处理。详情准备完成后才切换布局，过期、已移除或已关闭的战绩不再发布；返回主页和既有清理入口都释放待显示详情。结果筛选缓存同时区分玩家和比赛模式，每次读取固定筛选条件，条件改变后不继续扫描、缓存或发布旧数据。页面自行创建的字体随所属控件释放。
 
+桌面对局速览按双队伍槽位构建、玩家数据填充和当前玩家详情分别处理，卡片使用具名行对象。刷新保留十个卡片控件；一名隐藏玩家只影响其自己的成就，其他英雄的成就不会显示在当前英雄上。图片从上层缓存借用，换局和关闭都不释放借用图片；关闭后的晚到更新不再访问控件。
+
 回归可独立运行，避免受界面测试上下文影响：
 
 ```powershell
@@ -101,6 +103,7 @@ dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --
 dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --opgg-lifecycle-checks
 dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --profile-surface-checks
 dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --history-navigation-checks
+dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --loading-view-checks
 ```
 
 全部 204 个原待整理文件已经完成工具排版，并分模块提交；控制流括号也已补齐。未列入样板的模块仍需处理过长方法、异步调用和资源边界，不能把排版完成视为全部结构整理完成。
