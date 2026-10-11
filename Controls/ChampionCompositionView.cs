@@ -96,7 +96,10 @@ public sealed partial class ChampionCompositionView : UserControl
         _grid.GridColor = Color.FromArgb(30, 58, 68);
         _grid.RowTemplate.Height = 30;
         foreach (string name in new[] { "英雄", "生命", "护甲 / 魔抗", "普攻距离", "普攻周期", "数据" })
+        {
             _grid.Columns.Add(name, name);
+        }
+
         _grid.Columns[0].FillWeight = 130;
         _details.BackColor = BackColor;
         _details.ForeColor = ForeColor;
@@ -123,13 +126,19 @@ public sealed partial class ChampionCompositionView : UserControl
         bool changed = _roster?.Signature != roster.Signature;
         _roster = roster;
         if (!changed)
+        {
             return;
+        }
+
         int previous = (_replacement.SelectedItem as Choice)?.Id ?? 0;
         _changing = true;
         _replacement.Items.Clear();
         _replacement.Items.Add(new Choice(0, "保持当前阵容"));
         foreach (int id in roster.Bench)
+        {
             _replacement.Items.Add(new Choice(id, _champion(id).Name));
+        }
+
         _replacement.SelectedIndex = Math.Max(
             0,
             _replacement.Items.Cast<Choice>().ToList().FindIndex(c => c.Id == previous)
@@ -171,10 +180,16 @@ public sealed partial class ChampionCompositionView : UserControl
                     entered = true;
                     var champion = _champion(id);
                     if (string.IsNullOrWhiteSpace(champion.Alias))
+                    {
                         throw new InvalidDataException("本地英雄别名尚未加载。");
+                    }
+
                     var result = await _client.GetAsync(champion.Alias, _lifetime(), token);
                     if (token.IsCancellationRequested || IsDisposed)
+                    {
                         return;
+                    }
+
                     _snapshots[id] = result;
                     _errors.Remove(id);
                 }
@@ -185,16 +200,23 @@ public sealed partial class ChampionCompositionView : UserControl
                 catch (Exception ex)
                 {
                     if (token.IsCancellationRequested || IsDisposed)
+                    {
                         return;
+                    }
+
                     _errors[id] = ex.Message;
                 }
                 finally
                 {
                     if (entered)
+                    {
                         concurrency.Release();
+                    }
                 }
                 if (!token.IsCancellationRequested && !IsDisposed)
+                {
                     QueueDashboardRefresh();
+                }
             })
         );
     }
@@ -269,7 +291,10 @@ public sealed partial class ChampionCompositionView : UserControl
         var text = new StringBuilder();
         text.AppendLine($"{_champion(id).Name} · 基础能力\n");
         foreach (var value in snapshot.Report.Attributes)
+        {
             text.AppendLine($"{value.Name}：{Number(value.Values.FirstOrDefault(), "0.###")} {value.Unit}");
+        }
+
         text.AppendLine("\n技能分析\n控制类型、实际射程、命中条件和护盾数值仍在验证中，当前不计入阵容合计。");
         foreach (var spell in snapshot.Report.Spells)
         {
@@ -277,15 +302,23 @@ public sealed partial class ChampionCompositionView : UserControl
             foreach (
                 var formula in spell.Formulas.Where(f => f.Name.Contains("Shield", StringComparison.OrdinalIgnoreCase))
             )
+            {
                 text.AppendLine("护盾公式待验证：" + formula.Expression);
+            }
+
             if (spell.Warnings.Any(w => w.Contains("ChainDuration")))
+            {
                 text.AppendLine("连接阶段时间不计入已确认控制时长。");
+            }
         }
         text.AppendLine(
             $"\n来源：CommunityDragon · latest（未锁定补丁）\n读取时间：{snapshot.FetchedAt.LocalDateTime:yyyy-MM-dd HH:mm}\n快照：{snapshot.ContentHash[..12]}"
         );
         if (snapshot.Warning != null)
+        {
             text.AppendLine(snapshot.Warning);
+        }
+
         _details.Text = text.ToString();
     }
 

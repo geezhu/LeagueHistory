@@ -58,7 +58,10 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
         foreach (int id in _options.SelectMany(OpggItemSetService.Ids).Distinct())
         {
             if (_images.IsCancellationRequested)
+            {
                 return;
+            }
+
             try
             {
                 var info =
@@ -79,7 +82,9 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
             catch
             {
                 if (IsDisposed || _images.IsCancellationRequested)
+                {
                     return;
+                }
             }
         }
     }
@@ -105,7 +110,9 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
         {
             var rect = new Rectangle(x, y, iconSize, iconSize);
             if (_icons.TryGetValue(id, out var icon))
+            {
                 e.Graphics.DrawImage(icon, rect);
+            }
             else
             {
                 using var fallback = new SolidBrush(Color.FromArgb(38, 64, 75));
@@ -154,7 +161,10 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
             _images.Cancel();
             _images.Dispose();
             foreach (var image in _icons.Values)
+            {
                 image.Dispose();
+            }
+
             _icons.Clear();
         }
         base.Dispose(disposing);

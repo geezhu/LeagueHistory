@@ -31,9 +31,12 @@ public sealed partial class ChampionCompositionView
             {
                 WeaknessLine(heroCard, _champion(id).Name, true);
                 if (_snapshots[id].Stale || _errors.ContainsKey(id))
+                {
                     WeaknessLine(heroCard, "当前使用旧缓存，更新后请复核。", true);
+                }
             }
             else
+            {
                 WeaknessLine(
                     heroCard,
                     id <= 0 ? "选择英雄后显示能力分析。"
@@ -41,12 +44,16 @@ public sealed partial class ChampionCompositionView
                         : "正在读取英雄能力数据。",
                     false
                 );
+            }
+
             RenderTacticalFindings(findings);
             if (reports.TryGetValue(id, out var details))
             {
                 var basics = Card("个人能力建议", "技能来源与基础攻击能力");
                 foreach (var insight in CompositionWeakness.HeroInsights(details))
+                {
                     WeaknessLine(basics, insight, false);
+                }
             }
             return;
         }
@@ -55,15 +62,24 @@ public sealed partial class ChampionCompositionView
             $"基于已读取的 {result.Known}/{result.Slots} 个位置，结合技能标签、客户端技能说明与基础属性生成线索。未记录不代表没有；不包含装备、符文、强化和地图修正。"
         );
         if (!result.Complete)
+        {
             WeaknessLine(card, "阵容未选齐或数据未读全，以下仅是已读取部分的线索。", true);
+        }
+
         if (team.Any(e => e.Preview))
+        {
             WeaknessLine(card, "包含预选英雄，锁定或交换后会重新分析。", false);
+        }
+
         if (
             team.Any(e =>
                 _snapshots.TryGetValue(e.ChampionId, out var s) && (s.Stale || _errors.ContainsKey(e.ChampionId))
             )
         )
+        {
             WeaknessLine(card, "部分数据来自旧缓存，结论需在更新后复核。", true);
+        }
+
         RenderTacticalFindings(findings);
     }
 
@@ -96,7 +112,10 @@ public sealed partial class ChampionCompositionView
             Margin = Padding.Empty,
         };
         foreach (var axis in axes)
+        {
             WeaknessLine(rules, axis.Label + "：" + axis.Basis, false);
+        }
+
         var button = ActionButton("评分说明");
         button.Click += (_, _) =>
         {
@@ -116,11 +135,14 @@ public sealed partial class ChampionCompositionView
         {
             var card = Card(finding.Category + " · " + finding.Status, finding.Detail);
             if (loaded < team.Length)
+            {
                 WeaknessLine(
                     card,
                     $"技能说明已读取 {loaded}/{team.Length} 位；客户端未连接或加载失败时，可连接后点击“重新读取”。",
                     false
                 );
+            }
+
             WeaknessLine(card, finding.Advice, false);
             if (finding.Evidence.Length == 0)
             {
@@ -142,7 +164,10 @@ public sealed partial class ChampionCompositionView
                 {
                     evidence.SuspendLayout();
                     foreach (var line in finding.Evidence)
+                    {
                         WeaknessLine(evidence, line, false);
+                    }
+
                     evidence.ResumeLayout();
                 }
                 evidence.Visible = !evidence.Visible;

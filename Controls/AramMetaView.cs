@@ -147,6 +147,7 @@ internal sealed partial class AramMetaView : UserControl
                 ("样本选取率", 100),
             }
         )
+        {
             _grid.Columns.Add(
                 new DataGridViewTextBoxColumn
                 {
@@ -156,6 +157,8 @@ internal sealed partial class AramMetaView : UserControl
                     SortMode = DataGridViewColumnSortMode.Programmatic,
                 }
             );
+        }
+
         ConfigureRankings();
         _grid.CellClick += async (_, e) =>
         {
@@ -169,7 +172,9 @@ internal sealed partial class AramMetaView : UserControl
         {
             var row = _grid.Rows[e.RowIndex];
             if (row.Cells[0].Value == null && row.Tag is AramMetaChampion c)
+            {
                 _ = SetGridImageAsync(row, c, _renderLifetime?.Token ?? default);
+            }
         };
         _grid.KeyDown += async (_, e) =>
         {
@@ -183,7 +188,10 @@ internal sealed partial class AramMetaView : UserControl
         _grid.ColumnHeaderMouseClick += (_, e) =>
         {
             if (e.ColumnIndex == 0)
+            {
                 return;
+            }
+
             _follow.Checked = false;
             _descending = _sort == e.ColumnIndex ? !_descending : e.ColumnIndex != 1;
             _sort = e.ColumnIndex;
@@ -211,10 +219,15 @@ internal sealed partial class AramMetaView : UserControl
     private void FilterChanged()
     {
         if (_syncing)
+        {
             return;
+        }
+
         _follow.Checked = false;
         if (_champion == 0)
+        {
             FillGrid();
+        }
     }
 
     internal Task OpenChampionAsync(int id)
@@ -264,7 +277,10 @@ internal sealed partial class AramMetaView : UserControl
     {
         int next = _historyIndex + delta;
         if (next < 0 || next >= _history.Count)
+        {
             return;
+        }
+
         _follow.Checked = false;
         _history[_historyIndex] = Capture();
         _historyIndex = next;
@@ -320,7 +336,10 @@ internal sealed partial class AramMetaView : UserControl
                 preview =>
                 {
                     if (IsDisposed || request.IsCancellationRequested || _request != request)
+                    {
                         return;
+                    }
+
                     _page = preview;
                     _search.Visible = false;
                     _role.Visible = false;
@@ -338,7 +357,10 @@ internal sealed partial class AramMetaView : UserControl
             );
             request.Token.ThrowIfCancellationRequested();
             if (IsDisposed)
+            {
                 return;
+            }
+
             bool reuse =
                 page.Cached
                 && !previewShown
@@ -373,9 +395,15 @@ internal sealed partial class AramMetaView : UserControl
             }
             var visit = _history[_historyIndex];
             if (id == 0 && _grid.Rows.Count > 0)
+            {
                 _grid.FirstDisplayedScrollingRowIndex = Math.Min(visit.Scroll, _grid.Rows.Count - 1);
+            }
+
             if (id != 0)
+            {
                 _detail.AutoScrollPosition = new Point(0, detailScroll);
+            }
+
             UpdateStatus(page);
         }
         catch (OperationCanceledException)
@@ -413,7 +441,10 @@ internal sealed partial class AramMetaView : UserControl
     private void FillGrid()
     {
         if (_page == null)
+        {
             return;
+        }
+
         var rows = _page.Index.Champions.Where(c =>
             (_role.SelectedIndex == 0 || c.Roles.Contains(Roles[_role.SelectedIndex]))
             && (Name(c) + " " + c.Name + " " + c.Alias + " " + c.Id).Contains(
@@ -422,7 +453,9 @@ internal sealed partial class AramMetaView : UserControl
             )
         );
         if (_sort == 1)
+        {
             rows = _descending ? rows.OrderByDescending(Name) : rows.OrderBy(Name);
+        }
         else
         {
             double Value(AramMetaChampion c) =>
@@ -466,25 +499,36 @@ internal sealed partial class AramMetaView : UserControl
         {
             _grid.Rows.Clear();
             if (batch.Length > 0)
+            {
                 _grid.Rows.AddRange(batch);
+            }
         }
         finally
         {
             _grid.ResumeLayout();
         }
         foreach (DataGridViewColumn column in _grid.Columns)
+        {
             column.HeaderCell.SortGlyphDirection =
                 column.Index == _sort ? (_descending ? SortOrder.Descending : SortOrder.Ascending) : SortOrder.None;
+        }
+
         _grid.ClearSelection();
     }
 
     private async Task PollAsync()
     {
         if (_polling || !Visible || !_follow.Checked)
+        {
             return;
+        }
+
         var client = FormMain.Globals.lcuClient?.Client;
         if (client == null)
+        {
             return;
+        }
+
         _polling = true;
         _poll?.Dispose();
         _poll = new(TimeSpan.FromSeconds(5));
@@ -502,7 +546,10 @@ internal sealed partial class AramMetaView : UserControl
                 .FirstOrDefault(p => (int?)p["cellId"] == (int?)session["localPlayerCellId"]);
             int id = (int?)own?["championId"] ?? 0;
             if (id <= 0 || id.ToString() == _selection || !Visible || !_follow.Checked)
+            {
                 return;
+            }
+
             _selection = id.ToString();
             _ = NavigateAsync(id);
         }
@@ -534,7 +581,10 @@ internal sealed partial class AramMetaView : UserControl
             _rankingBold?.Dispose();
             _imageHttp.Dispose();
             foreach (var image in _images.Values)
+            {
                 image.Dispose();
+            }
+
             _images.Clear();
         }
         base.Dispose(disposing);

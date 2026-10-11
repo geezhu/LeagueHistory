@@ -31,7 +31,10 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
         foreach (int id in _schemes.Select(s => s.Perks[0]).Distinct())
         {
             if (_images.IsCancellationRequested)
+            {
                 return;
+            }
+
             try
             {
                 var info = await FormMain.Globals.resLoading.GetRuneInfoAsync(id);
@@ -49,7 +52,9 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
             catch
             {
                 if (IsDisposed || _images.IsCancellationRequested)
+                {
                     return;
+                }
             }
         }
     }
@@ -61,13 +66,19 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
         );
         e.Graphics.FillRectangle(fill, e.Bounds);
         if (e.Index < 0 || e.Index >= _schemes.Length)
+        {
             return;
+        }
+
         var scheme = _schemes[e.Index];
         int id = scheme.Perks[0];
         var icon = new Rectangle(e.Bounds.Left + 5, e.Bounds.Top + 3, 32, 32);
         if (_icons.TryGetValue(id, out var image))
+        {
             e.Graphics.DrawImage(image, icon);
+        }
         else
+        {
             TextRenderer.DrawText(
                 e.Graphics,
                 "◆",
@@ -76,6 +87,8 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
                 Color.FromArgb(208, 185, 130),
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
             );
+        }
+
         var rune = FormMain.Globals.resLoading.GetRuneById(id);
         string name = rune?.name ?? rune?.Name ?? "推荐符文";
         string[] highlights = _highlights(scheme);
@@ -86,7 +99,9 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
             string Rate(double? n) => n.HasValue ? n.Value.ToString("P1") : "—";
             subtitle = $"胜率 {Rate(scheme.WinRate)} · 使用率 {Rate(scheme.PickRate)}";
             if (highlights.Length > 0)
+            {
                 title += " · " + string.Join(" / ", highlights);
+            }
         }
         var text = new Rectangle(e.Bounds.Left + 44, e.Bounds.Top + 1, Math.Max(0, e.Bounds.Width - 48), 19);
         TextRenderer.DrawText(
@@ -115,7 +130,10 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
             _images.Cancel();
             _images.Dispose();
             foreach (var icon in _icons.Values)
+            {
                 icon.Dispose();
+            }
+
             _icons.Clear();
         }
         base.Dispose(disposing);

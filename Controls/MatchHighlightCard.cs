@@ -29,7 +29,10 @@ internal sealed class MatchHighlightCard : Control
         {
             string? alias = FormMain.Globals.resLoading.GetChampionById(championId)?.Alias;
             if (string.IsNullOrEmpty(alias) || !alias.All(char.IsAsciiLetterOrDigit))
+            {
                 return;
+            }
+
             var image = await Cache.GetOrDownloadImageAsync(
                 $"https://ddragon.leagueoflegends.com/cdn/img/champion/splash/{alias}_0.jpg",
                 "splash",
@@ -53,7 +56,10 @@ internal sealed class MatchHighlightCard : Control
     {
         base.OnPaint(e);
         if (Width <= 0 || Height <= 0)
+        {
             return;
+        }
+
         if (_splash != null)
         {
             float scale = Math.Max(Width / (float)_splash.Width, Height / (float)_splash.Height);

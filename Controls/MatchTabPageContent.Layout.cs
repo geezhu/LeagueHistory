@@ -79,7 +79,10 @@
             {
                 string value = linkGameName.Tag as string ?? linkGameName.Text;
                 if (string.IsNullOrWhiteSpace(value))
+                {
                     return;
+                }
+
                 Clipboard.SetText(value);
                 copyTip.Show("已复制 Riot ID", copy, 0, copy.Height, 1500);
             };
@@ -189,7 +192,10 @@
             options.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
             options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             for (int row = 0; row < 3; row++)
+            {
                 options.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+            }
+
             options.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             comboFilter.Dock = DockStyle.Fill;
             comboFilter.Margin = new Padding(0, 2, 0, 2);
@@ -208,7 +214,9 @@
                 };
                 _currentPage = 1;
                 if (!string.IsNullOrEmpty(_puuid))
+                {
                     await UpdateMatchesDisplay();
+                }
             };
             string[] filterLabels = { "比赛模式", "比赛结果", "每页场数" };
             Control[] filterControls = { comboFilter, _outcomeFilter, comboPage };
@@ -326,7 +334,9 @@
             flowLayoutPanelRight.ControlRemoved += (_, e) =>
             {
                 if (e.Control == _selectedCard)
+                {
                     ReturnToProfile();
+                }
             };
             ConfigureProfileNavigation(header, toolbar);
             var listHost = new Panel { Dock = DockStyle.Fill };

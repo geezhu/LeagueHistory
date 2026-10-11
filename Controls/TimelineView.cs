@@ -72,14 +72,22 @@ public sealed class TimelineView : UserControl
         toolbar.Controls.AddRange(new Control[] { _filter, _retry });
         _retry.Click += (_, _) => LoadTimeline();
         foreach (var (title, width) in new[] { ("时间", 65), ("玩家", 150), ("事件", 260), ("位置坐标", 110) })
+        {
             _events.Columns.Add(title, width);
+        }
+
         _events.SelectedIndexChanged += (_, _) =>
         {
             if (_data == null || _events.SelectedItems.Count == 0 || _events.SelectedItems[0].Tag is not long stamp)
+            {
                 return;
+            }
+
             int index = _data.Frames.FindLastIndex(f => f.Timestamp <= stamp);
             if (index >= 0)
+            {
                 _time.Value = Math.Min(index, _time.Maximum);
+            }
         };
         _time.ValueChanged += (_, _) => UpdateFrame();
         Controls.Add(_events);
@@ -120,7 +128,10 @@ public sealed class TimelineView : UserControl
                 request.Token
             );
             if (IsDisposed || request.IsCancellationRequested)
+            {
                 return;
+            }
+
             if (response.Data == null)
             {
                 _status.Text = response.Message;
@@ -154,19 +165,26 @@ public sealed class TimelineView : UserControl
         {
             System.Diagnostics.Debug.WriteLine($"时间线解析失败: {ex.GetType().Name}");
             if (!IsDisposed && !request.IsCancellationRequested)
+            {
                 _status.Text = "时间线格式暂不支持，请重试。";
+            }
         }
         finally
         {
             if (!IsDisposed && !request.IsCancellationRequested)
+            {
                 _retry.Enabled = true;
+            }
         }
     }
 
     private void UpdateFrame()
     {
         if (_data == null || _data.Frames.Count == 0)
+        {
             return;
+        }
+
         var frame = _data.Frames[_time.Value];
         _chart.Selected = _time.Value;
         _chart.Invalidate();
@@ -183,12 +201,14 @@ public sealed class TimelineView : UserControl
         _events.BeginUpdate();
         _events.Items.Clear();
         if (_data != null)
+        {
             foreach (
                 var ev in _data.Events.Where(e =>
                     _filter.SelectedIndex == 0
                     || (_filter.SelectedIndex == 1 ? e.Kind == "CHAMPION_KILL" : e.Kind != "CHAMPION_KILL")
                 )
             )
+            {
                 _events.Items.Add(
                     new ListViewItem(
                         new[]
@@ -203,6 +223,9 @@ public sealed class TimelineView : UserControl
                         Tag = ev.Timestamp,
                     }
                 );
+            }
+        }
+
         _events.EndUpdate();
     }
 
@@ -230,7 +253,10 @@ internal sealed class TimelineGoldChart : Control
     {
         base.OnPaint(e);
         if (Data == null || Data.Frames.Count == 0)
+        {
             return;
+        }
+
         var area = new Rectangle(58, 26, Math.Max(1, Width - 82), Math.Max(1, Height - 58));
         double max = Math.Max(
             100,
@@ -267,9 +293,15 @@ internal sealed class TimelineGoldChart : Control
             var a = Data.Frames[i - 1];
             var b = Data.Frames[i];
             if (Data.FrameInterval is > 0 && b.Timestamp - a.Timestamp > Data.FrameInterval.Value * 1.5)
+            {
                 continue;
+            }
+
             if (Data.GoldDifference(a) is not double av || Data.GoldDifference(b) is not double bv)
+            {
                 continue;
+            }
+
             var ap = Point(a, av);
             var bp = Point(b, bv);
             if (av * bv < 0)
@@ -282,7 +314,9 @@ internal sealed class TimelineGoldChart : Control
                 Segment(crossing, bp, bv > 0);
             }
             else
+            {
                 Segment(ap, bp, av + bv >= 0);
+            }
         }
         using var cursor = new Pen(Color.FromArgb(111, 123, 139))
         {

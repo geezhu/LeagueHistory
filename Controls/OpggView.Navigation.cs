@@ -28,12 +28,21 @@ internal sealed partial class OpggView
         // Preserve the controls' values, including hidden lane/tier selections.
         var page = new OpggQuery(Value(_region), Value(_mode), Value(_tier), Value(_position), _championId);
         if (_navigationIndex >= 0 && _navigation[_navigationIndex] == page)
+        {
             return;
+        }
+
         if (_navigationIndex + 1 < _navigation.Count)
+        {
             _navigation.RemoveRange(_navigationIndex + 1, _navigation.Count - _navigationIndex - 1);
+        }
+
         _navigation.Add(page);
         if (_navigation.Count > 100)
+        {
             _navigation.RemoveAt(0);
+        }
+
         _navigationIndex = _navigation.Count - 1;
         UpdateNavigationButtons();
     }
@@ -42,7 +51,10 @@ internal sealed partial class OpggView
     {
         int next = _navigationIndex + direction;
         if (next < 0 || next >= _navigation.Count)
+        {
             return false;
+        }
+
         _filterTimer.Stop();
         Cancel();
         _follow.Checked = false;

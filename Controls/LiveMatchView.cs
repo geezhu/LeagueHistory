@@ -118,7 +118,10 @@ public sealed partial class LiveMatchView : UserControl
         {
             bool wide = panels.Width >= 820;
             if (wideLayout == wide)
+            {
                 return;
+            }
+
             wideLayout = wide;
             panels.SuspendLayout();
             panels.Controls.Remove(_players);
@@ -129,10 +132,16 @@ public sealed partial class LiveMatchView : UserControl
             panels.RowCount = wide ? 1 : 2;
             panels.ColumnStyles.Add(new(SizeType.Percent, wide ? 48 : 100));
             if (wide)
+            {
                 panels.ColumnStyles.Add(new(SizeType.Percent, 52));
+            }
+
             panels.RowStyles.Add(new(SizeType.Percent, wide ? 100 : 45));
             if (!wide)
+            {
                 panels.RowStyles.Add(new(SizeType.Percent, 55));
+            }
+
             panels.Controls.Add(_players, 0, 0);
             panels.Controls.Add(details, wide ? 1 : 0, wide ? 0 : 1);
             panels.ResumeLayout();
@@ -151,7 +160,9 @@ public sealed partial class LiveMatchView : UserControl
         {
             _cardsSignature = "";
             if (_snapshot != null)
+            {
                 RenderCards();
+            }
         };
         var record = Button("记录已选");
         var clear = Button("清除记录");
@@ -201,23 +212,37 @@ public sealed partial class LiveMatchView : UserControl
             var player = Selected();
             int id = ChampionId(player);
             if (id > 0 && _currentQueue is 450 or 2400)
+            {
                 _guide(id, _currentQueue);
+            }
         };
         record.Click += (_, _) =>
         {
             var player = Selected();
             if (player == null || _augment.SelectedItem is not AugmentChoice choice)
+            {
                 return;
+            }
+
             if (!_manualAugments.TryGetValue(player.Key, out var list))
+            {
                 _manualAugments[player.Key] = list = new();
+            }
+
             if (!list.Contains(choice.Id))
+            {
                 list.Add(choice.Id);
+            }
+
             ShowEquipment();
         };
         clear.Click += (_, _) =>
         {
             if (Selected() is { } player)
+            {
                 _manualAugments.Remove(player.Key);
+            }
+
             ShowEquipment();
         };
         _timer.Tick += (_, _) => _ = PollAsync();
@@ -225,7 +250,9 @@ public sealed partial class LiveMatchView : UserControl
         VisibleChanged += (_, _) =>
         {
             if (Visible)
+            {
                 _ = PollAsync();
+            }
         };
     }
 
@@ -257,7 +284,10 @@ public sealed partial class LiveMatchView : UserControl
     private async Task PollAsync()
     {
         if (_busy || !Visible || IsDisposed)
+        {
             return;
+        }
+
         _busy = true;
         try
         {
@@ -272,7 +302,10 @@ public sealed partial class LiveMatchView : UserControl
                 detected = 0;
             }
             if (IsDisposed || _life.IsCancellationRequested)
+            {
                 return;
+            }
+
             int queue = _mode.SelectedIndex switch
             {
                 1 => 450,
@@ -287,7 +320,10 @@ public sealed partial class LiveMatchView : UserControl
                         != string.Join("|", _snapshot.Players.Select(p => p.Key))
                 )
             )
+            {
                 _manualAugments.Clear();
+            }
+
             _snapshot = snapshot;
             _currentQueue = queue;
             if (_rankQueue != queue)
@@ -347,15 +383,24 @@ public sealed partial class LiveMatchView : UserControl
             {
                 var page = await _am.GetAsync(0, false, token);
                 if (token.IsCancellationRequested || _currentQueue != queue || _snapshot == null)
+                {
                     return;
+                }
+
                 _augmentMetadata = page.Index.Augments;
                 foreach (var c in page.Index.Champions)
+                {
                     _ranks[c.Id] = (c.Tier, c.WinRate, page.Index.PickRate(c));
+                }
+
                 _rankStatus =
                     $"arammeta {page.Index.Patch} · 调整后胜率 / 样本选取率" + (page.UpdateFailed ? " · 旧缓存" : "");
                 if (_augment.Items.Count == 0)
+                {
                     foreach (var entry in page.Index.Augments.Properties())
+                    {
                         if (int.TryParse(entry.Name, out int id))
+                        {
                             _augment.Items.Add(
                                 new AugmentChoice(
                                     id,
@@ -364,14 +409,23 @@ public sealed partial class LiveMatchView : UserControl
                                         ?? $"强化 {id}"
                                 )
                             );
+                        }
+                    }
+                }
             }
             else
             {
                 var page = await _opgg.GetTiersAsync(new("global", "aram", "all", "none", 0), false, token);
                 if (token.IsCancellationRequested || _currentQueue != queue || _snapshot == null)
+                {
                     return;
+                }
+
                 foreach (var c in page.Rows)
+                {
                     _ranks[c.ChampionId] = (c.Tier.HasValue ? "T" + c.Tier : "—", c.WinRate, c.PickRate);
+                }
+
                 _rankStatus = $"OP.GG {page.Version} · 全球 / 全段位 · 胜率 / 登场率";
             }
         }
@@ -384,7 +438,10 @@ public sealed partial class LiveMatchView : UserControl
             _rankStatus = "梯队更新失败，可刷新重试；当前装备仍可查看。";
         }
         if (IsDisposed || token.IsCancellationRequested || _snapshot == null)
+        {
             return;
+        }
+
         Render();
     }
 
@@ -395,7 +452,10 @@ public sealed partial class LiveMatchView : UserControl
             queue = _currentQueue;
         string key = $"{queue}:{id}";
         if (_pendingRecommendation == key && _detailLoad is { IsCancellationRequested: false })
+        {
             return;
+        }
+
         _detailLoad?.Cancel();
         _detailLoad?.Dispose();
         _detailLoad = CancellationTokenSource.CreateLinkedTokenSource(_life.Token);
@@ -423,7 +483,10 @@ public sealed partial class LiveMatchView : UserControl
             {
                 var page = await _am.GetAsync(id, false, token);
                 foreach (var item in AramMetaRecommendation.Read(page, id, "items").Take(3))
+                {
                     builds.Add((item.Ids, item.WinRate, item.PickRate));
+                }
+
                 foreach (
                     var (category, title) in new[]
                     {
@@ -432,12 +495,15 @@ public sealed partial class LiveMatchView : UserControl
                         ("kSilver", "白银强化"),
                     }
                 )
+                {
                     augments.Add((title, AramMetaRecommendation.Read(page, id, category).Take(5).ToArray()));
+                }
             }
             else
             {
                 var page = await _opgg.GetBuildAsync(new("global", "aram", "all", "none", id), false, token);
                 foreach (var item in (page.Data["core_items"] as JArray ?? new()).OfType<JObject>().Take(3))
+                {
                     builds.Add(
                         (
                             Services.OpggItemSetService.Ids(item),
@@ -445,6 +511,7 @@ public sealed partial class LiveMatchView : UserControl
                             (double?)item["pick_rate"]
                         )
                     );
+                }
             }
             if (!token.IsCancellationRequested && !IsDisposed)
             {
@@ -456,12 +523,16 @@ public sealed partial class LiveMatchView : UserControl
         catch
         {
             if (!token.IsCancellationRequested && !IsDisposed)
+            {
                 SetMessage(_recommendations, "推荐读取失败，可点击刷新对局重试。");
+            }
         }
         finally
         {
             if (ReferenceEquals(_detailLoad, request))
+            {
                 _pendingRecommendation = null;
+            }
         }
     }
 

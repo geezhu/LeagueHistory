@@ -30,9 +30,15 @@ internal sealed class CompactHistoryHost : Panel
             ClientSize.Height
         );
         if (_list.Bounds != bounds)
+        {
             _list.Bounds = bounds;
+        }
+
         if (_list.Columns.Count > 0)
+        {
             _list.Columns[0].Width = Math.Max(30, ClientSize.Width - _rail.Width - 1);
+        }
+
         _rail.Invalidate();
     }
 
@@ -44,10 +50,16 @@ internal sealed class CompactHistoryHost : Panel
         {
             e.Graphics.Clear(Color.White);
             if (list.Items.Count == 0 || !list.IsHandleCreated)
+            {
                 return;
+            }
+
             int visible = Math.Max(1, list.ClientSize.Height / Math.Max(1, list.GetItemRect(0).Height));
             if (visible >= list.Items.Count)
+            {
                 return;
+            }
+
             int length = Math.Min(Height, Math.Max(24, Height * visible / list.Items.Count));
             int top =
                 (list.TopItem?.Index ?? 0) * Math.Max(0, Height - length) / Math.Max(1, list.Items.Count - visible);
@@ -59,7 +71,10 @@ internal sealed class CompactHistoryHost : Panel
         {
             base.OnMouseDown(e);
             if (e.Button != MouseButtons.Left)
+            {
                 return;
+            }
+
             _dragging = true;
             Capture = true;
             Scroll(e.Y);
@@ -69,7 +84,9 @@ internal sealed class CompactHistoryHost : Panel
         {
             base.OnMouseMove(e);
             if (_dragging)
+            {
                 Scroll(e.Y);
+            }
         }
 
         protected override void OnMouseUp(MouseEventArgs e)
@@ -83,7 +100,10 @@ internal sealed class CompactHistoryHost : Panel
         private void Scroll(int y)
         {
             if (list.Items.Count == 0)
+            {
                 return;
+            }
+
             int visible = Math.Max(1, list.ClientSize.Height / Math.Max(1, list.GetItemRect(0).Height));
             int index = (int)
                 Math.Round(Math.Clamp((double)y / Math.Max(1, Height), 0, 1) * Math.Max(0, list.Items.Count - visible));

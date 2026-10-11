@@ -33,7 +33,9 @@ public sealed partial class LiveMatchView
     private static void Clear(Control parent)
     {
         foreach (Control c in parent.Controls.Cast<Control>().ToArray())
+        {
             c.Dispose();
+        }
     }
 
     private Label TextLabel(string text, Color? color = null) =>
@@ -63,10 +65,16 @@ public sealed partial class LiveMatchView
     private void Render()
     {
         if (_snapshot == null)
+        {
             return;
+        }
+
         bool changed = Selected() == null;
         if (changed)
+        {
             _selectedKey = (_snapshot.Players.FirstOrDefault(p => p.Self) ?? _snapshot.Players.FirstOrDefault())?.Key;
+        }
+
         string items = ItemsKey(Selected());
         _status.Text =
             (
@@ -85,14 +93,20 @@ public sealed partial class LiveMatchView
             _ = LoadRecommendationsAsync();
         }
         else if (items != _selectedItems)
+        {
             UpdateOwnedItems();
+        }
+
         _selectedItems = items;
     }
 
     private void RenderCards()
     {
         if (_snapshot == null || _rendering)
+        {
             return;
+        }
+
         string signature =
             _selectedKey
             + "|"
@@ -105,14 +119,22 @@ public sealed partial class LiveMatchView
                 )
             );
         if (signature == _cardsSignature)
+        {
             return;
+        }
+
         _cardsSignature = signature;
         _rendering = true;
         _players.SuspendLayout();
         var scroll = _players.AutoScrollPosition;
         foreach (var cached in _playerCards.Values)
+        {
             if (!cached.Card.IsDisposed)
+            {
                 cached.Card.Parent?.Controls.Remove(cached.Card);
+            }
+        }
+
         Clear(_players);
         var active = new HashSet<string>();
         int width = Math.Max(160, (_players.ClientSize.Width - 42) / 2);
@@ -216,6 +238,7 @@ public sealed partial class LiveMatchView
                 };
                 card.Controls.Add(items);
                 if (p.Items == null)
+                {
                     items.Controls.Add(
                         new Label
                         {
@@ -224,7 +247,9 @@ public sealed partial class LiveMatchView
                             ForeColor = Muted,
                         }
                     );
+                }
                 else if (p.Items.Length == 0)
+                {
                     items.Controls.Add(
                         new Label
                         {
@@ -233,9 +258,15 @@ public sealed partial class LiveMatchView
                             ForeColor = Muted,
                         }
                     );
+                }
                 else
+                {
                     foreach (var item in p.Items.Take(7))
+                    {
                         items.Controls.Add(Icon("item", item.Id, 22, ItemName(item.Id, item.Name), count: item.Count));
+                    }
+                }
+
                 void Select(Control c)
                 {
                     c.Cursor = Cursors.Hand;
@@ -249,7 +280,9 @@ public sealed partial class LiveMatchView
                         _ = LoadRecommendationsAsync();
                     };
                     foreach (Control child in c.Controls)
+                    {
                         Select(child);
+                    }
                 }
                 Select(card);
             }
@@ -268,14 +301,20 @@ public sealed partial class LiveMatchView
     {
         var p = Selected();
         if (p == null)
+        {
             return;
+        }
+
         int id = ChampionId(p);
         var rank = _ranks.GetValueOrDefault(id);
         string signature =
             $"{p.Key}|{id}|{p.Level}|{ItemsKey(p)}|{rank}|{_currentQueue}|{Streak(p)}|"
             + string.Join(",", _manualAugments.GetValueOrDefault(p.Key) ?? new());
         if (signature == _equipmentSignature)
+        {
             return;
+        }
+
         _equipmentSignature = signature;
         _equipment.SuspendLayout();
         Clear(_equipment);
@@ -338,16 +377,24 @@ public sealed partial class LiveMatchView
         var row = IconRow();
         _equipment.Controls.Add(row);
         if (p.Items is { Length: > 0 })
+        {
             foreach (var item in p.Items)
+            {
                 row.Controls.Add(Icon("item", item.Id, 44, ItemName(item.Id, item.Name), count: item.Count));
+            }
+        }
         else
+        {
             row.Controls.Add(TextLabel(p.Items == null ? "接口未提供装备信息" : "尚未购买装备", Muted));
+        }
+
         if (_currentQueue == 2400)
         {
             _equipment.Controls.Add(TextLabel("已选强化 · 手动记录", Gold));
             var augmentRow = IconRow();
             _equipment.Controls.Add(augmentRow);
             if (_manualAugments.TryGetValue(p.Key, out var ids) && ids.Count > 0)
+            {
                 foreach (int augmentId in ids)
                 {
                     var icon = Icon("augment", augmentId, 44, AugmentName(augmentId));
@@ -358,8 +405,11 @@ public sealed partial class LiveMatchView
                         ShowEquipment();
                     };
                 }
+            }
             else
+            {
                 augmentRow.Controls.Add(TextLabel("在底部记录已选强化，点击图标可移除。", Muted));
+            }
         }
         ResizeSections();
         _equipment.ResumeLayout();
@@ -416,10 +466,16 @@ public sealed partial class LiveMatchView
             try
             {
                 if (id <= 0)
+                {
                     return;
+                }
+
                 var info = await CachedIconAsync(kind, id);
                 if (icon.IsDisposed || _life.IsCancellationRequested)
+                {
                     return;
+                }
+
                 if (info.image != null)
                 {
                     icon.BackgroundImage = info.image;
@@ -452,7 +508,10 @@ public sealed partial class LiveMatchView
                     button.FlatAppearance.BorderSize = owned ? 2 : 0;
                     string description = "";
                     if (_imageTasks.TryGetValue($"item:{item.Item2}", out var task) && task.IsCompletedSuccessfully)
+                    {
                         description = task.Result.description;
+                    }
+
                     _tips.SetToolTip(
                         button,
                         TooltipText.Format(ItemName(item.Item2) + (owned ? " · 已拥有" : ""), description)
@@ -468,7 +527,10 @@ public sealed partial class LiveMatchView
     {
         string key = $"{kind}:{id}";
         if (_imageTasks.TryGetValue(key, out var existing))
+        {
             return existing;
+        }
+
         return _imageTasks[key] = Load();
         async Task<(Image? image, string name, string description)> Load()
         {
@@ -489,7 +551,10 @@ public sealed partial class LiveMatchView
                     return (null, info.name, info.description);
                 }
                 if (info.image != null)
+                {
                     _cachedImages.Add(info.image);
+                }
+
                 return info;
             }
             catch
@@ -502,10 +567,16 @@ public sealed partial class LiveMatchView
     private void DisposeImageCache()
     {
         foreach (var cached in _playerCards.Values)
+        {
             cached.Card.Dispose();
+        }
+
         _playerCards.Clear();
         foreach (var image in _cachedImages)
+        {
             image.Dispose();
+        }
+
         _cachedImages.Clear();
         _imageTasks.Clear();
     }
@@ -516,19 +587,28 @@ public sealed partial class LiveMatchView
         {
             var client = FormMain.Globals.lcuClient?.Client;
             if (client == null || id <= 0)
+            {
                 return;
+            }
+
             if (!_championDetails.TryGetValue(id, out var data))
             {
                 data = JObject.Parse(
                     await client.GetStringAsync($"/lol-game-data/assets/v1/champions/{id}.json", _life.Token)
                 );
                 if ((int?)data["id"] != id)
+                {
                     return;
+                }
+
                 _championDetails[id] = data;
             }
             string? path = ProfileBackgroundPanel.FindSplash(data, id * 1000);
             if (path == null)
+            {
                 return;
+            }
+
             var image = await new ImageCacheService(client).GetOrDownloadImageAsync(
                 path,
                 "profile-backgrounds",
@@ -553,7 +633,10 @@ public sealed partial class LiveMatchView
         Clear(_recommendations);
         _recommendations.Controls.Add(TextLabel("推荐出装", Gold));
         if (builds.Count == 0)
+        {
             _recommendations.Controls.Add(TextLabel("暂无组合，可打开完整攻略查看其他方案。", Muted));
+        }
+
         foreach (var build in builds)
         {
             var card = Stack();
@@ -563,9 +646,12 @@ public sealed partial class LiveMatchView
             var icons = IconRow();
             card.Controls.Add(icons);
             foreach (int id in build.Ids)
+            {
                 icons.Controls.Add(
                     Icon("item", id, 38, ItemName(id), owned: Selected()?.Items?.Any(i => i.Id == id) == true)
                 );
+            }
+
             card.Controls.Add(
                 TextLabel($"胜率 {Rate(build.Win)} · 选用率 {Rate(build.Pick)}", Color.FromArgb(90, 206, 212))
             );
@@ -590,17 +676,29 @@ public sealed partial class LiveMatchView
                 {
                     var p = Selected();
                     if (p == null)
+                    {
                         return;
+                    }
+
                     if (!_manualAugments.TryGetValue(p.Key, out var list))
+                    {
                         _manualAugments[p.Key] = list = new();
+                    }
+
                     if (!list.Contains(id))
+                    {
                         list.Add(id);
+                    }
+
                     ShowEquipment();
                 };
             }
         }
         if (augments.Count > 0)
+        {
             _recommendations.Controls.Add(TextLabel("悬浮查看介绍；点击强化可记入手动记录。", Muted));
+        }
+
         ResizeSections();
         _recommendations.ResumeLayout();
     }
@@ -608,17 +706,24 @@ public sealed partial class LiveMatchView
     private void ResizeSections()
     {
         foreach (var host in new[] { _equipment, _recommendations })
-        foreach (Control c in host.Controls)
         {
-            if (c is ProfileBackgroundPanel || c is FlowLayoutPanel { FlowDirection: FlowDirection.TopDown })
+            foreach (Control c in host.Controls)
             {
-                c.MinimumSize = new Size(Math.Max(210, host.Width - 12), 0);
-                c.Width = Math.Max(210, host.Width - 12);
+                if (c is ProfileBackgroundPanel || c is FlowLayoutPanel { FlowDirection: FlowDirection.TopDown })
+                {
+                    c.MinimumSize = new Size(Math.Max(210, host.Width - 12), 0);
+                    c.Width = Math.Max(210, host.Width - 12);
+                }
+                if (c is FlowLayoutPanel row)
+                {
+                    row.MaximumSize = new Size(Math.Max(210, host.Width - 12), 0);
+                }
+
+                if (c is Label label)
+                {
+                    label.MaximumSize = new Size(Math.Max(200, host.Width - 18), 0);
+                }
             }
-            if (c is FlowLayoutPanel row)
-                row.MaximumSize = new Size(Math.Max(210, host.Width - 12), 0);
-            if (c is Label label)
-                label.MaximumSize = new Size(Math.Max(200, host.Width - 18), 0);
         }
     }
 }

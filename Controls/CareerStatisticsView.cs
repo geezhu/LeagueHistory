@@ -60,7 +60,10 @@ public sealed class CareerStatisticsView : UserControl
         header.Controls.Add(_retry);
         _retry.Click += (_, _) => LoadPlayer(_puuid);
         foreach (var (title, width) in new[] { ("比赛模式", 150), ("有效场次", 90), ("胜率", 90), ("综合 KDA", 100) })
+        {
             _modes.Columns.Add(title, width);
+        }
+
         Controls.Add(_modes);
         Controls.Add(_summary);
         Controls.Add(_status);
@@ -71,7 +74,10 @@ public sealed class CareerStatisticsView : UserControl
     public async void LoadPlayer(string puuid)
     {
         if (string.IsNullOrWhiteSpace(puuid) || IsDisposed)
+        {
             return;
+        }
+
         _puuid = puuid;
         _request?.Cancel();
         _request?.Dispose();
@@ -97,10 +103,15 @@ public sealed class CareerStatisticsView : UserControl
                 );
                 records = CareerStatistics.Records(response.Data);
                 if (records == null && response.Status is not (401 or 403) && _historyLoader != null)
+                {
                     records = await _historyLoader(puuid, request.Token);
+                }
             }
             if (IsDisposed || request.IsCancellationRequested)
+            {
                 return;
+            }
+
             if (records == null)
             {
                 _status.Text =
@@ -149,12 +160,16 @@ public sealed class CareerStatisticsView : UserControl
         {
             System.Diagnostics.Debug.WriteLine($"统计解析失败: {ex.GetType().Name}");
             if (!IsDisposed && !request.IsCancellationRequested)
+            {
                 _status.Text = "统计数据格式暂不支持，未使用不完整数据计算。";
+            }
         }
         finally
         {
             if (!IsDisposed && !request.IsCancellationRequested)
+            {
                 _retry.Enabled = true;
+            }
         }
     }
 

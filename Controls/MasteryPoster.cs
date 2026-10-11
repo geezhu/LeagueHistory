@@ -24,7 +24,10 @@ internal sealed class MasteryPoster : PictureBox
         {
             string? alias = FormMain.Globals.resLoading.GetChampionById(championId)?.Alias;
             if (string.IsNullOrEmpty(alias) || !alias.All(char.IsAsciiLetterOrDigit))
+            {
                 return;
+            }
+
             var image = await Cache.GetOrDownloadImageAsync(
                 $"https://ddragon.leagueoflegends.com/cdn/img/champion/loading/{alias}_0.jpg",
                 "mastery-posters",
@@ -36,7 +39,10 @@ internal sealed class MasteryPoster : PictureBox
                 return;
             }
             if (image == null)
+            {
                 return;
+            }
+
             var previous = Image;
             Image = image;
             previous?.Dispose();
@@ -51,7 +57,10 @@ internal sealed class MasteryPoster : PictureBox
     protected override void OnPaint(PaintEventArgs e)
     {
         if (Width <= 0 || Height <= 0)
+        {
             return;
+        }
+
         var g = e.Graphics;
         g.Clear(BackColor);
         if (Image != null)
@@ -72,7 +81,10 @@ internal sealed class MasteryPoster : PictureBox
         };
         g.FillRectangle(shade, ClientRectangle);
         if (_rank > 3)
+        {
             return;
+        }
+
         Color accent =
             _rank == 1 ? Color.FromArgb(207, 168, 78)
             : _rank == 2 ? Color.FromArgb(145, 166, 186)

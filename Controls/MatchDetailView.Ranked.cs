@@ -17,14 +17,23 @@ public partial class MatchDetailView
     private async void AddPlayerRank(Panel row, JObject participant)
     {
         if (_match.QueueId.Replace("q_", "") != "420")
+        {
             return;
+        }
+
         string? puuid = participant["puuid"]?.ToString();
         if (string.IsNullOrEmpty(puuid))
+        {
             return;
+        }
+
         var emblem = new RankEmblem { Name = "PlayerRankEmblem", Bounds = new Rectangle(206, 5, 30, 28) };
         var name = row.Controls.OfType<LinkLabel>().FirstOrDefault();
         if (name != null)
+        {
             name.Width = Math.Min(name.Width, 144);
+        }
+
         row.Controls.Add(emblem);
         _toolTip.SetToolTip(emblem, "正在获取当前单双排段位…");
         var token = _rankRequests.Token;
@@ -38,7 +47,9 @@ public partial class MatchDetailView
                     RankCache.TryGetValue(puuid, out var cached)
                     && DateTime.UtcNow - cached.Time < TimeSpan.FromMinutes(5)
                 )
+                {
                     rank = cached.Stats;
+                }
                 else
                 {
                     var service = new PlayerStatisticsService(() => FormMain.Globals.lcuClient.Client);
@@ -50,7 +61,10 @@ public partial class MatchDetailView
                     {
                         rank = RankedStats.FromJson(data)["单双排"];
                         if (RankCache.Count >= 256)
+                        {
                             RankCache.Clear();
+                        }
+
                         RankCache[puuid] = (DateTime.UtcNow, rank);
                     }
                 }
@@ -60,9 +74,15 @@ public partial class MatchDetailView
                 RankGate.Release();
             }
             if (IsDisposed || emblem.IsDisposed || token.IsCancellationRequested)
+            {
                 return;
+            }
+
             if (rank != null)
+            {
                 emblem.SetTier(rank.Tier);
+            }
+
             _toolTip.SetToolTip(
                 emblem,
                 rank == null ? "当前单双排段位暂不可用" : $"当前单双排：{rank.FormattedTier}\n不是本场比赛发生时的段位"
@@ -80,7 +100,10 @@ public partial class MatchDetailView
         var teams = _match.RawGameData?["teams"] as JArray;
         var team = teams?.OfType<JObject>().FirstOrDefault(t => (int?)t["teamId"] == teamId);
         if (team?["bans"] is not JArray bans || bans.Count == 0)
+        {
             return;
+        }
+
         var button = new Button
         {
             Name = "TeamBans",
@@ -107,6 +130,7 @@ public partial class MatchDetailView
             {
                 // ToolStripDropDown still touches its handle after raising Closed.
                 if (!IsDisposed && IsHandleCreated)
+                {
                     BeginInvoke(
                         (Action)(
                             () =>
@@ -120,6 +144,7 @@ public partial class MatchDetailView
                             }
                         )
                     );
+                }
             };
             var slots = new List<(PictureBox Picture, int Id)>();
             foreach (var ban in bans.OfType<JObject>().OrderBy(b => (int?)b["pickTurn"] ?? int.MaxValue))
@@ -140,7 +165,10 @@ public partial class MatchDetailView
             foreach (var (picture, id) in slots)
             {
                 if (id <= 0 || popup.IsDisposed || IsDisposed)
+                {
                     continue;
+                }
+
                 try
                 {
                     var image = await FormMain.Globals.resLoading.GetChampionIconAsync(id);

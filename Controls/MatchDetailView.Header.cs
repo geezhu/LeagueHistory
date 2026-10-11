@@ -22,7 +22,10 @@ public partial class MatchDetailView
             Margin = Padding.Empty,
         };
         foreach (float width in new[] { 23f, 24f, 21f, 19f, 13f })
+        {
             info.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, width));
+        }
+
         info.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         string Kills(int team)
         {

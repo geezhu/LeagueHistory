@@ -134,7 +134,9 @@ internal sealed partial class OpggView : UserControl
     {
         var item = box.Items.Cast<Choice>().FirstOrDefault(c => c.Value == value);
         if (item != null)
+        {
             box.SelectedItem = item;
+        }
     }
 
     private static string ChampionName(int id) =>
@@ -169,33 +171,49 @@ internal sealed partial class OpggView : UserControl
         _back.Click += async (_, _) =>
         {
             if (MoveNavigation(-1))
+            {
                 await LoadAsync(false);
+            }
         };
         _forward.Click += async (_, _) =>
         {
             if (MoveNavigation(1))
+            {
                 await LoadAsync(false);
+            }
         };
         _tips.SetToolTip(_back, "后退到上一个浏览页面");
         _tips.SetToolTip(_forward, "前进到下一个浏览页面");
         RecordNavigation();
         refresh.Click += async (_, _) => await LoadAsync(true);
         foreach (var box in new[] { _region, _mode, _tier, _position })
+        {
             box.SelectedIndexChanged += (_, _) =>
             {
                 if (_syncing)
+                {
                     return;
+                }
+
                 _follow.Checked = false;
                 if (box == _mode)
+                {
                     _championId = 0;
+                }
+
                 Cancel();
                 ClearContent();
                 _tiers.ClearRows();
                 _syncing = true;
                 if (box == _mode)
+                {
                     SetValue(_tier, _modeTiers[Value(_mode)]);
+                }
                 else if (box == _tier)
+                {
                     _modeTiers[Value(_mode)] = Value(_tier);
+                }
+
                 _position.Visible = Value(_mode) == "ranked";
                 _tier.Visible = Value(_mode) != "arena";
                 _position.Enabled = true;
@@ -205,27 +223,37 @@ internal sealed partial class OpggView : UserControl
                 _filterTimer.Stop();
                 _filterTimer.Start();
             };
+        }
+
         _tiers.ChampionRequested += async row =>
         {
             _follow.Checked = false;
             _syncing = true;
             SelectHero(row.ChampionId);
             if (Value(_mode) == "ranked")
+            {
                 SetValue(_position, row.Position.ToLowerInvariant());
+            }
+
             _syncing = false;
             await LoadAsync(false);
         };
         _content.SizeChanged += (_, _) =>
         {
             foreach (Control c in _content.Controls)
+            {
                 ResizeSection(c);
+            }
         };
         _timer.Tick += async (_, _) => await PollSelectionAsync();
         _filterTimer.Tick += async (_, _) =>
         {
             _filterTimer.Stop();
             if (!Visible)
+            {
                 return;
+            }
+
             await LoadAsync(false);
         };
         _follow.CheckedChanged += (_, _) =>
@@ -264,7 +292,9 @@ internal sealed partial class OpggView : UserControl
     private void ClearContent()
     {
         foreach (Control c in _content.Controls.Cast<Control>().ToArray())
+        {
             c.Dispose();
+        }
     }
 
     private async Task LoadAsync(bool refresh)
@@ -286,7 +316,10 @@ internal sealed partial class OpggView : UserControl
             _status.Text = "正在加载 OP.GG 数据…";
             var tiers = await _client.GetTiersAsync(query, refresh, cts.Token);
             if (cts.IsCancellationRequested || IsDisposed)
+            {
                 return;
+            }
+
             if (id > 0 && query.Mode == "ranked" && _follow.Checked)
             {
                 var position = OpggQuery.PositionForChampion(tiers.Rows, id, _assignedPosition);
@@ -304,7 +337,9 @@ internal sealed partial class OpggView : UserControl
                     }
                     // Automatic resolution corrects this visit rather than creating another history entry.
                     if (_navigationIndex >= 0)
+                    {
                         _navigation[_navigationIndex] = new(Value(_region), Value(_mode), Value(_tier), position, id);
+                    }
                 }
             }
             _tiers.SetRows(
@@ -338,7 +373,9 @@ internal sealed partial class OpggView : UserControl
         catch (OperationCanceledException)
         {
             if (!cts.IsCancellationRequested && !IsDisposed)
+            {
                 _status.Text = "请求超时，请重试。";
+            }
         }
         catch (Exception ex)
         {
@@ -361,14 +398,19 @@ internal sealed partial class OpggView : UserControl
         foreach (Control child in section.Controls)
         {
             if (child is Label)
+            {
                 child.MaximumSize = new Size(width - 24, 0);
+            }
+
             if (child is FlowLayoutPanel)
             {
                 child.MinimumSize = new Size(width - 24, 0);
                 child.MaximumSize = new Size(width - 24, 0);
             }
             if (child is TableLayoutPanel)
+            {
                 child.Width = width - 24;
+            }
         }
     }
 
@@ -430,7 +472,9 @@ internal sealed partial class OpggView : UserControl
                         t =>
                         {
                             if (t.Status == TaskStatus.RanToCompletion)
+                            {
                                 t.Result.image?.Dispose();
+                            }
                         },
                         TaskScheduler.Default
                     );
@@ -481,17 +525,25 @@ internal sealed partial class OpggView : UserControl
         {
             image?.Dispose();
             if (!row.IsDisposed)
+            {
                 row.Controls.Add(new Label { AutoSize = true, Text = name });
+            }
         }
     }
 
     private async Task PollSelectionAsync()
     {
         if (_polling || !_follow.Checked || !Visible)
+        {
             return;
+        }
+
         var client = FormMain.Globals.lcuClient?.Client;
         if (client == null)
+        {
             return;
+        }
+
         _polling = true;
         _poll?.Dispose();
         _poll = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -509,7 +561,10 @@ internal sealed partial class OpggView : UserControl
                 .FirstOrDefault(p => (int?)p["cellId"] == (int?)session["localPlayerCellId"]);
             int champion = (int?)player?["championId"] ?? 0;
             if (champion <= 0)
+            {
                 return;
+            }
+
             var actions = (session["actions"] as JArray ?? new()).OfType<JArray>().SelectMany(a => a.OfType<JObject>());
             if (
                 actions.Any(a =>
@@ -518,7 +573,10 @@ internal sealed partial class OpggView : UserControl
                     && (bool?)a["completed"] != true
                 )
             )
+            {
                 return;
+            }
+
             using var gameResponse = await client.GetAsync("/lol-gameflow/v1/session", _poll.Token);
             gameResponse.EnsureSuccessStatusCode();
             var game = JObject.Parse(await gameResponse.Content.ReadAsStringAsync(_poll.Token));
@@ -534,7 +592,10 @@ internal sealed partial class OpggView : UserControl
             };
             string key = $"{queue}:{champion}:{position}";
             if (key == _selection || IsDisposed || !Visible || !_follow.Checked)
+            {
                 return;
+            }
+
             _selection = key;
             Cancel();
             ClearContent();

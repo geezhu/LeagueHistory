@@ -72,14 +72,19 @@ internal sealed class LolLauncherPanel : UserControl
                 SelectedPath = _installation?.Root ?? "",
             };
             if (dialog.ShowDialog(FindForm()) != DialogResult.OK)
+            {
                 return;
+            }
+
             _selected = true;
             choose.Enabled = false;
             try
             {
                 var installation = await Task.Run(() => LOLHelper.Shared.SaveInstallation(dialog.SelectedPath));
                 if (!IsDisposed)
+                {
                     ShowInstallation(installation);
+                }
             }
             catch (Exception ex)
             {
@@ -92,7 +97,9 @@ internal sealed class LolLauncherPanel : UserControl
             finally
             {
                 if (!IsDisposed)
+                {
                     choose.Enabled = true;
+                }
             }
         };
     }
@@ -104,7 +111,9 @@ internal sealed class LolLauncherPanel : UserControl
         {
             var installation = await LOLHelper.Shared.DetectAsync().WaitAsync(TimeSpan.FromSeconds(8));
             if (!IsDisposed && !_selected)
+            {
                 ShowInstallation(installation);
+            }
         }
         catch (Exception)
         {
@@ -139,7 +148,10 @@ internal sealed class LolLauncherPanel : UserControl
     private void Arrange()
     {
         if (_buttons == null || _buttons.Controls.Count == 0)
+        {
             return;
+        }
+
         int width = Math.Max(180, ClientSize.Width),
             line = Math.Max(22, Font.Height + 5);
         _status.SetBounds(0, 0, width, line);
@@ -164,13 +176,18 @@ internal sealed class LolLauncherPanel : UserControl
         _hint.SetBounds(0, _buttons.Bottom + 2, width, hintHeight);
         int height = _hint.Bottom + 2;
         if (Height != height)
+        {
             Height = height;
+        }
     }
 
     private async void Start(string? path)
     {
         if (path == null)
+        {
             return;
+        }
+
         _official.Enabled = _wegame.Enabled = false;
         try
         {
@@ -179,19 +196,26 @@ internal sealed class LolLauncherPanel : UserControl
         catch (Exception ex)
         {
             if (!IsDisposed)
+            {
                 MessageBox.Show(FindForm(), ex.Message, "启动失败");
+            }
         }
         finally
         {
             if (!IsDisposed)
+            {
                 ShowInstallation(_installation);
+            }
         }
     }
 
     protected override void Dispose(bool disposing)
     {
         if (disposing)
+        {
             _tips.Dispose();
+        }
+
         base.Dispose(disposing);
     }
 }

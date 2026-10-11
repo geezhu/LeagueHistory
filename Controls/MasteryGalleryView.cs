@@ -79,21 +79,29 @@ internal sealed class MasteryGalleryView : UserControl
         {
             _loadTimer.Stop();
             if (_loading || !Visible)
+            {
                 return;
+            }
+
             _loading = true;
             try
             {
                 // Only fetch visible posters, at most four at a time.
                 var visible = _pending.Where(p => p.Key.Bounds.IntersectsWith(_grid.ClientRectangle)).Take(4).ToArray();
                 foreach (var pair in visible)
+                {
                     _pending.Remove(pair.Key);
+                }
+
                 await Task.WhenAll(visible.Select(p => p.Key.LoadArtworkAsync(p.Value)));
             }
             finally
             {
                 _loading = false;
                 if (!IsDisposed)
+                {
                     ScheduleImages();
+                }
             }
         };
     }
@@ -101,7 +109,9 @@ internal sealed class MasteryGalleryView : UserControl
     private void ScheduleImages()
     {
         if (!IsDisposed && Visible && _pending.Any(p => p.Key.Bounds.IntersectsWith(_grid.ClientRectangle)))
+        {
             _loadTimer.Start();
+        }
     }
 
     protected override void Dispose(bool disposing)

@@ -45,7 +45,9 @@ internal sealed class RecentActivityView : Control
         {
             string text = _hits.FirstOrDefault(h => h.bounds.Contains(e.Location)).text ?? _status;
             if (_tip.GetToolTip(this) != text)
+            {
                 _tip.SetToolTip(this, text);
+            }
         };
     }
 
@@ -63,10 +65,15 @@ internal sealed class RecentActivityView : Control
                 .Distinct()
                 .ToArray();
             if (roles == null || roles.Length == 0)
+            {
                 continue;
+            }
+
             classified++;
             foreach (int role in roles)
+            {
                 weights[role] += 1d / roles.Length;
+            }
         }
         return weights;
     }
@@ -98,14 +105,20 @@ internal sealed class RecentActivityView : Control
                 );
                 var batch = CareerStatistics.Records(response.Data);
                 if (batch == null && response.Status is not (0 or 401 or 403))
+                {
                     batch = await FormMain.Globals.sgpClient.SgpFetchLatestMatches(
                         puuid,
                         start,
                         count,
                         cancellationToken: request.Token
                     );
+                }
+
                 if (IsDisposed || request.IsCancellationRequested)
+                {
                     return;
+                }
+
                 if (batch == null)
                 {
                     if (records.Count == 0)
@@ -119,7 +132,10 @@ internal sealed class RecentActivityView : Control
                     break;
                 }
                 foreach (var record in batch)
+                {
                     records.Add(record.DeepClone());
+                }
+
                 games = CareerStatistics
                     .Parse(records, puuid, includeRemakes: true)
                     .Games.Where(g => g.Champion > 0)
@@ -128,7 +144,9 @@ internal sealed class RecentActivityView : Control
                     .Take(50)
                     .ToArray();
                 if (batch.Count < count)
+                {
                     break;
+                }
             }
             OverviewLoaded?.Invoke(games, $"最近 {games.Length} 场" + (partial ? " · 部分记录暂不可用" : ""));
             games = games.Take(20).ToArray();
@@ -145,7 +163,10 @@ internal sealed class RecentActivityView : Control
             var masteryTask = ChampionMasteryService.Shared.GetAsync(puuid, request.Token);
             await Task.WhenAll(catalogTask, masteryTask);
             if (IsDisposed || request.IsCancellationRequested)
+            {
                 return;
+            }
+
             _weights = CountRoles(games, catalogTask.Result.Data as JArray ?? new JArray(), out _classified);
             var mastery = ProfileMasteryView.SelectAll(masteryTask.Result.Data);
             foreach (
@@ -209,9 +230,14 @@ internal sealed class RecentActivityView : Control
             var hero = _heroes[i];
             var rect = new Rectangle(112 + i * 48, 23, 36, 36);
             if (hero.image != null)
+            {
                 g.DrawImage(hero.image, rect);
+            }
             else
+            {
                 Text("—", rect);
+            }
+
             _hits.Add(
                 (
                     rect,
@@ -220,11 +246,17 @@ internal sealed class RecentActivityView : Control
             );
         }
         if (_heroes.Count == 0)
+        {
             Text(_status, new Rectangle(108, 20, wide ? 154 : Math.Max(1, Width - 120), 42));
+        }
+
         int left = wide ? 276 : 12,
             top = wide ? 12 : 80;
         if (wide)
+        {
             g.DrawLine(line, 266, 22, 266, 62);
+        }
+
         float cell = Math.Max(1, (Width - left - 12) / 6f);
         for (int i = 0; i < 6; i++)
         {
@@ -251,7 +283,10 @@ internal sealed class RecentActivityView : Control
     private void ClearImages()
     {
         foreach (var hero in _heroes)
+        {
             hero.image?.Dispose();
+        }
+
         _heroes.Clear();
     }
 
@@ -264,7 +299,9 @@ internal sealed class RecentActivityView : Control
             _tip.Dispose();
             ClearImages();
             foreach (var icon in _roleIcons)
+            {
                 icon.Dispose();
+            }
         }
         base.Dispose(disposing);
     }

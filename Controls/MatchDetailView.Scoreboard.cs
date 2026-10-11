@@ -14,7 +14,10 @@ public partial class MatchDetailView
     )
     {
         if (matchInfo.AllParticipants == null)
+        {
             return;
+        }
+
         var loading = new Label
         {
             Text = "正在加载比赛数据…",
@@ -32,7 +35,10 @@ public partial class MatchDetailView
             {
                 var team = matchInfo.AllParticipants.Where(p => p["teamId"]?.Value<int>() == teamId).ToList();
                 if (team.Count == 0)
+                {
                     continue;
+                }
+
                 var rows = new List<(JObject Player, Panel Row)>();
                 // Build the whole team before displaying it so headers never detach from rows.
                 var section = new BufferedPanel
@@ -78,12 +84,18 @@ public partial class MatchDetailView
                     button.FlatAppearance.BorderSize = 0;
                     section.Controls.Add(button);
                     if (key == null)
+                    {
                         return;
+                    }
+
                     button.Cursor = Cursors.Hand;
                     button.Click += (_, _) =>
                     {
                         if (rows.Count != team.Count)
+                        {
                             return;
+                        }
+
                         descending = activeSort == key ? !descending : true;
                         activeSort = key;
                         double Value(JObject p) =>
@@ -106,7 +118,10 @@ public partial class MatchDetailView
                             rowY += item.Row.Height;
                         }
                         foreach (var header in section.Controls.OfType<Button>())
+                        {
                             header.Text = header.Text.TrimEnd(' ', '↑', '↓');
+                        }
+
                         button.Text = title + (descending ? " ↓" : " ↑");
                         section.ResumeLayout();
                     };
@@ -123,7 +138,10 @@ public partial class MatchDetailView
                 foreach (var participant in team)
                 {
                     if (panel.IsDisposed)
+                    {
                         return;
+                    }
+
                     var row = await layoutManager.CreateDetailedPlayerPanel(
                         participant,
                         matchInfo,
@@ -145,14 +163,20 @@ public partial class MatchDetailView
                 y += section.Height + 10;
             }
             if (panel.IsDisposed)
+            {
                 return;
+            }
+
             panel.SuspendLayout();
             try
             {
                 _buildingScoreboard = false;
                 AddMatchHighlights(matchInfo);
                 foreach (var section in sections)
+                {
                     section.Visible = true;
+                }
+
                 loading.Dispose();
             }
             finally
@@ -167,7 +191,10 @@ public partial class MatchDetailView
             foreach (var section in sections)
             {
                 if (section.IsDisposed)
+                {
                     continue;
+                }
+
                 DisposeImagesInControls(section.Controls);
                 section.Dispose();
             }

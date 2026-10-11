@@ -64,9 +64,15 @@ internal sealed partial class AramMetaView
     private void PaintRankingCell(object? sender, DataGridViewCellPaintingEventArgs e)
     {
         if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not AramMetaChampion champion || e.Graphics == null)
+        {
             return;
+        }
+
         if (e.ColumnIndex is not (0 or 2 or 4))
+        {
             return;
+        }
+
         e.PaintBackground(e.ClipBounds, true);
         var bounds = e.CellBounds;
         if (e.ColumnIndex == 0)
@@ -80,7 +86,9 @@ internal sealed partial class AramMetaView
                 TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter
             );
             if (e.Value is Image avatar)
+            {
                 e.Graphics.DrawImage(avatar, new Rectangle(bounds.X + 36, bounds.Y + (bounds.Height - 34) / 2, 34, 34));
+            }
         }
         else if (e.ColumnIndex == 2)
         {
