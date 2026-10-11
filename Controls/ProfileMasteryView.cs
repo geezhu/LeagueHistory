@@ -8,6 +8,9 @@ public sealed class ProfileMasteryView : UserControl
 {
     private readonly PlayerStatisticsService _service;
     private readonly bool _sharedMastery;
+    private readonly bool _ownsChampionImages;
+    private readonly Font _headingFont = new("Microsoft YaHei UI", 11f, FontStyle.Bold);
+    private readonly Font _posterFont = new("Microsoft YaHei UI", 10f, FontStyle.Bold);
     private readonly Func<int, Task<(Image? image, string name, string description)>> _champion;
     private readonly TableLayoutPanel _cards = new()
     {
@@ -19,7 +22,6 @@ public sealed class ProfileMasteryView : UserControl
     {
         Text = "英雄成就",
         Dock = DockStyle.Fill,
-        Font = new Font("Microsoft YaHei UI", 11f, FontStyle.Bold),
         AutoEllipsis = true,
     };
     public string OwnershipText { get; private set; } = "— / —";
@@ -60,6 +62,9 @@ public sealed class ProfileMasteryView : UserControl
     private JObject[] _records = Array.Empty<JObject>();
     public event Action<JObject[]>? AllRequested;
     private CancellationTokenSource? _request;
+    private bool _closing;
+    private readonly HashSet<Task> _pendingWork = new();
+    private Task _cleanupWork = Task.CompletedTask;
     private string _puuid = "";
     public event Action<JObject>? ProfileLoaded;
 
@@ -70,7 +75,9 @@ public sealed class ProfileMasteryView : UserControl
     {
         _service = service ?? new(() => FormMain.Globals.lcuClient.Client);
         _sharedMastery = service == null;
+        _ownsChampionImages = champion == null;
         _champion = champion ?? FormMain.Globals.resLoading.GetChampionInfoAsync;
+        _heading.Font = _headingFont;
         BackColor = Color.White;
         ForeColor = Color.FromArgb(36, 63, 98);
         Height = 100;
@@ -125,17 +132,27 @@ public sealed class ProfileMasteryView : UserControl
                 .ToArray()
             : Array.Empty<JObject>();
 
-    public async void LoadPlayer(string puuid, bool refresh = false)
+    public void LoadPlayer(string puuid, bool refresh = false)
     {
-        if (string.IsNullOrWhiteSpace(puuid) || IsDisposed)
+        if (string.IsNullOrWhiteSpace(puuid) || _closing)
         {
             return;
         }
-
         _puuid = puuid;
-        _request?.Cancel();
-        _request?.Dispose();
+        RetireRequest();
         var request = _request = new CancellationTokenSource();
+        var token = request.Token;
+        PrepareLoadingState();
+        if (_closing || token.IsCancellationRequested)
+        {
+            return;
+        }
+        _ = TrackWork(LoadProfileAsync(puuid, token));
+        _ = TrackWork(LoadMasteryAsync(puuid, refresh, token));
+    }
+
+    private void PrepareLoadingState()
+    {
         ClearCards();
         Height = 100;
         _refresh.Enabled = false;
@@ -146,116 +163,151 @@ public sealed class ProfileMasteryView : UserControl
         _owned = _total = "—";
         _masteryAvailable = false;
         UpdateCountHeading();
-        _ = LoadProfileAsync(puuid, request.Token);
+    }
+
+    private async Task LoadMasteryAsync(string puuid, bool refresh, CancellationToken token)
+    {
+        await Task.Yield();
         try
         {
-            StatisticsResponse response;
-            bool stale = false;
-            if (_sharedMastery)
-            {
-                var page = await ChampionMasteryService.Shared.GetAsync(puuid, request.Token, refresh);
-                response = new(page.Data, page.Message);
-                stale = page.Stale;
-            }
-            else
-            {
-                response = await _service.GetAsync(
-                    $"/lol-champion-mastery/v1/{Uri.EscapeDataString(puuid)}/champion-mastery",
-                    request.Token
-                );
-            }
-
-            if (IsDisposed || request.IsCancellationRequested)
+            token.ThrowIfCancellationRequested();
+            var (response, stale) = await ReadMasteryAsync(puuid, refresh, token);
+            if (_closing || token.IsCancellationRequested)
             {
                 return;
             }
-
-            _records = SelectAll(response.Data);
-            _all.Enabled = _records.Length > 0;
-            _masteryAvailable = response.Data is JArray;
-            UpdateCountHeading();
-            var top = SelectTop(response.Data);
-            if (top.Length == 0)
+            var top = ShowMasterySummary(response, stale);
+            if (top.Length > 0)
             {
-                _status.Text =
-                    response.Data is JArray ? "暂无英雄成就记录。"
-                    : string.IsNullOrEmpty(response.Message) ? "暂时无法获取英雄成就。"
-                    : response.Message;
-                return;
-            }
-            _status.Text = stale ? "当前显示旧成就缓存，后台检查更新；点击刷新可等待最新结果。" : "";
-            _status.Visible = stale;
-            Height = 360;
-            int column = 0;
-            foreach (var mastery in top)
-            {
-                int championId = (int)mastery["championId"]!;
-                var resource = await _champion(championId);
-                if (IsDisposed || request.IsCancellationRequested)
-                {
-                    return;
-                }
-
-                var card = new Panel
-                {
-                    Dock = DockStyle.Fill,
-                    MaximumSize = new Size(210, 280),
-                    Margin = new Padding(6),
-                };
-                var icon = new MasteryPoster(column + 1, resource.image);
-                string level =
-                    mastery["championLevel"]?.Type == JTokenType.Integer
-                        ? $"{mastery["championLevel"]} 级英雄成就"
-                        : "";
-                var label = new Label
-                {
-                    Dock = DockStyle.Bottom,
-                    Height = 90,
-                    TextAlign = ContentAlignment.MiddleCenter,
-                    BackColor = Color.Transparent,
-                    ForeColor = Color.White,
-                    Font = new Font("Microsoft YaHei UI", 10f, FontStyle.Bold),
-                    Text =
-                        $"{(string.IsNullOrWhiteSpace(resource.name) ? "英雄 " + championId : resource.name)}\n{level}\n{(long)mastery["championPoints"]!:N0} 成就点数",
-                };
-                icon.Controls.Add(label);
-                card.Controls.Add(icon);
-                _cards.Controls.Add(card, column++, 0);
-                _ = icon.LoadArtworkAsync(championId);
+                await RenderTopChampionsAsync(top, token);
             }
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // A new player or closed profile no longer owns these records.
+        }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"成就加载失败: {ex.GetType().Name}");
-            if (!IsDisposed && !request.IsCancellationRequested)
+            if (!_closing && !token.IsCancellationRequested)
             {
                 _status.Text = "英雄成就加载失败，请重试。";
             }
         }
         finally
         {
-            if (!IsDisposed && !request.IsCancellationRequested)
+            if (!_closing && !token.IsCancellationRequested)
             {
                 _refresh.Enabled = true;
             }
         }
     }
 
+    private async Task<(StatisticsResponse Response, bool Stale)> ReadMasteryAsync(
+        string puuid,
+        bool refresh,
+        CancellationToken token
+    )
+    {
+        if (_sharedMastery)
+        {
+            var page = await ChampionMasteryService.Shared.GetAsync(puuid, token, refresh);
+            return (new(page.Data, page.Message), page.Stale);
+        }
+        var response = await _service.GetAsync(
+            $"/lol-champion-mastery/v1/{Uri.EscapeDataString(puuid)}/champion-mastery",
+            token
+        );
+        return (response, false);
+    }
+
+    private JObject[] ShowMasterySummary(StatisticsResponse response, bool stale)
+    {
+        _records = SelectAll(response.Data);
+        _all.Enabled = _records.Length > 0;
+        _masteryAvailable = response.Data is JArray;
+        UpdateCountHeading();
+        var top = SelectTop(response.Data);
+        if (top.Length == 0)
+        {
+            _status.Text =
+                response.Data is JArray ? "暂无英雄成就记录。"
+                : string.IsNullOrEmpty(response.Message) ? "暂时无法获取英雄成就。"
+                : response.Message;
+            return top;
+        }
+        _status.Text = stale ? "当前显示旧成就缓存，后台检查更新；点击刷新可等待最新结果。" : "";
+        _status.Visible = stale;
+        Height = 360;
+        return top;
+    }
+
+    private async Task RenderTopChampionsAsync(JObject[] top, CancellationToken token)
+    {
+        int column = 0;
+        foreach (var mastery in top)
+        {
+            token.ThrowIfCancellationRequested();
+            int championId = (int)mastery["championId"]!;
+            var resource = await _champion(championId);
+            // Default game resources return a fresh image; injected providers retain ownership of their images.
+            using var ownedImage = _ownsChampionImages ? resource.image : null;
+            if (_closing || token.IsCancellationRequested)
+            {
+                return;
+            }
+            var poster = AddMasteryCard(mastery, resource.image, resource.name, column++);
+            _ = TrackWork(poster.LoadArtworkAsync(championId));
+        }
+    }
+
+    private MasteryPoster AddMasteryCard(JObject mastery, Image? image, string name, int column)
+    {
+        int championId = (int)mastery["championId"]!;
+        var card = new Panel
+        {
+            Dock = DockStyle.Fill,
+            MaximumSize = new Size(210, 280),
+            Margin = new Padding(6),
+        };
+        var poster = new MasteryPoster(column + 1, image);
+        string level =
+            mastery["championLevel"]?.Type == JTokenType.Integer ? $"{mastery["championLevel"]} 级英雄成就" : "";
+        poster.Controls.Add(
+            new Label
+            {
+                Dock = DockStyle.Bottom,
+                Height = 90,
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent,
+                ForeColor = Color.White,
+                Font = _posterFont,
+                Text =
+                    $"{(string.IsNullOrWhiteSpace(name) ? "英雄 " + championId : name)}\n{level}\n{(long)mastery["championPoints"]!:N0} 成就点数",
+            }
+        );
+        card.Controls.Add(poster);
+        _cards.Controls.Add(card, column, 0);
+        return poster;
+    }
+
     private async Task LoadProfileAsync(string puuid, CancellationToken cancellationToken)
     {
+        // Track both profile and mastery workers before a subscriber can close or replace the view.
+        await Task.Yield();
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var profile = await _service.GetAsync(
                 "/lol-summoner/v1/summoners-by-puuid-cached/" + Uri.EscapeDataString(puuid),
                 cancellationToken
             );
-            if (!IsDisposed && !cancellationToken.IsCancellationRequested && profile.Data is JObject summoner)
+            if (!_closing && !cancellationToken.IsCancellationRequested && profile.Data is JObject summoner)
             {
                 ProfileLoaded?.Invoke(summoner);
             }
 
-            if (IsDisposed || cancellationToken.IsCancellationRequested)
+            if (_closing || cancellationToken.IsCancellationRequested)
             {
                 return;
             }
@@ -269,16 +321,18 @@ public sealed class ProfileMasteryView : UserControl
                     )
                     : Task.FromResult(new StatisticsResponse(null, ""));
             await Task.WhenAll(catalogTask, inventoryTask);
-            if (IsDisposed || cancellationToken.IsCancellationRequested)
+            var catalogResponse = await catalogTask;
+            var inventoryResponse = await inventoryTask;
+            if (_closing || cancellationToken.IsCancellationRequested)
             {
                 return;
             }
 
-            var catalog = StandardChampions(catalogTask.Result.Data);
-            var inventory = StandardChampions(inventoryTask.Result.Data);
+            var catalog = StandardChampions(catalogResponse.Data);
+            var inventory = StandardChampions(inventoryResponse.Data);
             string total = catalog.Length > 0 ? catalog.Length.ToString() : "—";
             string owned =
-                inventoryTask.Result.Data is JArray
+                inventoryResponse.Data is JArray
                 && catalog.Length > 0
                 && catalog.All(c =>
                     inventory.Any(i =>
@@ -295,11 +349,72 @@ public sealed class ProfileMasteryView : UserControl
             _total = total;
             UpdateCountHeading();
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Replaced profiles must not update the ownership heading.
+        }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"玩家资料加载失败: {ex.GetType().Name}");
         }
+    }
+
+    private Task TrackWork(Task task)
+    {
+        lock (_pendingWork)
+        {
+            _pendingWork.Add(task);
+        }
+        _ = task.ContinueWith(
+            completed =>
+            {
+                lock (_pendingWork)
+                {
+                    _pendingWork.Remove(completed);
+                }
+                if (completed.Exception is { } error)
+                {
+                    System.Diagnostics.Debug.WriteLine($"mastery view: {error.GetBaseException().GetType().Name}");
+                }
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default
+        );
+        return task;
+    }
+
+    private Task[] PendingWork()
+    {
+        lock (_pendingWork)
+        {
+            return _pendingWork.ToArray();
+        }
+    }
+
+    private void RetireRequest()
+    {
+        var source = _request;
+        _request = null;
+        if (source == null)
+        {
+            return;
+        }
+        var pending = PendingWork();
+        var cancellation = source.CancelAsync();
+        TrackWork(
+            Task.WhenAll(pending.Append(cancellation))
+                .ContinueWith(
+                    completed =>
+                    {
+                        _ = completed.Exception;
+                        source.Dispose();
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default
+                )
+        );
     }
 
     private void ClearCards()
@@ -312,11 +427,14 @@ public sealed class ProfileMasteryView : UserControl
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
+        if (disposing && !_closing)
         {
-            _request?.Cancel();
-            _request?.Dispose();
+            _closing = true;
+            RetireRequest();
+            _cleanupWork = Task.WhenAll(PendingWork());
             ClearCards();
+            _headingFont.Dispose();
+            _posterFont.Dispose();
         }
         base.Dispose(disposing);
     }

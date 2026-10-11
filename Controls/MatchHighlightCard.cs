@@ -20,10 +20,10 @@ internal sealed class MatchHighlightCard : Control
         Margin = new Padding(0, 6, 10, 6);
         DoubleBuffered = true;
         BackColor = Color.FromArgb(36, 63, 98);
-        LoadSplash(championId);
+        _ = LoadSplashAsync(championId);
     }
 
-    private async void LoadSplash(int championId)
+    private async Task LoadSplashAsync(int championId)
     {
         try
         {

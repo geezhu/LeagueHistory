@@ -17,6 +17,11 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--profile-presentation-checks"))
+        {
+            ProfilePresentationChecks.Run();
+            return;
+        }
         if (args.Contains("--composition-lifecycle-checks"))
         {
             CompositionViewLifecycleChecks.Run();
