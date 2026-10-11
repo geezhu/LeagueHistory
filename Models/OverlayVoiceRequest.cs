@@ -30,7 +30,10 @@ public sealed record OverlayVoiceRequest(
             || value["text"] != null
             || value["confirmed"] != null
         )
+        {
             return null;
+        }
+
         if (
             !long.TryParse(value["createdAt"]!.ToString(), out long created)
             || !long.TryParse(value["updatedAt"]!.ToString(), out long updated)
@@ -43,7 +46,10 @@ public sealed record OverlayVoiceRequest(
             || ack < 0
             || ack > 1000000
         )
+        {
             return null;
+        }
+
         return new(id.ToString("N"), session, created, updated, (string)value["action"]!, ack);
     }
 

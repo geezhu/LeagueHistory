@@ -71,7 +71,10 @@ public sealed record OpggBuild(OpggQuery Query, string Version, JObject Data, JO
             || data["summary"] is not JObject summary
             || (int?)summary["id"] != query.ChampionId
         )
+        {
             throw new InvalidDataException("该英雄在当前筛选条件下暂无攻略。");
+        }
+
         var stats =
             query.Mode == "ranked"
                 ? (summary["positions"] as JArray)
@@ -82,7 +85,10 @@ public sealed record OpggBuild(OpggQuery Query, string Version, JObject Data, JO
                     ?["stats"] as JObject
                 : summary["average_stats"] as JObject;
         if (stats == null)
+        {
             throw new InvalidDataException("该英雄在当前分路暂无统计，请更换分路。");
+        }
+
         var runes = (data["runes"] as JArray ?? new())
             .OfType<JObject>()
             .Select(r => new OpggRunes(
@@ -117,7 +123,10 @@ public sealed record OpggBuild(OpggQuery Query, string Version, JObject Data, JO
     public static OpggTier[] ParseTiers(JObject raw, string mode)
     {
         if (raw["data"] is not JArray list)
+        {
             throw new InvalidDataException("暂无英雄梯队数据。");
+        }
+
         var results = new List<OpggTier>();
         foreach (var champion in list.OfType<JObject>())
         {
@@ -131,7 +140,10 @@ public sealed record OpggBuild(OpggQuery Query, string Version, JObject Data, JO
             foreach (var position in positions)
             {
                 if (position["stats"] is not JObject stats)
+                {
                     continue;
+                }
+
                 results.Add(
                     new(
                         (int?)champion["id"] ?? 0,

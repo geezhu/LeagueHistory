@@ -24,7 +24,10 @@ public sealed class OutcomeHistoryPager
             }
             var batch = await fetch(Scanned, count);
             if (batch == null)
+            {
                 throw new InvalidOperationException("获取筛选记录失败，请重试");
+            }
+
             if (batch.Count == 0)
             {
                 Exhausted = true;
@@ -35,10 +38,14 @@ public sealed class OutcomeHistoryPager
                 var record = token as JObject ?? new JObject();
                 _records.Add((JObject)record.DeepClone());
                 if (MatchOutcomeFilter.GetWin(record, puuid) == win)
+                {
                     matches.Add(record);
+                }
             }
             if (Scanned >= 200)
+            {
                 Exhausted = true;
+            }
         }
         Matches = matches.Count;
         return new JArray(matches.Skip((page - 1) * size).Take(size));

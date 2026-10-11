@@ -39,7 +39,10 @@ public sealed record ChampionSelectRoster(ChampionSelectRosterEntry[] Team, int[
                     preview = true;
                 }
                 if (action != null && (int?)action["championId"] == id && (bool?)action["completed"] == false)
+                {
                     preview = true;
+                }
+
                 return new ChampionSelectRosterEntry(id, cell, cell == own, preview, (string?)p["puuid"] ?? "");
             })
             .ToArray();

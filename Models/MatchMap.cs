@@ -15,10 +15,17 @@ public static class MatchMap
     private static string GetBridgeName(JObject raw)
     {
         if (raw["gameModeMutators"] is not JArray mutators)
+        {
             return "随机地图";
+        }
+
         foreach (var mutator in mutators)
+        {
             if (mutator.Type == JTokenType.String && BridgeNames.TryGetValue((string)mutator!, out var name))
+            {
                 return name;
+            }
+        }
         // An explicitly supplied list without an override uses the client's base map.
         return "嚎哭深渊";
     }
@@ -28,7 +35,10 @@ public static class MatchMap
         raw = raw?["json"] as JObject ?? raw;
         raw = raw?["info"] as JObject ?? raw;
         if (raw?["mapId"]?.Type != JTokenType.Integer)
+        {
             return "未知地图";
+        }
+
         return (int)raw["mapId"]! switch
         {
             11 => "召唤师峡谷",

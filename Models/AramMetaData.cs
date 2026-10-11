@@ -41,7 +41,10 @@ public sealed record AramMetaIndex(
         get
         {
             if (Champions.Length == 0 || Champions.Any(c => c.Games is null or < 0))
+            {
                 return null;
+            }
+
             decimal total = Champions.Sum(c => (decimal)c.Games!.Value);
             return total > 0 && total % 10 == 0 && total / 10 <= long.MaxValue ? (long)(total / 10) : null;
         }
@@ -60,7 +63,10 @@ public sealed record AramMetaIndex(
     public static AramMetaIndex Parse(JObject raw)
     {
         if (raw["champs"] is not JObject champs || string.IsNullOrWhiteSpace((string?)raw["detailVersion"]))
+        {
             throw new InvalidDataException("arammeta 数据结构不完整。");
+        }
+
         var rows = champs
             .Properties()
             .Where(p => int.TryParse(p.Name, out _) && p.Value is JObject)

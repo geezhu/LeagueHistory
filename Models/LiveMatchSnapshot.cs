@@ -31,7 +31,10 @@ public sealed record LiveMatchSnapshot(string Mode, int Map, double Time, LiveMa
     public static LiveMatchSnapshot Parse(JObject data)
     {
         if (data["allPlayers"] is not JArray rows || data["gameData"] is not JObject game)
+        {
             throw new InvalidDataException("游戏数据不完整。");
+        }
+
         var active = data["activePlayer"] as JObject;
         string? activeId = (string?)active?["riotId"];
         string? activeName = (string?)active?["summonerName"];
@@ -42,7 +45,10 @@ public sealed record LiveMatchSnapshot(string Mode, int Map, double Time, LiveMa
                     string name = (string?)row["riotId"] ?? (string?)row["summonerName"] ?? $"玩家 {index + 1}";
                     bool bot = (bool?)row["isBot"] ?? false;
                     if (bot && (string.IsNullOrWhiteSpace(name) || name.Trim() == "#"))
+                    {
                         name = (string?)row["summonerName"] ?? $"机器人 {index + 1}";
+                    }
+
                     bool self = !string.IsNullOrWhiteSpace(activeId)
                         ? (string?)row["riotId"] == activeId
                         : !string.IsNullOrWhiteSpace(activeName) && (string?)row["summonerName"] == activeName;
@@ -64,7 +70,10 @@ public sealed record LiveMatchSnapshot(string Mode, int Map, double Time, LiveMa
                     string? riot = (string?)row["riotId"];
                     string? gameName = (string?)row["riotIdGameName"];
                     if (string.IsNullOrWhiteSpace(gameName) && riot?.IndexOf('#') is > 0)
+                    {
                         gameName = riot[..riot.IndexOf('#')];
+                    }
+
                     return new LiveMatchPlayer(
                         name + "|" + index,
                         name,
@@ -95,7 +104,10 @@ public sealed record LiveMatchSnapshot(string Mode, int Map, double Time, LiveMa
         {
             string eventName = (string?)row["EventName"] ?? "";
             if (eventName is not ("ChampionKill" or "GameStart"))
+            {
                 continue;
+            }
+
             if (
                 !double.TryParse(
                     row["EventTime"]?.ToString(),

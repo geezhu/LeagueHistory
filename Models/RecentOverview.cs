@@ -44,12 +44,19 @@ public sealed class RecentOverview
         {
             int replace = extra.Queue == 2400 ? Array.FindIndex(modes, m => m.Queue == 450 && m.Games == 0) : -1;
             if (replace < 0)
+            {
                 replace = Array.FindIndex(modes, m => m.Games == 0);
+            }
             // Hextech ARAM must remain visible even when all four default modes have games.
             if (replace < 0 && extra.Queue == 2400)
+            {
                 replace = Enumerable.Range(0, 4).OrderBy(i => modes[i].Games).ThenByDescending(i => i).First();
+            }
+
             if (replace >= 0)
+            {
                 modes[replace] = extra;
+            }
         }
         var kda = games.Where(g => IsMatchmadeRift(g.Queue) || g.Queue is 420 or 440).ToArray();
         bool usesAram = false;

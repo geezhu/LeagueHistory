@@ -23,14 +23,19 @@ public static class LiveChampionIdentity
         var catalog = champions.Where(c => c.Id > 0);
         string alias = ReadAlias(player.ChampionAlias);
         if (alias.Length == 0)
+        {
             alias = player.ChampionAlias.Trim();
+        }
+
         var matches = catalog
             .Where(c => alias.Length > 0 && string.Equals(c.Alias, alias, StringComparison.OrdinalIgnoreCase))
             .DistinctBy(c => c.Id)
             .Take(2)
             .ToArray();
         if (matches.Length > 0)
+        {
             return matches.Length == 1 ? matches[0] : null;
+        }
         // Exact resource names also work when the game omits or changes the raw key.
         string name = player.ChampionName.Trim();
         matches = catalog
