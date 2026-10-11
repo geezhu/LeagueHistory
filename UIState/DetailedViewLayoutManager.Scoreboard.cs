@@ -97,55 +97,107 @@ namespace League.UIState
             MatchInfo match
         )
         {
-            Color ink = Color.FromArgb(36, 48, 65),
-                muted = Color.FromArgb(111, 123, 139);
-            Label Text(string text, int x, int width, Color color, bool bold = false)
+            var highlight = ScoreboardHighlight(player);
+            AddScoreboardProfile(row, player, name, isSelf, match);
+            AddScoreboardLoadout(row, player, match);
+            AddScoreboardKda(row, player, match, highlight);
+            AddScoreboardMetric(
+                row,
+                player,
+                match,
+                highlight,
+                "goldEarned",
+                stats.gold,
+                stats.goldRank,
+                686,
+                Color.FromArgb(190, 166, 113)
+            );
+            AddScoreboardMetric(
+                row,
+                player,
+                match,
+                highlight,
+                "totalDamageDealtToChampions",
+                stats.damage,
+                stats.damageRank,
+                780,
+                Color.FromArgb(77, 184, 171)
+            );
+
+            AddScoreboardSecondaryMetrics(
+                row,
+                player,
+                match,
+                stats.kp,
+                stats.kpRank,
+                stats.damageTaken,
+                stats.damageTakenRank,
+                highlight
+            );
+        }
+
+        private static readonly Color ScoreboardInk = Color.FromArgb(36, 48, 65);
+        private static readonly Color ScoreboardMuted = Color.FromArgb(111, 123, 139);
+
+        private Label ScoreboardText(Panel row, string text, int x, int width, Color color, bool bold = false)
+        {
+            var label = new Label
             {
-                var label = new Label
-                {
-                    Text = text,
-                    Location = new Point(x, 4),
-                    Size = new Size(width, 30),
-                    ForeColor = color,
-                    BackColor = Color.Transparent,
-                    AutoEllipsis = true,
-                    TextAlign = ContentAlignment.MiddleLeft,
-                    Font = new Font("Microsoft YaHei UI", 9f, bold ? FontStyle.Bold : FontStyle.Regular),
-                };
-                row.Controls.Add(label);
-                _toolTip.SetToolTip(label, text);
-                return label;
-            }
-            void Icon(Image? image, string? hint, int x, int y, int size)
+                Text = text,
+                Location = new Point(x, 4),
+                Size = new Size(width, 30),
+                ForeColor = color,
+                BackColor = Color.Transparent,
+                AutoEllipsis = true,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = new Font("Microsoft YaHei UI", 9f, bold ? FontStyle.Bold : FontStyle.Regular),
+            };
+            row.Controls.Add(label);
+            _toolTip.SetToolTip(label, text);
+            return label;
+        }
+
+        private void ScoreboardIcon(Panel row, Image? image, string? hint, int x, int y, int size)
+        {
+            var picture = new PictureBox
             {
-                var picture = new PictureBox
-                {
-                    Location = new Point(x, y),
-                    Size = new Size(size, size),
-                    BackColor = Color.FromArgb(239, 243, 248),
-                    SizeMode = PictureBoxSizeMode.Zoom,
-                    Image = image == null ? null : new Bitmap(image),
-                };
-                row.Controls.Add(picture);
-                _toolTip.SetToolTip(picture, StripHtmlTags(hint ?? ""));
-            }
-            void Cached(Dictionary<int, (Image, string, string)> cache, int id, int x, int y, int size)
+                Location = new Point(x, y),
+                Size = new Size(size, size),
+                BackColor = Color.FromArgb(239, 243, 248),
+                SizeMode = PictureBoxSizeMode.Zoom,
+                Image = image == null ? null : new Bitmap(image),
+            };
+            row.Controls.Add(picture);
+            _toolTip.SetToolTip(picture, StripHtmlTags(hint ?? ""));
+        }
+
+        private void CachedScoreboardIcon(
+            Panel row,
+            Dictionary<int, (Image, string, string)> cache,
+            int id,
+            int x,
+            int y,
+            int size
+        )
+        {
+            if (cache.TryGetValue(id, out var data))
             {
-                if (cache.TryGetValue(id, out var data))
-                {
-                    Icon(data.Item1, data.Item2 + "\n" + data.Item3, x, y, size);
-                }
-                else
-                {
-                    Icon(null, id > 0 ? "资源暂未加载" : "空槽位", x, y, size);
-                }
+                ScoreboardIcon(row, data.Item1, data.Item2 + "\n" + data.Item3, x, y, size);
             }
+            else
+            {
+                ScoreboardIcon(row, null, id > 0 ? "资源暂未加载" : "空槽位", x, y, size);
+            }
+        }
+
+        private void AddScoreboardProfile(Panel row, JObject player, string name, bool isSelf, MatchInfo match)
+        {
             if (isSelf)
             {
                 row.Controls.Add(new Panel { BackColor = Color.FromArgb(46, 103, 190), Size = new Size(3, 44) });
             }
 
-            Cached(_championCache, player["championId"]?.Value<int>() ?? 0, 12, 5, 34);
+            CachedScoreboardIcon(row, _championCache, player["championId"]?.Value<int>() ?? 0, 12, 5, 34);
             var nameLabel = new League.Controls.PlayerNameLink
             {
                 Name = "PlayerName",
@@ -156,9 +208,9 @@ namespace League.UIState
                 Location = new Point(58, 4),
                 Size = new Size(180, 30),
                 Font = new Font("Microsoft YaHei UI", 9f, isSelf ? FontStyle.Bold : FontStyle.Regular),
-                LinkColor = isSelf ? Color.FromArgb(46, 103, 190) : ink,
+                LinkColor = isSelf ? Color.FromArgb(46, 103, 190) : ScoreboardInk,
                 ActiveLinkColor = Color.FromArgb(46, 103, 190),
-                ForeColor = ink,
+                ForeColor = ScoreboardInk,
             };
             nameLabel.ProfileRequested += id => PlayerProfileRequested?.Invoke(id);
             row.Controls.Add(nameLabel);
@@ -190,14 +242,25 @@ namespace League.UIState
                     badgeX += 16;
                 }
             }
+        }
+
+        private void AddScoreboardLoadout(Panel row, JObject player, MatchInfo match)
+        {
             for (int i = 1; i <= 2; i++)
             {
-                Cached(_spellCache, player[$"spell{i}Id"]?.Value<int>() ?? 0, 242, 11 + (i - 1) * 12, 10);
+                CachedScoreboardIcon(
+                    row,
+                    _spellCache,
+                    player[$"spell{i}Id"]?.Value<int>() ?? 0,
+                    242,
+                    11 + (i - 1) * 12,
+                    10
+                );
             }
 
             for (int i = 0; i < 7; i++)
             {
-                Cached(_itemCache, player[$"item{i}"]?.Value<int>() ?? 0, 258 + i * 24, 11, 22);
+                CachedScoreboardIcon(row, _itemCache, player[$"item{i}"]?.Value<int>() ?? 0, 258 + i * 24, 11, 22);
             }
 
             if (IsHextechArenaMode(player))
@@ -205,7 +268,14 @@ namespace League.UIState
                 var augments = GetSelfAugments(player, match);
                 for (int i = 0; i < Math.Min(6, augments.Length); i++)
                 {
-                    Icon(augments[i]?.Icon, augments[i]?.name + "\n" + augments[i]?.longDesc, 436 + i * 24, 11, 22);
+                    ScoreboardIcon(
+                        row,
+                        augments[i]?.Icon,
+                        augments[i]?.name + "\n" + augments[i]?.longDesc,
+                        436 + i * 24,
+                        11,
+                        22
+                    );
                 }
             }
             else
@@ -216,7 +286,7 @@ namespace League.UIState
                     .ToArray();
                 for (int i = 0; i < Math.Min(6, all.Length); i++)
                 {
-                    Cached(_runeCache, all[i].RuneId, 436 + i * 24, 11, 22);
+                    CachedScoreboardIcon(row, _runeCache, all[i].RuneId, 436 + i * 24, 11, 22);
                 }
                 // Retain access to the stat shards without expanding every row.
                 string shards = string.Join(
@@ -232,23 +302,26 @@ namespace League.UIState
                     _toolTip.SetToolTip(row, shards);
                 }
             }
-            bool IsMaximum(string key)
-            {
-                if (
-                    match.AllParticipants.Count == 0
-                    || match.AllParticipants.Any(p => p[key]?.Type != JTokenType.Integer)
-                )
-                {
-                    return false;
-                }
+        }
 
-                int value = player[key]?.Value<int>() ?? 0;
-                return value > 0 && value == match.AllParticipants.Max(p => p[key]!.Value<int>());
+        private static bool IsScoreboardMaximum(JObject player, MatchInfo match, string key)
+        {
+            if (match.AllParticipants.Count == 0 || match.AllParticipants.Any(p => p[key]?.Type != JTokenType.Integer))
+            {
+                return false;
             }
-            Color highlight =
-                player["win"]?.Value<bool>() == true ? Color.FromArgb(38, 139, 113)
-                : player["win"]?.Value<bool>() == false ? Color.FromArgb(191, 81, 91)
-                : Color.FromArgb(46, 103, 190);
+
+            int value = player[key]?.Value<int>() ?? 0;
+            return value > 0 && value == match.AllParticipants.Max(p => p[key]!.Value<int>());
+        }
+
+        private static Color ScoreboardHighlight(JObject player) =>
+            player["win"]?.Value<bool>() == true ? Color.FromArgb(38, 139, 113)
+            : player["win"]?.Value<bool>() == false ? Color.FromArgb(191, 81, 91)
+            : Color.FromArgb(46, 103, 190);
+
+        private void AddScoreboardKda(Panel row, JObject player, MatchInfo match, Color highlight)
+        {
             string kills = player["kills"]?.ToString() ?? "—",
                 deaths = player["deaths"]?.ToString() ?? "—",
                 assists = player["assists"]?.ToString() ?? "—";
@@ -258,49 +331,76 @@ namespace League.UIState
                 Text = $"{kills} / {deaths} / {assists}",
                 Location = new Point(592, 4),
                 Size = new Size(90, 30),
-                ForeColor = ink,
+                ForeColor = ScoreboardInk,
                 BackColor = Color.Transparent,
                 Font = new Font("Microsoft YaHei UI", 9f, FontStyle.Bold),
                 TextAlign = ContentAlignment.MiddleLeft,
                 AutoEllipsis = true,
                 HighlightColor = highlight,
-                KillsLength = IsMaximum("kills") ? kills.Length : 0,
-                AssistsStart = IsMaximum("assists") ? kills.Length + deaths.Length + 6 : -1,
+                KillsLength = IsScoreboardMaximum(player, match, "kills") ? kills.Length : 0,
+                AssistsStart = IsScoreboardMaximum(player, match, "assists") ? kills.Length + deaths.Length + 6 : -1,
             };
             row.Controls.Add(kda);
             _toolTip.SetToolTip(kda, "击杀 / 死亡 / 助攻；彩色数字表示全场最高（并列均高亮）");
-            void Metric(string key, int value, int rank, int x, Color color)
+        }
+
+        private void AddScoreboardMetric(
+            Panel row,
+            JObject player,
+            MatchInfo match,
+            Color highlight,
+            string key,
+            int value,
+            int rank,
+            int x,
+            Color color
+        )
+        {
+            int maximum = match.AllParticipants.Max(p => p[key]?.Value<int>() ?? 0);
+            bool leading = IsScoreboardMaximum(player, match, key);
+            var label = ScoreboardText(
+                row,
+                $"{value / 1000d:0.0}k",
+                x,
+                86,
+                leading ? highlight : ScoreboardInk,
+                leading
+            );
+            label.Name = key;
+            _toolTip.SetToolTip(label, $"{value:N0} · 全场第 {rank} 名" + (leading ? " · 全场最高（并列均高亮）" : ""));
+            var bar = new Panel
             {
-                int maximum = match.AllParticipants.Max(p => p[key]?.Value<int>() ?? 0);
-                bool leading = IsMaximum(key);
-                var label = Text($"{value / 1000d:0.0}k", x, 86, leading ? highlight : ink, leading);
-                label.Name = key;
-                _toolTip.SetToolTip(
-                    label,
-                    $"{value:N0} · 全场第 {rank} 名" + (leading ? " · 全场最高（并列均高亮）" : "")
-                );
-                var bar = new Panel
-                {
-                    Location = new Point(x, 36),
-                    Size = new Size(76, 3),
-                    BackColor = Color.FromArgb(231, 237, 245),
-                };
-                int filled = maximum > 0 && value > 0 ? Math.Max(1, (int)(76d * value / maximum)) : 0;
-                bar.Paint += (_, e) =>
-                {
-                    using var brush = new SolidBrush(color);
-                    e.Graphics.FillRectangle(brush, 0, 0, filled, 3);
-                };
-                row.Controls.Add(bar);
-            }
-            Metric("goldEarned", stats.gold, stats.goldRank, 686, Color.FromArgb(190, 166, 113));
-            Metric("totalDamageDealtToChampions", stats.damage, stats.damageRank, 780, Color.FromArgb(77, 184, 171));
-            bool IsDerivedMaximum(Func<JObject, double?> selector)
+                Location = new Point(x, 36),
+                Size = new Size(76, 3),
+                BackColor = Color.FromArgb(231, 237, 245),
+            };
+            int filled = maximum > 0 && value > 0 ? Math.Max(1, (int)(76d * value / maximum)) : 0;
+            bar.Paint += (_, e) =>
             {
-                var values = match.AllParticipants.Select(selector).ToArray();
-                var value = selector(player);
-                return value > 0 && values.Length > 0 && values.All(v => v.HasValue) && value == values.Max();
-            }
+                using var brush = new SolidBrush(color);
+                e.Graphics.FillRectangle(brush, 0, 0, filled, 3);
+            };
+            row.Controls.Add(bar);
+        }
+
+        private static bool IsScoreboardDerivedMaximum(JObject player, MatchInfo match, Func<JObject, double?> selector)
+        {
+            var values = match.AllParticipants.Select(selector).ToArray();
+            var value = selector(player);
+            return value > 0 && values.Length > 0 && values.All(v => v.HasValue) && value == values.Max();
+        }
+
+        private void AddScoreboardSecondaryMetrics(
+            Panel row,
+            JObject player,
+            MatchInfo match,
+            double participation,
+            int kpRank,
+            int damageTaken,
+            int damageTakenRank,
+            Color highlight
+        )
+        {
             double? Participation(JObject p) =>
                 p["challenges"]?["killParticipation"] is JToken token
                 && token.Type is JTokenType.Float or JTokenType.Integer
@@ -311,24 +411,28 @@ namespace League.UIState
                 && p["neutralMinionsKilled"]?.Type == JTokenType.Integer
                     ? p["totalMinionsKilled"]!.Value<double>() + p["neutralMinionsKilled"]!.Value<double>()
                     : null;
-            bool topKp = IsDerivedMaximum(Participation),
-                topCs = IsDerivedMaximum(Minions),
-                topTaken = IsMaximum("totalDamageTaken");
+            bool topKp = IsScoreboardDerivedMaximum(player, match, Participation),
+                topCs = IsScoreboardDerivedMaximum(player, match, Minions),
+                topTaken = IsScoreboardMaximum(player, match, "totalDamageTaken");
             string Highest(bool leading) => leading ? " · 全场最高（并列均高亮）" : "";
-            var kp = Text($"{stats.kp:P1}", 880, 70, topKp ? highlight : muted, topKp);
+            var kp = ScoreboardText(row, $"{participation:P1}", 880, 70, topKp ? highlight : ScoreboardMuted, topKp);
             kp.Name = "killParticipation";
-            _toolTip.SetToolTip(kp, $"参团率 {stats.kp:P1} · 全场第 {stats.kpRank} 名" + Highest(topKp));
+            _toolTip.SetToolTip(kp, $"参团率 {participation:P1} · 全场第 {kpRank} 名" + Highest(topKp));
             int cs =
                 (player["totalMinionsKilled"]?.Value<int>() ?? 0) + (player["neutralMinionsKilled"]?.Value<int>() ?? 0);
-            var minions = Text($"{cs}", 958, 60, topCs ? highlight : muted, topCs);
+            var minions = ScoreboardText(row, $"{cs}", 958, 60, topCs ? highlight : ScoreboardMuted, topCs);
             minions.Name = "totalCs";
             _toolTip.SetToolTip(minions, $"补刀 {cs:N0}（小兵 + 野怪）" + Highest(topCs));
-            var taken = Text($"{stats.damageTaken / 1000d:0.0}k", 1026, 90, topTaken ? highlight : muted, topTaken);
-            taken.Name = "totalDamageTaken";
-            _toolTip.SetToolTip(
-                taken,
-                $"承受伤害 {stats.damageTaken:N0} · 全场第 {stats.damageTakenRank} 名" + Highest(topTaken)
+            var taken = ScoreboardText(
+                row,
+                $"{damageTaken / 1000d:0.0}k",
+                1026,
+                90,
+                topTaken ? highlight : ScoreboardMuted,
+                topTaken
             );
+            taken.Name = "totalDamageTaken";
+            _toolTip.SetToolTip(taken, $"承受伤害 {damageTaken:N0} · 全场第 {damageTakenRank} 名" + Highest(topTaken));
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace League.Controls;
+namespace League.Controls;
 
 public partial class MatchDetailView
 {
@@ -26,156 +26,11 @@ public partial class MatchDetailView
             {
                 section.Width = width;
                 section.Top = sectionY + _scoreboard.AutoScrollPosition.Y;
-                if (section.Controls["MetricPage"] is not Button pageButton)
-                {
-                    pageButton = new Button
-                    {
-                        Name = "MetricPage",
-                        Width = 28,
-                        Height = 28,
-                        FlatStyle = FlatStyle.Flat,
-                        Text = "\u203a",
-                        Font = new Font("Microsoft YaHei UI", 12f, FontStyle.Bold),
-                        ForeColor = Color.FromArgb(46, 103, 190),
-                        Cursor = Cursors.Hand,
-                    };
-                    pageButton.FlatAppearance.BorderSize = 0;
-                    pageButton.Click += (_, _) => ToggleMetricPage(section);
-                    section.Controls.Add(pageButton);
-                }
                 bool secondary = _secondaryMetrics.GetValueOrDefault(section);
-                pageButton.Visible = compact;
-                pageButton.SetBounds(width - 30, 32, 28, 28);
-                pageButton.Text = secondary ? "\u2039" : "\u203a";
-                _toolTip.SetToolTip(
-                    pageButton,
-                    secondary
-                        ? "\u67e5\u770b KDA / \u7ecf\u6d4e / \u9020\u6210\u4f24\u5bb3"
-                        : "\u67e5\u770b\u53c2\u56e2\u7387 / \u8865\u5200 / \u627f\u53d7\u4f24\u5bb3"
-                );
-                int metricWidth = (width - 550) / 3;
-                int MetricIndex(int x) =>
-                    x switch
-                    {
-                        592 or 880 => 0,
-                        686 or 958 => 1,
-                        780 or 1026 => 2,
-                        _ => -1,
-                    };
-                bool MetricVisible(int x) => !compact || (secondary ? x >= 880 : x < 880);
-
-                foreach (var header in section.Controls.OfType<Button>())
-                {
-                    if (header.Name == "MetricPage")
-                    {
-                        continue;
-                    }
-
-                    if (header.Name == "TeamBans")
-                    {
-                        header.Left = width - 76;
-                        continue;
-                    }
-                    if (!_originalBounds.TryGetValue(header, out var bounds))
-                    {
-                        _originalBounds[header] = bounds = header.Bounds;
-                    }
-
-                    header.Bounds = bounds;
-                    if (compact)
-                    {
-                        header.Visible = bounds.X < 592 || MetricVisible(bounds.X);
-                        if (bounds.X >= 592)
-                        {
-                            header.SetBounds(
-                                520 + MetricIndex(bounds.X) * metricWidth,
-                                bounds.Y,
-                                metricWidth,
-                                bounds.Height
-                            );
-                        }
-                        else if (bounds.X >= 242)
-                        {
-                            header.Left = bounds.X - 64;
-                        }
-                        else if (bounds.X == 58)
-                        {
-                            header.Width = 116;
-                        }
-                    }
-                    else
-                    {
-                        header.Visible = true;
-                    }
-                }
-                foreach (var title in section.Controls.OfType<Label>())
-                {
-                    title.Width = width - (section.Controls.ContainsKey("TeamBans") ? 100 : 24);
-                }
-
-                foreach (var title in section.Controls.OfType<TeamSummaryHeader>())
-                {
-                    title.Width = width - (section.Controls.ContainsKey("TeamBans") ? 100 : 24);
-                }
-
-                int rowY = 64;
-                foreach (var row in section.Controls.OfType<Panel>().OrderBy(r => r.Top))
-                {
-                    row.SetBounds(0, rowY, width, 44);
-                    foreach (Control cell in row.Controls)
-                    {
-                        if (!_originalBounds.TryGetValue(cell, out var bounds))
-                        {
-                            _originalBounds[cell] = bounds = cell.Bounds;
-                        }
-
-                        if (!_originalTexts.TryGetValue(cell, out var text))
-                        {
-                            _originalTexts[cell] = text = cell.Text;
-                        }
-
-                        cell.Bounds = bounds;
-                        cell.Text = text;
-                        cell.Visible = true;
-                        if (!compact)
-                        {
-                            continue;
-                        }
-
-                        if (cell is LinkLabel)
-                        {
-                            cell.Width = Math.Min(
-                                bounds.Width,
-                                row.Controls.ContainsKey("PlayerRankEmblem") ? 84 : 118
-                            );
-                        }
-                        else if (cell.Name == "PlayerRankEmblem")
-                        {
-                            cell.SetBounds(146, 1, 28, 22);
-                        }
-                        else if (cell.Name.StartsWith("Honor_", StringComparison.Ordinal))
-                        {
-                            cell.Left = 58 + (bounds.X - 58) / 16 * 14;
-                        }
-                        else if (bounds.X >= 242 && bounds.X < 592)
-                        {
-                            cell.Left = bounds.X - 64;
-                        }
-                        else if (bounds.X >= 592)
-                        {
-                            cell.Visible = MetricVisible(bounds.X);
-                            cell.Left = 520 + MetricIndex(bounds.X) * metricWidth;
-                            cell.Width = Math.Min(bounds.Width, metricWidth - 4);
-                        }
-                        if (bounds.Width == 3 && bounds.X == 0)
-                        {
-                            cell.Height = row.Height;
-                        }
-                    }
-                    rowY += row.Height;
-                }
-                section.Height = rowY;
-                sectionY += rowY + 10;
+                ConfigureMetricPage(section, width, compact, secondary);
+                ReflowScoreboardHeaders(section, width, compact, secondary);
+                ReflowScoreboardRows(section, width, compact, secondary);
+                sectionY += section.Height + 10;
             }
             if (_scoreboard.Controls["MatchHighlights"] is Control highlights)
             {
@@ -186,6 +41,166 @@ public partial class MatchDetailView
         {
             _scoreboard.ResumeLayout(true);
             _reflowing = false;
+        }
+    }
+
+    private void ConfigureMetricPage(Panel section, int width, bool compact, bool secondary)
+    {
+        if (section.Controls["MetricPage"] is not Button pageButton)
+        {
+            pageButton = new Button
+            {
+                Name = "MetricPage",
+                Width = 28,
+                Height = 28,
+                FlatStyle = FlatStyle.Flat,
+                Text = "›",
+                Font = new Font("Microsoft YaHei UI", 12f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(46, 103, 190),
+                Cursor = Cursors.Hand,
+            };
+            pageButton.FlatAppearance.BorderSize = 0;
+            pageButton.Click += (_, _) => ToggleMetricPage(section);
+            section.Controls.Add(pageButton);
+        }
+        pageButton.Visible = compact;
+        pageButton.SetBounds(width - 30, 32, 28, 28);
+        UpdateMetricPageText(pageButton, secondary);
+    }
+
+    private void UpdateMetricPageText(Button button, bool secondary)
+    {
+        button.Text = secondary ? "‹" : "›";
+        _toolTip.SetToolTip(button, secondary ? "查看 KDA / 经济 / 造成伤害" : "查看参团率 / 补刀 / 承受伤害");
+    }
+
+    private static int MetricIndex(int x) =>
+        x switch
+        {
+            592 or 880 => 0,
+            686 or 958 => 1,
+            780 or 1026 => 2,
+            _ => -1,
+        };
+
+    private static bool MetricVisible(int x, bool compact, bool secondary) =>
+        !compact || (secondary ? x >= 880 : x < 880);
+
+    private Rectangle RestoreScoreboardBounds(Control control)
+    {
+        if (!_originalBounds.TryGetValue(control, out var bounds))
+        {
+            _originalBounds[control] = bounds = control.Bounds;
+        }
+        control.Bounds = bounds;
+        return bounds;
+    }
+
+    private void ReflowScoreboardHeaders(Panel section, int width, bool compact, bool secondary)
+    {
+        int metricWidth = (width - 550) / 3;
+        foreach (var header in section.Controls.OfType<Button>())
+        {
+            if (header.Name == "MetricPage")
+            {
+                continue;
+            }
+            if (header.Name == "TeamBans")
+            {
+                header.Left = width - 76;
+                continue;
+            }
+
+            var bounds = RestoreScoreboardBounds(header);
+            header.Visible = !compact || bounds.X < 592 || MetricVisible(bounds.X, compact, secondary);
+            if (!compact)
+            {
+                continue;
+            }
+            if (bounds.X >= 592)
+            {
+                header.SetBounds(520 + MetricIndex(bounds.X) * metricWidth, bounds.Y, metricWidth, bounds.Height);
+            }
+            else if (bounds.X >= 242)
+            {
+                header.Left = bounds.X - 64;
+            }
+            else if (bounds.X == 58)
+            {
+                header.Width = 116;
+            }
+        }
+
+        int titleWidth = width - (section.Controls.ContainsKey("TeamBans") ? 100 : 24);
+        foreach (var title in section.Controls.OfType<Label>())
+        {
+            title.Width = titleWidth;
+        }
+        foreach (var title in section.Controls.OfType<TeamSummaryHeader>())
+        {
+            title.Width = titleWidth;
+        }
+    }
+
+    private void ReflowScoreboardRows(Panel section, int width, bool compact, bool secondary)
+    {
+        int rowY = 64;
+        int metricWidth = (width - 550) / 3;
+        foreach (var row in section.Controls.OfType<Panel>().OrderBy(r => r.Top))
+        {
+            row.SetBounds(0, rowY, width, 44);
+            foreach (Control cell in row.Controls)
+            {
+                var bounds = RestoreScoreboardBounds(cell);
+                if (!_originalTexts.TryGetValue(cell, out var text))
+                {
+                    _originalTexts[cell] = text = cell.Text;
+                }
+                cell.Text = text;
+                cell.Visible = true;
+                if (compact)
+                {
+                    ReflowCompactScoreboardCell(row, cell, bounds, metricWidth, secondary);
+                }
+            }
+            rowY += row.Height;
+        }
+        section.Height = rowY;
+    }
+
+    private static void ReflowCompactScoreboardCell(
+        Panel row,
+        Control cell,
+        Rectangle bounds,
+        int metricWidth,
+        bool secondary
+    )
+    {
+        if (cell is LinkLabel)
+        {
+            cell.Width = Math.Min(bounds.Width, row.Controls.ContainsKey("PlayerRankEmblem") ? 84 : 118);
+        }
+        else if (cell.Name == "PlayerRankEmblem")
+        {
+            cell.SetBounds(146, 1, 28, 22);
+        }
+        else if (cell.Name.StartsWith("Honor_", StringComparison.Ordinal))
+        {
+            cell.Left = 58 + (bounds.X - 58) / 16 * 14;
+        }
+        else if (bounds.X >= 242 && bounds.X < 592)
+        {
+            cell.Left = bounds.X - 64;
+        }
+        else if (bounds.X >= 592)
+        {
+            cell.Visible = MetricVisible(bounds.X, true, secondary);
+            cell.Left = 520 + MetricIndex(bounds.X) * metricWidth;
+            cell.Width = Math.Min(bounds.Width, metricWidth - 4);
+        }
+        if (bounds.Width == 3 && bounds.X == 0)
+        {
+            cell.Height = row.Height;
         }
     }
 
@@ -225,8 +240,7 @@ public partial class MatchDetailView
                     control.Visible = visible;
                 }
             }
-            button.Text = secondary ? "‹" : "›";
-            _toolTip.SetToolTip(button, secondary ? "查看 KDA / 经济 / 造成伤害" : "查看参团率 / 补刀 / 承受伤害");
+            UpdateMetricPageText(button, secondary);
         }
         finally
         {
@@ -234,7 +248,6 @@ public partial class MatchDetailView
             {
                 row.ResumeLayout(false);
             }
-
             section.ResumeLayout(false);
         }
     }
