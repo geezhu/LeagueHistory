@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using League.Models;
 using League.Services;
 
@@ -30,14 +31,30 @@ internal sealed class VoiceInputDialog : Form
     private readonly Func<bool> _current;
     private readonly Func<IDesktopVoiceSession> _factory;
     private readonly CancellationTokenSource _lifetime = new();
+    private readonly Font _dialogFont = new("Microsoft YaHei UI", 9);
+    private readonly Font _draftFont = new("Microsoft YaHei UI", 10);
+    private Task _recordWork = Task.CompletedTask;
+    private Task _sendWork = Task.CompletedTask;
+    private Task _cleanupWork = Task.CompletedTask;
     private CancellationTokenSource? _recordLife;
     private IDesktopVoiceSession? _session;
-    private bool _recording,
-        _stopping,
-        _sending,
-        _voiceDisposed,
-        _decoding,
-        _ready;
+
+    private enum DialogState
+    {
+        Idle,
+        Preparing,
+        Recording,
+        Stopping,
+        Decoding,
+        Sending,
+        Closed,
+    }
+
+    private DialogState _state;
+    private bool IsRecording =>
+        _state is DialogState.Preparing or DialogState.Recording or DialogState.Stopping or DialogState.Decoding;
+    private bool IsSending => _state == DialogState.Sending;
+
     private int _generation;
 
     public VoiceInputDialog(
@@ -49,6 +66,13 @@ internal sealed class VoiceInputDialog : Form
         _sendMessage = sendMessage;
         _current = current;
         _factory = factory ?? (() => new SenseVoiceSession());
+        ConfigureSurface();
+        BindActions();
+        UpdateActions();
+    }
+
+    private void ConfigureSurface()
+    {
         Text = "选人语音输入";
         Name = "VoiceInputDialog";
         ShowInTaskbar = false;
@@ -56,7 +80,7 @@ internal sealed class VoiceInputDialog : Form
         FormBorderStyle = FormBorderStyle.FixedToolWindow;
         BackColor = Color.FromArgb(8, 29, 40);
         ForeColor = Color.FromArgb(215, 225, 226);
-        Font = new Font("Microsoft YaHei UI", 9);
+        Font = _dialogFont;
         ClientSize = new Size(380, 234);
         var layout = new TableLayoutPanel
         {
@@ -79,25 +103,8 @@ internal sealed class VoiceInputDialog : Form
         _draft.BackColor = Color.FromArgb(12, 39, 51);
         _draft.ForeColor = ForeColor;
         _draft.BorderStyle = BorderStyle.FixedSingle;
-        _draft.Font = new Font(Font.FontFamily, 10);
-        _draft.TextChanged += (_, _) =>
-        {
-            UpdateActions();
-            if (!_recording && !_sending)
-            {
-                _status.Text =
-                    _draft.TextLength == 0 || OverlayVoiceChatText.TryNormalize(_draft.Text, out _)
-                        ? ""
-                        : "请使用单行聊天文字，最多 180 字符；不支持斜杠命令。";
-            }
-        };
-        _draft.KeyDown += (_, e) =>
-        {
-            if (e.KeyCode == Keys.Enter)
-            {
-                e.SuppressKeyPress = true;
-            }
-        };
+        _draft.Font = _draftFont;
+        ConfigureDraftInput();
         layout.Controls.Add(_draft, 0, 1);
         _status.Padding = new Padding(0, 6, 0, 0);
         _status.ForeColor = Color.FromArgb(145, 172, 187);
@@ -112,18 +119,49 @@ internal sealed class VoiceInputDialog : Form
         _send.BackColor = Color.FromArgb(0, 126, 139);
         layout.Controls.Add(actions, 0, 3);
         Controls.Add(layout);
+    }
+
+    private void ConfigureDraftInput()
+    {
+        _draft.TextChanged += (_, _) =>
+        {
+            UpdateActions();
+            if (!IsRecording && !IsSending)
+            {
+                _status.Text =
+                    _draft.TextLength == 0 || OverlayVoiceChatText.TryNormalize(_draft.Text, out _)
+                        ? ""
+                        : "请使用单行聊天文字，最多 180 字符；不支持斜杠命令。";
+            }
+        };
+        _draft.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+            }
+        };
+    }
+
+    private void BindActions()
+    {
         _record.Click += async (_, _) =>
         {
-            if (_recording)
+            if (IsRecording)
             {
                 StopRecording();
             }
             else
             {
-                await RecordAsync();
+                _recordWork = RecordAsync();
+                await _recordWork;
             }
         };
-        _send.Click += async (_, _) => await SendAsync();
+        _send.Click += async (_, _) =>
+        {
+            _sendWork = SendAsync();
+            await _sendWork;
+        };
         _clear.Click += (_, _) => _draft.Clear();
         _close.Click += (_, _) => Close();
         Shown += (_, _) => UpdateActions();
@@ -148,102 +186,60 @@ internal sealed class VoiceInputDialog : Form
 
     private void UpdateActions()
     {
-        if (IsDisposed)
+        if (IsDisposed || _state == DialogState.Closed)
         {
             return;
         }
-
         bool current = !_lifetime.IsCancellationRequested && _current();
-        _draft.ReadOnly = _recording || _sending;
-        _record.Text =
-            _recording
-                ? (
-                    _decoding ? "识别中…"
-                    : _stopping ? "停止中…"
-                    : _ready ? "停止录音"
-                    : "准备中…"
-                )
-            : _draft.Text.Length == 0 ? "开始录音"
-            : "重新录音";
-        _record.Enabled = current && !_sending && !_stopping && !_decoding && (!_recording || _ready);
-        _send.Enabled = current && !_recording && !_sending && OverlayVoiceChatText.TryNormalize(_draft.Text, out _);
-        _clear.Enabled = !_recording && !_sending && _draft.TextLength > 0;
+        _draft.ReadOnly = IsRecording || IsSending;
+        _record.Text = _state switch
+        {
+            DialogState.Decoding => "识别中…",
+            DialogState.Stopping => "停止中…",
+            DialogState.Recording => "停止录音",
+            DialogState.Preparing => "准备中…",
+            _ => _draft.TextLength == 0 ? "开始录音" : "重新录音",
+        };
+        _record.Enabled = current && (_state is DialogState.Idle or DialogState.Recording);
+        _send.Enabled = current && _state == DialogState.Idle && OverlayVoiceChatText.TryNormalize(_draft.Text, out _);
+        _clear.Enabled = _state == DialogState.Idle && _draft.TextLength > 0;
         _count.Text = $"{_draft.TextLength} / 180";
     }
 
     private void StopRecording()
     {
-        if (!_recording)
+        if (!IsRecording)
         {
             return;
         }
-
-        _stopping = true;
+        _state = DialogState.Stopping;
         _session?.Stop();
         UpdateActions();
     }
 
+    private bool RecordingCurrent(int generation, CancellationTokenSource source) =>
+        !IsDisposed
+        && _state != DialogState.Closed
+        && generation == _generation
+        && !source.IsCancellationRequested
+        && _current();
+
     private async Task RecordAsync()
     {
-        if (_recording || _sending || !_current())
+        if (_state != DialogState.Idle || !_current())
         {
             return;
         }
-
         int generation = ++_generation;
-        _recording = true;
-        _stopping = false;
-        _decoding = false;
-        _ready = false;
+        _state = DialogState.Preparing;
         _status.Text = "";
         UpdateActions();
         using var source = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         _recordLife = source;
         IDesktopVoiceSession? session = null;
-        bool Current() => !IsDisposed && generation == _generation && !source.IsCancellationRequested && _current();
-        var pending = new System.Collections.Concurrent.ConcurrentQueue<VoiceRecognitionUpdate>();
-        void Receive(VoiceRecognitionUpdate update)
-        {
-            if (IsDisposed || !IsHandleCreated)
-            {
-                return;
-            }
-
-            pending.Enqueue(update);
-            try
-            {
-                BeginInvoke(new Action(Drain));
-            }
-            catch (InvalidOperationException) { }
-        }
-        void Drain()
-        {
-            if (!Current() || !_recording)
-            {
-                pending.Clear();
-                return;
-            }
-            while (pending.TryDequeue(out var update))
-            {
-                if (!update.Final)
-                {
-                    _decoding = update.Stage == "decoding";
-                    _ready = update.Stage == "recording";
-                    _status.Text = _ready && !_stopping ? update.Message : "";
-                    UpdateActions();
-                    continue;
-                }
-                string chunk = new(
-                    update.Text.Select(c => char.IsControl(c) || c is '\u2028' or '\u2029' ? ' ' : c).ToArray()
-                );
-                _draft.Text = Clip((_draft.Text.Length > 0 ? _draft.Text + " " : "") + chunk, 180);
-                _status.Text = update.Confidence < .3f ? "请检查识别文字。" : "";
-                if (_draft.TextLength >= 180)
-                {
-                    StopRecording();
-                }
-            }
-        }
+        var pending = new ConcurrentQueue<VoiceRecognitionUpdate>();
+        void Drain() => DrainUpdates(generation, source, pending);
+        void Receive(VoiceRecognitionUpdate update) => QueueUpdate(update, pending, Drain);
         try
         {
             session = _factory();
@@ -251,9 +247,9 @@ internal sealed class VoiceInputDialog : Form
             session.Update += Receive;
             _draft.Clear();
             var outcome = await session.RunAsync(source.Token);
-            // Drain final callbacks before unlocking the editable draft.
+            // Process terminal callbacks before unlocking the editable draft.
             Drain();
-            if (Current())
+            if (RecordingCurrent(generation, source))
             {
                 _status.Text =
                     outcome.Message.Length > 0 ? outcome.Message
@@ -264,35 +260,17 @@ internal sealed class VoiceInputDialog : Form
         }
         catch (OperationCanceledException)
         {
-            if (Current())
+            if (RecordingCurrent(generation, source))
             {
                 _status.Text = "录音已取消。";
             }
         }
-        catch (VoiceRecognitionException exception)
+        catch (Exception error)
         {
-            ReportError(exception);
-            if (Current())
+            ReportError(error);
+            if (RecordingCurrent(generation, source))
             {
-                _status.Text = exception.Message;
-            }
-        }
-        catch (InvalidOperationException exception)
-        {
-            ReportError(exception);
-            if (Current())
-            {
-                _status.Text = exception.Message.StartsWith("当前没有可用")
-                    ? exception.Message
-                    : "中文语音引擎或麦克风不可用，请检查语音组件和麦克风权限；也可直接输入。";
-            }
-        }
-        catch (Exception exception)
-        {
-            ReportError(exception);
-            if (Current())
-            {
-                _status.Text = "麦克风或本机中文模型不可用，请在设置中检查模型和麦克风权限，或直接输入。";
+                _status.Text = DescribeVoiceError(error);
             }
         }
         finally
@@ -302,18 +280,90 @@ internal sealed class VoiceInputDialog : Form
                 session.Update -= Receive;
                 session.Dispose();
             }
+            pending.Clear();
             _session = null;
             _recordLife = null;
-            _recording = false;
-            _stopping = false;
-            _decoding = false;
-            _ready = false;
-            if (!IsDisposed)
+            if (_state != DialogState.Closed)
             {
+                _state = DialogState.Idle;
                 UpdateActions();
             }
         }
     }
+
+    private void QueueUpdate(
+        VoiceRecognitionUpdate update,
+        ConcurrentQueue<VoiceRecognitionUpdate> pending,
+        Action drain
+    )
+    {
+        if (IsDisposed || !IsHandleCreated || _state == DialogState.Closed)
+        {
+            return;
+        }
+        pending.Enqueue(update);
+        try
+        {
+            BeginInvoke(drain);
+        }
+        catch (InvalidOperationException)
+        {
+            // Closing the dialog can destroy its handle between the check and the queued callback.
+            pending.Clear();
+        }
+    }
+
+    private void DrainUpdates(
+        int generation,
+        CancellationTokenSource source,
+        ConcurrentQueue<VoiceRecognitionUpdate> pending
+    )
+    {
+        if (!RecordingCurrent(generation, source) || !IsRecording)
+        {
+            pending.Clear();
+            return;
+        }
+        while (pending.TryDequeue(out var update))
+        {
+            if (!update.Final)
+            {
+                if (update.Stage == "decoding")
+                {
+                    _state = DialogState.Decoding;
+                }
+                else if (update.Stage == "recording" && _state != DialogState.Stopping)
+                {
+                    _state = DialogState.Recording;
+                }
+                _status.Text = _state == DialogState.Recording ? update.Message : "";
+                UpdateActions();
+                continue;
+            }
+            string chunk = new(
+                update
+                    .Text.Select(character =>
+                        char.IsControl(character) || character is '\u2028' or '\u2029' ? ' ' : character
+                    )
+                    .ToArray()
+            );
+            _draft.Text = Clip((_draft.TextLength > 0 ? _draft.Text + " " : "") + chunk, 180);
+            _status.Text = update.Confidence < .3f ? "请检查识别文字。" : "";
+            if (_draft.TextLength >= 180)
+            {
+                StopRecording();
+            }
+        }
+    }
+
+    private static string DescribeVoiceError(Exception error) =>
+        error switch
+        {
+            VoiceRecognitionException => error.Message,
+            InvalidOperationException when error.Message.StartsWith("当前没有可用") => error.Message,
+            InvalidOperationException => "中文语音引擎或麦克风不可用，请检查语音组件和麦克风权限；也可直接输入。",
+            _ => "麦克风或本机中文模型不可用，请在设置中检查模型和麦克风权限，或直接输入。",
+        };
 
     private static void ReportError(Exception error) =>
         ChatSendDiagnostics.Shared.Report(
@@ -334,7 +384,7 @@ internal sealed class VoiceInputDialog : Form
 
     private async Task SendAsync()
     {
-        if (_sending || _recording || !_current())
+        if (_state != DialogState.Idle || !_current())
         {
             return;
         }
@@ -344,7 +394,7 @@ internal sealed class VoiceInputDialog : Form
             _status.Text = "请输入一条不超过 180 字符的聊天文字；不支持换行或斜杠命令。";
             return;
         }
-        _sending = true;
+        _state = DialogState.Sending;
         _status.Text = "正在发送到选人聊天…";
         UpdateActions();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
@@ -381,7 +431,10 @@ internal sealed class VoiceInputDialog : Form
         }
         finally
         {
-            _sending = false;
+            if (_state != DialogState.Closed)
+            {
+                _state = DialogState.Idle;
+            }
             if (!IsDisposed)
             {
                 UpdateActions();
@@ -389,17 +442,40 @@ internal sealed class VoiceInputDialog : Form
         }
     }
 
-    protected override void Dispose(bool disposing)
+    private async Task FinishClosedWorkAsync(Task cancel)
     {
-        if (disposing && !_voiceDisposed)
+        try
         {
-            _voiceDisposed = true;
-            ++_generation;
-            _lifetime.Cancel();
-            _recordLife?.Cancel();
-            _session?.Dispose();
+            await cancel.ConfigureAwait(false);
+            await Task.WhenAll(_recordWork, _sendWork).ConfigureAwait(false);
+        }
+        catch (Exception error)
+        {
+            // A cleanup failure must be observed without reviving the closed dialog or replacing its primary error.
+            System.Diagnostics.Debug.WriteLine($"Voice dialog closed-work cleanup: {error}");
+        }
+        finally
+        {
             _lifetime.Dispose();
         }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        bool releaseFonts = disposing && _state != DialogState.Closed;
+        if (releaseFonts)
+        {
+            _state = DialogState.Closed;
+            ++_generation;
+            var cancellation = _lifetime.CancelAsync();
+            _session?.Dispose();
+            _cleanupWork = FinishClosedWorkAsync(cancellation);
+        }
         base.Dispose(disposing);
+        if (releaseFonts)
+        {
+            _dialogFont.Dispose();
+            _draftFont.Dispose();
+        }
     }
 }
