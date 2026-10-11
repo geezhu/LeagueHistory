@@ -1,15 +1,17 @@
-﻿using Newtonsoft.Json.Linq;
-using League.States;
+﻿using League.States;
+using Newtonsoft.Json.Linq;
 
 namespace League;
 
 public partial class FormMain
 {
     private bool _openingPlayerProfile;
+
     // Shared by history player icons and detail player names.
     public async Task OpenPlayerProfileAsync(string summonerId)
     {
-        if (_openingPlayerProfile || string.IsNullOrWhiteSpace(summonerId) || summonerId == "0") return;
+        if (_openingPlayerProfile || string.IsNullOrWhiteSpace(summonerId) || summonerId == "0")
+            return;
         _openingPlayerProfile = true;
         _uiManager!.ShowLoadingIndicator();
         try
@@ -35,7 +37,8 @@ public partial class FormMain
                 imageTabControl1.SelectedIndex = 0;
                 Activate();
             }
-            else MessageBox.Show("无法获取该玩家的资料，请确认客户端已连接后重试。");
+            else
+                MessageBox.Show("无法获取该玩家的资料，请确认客户端已连接后重试。");
         }
         catch (Exception ex)
         {
@@ -47,5 +50,4 @@ public partial class FormMain
             _uiManager!.HideLoadingIndicator();
         }
     }
-
 }
