@@ -25,6 +25,20 @@ public sealed class MatchStatisticsView : UserControl
         Dock = DockStyle.Fill;
         BackColor = Color.White;
         _players = (match.AllParticipants ?? new()).OrderBy(p => (int?)p["teamId"] ?? 0).ToArray();
+        ConfigureGrid();
+        CreatePlayerColumns(match);
+        foreach (var category in MatchMetricCatalog.Categories)
+        {
+            AddMetricGroup(category.Title, category.Metrics.Select(m => (m.Title, m.Key)).ToArray());
+        }
+        _grid.CellClick += (_, e) => ToggleMetricGroup(e.RowIndex);
+        _grid.CellPainting += (_, e) => PaintPlayerHeader(e);
+        Controls.Add(_grid);
+        _grid.SizeChanged += (_, _) => ResizePlayerColumns();
+    }
+
+    private void ConfigureGrid()
+    {
         _grid.Dock = DockStyle.Fill;
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
@@ -49,6 +63,10 @@ public sealed class MatchStatisticsView : UserControl
             Alignment = DataGridViewContentAlignment.MiddleCenter,
         };
         _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(244, 247, 251);
+    }
+
+    private void CreatePlayerColumns(MatchInfo match)
+    {
         _grid.Columns.Add(
             new DataGridViewTextBoxColumn
             {
@@ -100,104 +118,102 @@ public sealed class MatchStatisticsView : UserControl
 
             _grid.Columns.Add(column);
         }
-        void Group(string name, params (string Title, string Key)[] metrics)
-        {
-            var available = metrics.Where(m => _players.Any(p => Value(p, m.Key) != "—")).ToArray();
-            if (available.Length == 0)
-            {
-                return;
-            }
+    }
 
-            int start = _grid.Rows.Add("▾  " + name);
-            var group = _grid.Rows[start];
-            group.Tag = name;
-            group.DefaultCellStyle.BackColor = Color.FromArgb(232, 239, 248);
-            group.DefaultCellStyle.Font = _bold;
-            foreach (var metric in available)
-            {
-                _grid.Rows.Add(
-                    new object[] { metric.Title }
-                        .Concat(_players.Select(p => (object)Value(p, metric.Key)))
-                        .ToArray()
-                );
-            }
-        }
-        foreach (var category in MatchMetricCatalog.Categories)
+    private void AddMetricGroup(string name, (string Title, string Key)[] metrics)
+    {
+        var available = metrics.Where(m => _players.Any(p => Value(p, m.Key) != "—")).ToArray();
+        if (available.Length == 0)
         {
-            Group(category.Title, category.Metrics.Select(m => (m.Title, m.Key)).ToArray());
+            return;
         }
 
-        _grid.CellClick += (_, e) =>
+        int start = _grid.Rows.Add("▾  " + name);
+        var group = _grid.Rows[start];
+        group.Tag = name;
+        group.DefaultCellStyle.BackColor = Color.FromArgb(232, 239, 248);
+        group.DefaultCellStyle.Font = _bold;
+        foreach (var metric in available)
         {
-            if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not string name)
-            {
-                return;
-            }
-
-            int next = e.RowIndex + 1;
-            if (next >= _grid.Rows.Count)
-            {
-                return;
-            }
-
-            bool show = !_grid.Rows[next].Visible;
-            _grid.CurrentCell = _grid.Rows[e.RowIndex].Cells[0];
-            _grid.SuspendLayout();
-            for (int r = next; r < _grid.Rows.Count && _grid.Rows[r].Tag == null; r++)
-            {
-                _grid.Rows[r].Visible = show;
-            }
-
-            _grid.Rows[e.RowIndex].Cells[0].Value = (show ? "▾  " : "▸  ") + name;
-            _grid.ResumeLayout();
-        };
-        _grid.CellPainting += (_, e) =>
-        {
-            if (e.RowIndex != -1 || e.ColumnIndex <= 0)
-            {
-                return;
-            }
-
-            e.PaintBackground(e.ClipBounds, false);
-            var box = new Rectangle(e.CellBounds.Left + (e.CellBounds.Width - 34) / 2, e.CellBounds.Top + 7, 34, 34);
-            if (_headers.TryGetValue(e.ColumnIndex, out var image))
-            {
-                var state = e.Graphics.Save();
-                using var clip = new System.Drawing.Drawing2D.GraphicsPath();
-                clip.AddEllipse(box);
-                e.Graphics.SetClip(clip);
-                e.Graphics.DrawImage(image, box);
-                e.Graphics.Restore(state);
-            }
-            using var pen = new Pen(
-                (int?)_players[e.ColumnIndex - 1]["teamId"] == 100
-                    ? Color.FromArgb(46, 153, 190)
-                    : Color.FromArgb(191, 81, 91),
-                2
+            _grid.Rows.Add(
+                new object[] { metric.Title }
+                    .Concat(_players.Select(p => (object)Value(p, metric.Key)))
+                    .ToArray()
             );
-            e.Graphics.DrawEllipse(pen, box);
-            TextRenderer.DrawText(
-                e.Graphics,
-                $"{e.ColumnIndex}",
-                Font,
-                new Rectangle(e.CellBounds.Left, e.CellBounds.Top + 43, e.CellBounds.Width, 18),
-                ForeColor,
-                TextFormatFlags.HorizontalCenter
-            );
-            e.Handled = true;
-        };
-        Controls.Add(_grid);
-        _grid.SizeChanged += (_, _) =>
+        }
+    }
+
+    private void ToggleMetricGroup(int rowIndex)
+    {
+        if (rowIndex < 0 || _grid.Rows[rowIndex].Tag is not string name)
         {
-            int width = Math.Max(76, (_grid.ClientSize.Width - 210) / Math.Max(1, _players.Length));
-            foreach (DataGridViewColumn column in _grid.Columns)
+            return;
+        }
+
+        int next = rowIndex + 1;
+        if (next >= _grid.Rows.Count)
+        {
+            return;
+        }
+
+        bool show = !_grid.Rows[next].Visible;
+        _grid.CurrentCell = _grid.Rows[rowIndex].Cells[0];
+        _grid.SuspendLayout();
+        for (int r = next; r < _grid.Rows.Count && _grid.Rows[r].Tag == null; r++)
+        {
+            _grid.Rows[r].Visible = show;
+        }
+
+        _grid.Rows[rowIndex].Cells[0].Value = (show ? "▾  " : "▸  ") + name;
+        _grid.ResumeLayout();
+    }
+
+    private void PaintPlayerHeader(DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex != -1 || e.ColumnIndex <= 0)
+        {
+            return;
+        }
+
+        e.PaintBackground(e.ClipBounds, false);
+        var box = new Rectangle(e.CellBounds.Left + (e.CellBounds.Width - 34) / 2, e.CellBounds.Top + 7, 34, 34);
+        if (_headers.TryGetValue(e.ColumnIndex, out var image))
+        {
+            var state = e.Graphics.Save();
+            using var clip = new System.Drawing.Drawing2D.GraphicsPath();
+            clip.AddEllipse(box);
+            e.Graphics.SetClip(clip);
+            e.Graphics.DrawImage(image, box);
+            e.Graphics.Restore(state);
+        }
+        using var pen = new Pen(
+            (int?)_players[e.ColumnIndex - 1]["teamId"] == 100
+                ? Color.FromArgb(46, 153, 190)
+                : Color.FromArgb(191, 81, 91),
+            2
+        );
+        e.Graphics.DrawEllipse(pen, box);
+        TextRenderer.DrawText(
+            e.Graphics,
+            $"{e.ColumnIndex}",
+            Font,
+            new Rectangle(e.CellBounds.Left, e.CellBounds.Top + 43, e.CellBounds.Width, 18),
+            ForeColor,
+            TextFormatFlags.HorizontalCenter
+        );
+        e.Handled = true;
+    }
+
+    private void ResizePlayerColumns()
+    {
+        int width = Math.Max(76, (_grid.ClientSize.Width - 210) / Math.Max(1, _players.Length));
+        foreach (DataGridViewColumn column in _grid.Columns)
+        {
+            if (column.Index > 0)
             {
-                if (column.Index > 0)
-                {
-                    column.Width = width;
-                }
+                column.Width = width;
             }
-        };
+        }
     }
 
     public static string Value(JObject player, string key)
