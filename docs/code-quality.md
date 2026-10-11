@@ -55,7 +55,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Update-CodeQualitySc
 
 ## 当前样板与验证
 
-样板已扩展到全部新增客户端、模型、英雄分析解析器和图标／名称辅助代码，以及全部新增服务和管理器，并开始覆盖战绩界面、arammeta 页面、阵容分析、英雄成就与基础控件；共 148 个源码文件。
+样板已扩展到全部新增客户端、模型、英雄分析解析器和图标／名称辅助代码，以及全部新增服务和管理器，并开始覆盖战绩界面、arammeta 与 OP.GG 页面、阵容分析、英雄成就与基础控件；共 157 个源码文件。
 
 阵容分析的证据提取与结论生成分开，实时对局按玩家和事件解析，时间轴按帧、金币和事件处理。客户端分别处理缓存读取、网络刷新和原子保存；共享初始化不因单个视图取消而中止，等待方仍可取消。玩家加载分离名单核对、请求与结果投递；符文应用分离保存与当前页面校验。
 
@@ -75,6 +75,10 @@ arammeta 页面分开加载概要、完整详情与缓存复用；摘要、页�
 
 英雄成就页分开读取成就、玩家资料与拥有数量，再展示前五名。资料通知发出前登记两个工作，订阅方在通知中关闭页面也不会继续读取成就；切换玩家后旧图标不会插入新页面。海报复制借用图标；默认资源返回的新图片由页面释放，注入提供方的图标保持可用。全部成就页分别建立页头、海报列表与可见项加载，每批最多四张；关闭后不再启动计时器。击杀地图的坐标边界具有明确名称，战绩亮点的图片加载返回可观察任务。
 
+OP.GG 页面分别处理筛选、浏览历史、排行榜、分路解析与完整攻略；摘要、竞技场搭档和强化、出装及对局列表分别展示。符文选择为独立控件，管理方案预览、选择状态和应用过程；应用由当前页面授权，失败或取消后不显示过期成功状态。符文树按主系、副系和属性碎片构建，过期方案不覆盖当前节点图片。排行榜排序列具有明确名称，图片并发锁和取消源等全部图片工作结束后释放；页面关闭也先等待读取工作再释放自己的客户端。资源缓存的图片解码放在后台，取消的等待者仍负责释放缓存稍后返回的自有图片副本。
+
+异步界面检查使用持久的 WinForms 消息循环，避免只在同步完成时通过、真正异步返回时却落到错误线程。模拟检查覆盖快速换英雄、重复查询缓存、关闭时的图片与客户端清理、所选方案应用和失效页面禁止应用；不会写入真实符文页。
+
 回归可独立运行，避免受界面测试上下文影响：
 
 ```powershell
@@ -89,6 +93,8 @@ dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --
 dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --composition-checks
 dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --composition-lifecycle-checks
 dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --profile-presentation-checks
+dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --opgg-checks
+dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --opgg-lifecycle-checks
 ```
 
 全部 204 个原待整理文件已经完成工具排版，并分模块提交；控制流括号也已补齐。未列入样板的模块仍需处理过长方法、异步调用和资源边界，不能把排版完成视为全部结构整理完成。

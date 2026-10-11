@@ -43,74 +43,89 @@ internal sealed partial class OpggView
         };
         foreach (var group in groups)
         {
-            var column = new FlowLayoutPanel
-            {
-                AutoSize = true,
-                FlowDirection = FlowDirection.TopDown,
-                WrapContents = false,
-                Margin = new Padding(0, 0, 12, 0),
-            };
-            layout.Controls.Add(column);
-            column.Controls.Add(
-                new Label
-                {
-                    Text = $"{group.Title}（{group.Rows.Length}）",
-                    AutoSize = true,
-                    ForeColor = Color.SlateGray,
-                    Margin = new Padding(2, 0, 0, 6),
-                }
-            );
-            if (group.Rows.Length == 0)
-            {
-                column.Controls.Add(TextLabel("暂无符合条件的对局"));
-            }
-
-            foreach (var opponent in group.Rows)
-            {
-                token.ThrowIfCancellationRequested();
-                int id = (int)opponent["champion_id"]!;
-                var row = new Panel
-                {
-                    Size = new Size(320, 38),
-                    Margin = Padding.Empty,
-                    Tag = id,
-                };
-                column.Controls.Add(row);
-                var iconHost = new FlowLayoutPanel
-                {
-                    Bounds = new Rectangle(0, 1, 36, 36),
-                    Margin = Padding.Empty,
-                    WrapContents = false,
-                };
-                row.Controls.Add(iconHost);
-                var name = new Label
-                {
-                    Text = ChampionName(id),
-                    Bounds = new Rectangle(40, 0, 115, 38),
-                    TextAlign = ContentAlignment.MiddleLeft,
-                    AutoEllipsis = true,
-                };
-                var count = new Label
-                {
-                    Text = $"{(long)opponent["play"]!:N0} 场",
-                    Bounds = new Rectangle(155, 0, 95, 38),
-                    TextAlign = ContentAlignment.MiddleRight,
-                    ForeColor = Color.Gray,
-                };
-                var rate = new Label
-                {
-                    Text = $"{OpggBuild.Ratio(opponent["win"], opponent["play"]):P2}",
-                    Bounds = new Rectangle(253, 0, 65, 38),
-                    TextAlign = ContentAlignment.MiddleRight,
-                    ForeColor = group.Color,
-                    Font = new Font(Font, FontStyle.Bold),
-                };
-                row.Controls.AddRange(new Control[] { name, count, rate });
-                _tips.SetToolTip(name, ChampionName(id));
-                _tips.SetToolTip(rate, "当前攻略英雄对阵该英雄的胜率");
-                await AddIconAsync(iconHost, id, "champion", token);
-            }
+            await RenderMatchupGroupAsync(layout, group.Title, group.Rows, group.Color, token);
         }
+    }
+
+    private async Task RenderMatchupGroupAsync(
+        Control layout,
+        string title,
+        JObject[] opponents,
+        Color color,
+        CancellationToken token
+    )
+    {
+        var column = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Margin = new Padding(0, 0, 12, 0),
+        };
+        layout.Controls.Add(column);
+        column.Controls.Add(
+            new Label
+            {
+                Text = $"{title}（{opponents.Length}）",
+                AutoSize = true,
+                ForeColor = Color.SlateGray,
+                Margin = new Padding(2, 0, 0, 6),
+            }
+        );
+        if (opponents.Length == 0)
+        {
+            column.Controls.Add(TextLabel("暂无符合条件的对局"));
+        }
+        foreach (var opponent in opponents)
+        {
+            token.ThrowIfCancellationRequested();
+            await AddMatchupRowAsync(column, opponent, color, token);
+        }
+    }
+
+    private async Task AddMatchupRowAsync(Control column, JObject opponent, Color color, CancellationToken token)
+    {
+        int id = (int)opponent["champion_id"]!;
+        var row = new Panel
+        {
+            Size = new Size(320, 38),
+            Margin = Padding.Empty,
+            Tag = id,
+        };
+        column.Controls.Add(row);
+        var iconHost = new FlowLayoutPanel
+        {
+            Bounds = new Rectangle(0, 1, 36, 36),
+            Margin = Padding.Empty,
+            WrapContents = false,
+        };
+        row.Controls.Add(iconHost);
+        var name = new Label
+        {
+            Text = ChampionName(id),
+            Bounds = new Rectangle(40, 0, 115, 38),
+            TextAlign = ContentAlignment.MiddleLeft,
+            AutoEllipsis = true,
+        };
+        var count = new Label
+        {
+            Text = $"{(long)opponent["play"]!:N0} 场",
+            Bounds = new Rectangle(155, 0, 95, 38),
+            TextAlign = ContentAlignment.MiddleRight,
+            ForeColor = Color.Gray,
+        };
+        var rate = new Label
+        {
+            Text = $"{OpggBuild.Ratio(opponent["win"], opponent["play"]):P2}",
+            Bounds = new Rectangle(253, 0, 65, 38),
+            TextAlign = ContentAlignment.MiddleRight,
+            ForeColor = color,
+            Font = _sectionHeadingFont ??= new Font(Font, FontStyle.Bold),
+        };
+        row.Controls.AddRange(new Control[] { name, count, rate });
+        _tips.SetToolTip(name, ChampionName(id));
+        _tips.SetToolTip(rate, "当前攻略英雄对阵该英雄的胜率");
+        await AddIconAsync(iconHost, id, "champion", token);
     }
 
     private Control RecommendationStats(JToken data)
@@ -135,7 +150,7 @@ internal sealed partial class OpggView
             Bounds = new Rectangle(100, 10, 76, 24),
             TextAlign = ContentAlignment.MiddleRight,
             ForeColor = Color.FromArgb(0, 158, 171),
-            Font = new Font(Font, FontStyle.Bold),
+            Font = _sectionHeadingFont ??= new Font(Font, FontStyle.Bold),
         };
         panel.Controls.AddRange(new Control[] { win, count, pick });
         _tips.SetToolTip(win, "胜率");

@@ -17,6 +17,19 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--opgg-lifecycle-checks"))
+        {
+            WinFormsCheckHost.Run(OpggViewLifecycleChecks.Run);
+            return;
+        }
+        if (args.Contains("--opgg-checks"))
+        {
+            Task.Run(OpggChecks.RunAsync).GetAwaiter().GetResult();
+            Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
+            Application.EnableVisualStyles();
+            WinFormsCheckHost.Run(OpggChecks.Render);
+            return;
+        }
         if (args.Contains("--profile-presentation-checks"))
         {
             ProfilePresentationChecks.Run();
