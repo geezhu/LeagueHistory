@@ -72,6 +72,9 @@ internal sealed partial class AramMetaView : UserControl
     private bool _descending = true,
         _syncing,
         _polling;
+    private bool _closing;
+    private readonly HashSet<Task> _viewWork = new();
+    private Task _cleanupWork = Task.CompletedTask;
     private string _selection = "";
 
     private sealed record Visit(int Champion, string Search, int Role, int Sort, bool Descending, int Scroll);
@@ -102,6 +105,15 @@ internal sealed partial class AramMetaView : UserControl
         BackColor = Color.FromArgb(244, 247, 251);
         _role.Items.AddRange(new object[] { "全部职业", "战士", "法师", "刺客", "射手", "辅助", "坦克" });
         _role.SelectedIndex = 0;
+        var (home, refresh) = ConfigureToolbar();
+        ConfigureColumns();
+        ConfigureRankings();
+        BindGridEvents();
+        BindNavigation(home, refresh);
+    }
+
+    private (Button Home, Button Refresh) ConfigureToolbar()
+    {
         var refresh = new Button { Text = "刷新", AutoSize = true };
         var home = new Button { Text = "英雄榜", AutoSize = true };
         var toolbar = new FlowLayoutPanel
@@ -121,6 +133,11 @@ internal sealed partial class AramMetaView : UserControl
             _status,
             "来源 arammeta；调整后胜率经过来源模型处理，原始胜率为样本胜率。数据不是 OP.GG 统计。"
         );
+        return (home, refresh);
+    }
+
+    private void ConfigureColumns()
+    {
         _grid.RowTemplate.Height = 46;
         _grid.ColumnHeadersHeight = 36;
         _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(222, 242, 243);
@@ -158,8 +175,10 @@ internal sealed partial class AramMetaView : UserControl
                 }
             );
         }
+    }
 
-        ConfigureRankings();
+    private void BindGridEvents()
+    {
         _grid.CellClick += async (_, e) =>
         {
             if (e.RowIndex >= 0 && _grid.Rows[e.RowIndex].Tag is AramMetaChampion c)
@@ -173,7 +192,7 @@ internal sealed partial class AramMetaView : UserControl
             var row = _grid.Rows[e.RowIndex];
             if (row.Cells[0].Value == null && row.Tag is AramMetaChampion c)
             {
-                _ = SetGridImageAsync(row, c, _renderLifetime?.Token ?? default);
+                _ = TrackWork(SetGridImageAsync(row, c, _renderLifetime?.Token ?? default));
             }
         };
         _grid.KeyDown += async (_, e) =>
@@ -197,6 +216,10 @@ internal sealed partial class AramMetaView : UserControl
             _sort = e.ColumnIndex;
             FillGrid();
         };
+    }
+
+    private void BindNavigation(Button home, Button refresh)
+    {
         _search.TextChanged += (_, _) => FilterChanged();
         _role.SelectedIndexChanged += (_, _) => FilterChanged();
         home.Click += async (_, _) =>
@@ -218,7 +241,7 @@ internal sealed partial class AramMetaView : UserControl
 
     private void FilterChanged()
     {
-        if (_syncing)
+        if (_closing || _syncing)
         {
             return;
         }
@@ -299,6 +322,10 @@ internal sealed partial class AramMetaView : UserControl
     protected override void OnVisibleChanged(EventArgs e)
     {
         base.OnVisibleChanged(e);
+        if (_closing)
+        {
+            return;
+        }
         if (Visible)
         {
             _timer.Start();
@@ -307,108 +334,53 @@ internal sealed partial class AramMetaView : UserControl
         else
         {
             _timer.Stop();
-            _request?.Cancel();
-            _poll?.Cancel();
+            CancelRequest();
+            CancelPoll();
             _selection = "";
         }
     }
 
-    private async Task LoadAsync(bool refresh)
+    private Task LoadAsync(bool refresh)
     {
+        if (_closing || IsDisposed)
+        {
+            return Task.CompletedTask;
+        }
         if (!refresh && _renderedChampion == _champion && _page != null && _client.IsCurrent(_page, _champion))
         {
             UpdateStatus(_page);
-            return;
+            return Task.CompletedTask;
         }
-        _request?.Cancel();
-        _request?.Dispose();
-        var request = _request = new();
-        int id = _champion;
+        CancelRequest();
+        var request = _request = new CancellationTokenSource();
         _status.Text = "正在加载 arammeta · 海克斯大乱斗…";
+        return TrackWork(LoadPageAsync(_champion, refresh, request));
+    }
+
+    private async Task LoadPageAsync(int id, bool refresh, CancellationTokenSource request)
+    {
+        var token = request.Token;
+        // Track the worker before previews can create controls or invoke host callbacks.
+        await Task.Yield();
         try
         {
-            bool previewShown = false;
+            token.ThrowIfCancellationRequested();
             string? previewVersion = null;
             var page = await _client.GetAsync(
                 id,
                 refresh,
-                request.Token,
-                preview =>
-                {
-                    if (IsDisposed || request.IsCancellationRequested || _request != request)
-                    {
-                        return;
-                    }
-
-                    _page = preview;
-                    _search.Visible = false;
-                    _role.Visible = false;
-                    _grid.Visible = false;
-                    _detail.Visible = true;
-                    RenderDetail(preview, id, NewRenderToken());
-                    _renderedChampion = id;
-                    _detail.BringToFront();
-                    _detail.AutoScrollPosition = new Point(0, _history[_historyIndex].Scroll);
-                    previewShown = true;
-                    previewVersion = preview.Index.Version;
-                    _status.Text =
-                        $"arammeta · 海克斯大乱斗 · 数据版本 {preview.Index.Patch} · 英雄概要与强化推荐已加载，正在获取装备详情…";
-                }
+                token,
+                preview => previewVersion = ShowPreview(preview, id, request, token)
             );
-            request.Token.ThrowIfCancellationRequested();
-            if (IsDisposed)
+            token.ThrowIfCancellationRequested();
+            if (!_closing && !IsDisposed && _request == request)
             {
-                return;
+                ShowPage(page, id, previewVersion);
             }
-
-            bool reuse =
-                page.Cached
-                && !previewShown
-                && _renderedChampion == id
-                && _page != null
-                && _page.FetchedAt == page.FetchedAt
-                && _page.Index.Version == page.Index.Version
-                && (id == 0 || _page.Detail != null);
-            _page = page;
-            int detailScroll = previewShown
-                ? Math.Max(0, -_detail.AutoScrollPosition.Y)
-                : _history[_historyIndex].Scroll;
-            _search.Visible = id == 0;
-            _role.Visible = id == 0;
-            _grid.Visible = id == 0;
-            _detail.Visible = id != 0;
-            if (!reuse)
-            {
-                bool equipmentOnly = previewShown && previewVersion == page.Index.Version;
-                var renderToken = equipmentOnly ? _renderLifetime!.Token : NewRenderToken();
-                if (id == 0)
-                {
-                    FillGrid();
-                    _grid.BringToFront();
-                }
-                else
-                {
-                    RenderDetail(page, id, renderToken, equipmentOnly);
-                    _detail.BringToFront();
-                }
-                _renderedChampion = id;
-            }
-            var visit = _history[_historyIndex];
-            if (id == 0 && _grid.Rows.Count > 0)
-            {
-                _grid.FirstDisplayedScrollingRowIndex = Math.Min(visit.Scroll, _grid.Rows.Count - 1);
-            }
-
-            if (id != 0)
-            {
-                _detail.AutoScrollPosition = new Point(0, detailScroll);
-            }
-
-            UpdateStatus(page);
         }
         catch (OperationCanceledException)
         {
-            if (!request.IsCancellationRequested && !IsDisposed)
+            if (!token.IsCancellationRequested && !_closing && !IsDisposed)
             {
                 MarkDetailUnavailable();
                 _status.Text = "请求超时，点击刷新重试。";
@@ -416,7 +388,7 @@ internal sealed partial class AramMetaView : UserControl
         }
         catch (Exception ex)
         {
-            if (!request.IsCancellationRequested && !IsDisposed)
+            if (!token.IsCancellationRequested && !_closing && !IsDisposed)
             {
                 MarkDetailUnavailable();
                 _status.Text = "加载失败：" + ex.Message + " 点击刷新重试；保留上次内容。";
@@ -424,16 +396,83 @@ internal sealed partial class AramMetaView : UserControl
         }
     }
 
+    private string? ShowPreview(AramMetaPage preview, int id, CancellationTokenSource request, CancellationToken token)
+    {
+        if (_closing || IsDisposed || token.IsCancellationRequested || _request != request)
+        {
+            return null;
+        }
+        _page = preview;
+        SetPageVisibility(id);
+        RenderDetail(preview, id, NewRenderToken());
+        _renderedChampion = id;
+        _detail.BringToFront();
+        _detail.AutoScrollPosition = new Point(0, _history[_historyIndex].Scroll);
+        _status.Text =
+            $"arammeta · 海克斯大乱斗 · 数据版本 {preview.Index.Patch} · 英雄概要与强化推荐已加载，正在获取装备详情…";
+        return preview.Index.Version;
+    }
+
+    private void SetPageVisibility(int id)
+    {
+        _search.Visible = id == 0;
+        _role.Visible = id == 0;
+        _grid.Visible = id == 0;
+        _detail.Visible = id != 0;
+    }
+
+    private bool CanReusePage(AramMetaPage page, int id, string? previewVersion) =>
+        page.Cached
+        && previewVersion == null
+        && _renderedChampion == id
+        && _page != null
+        && _page.FetchedAt == page.FetchedAt
+        && _page.Index.Version == page.Index.Version
+        && (id == 0 || _page.Detail != null);
+
+    private void ShowPage(AramMetaPage page, int id, string? previewVersion)
+    {
+        bool reuse = CanReusePage(page, id, previewVersion);
+        _page = page;
+        int detailScroll =
+            previewVersion != null ? Math.Max(0, -_detail.AutoScrollPosition.Y) : _history[_historyIndex].Scroll;
+        SetPageVisibility(id);
+        if (!reuse)
+        {
+            bool equipmentOnly = previewVersion != null && previewVersion == page.Index.Version;
+            var token = equipmentOnly ? _renderLifetime!.Token : NewRenderToken();
+            if (id == 0)
+            {
+                FillGrid();
+                _grid.BringToFront();
+            }
+            else
+            {
+                RenderDetail(page, id, token, equipmentOnly);
+                _detail.BringToFront();
+            }
+            _renderedChampion = id;
+        }
+        if (id == 0 && _grid.Rows.Count > 0)
+        {
+            _grid.FirstDisplayedScrollingRowIndex = Math.Min(_history[_historyIndex].Scroll, _grid.Rows.Count - 1);
+        }
+        if (id != 0)
+        {
+            _detail.AutoScrollPosition = new Point(0, detailScroll);
+        }
+        UpdateStatus(page);
+    }
+
     private void UpdateStatus(AramMetaPage page)
     {
         _status.Text =
-            $"arammeta · 海克斯大乱斗 · 数据版本 {page.Index.Patch} · {(page.UpdateFailed ? "\u66f4\u65b0\u5931\u8d25\uff0c\u663e\u793a\u65e7\u7f13\u5b58" : page.Cached ? "缓存" : "已更新")} {page.FetchedAt.ToLocalTime():MM-dd HH:mm}\n调整后胜率与原始胜率分别展示；样本不代表全服。";
+            $"arammeta · 海克斯大乱斗 · 数据版本 {page.Index.Patch} · {(page.UpdateFailed ? "更新失败，显示旧缓存" : page.Cached ? "缓存" : "已更新")} {page.FetchedAt.ToLocalTime():MM-dd HH:mm}\n调整后胜率与原始胜率分别展示；样本不代表全服。";
     }
 
     private CancellationToken NewRenderToken()
     {
-        _renderLifetime?.Cancel();
-        _renderLifetime?.Dispose();
+        RetireSource(_renderLifetime);
         _renderLifetime = new();
         return _renderLifetime.Token;
     }
@@ -516,31 +555,38 @@ internal sealed partial class AramMetaView : UserControl
         _grid.ClearSelection();
     }
 
-    private async Task PollAsync()
+    private Task PollAsync()
     {
-        if (_polling || !Visible || !_follow.Checked)
+        if (_closing || _polling || !Visible || !_follow.Checked)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         var client = FormMain.Globals.lcuClient?.Client;
         if (client == null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         _polling = true;
-        _poll?.Dispose();
-        _poll = new(TimeSpan.FromSeconds(5));
+        CancelPoll();
+        var poll = _poll = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        return TrackWork(PollSelectionAsync(client, poll.Token));
+    }
+
+    private async Task PollSelectionAsync(HttpClient client, CancellationToken token)
+    {
+        await Task.Yield();
         try
         {
-            var flow = JObject.Parse(await client.GetStringAsync("/lol-gameflow/v1/session", _poll.Token));
+            token.ThrowIfCancellationRequested();
+            var flow = JObject.Parse(await client.GetStringAsync("/lol-gameflow/v1/session", token));
             if ((int?)flow["gameData"]?["queue"]?["id"] != 2400)
             {
                 _selection = "";
                 return;
             }
-            var session = JObject.Parse(await client.GetStringAsync("/lol-champ-select/v1/session", _poll.Token));
+            var session = JObject.Parse(await client.GetStringAsync("/lol-champ-select/v1/session", token));
             var own = (session["myTeam"] as JArray)
                 ?.OfType<JObject>()
                 .FirstOrDefault(p => (int?)p["cellId"] == (int?)session["localPlayerCellId"]);
@@ -553,38 +599,133 @@ internal sealed partial class AramMetaView : UserControl
             _selection = id.ToString();
             _ = NavigateAsync(id);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            // Client polling may time out or be cancelled when the page is hidden.
+        }
         catch (HttpRequestException)
         {
             _selection = "";
         }
-        catch (Newtonsoft.Json.JsonException) { }
+        catch (Newtonsoft.Json.JsonException)
+        {
+            // A transient client response is not a usable champion selection.
+        }
         finally
         {
             _polling = false;
         }
     }
 
+    private TTask TrackWork<TTask>(TTask task)
+        where TTask : Task
+    {
+        lock (_viewWork)
+        {
+            _viewWork.Add(task);
+        }
+        _ = task.ContinueWith(
+            completed =>
+            {
+                lock (_viewWork)
+                {
+                    _viewWork.Remove(completed);
+                }
+                if (completed.Exception is { } error)
+                {
+                    System.Diagnostics.Debug.WriteLine($"arammeta view: {error.GetBaseException().GetType().Name}");
+                }
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default
+        );
+        return task;
+    }
+
+    private Task[] PendingWork()
+    {
+        lock (_viewWork)
+        {
+            return _viewWork.ToArray();
+        }
+    }
+
+    private void RetireSource(CancellationTokenSource? source)
+    {
+        if (source == null)
+        {
+            return;
+        }
+        var pending = PendingWork();
+        var cancellation = source.CancelAsync();
+        TrackWork(
+            Task.WhenAll(pending.Append(cancellation))
+                .ContinueWith(
+                    completed =>
+                    {
+                        _ = completed.Exception;
+                        source.Dispose();
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default
+                )
+        );
+    }
+
+    private void CancelRequest()
+    {
+        var source = _request;
+        _request = null;
+        RetireSource(source);
+    }
+
+    private void CancelPoll()
+    {
+        var source = _poll;
+        _poll = null;
+        RetireSource(source);
+    }
+
+    private async Task CleanupResourcesAsync(Task[] pending)
+    {
+        try
+        {
+            await Task.WhenAll(pending).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Background faults are observed while still completing ownership cleanup.
+            System.Diagnostics.Debug.WriteLine($"arammeta cleanup: {ex.GetType().Name}");
+        }
+        _client.Dispose();
+        _imageHttp.Dispose();
+        _imageGate.Dispose();
+    }
+
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
+        if (disposing && !_closing)
         {
+            _closing = true;
             _timer.Stop();
             _timer.Dispose();
-            _request?.Cancel();
-            _poll?.Cancel();
-            _renderLifetime?.Cancel();
-            _renderLifetime?.Dispose();
+            CancelRequest();
+            CancelPoll();
+            RetireSource(_renderLifetime);
             _renderLifetime = null;
-            _client.Dispose();
+            // Client disposal waits for queued cache writes, so run final cleanup away from the UI.
+            var pending = PendingWork();
+            _cleanupWork = Task.Run(() => CleanupResourcesAsync(pending), CancellationToken.None);
             _tips.Dispose();
             _rankingBold?.Dispose();
-            _imageHttp.Dispose();
+            _heroHeadingFont?.Dispose();
+            _sectionHeadingFont?.Dispose();
             foreach (var image in _images.Values)
             {
                 image.Dispose();
             }
-
             _images.Clear();
         }
         base.Dispose(disposing);

@@ -5,6 +5,11 @@ namespace League.Controls;
 
 internal sealed partial class AramMetaView
 {
+    private const int OverviewTab = 0;
+    private const int AugmentTab = 1;
+    private const int BuildTab = 2;
+    private Font? _heroHeadingFont;
+    private Font? _sectionHeadingFont;
     private AramMetaPage? _detailData;
     private FlowLayoutPanel? _detailBody;
     private int _detailHero,
@@ -17,7 +22,7 @@ internal sealed partial class AramMetaView
     private void MarkDetailUnavailable()
     {
         _detailFailed = true;
-        if (_detailTab != 1)
+        if (_detailTab != AugmentTab)
         {
             RenderDetailBody();
         }
@@ -28,22 +33,13 @@ internal sealed partial class AramMetaView
         _detailData = page;
         _detailToken = token;
         _detailFailed = false;
-        if (equipmentOnly && _detailHero == id && _detailBody is { IsDisposed: false })
+        if (equipmentOnly && TryRefreshEquipment(id))
         {
-            if (_detailTab == 0 && _overviewEquipment is { IsDisposed: false })
-            {
-                RenderOverviewEquipment();
-            }
-            else if (_detailTab == 2)
-            {
-                RenderDetailBody();
-            }
-
             return;
         }
         if (_detailHero != id)
         {
-            _detailTab = 0;
+            _detailTab = OverviewTab;
             _rarity = 0;
             _augmentSort = 0;
             _augmentSearch = "";
@@ -56,87 +52,15 @@ internal sealed partial class AramMetaView
             {
                 control.Dispose();
             }
-
             var champion = page.Index.Champions.FirstOrDefault(c => c.Id == id);
             if (champion == null)
             {
+                _detailBody = null;
                 Section("暂无英雄数据");
                 return;
             }
-            var summary = Section(Name(champion));
-            summary.BackColor = Color.FromArgb(226, 242, 243);
-            summary.Controls[0].Font = new Font(Font.FontFamily, 14, FontStyle.Bold);
-            var header = Row(summary);
-            Icon(header, (string?)champion.Data["image"], Name(champion), token, 48, "champion", id);
-            var tierInk = TierColor(champion.Tier);
-            header.Controls.Add(
-                new Label
-                {
-                    Text = champion.Tier,
-                    Size = new Size(44, 30),
-                    TextAlign = ContentAlignment.MiddleCenter,
-                    ForeColor = tierInk,
-                    BackColor = Color.FromArgb(24, tierInk),
-                    Margin = new Padding(4, 17, 8, 0),
-                }
-            );
-            foreach (
-                var (label, value) in new[]
-                {
-                    ("调整后胜率", Rate(champion.WinRate)),
-                    ("原始胜率", Rate(champion.RawWinRate)),
-                    ("样本选取率", Rate(page.Index.PickRate(champion))),
-                    ("样本量", champion.Games?.ToString("N0") ?? "—"),
-                }
-            )
-            {
-                var metric = new Label
-                {
-                    Text = value + "\n" + label,
-                    AutoSize = false,
-                    Size = new Size(116, 46),
-                    TextAlign = ContentAlignment.MiddleCenter,
-                    ForeColor = label == "调整后胜率" ? Color.FromArgb(0, 130, 141) : Color.FromArgb(115, 133, 145),
-                    Margin = new Padding(4),
-                };
-                header.Controls.Add(metric);
-            }
-            _tips.SetToolTip(
-                summary,
-                "调整后胜率来自 arammeta 的统计模型；样本选取率按完整 5v5 样本计算，仅代表来源样本。"
-            );
-            var navigation = Section("");
-            navigation.Controls[0].Dispose();
-            var tabs = Row(navigation);
-            var names = new[] { "概览", "强化比较", "出装与技能" };
-            for (int i = 0; i < names.Length; i++)
-            {
-                int selected = i;
-                var button = new Button
-                {
-                    Text = names[i],
-                    Width = 112,
-                    Height = 32,
-                    FlatStyle = FlatStyle.Flat,
-                    Margin = new Padding(0, 0, 8, 0),
-                };
-                tabs.Controls.Add(button);
-                button.Click += (_, _) =>
-                {
-                    _detailTab = selected;
-                    UpdateTabs();
-                    RenderDetailBody();
-                };
-            }
-            void UpdateTabs()
-            {
-                for (int i = 0; i < tabs.Controls.Count; i++)
-                {
-                    tabs.Controls[i].BackColor = i == _detailTab ? Color.FromArgb(0, 153, 163) : Color.White;
-                    tabs.Controls[i].ForeColor = i == _detailTab ? Color.White : Color.FromArgb(60, 82, 99);
-                }
-            }
-            UpdateTabs();
+            RenderChampionSummary(page, champion, token);
+            RenderDetailNavigation();
             _detailBody = Section("");
             _detailBody.Controls[0].Dispose();
             RenderDetailBody();
@@ -145,6 +69,113 @@ internal sealed partial class AramMetaView
         finally
         {
             _detail.ResumeLayout(true);
+        }
+    }
+
+    private bool TryRefreshEquipment(int id)
+    {
+        if (_detailHero != id || _detailBody is not { IsDisposed: false })
+        {
+            return false;
+        }
+        if (_detailTab == OverviewTab && _overviewEquipment is { IsDisposed: false })
+        {
+            RenderOverviewEquipment();
+        }
+        else if (_detailTab == BuildTab)
+        {
+            RenderDetailBody();
+        }
+        // Augment comparison already uses the complete index; retain its filters and selected explanation.
+        return true;
+    }
+
+    private void RenderChampionSummary(AramMetaPage page, AramMetaChampion champion, CancellationToken token)
+    {
+        var summary = Section(Name(champion));
+        summary.BackColor = Color.FromArgb(226, 242, 243);
+        summary.Controls[0].Font = _heroHeadingFont ??= new Font(Font.FontFamily, 14, FontStyle.Bold);
+        var header = Row(summary);
+        Icon(header, (string?)champion.Data["image"], Name(champion), token, 48, "champion", champion.Id);
+        var tierInk = TierColor(champion.Tier);
+        header.Controls.Add(
+            new Label
+            {
+                Text = champion.Tier,
+                Size = new Size(44, 30),
+                TextAlign = ContentAlignment.MiddleCenter,
+                ForeColor = tierInk,
+                BackColor = Color.FromArgb(24, tierInk),
+                Margin = new Padding(4, 17, 8, 0),
+            }
+        );
+        AddChampionMetrics(header, page, champion);
+        _tips.SetToolTip(
+            summary,
+            "调整后胜率来自 arammeta 的统计模型；样本选取率按完整 5v5 样本计算，仅代表来源样本。"
+        );
+    }
+
+    private void AddChampionMetrics(Control header, AramMetaPage page, AramMetaChampion champion)
+    {
+        foreach (
+            var (label, value) in new[]
+            {
+                ("调整后胜率", Rate(champion.WinRate)),
+                ("原始胜率", Rate(champion.RawWinRate)),
+                ("样本选取率", Rate(page.Index.PickRate(champion))),
+                ("样本量", champion.Games?.ToString("N0") ?? "—"),
+            }
+        )
+        {
+            header.Controls.Add(
+                new Label
+                {
+                    Text = value + "\n" + label,
+                    AutoSize = false,
+                    Size = new Size(116, 46),
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    ForeColor = label == "调整后胜率" ? Color.FromArgb(0, 130, 141) : Color.FromArgb(115, 133, 145),
+                    Margin = new Padding(4),
+                }
+            );
+        }
+    }
+
+    private void RenderDetailNavigation()
+    {
+        var navigation = Section("");
+        navigation.Controls[0].Dispose();
+        var tabs = Row(navigation);
+        var names = new[] { "概览", "强化比较", "出装与技能" };
+        for (int i = 0; i < names.Length; i++)
+        {
+            int selected = i;
+            var button = new Button
+            {
+                Text = names[i],
+                Width = 112,
+                Height = 32,
+                FlatStyle = FlatStyle.Flat,
+                Margin = new Padding(0, 0, 8, 0),
+            };
+            tabs.Controls.Add(button);
+            button.Click += (_, _) =>
+            {
+                _detailTab = selected;
+                UpdateDetailTabs(tabs);
+                RenderDetailBody();
+            };
+        }
+        UpdateDetailTabs(tabs);
+    }
+
+    private void UpdateDetailTabs(Control tabs)
+    {
+        for (int i = 0; i < tabs.Controls.Count; i++)
+        {
+            tabs.Controls[i].BackColor = i == _detailTab ? Color.FromArgb(0, 153, 163) : Color.White;
+            tabs.Controls[i].ForeColor = i == _detailTab ? Color.White : Color.FromArgb(60, 82, 99);
         }
     }
 
@@ -163,11 +194,11 @@ internal sealed partial class AramMetaView
                 control.Dispose();
             }
 
-            if (_detailTab == 0)
+            if (_detailTab == OverviewTab)
             {
                 RenderOverview();
             }
-            else if (_detailTab == 1)
+            else if (_detailTab == AugmentTab)
             {
                 RenderAugmentComparison();
             }

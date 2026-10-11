@@ -17,6 +17,15 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--arammeta-checks"))
+        {
+            Task.Run(AramMetaChecks.RunAsync).GetAwaiter().GetResult();
+            Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
+            Application.EnableVisualStyles();
+            AramMetaChecks.Render();
+            AramMetaViewLifecycleChecks.Run();
+            return;
+        }
         if (args.Contains("--selection-control-checks"))
         {
             SelectionControlChecks.Run();

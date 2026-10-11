@@ -55,7 +55,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Update-CodeQualitySc
 
 ## 当前样板与验证
 
-样板已扩展到全部新增客户端、模型、英雄分析解析器和图标／名称辅助代码，以及全部新增服务和管理器，并开始覆盖战绩界面及基础控件；共 133 个源码文件。
+样板已扩展到全部新增客户端、模型、英雄分析解析器和图标／名称辅助代码，以及全部新增服务和管理器，并开始覆盖战绩界面、arammeta 页面及基础控件；共 139 个源码文件。
 
 阵容分析的证据提取与结论生成分开，实时对局按玩家和事件解析，时间轴按帧、金币和事件处理。客户端分别处理缓存读取、网络刷新和原子保存；共享初始化不因单个视图取消而中止，等待方仍可取消。玩家加载分离名单核对、请求与结果投递；符文应用分离保存与当前页面校验。
 
@@ -69,6 +69,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Update-CodeQualitySc
 
 装备与符文选择控件在关闭时等待图标工作及取消回调结束，再释放自己的关联取消源；不会取消父页面。队伍汇总借用主详情页的提示组件，成就海报拥有下载缓存返回的图片副本。
 
+arammeta 页面分开加载概要、完整详情与缓存复用；摘要、页签、强化筛选与统计说明、核心装备与单件备选分别处理。装备加载完成保留已显示的概要、选中页签与强化筛选。页面关闭先取消等待者，所有共享图片工作和取消回调结束后才释放 HTTP 客户端、并发锁与取消源；不会发布晚到的图片。
+
 回归可独立运行，避免受界面测试上下文影响：
 
 ```powershell
@@ -79,6 +81,7 @@ dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --
 dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --history-presentation-checks
 dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --player-champion-checks
 dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --selection-control-checks
+dotnet Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll --arammeta-checks
 ```
 
 全部 204 个原待整理文件已经完成工具排版，并分模块提交；控制流括号也已补齐。未列入样板的模块仍需处理过长方法、异步调用和资源边界，不能把排版完成视为全部结构整理完成。
