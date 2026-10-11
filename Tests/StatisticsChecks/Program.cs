@@ -17,6 +17,17 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--gamebar-protocol-checks"))
+        {
+            Task.Run(() =>
+            {
+                GameBarBridgeChecks.Run();
+                OverlayChampionDetailChecks.Run();
+                OverlayTierChatChecks.Run();
+                OverlayVoiceChatChecks.Run();
+            }).GetAwaiter().GetResult();
+            return;
+        }
         if (args.Contains("--roster-identity-checks"))
         {
             Task.Run(LoadingRosterIdentityChecks.Run).GetAwaiter().GetResult();

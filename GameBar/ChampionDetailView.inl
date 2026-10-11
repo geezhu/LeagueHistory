@@ -62,6 +62,21 @@ void InitializeDetails()
         r.Height({1, i == 3 ? GridUnitType::Star : GridUnitType::Auto});
         detailRoot.RowDefinitions().Append(r);
     }
+    InitializeDetailNavigation();
+    InitializeDetailBanner();
+    InitializeDetailTabs();
+    detailScroll.Content(detailBody);
+    detailScroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
+    detailScroll.VerticalScrollBarVisibility(ScrollBarVisibility::Auto);
+    Grid::SetRow(detailScroll, 3);
+    detailRoot.Children().Append(detailScroll);
+    Grid::SetRow(detailRoot, 2);
+    Grid::SetRowSpan(detailRoot, 2);
+    detailRoot.Visibility(Visibility::Collapsed);
+    root.Children().Append(detailRoot);
+}
+void InitializeDetailNavigation()
+{
     StackPanel navigation;
     navigation.Orientation(Orientation::Horizontal);
     navigation.Margin({0, 0, 0, 8});
@@ -91,6 +106,9 @@ void InitializeDetails()
         });
     navigation.Children().Append(retry);
     detailRoot.Children().Append(navigation);
+}
+void InitializeDetailBanner()
+{
     Grid banner;
     banner.Height(128);
     banner.Background(MakeBrush(0x102f3c));
@@ -108,6 +126,9 @@ void InitializeDetails()
     banner.Children().Append(summary);
     Grid::SetRow(banner, 1);
     detailRoot.Children().Append(banner);
+}
+void InitializeDetailTabs()
+{
     detailTabs.Orientation(Orientation::Horizontal);
     detailTabs.Margin({0, 8, 0, 8});
     std::array<hstring, 4> names{L"技能", L"出装", L"符文", L"海克斯"};
@@ -128,15 +149,6 @@ void InitializeDetails()
     }
     Grid::SetRow(detailTabs, 2);
     detailRoot.Children().Append(detailTabs);
-    detailScroll.Content(detailBody);
-    detailScroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
-    detailScroll.VerticalScrollBarVisibility(ScrollBarVisibility::Auto);
-    Grid::SetRow(detailScroll, 3);
-    detailRoot.Children().Append(detailScroll);
-    Grid::SetRow(detailRoot, 2);
-    Grid::SetRowSpan(detailRoot, 2);
-    detailRoot.Visibility(Visibility::Collapsed);
-    root.Children().Append(detailRoot);
 }
 void RefreshDetailHeader()
 {
@@ -249,7 +261,10 @@ fire_and_forget WriteDetailRequest()
         }
         catch (hresult_error const &)
         {
-            detailSource.Text(L"无法请求英雄详情，请重试。");
+            if (!stopped)
+            {
+                detailSource.Text(L"无法请求英雄详情，请重试。");
+            }
         }
     }
     requestBusy = false;
@@ -279,6 +294,7 @@ fire_and_forget DecodeDetailImage(Image target, hstring data, uint64_t render, i
     }
     catch (...)
     {
+        // An invalid or missing icon leaves its text in place and must not stop other detail rows.
     }
     --pendingDetailImages;
 }
@@ -335,7 +351,34 @@ void RenderDetails()
     detailScroll.ChangeView(nullptr, 0.0, nullptr);
     std::array<hstring, 4> keys{L"skills", L"builds", L"runes", L"augments"};
     for (int i = 0; i < 4; ++i)
+    {
         tabButtons[i].Background(MakeBrush(keys[i] == detailTab ? 0x008b98 : 0x143542));
+    }
+    RenderRarityChoices();
+    bool found = false;
+    int rarityIndex = 0;
+    for (auto const &entry : detailData.GetNamedArray(L"sections", JsonArray()))
+    {
+        auto section = entry.GetObject();
+        if (section.GetNamedString(L"tab", L"") != detailTab)
+        {
+            continue;
+        }
+        if (detailTab == L"augments" && rarityIndex++ != detailRarity)
+        {
+            continue;
+        }
+        found = true;
+        RenderDetailSection(section);
+    }
+    if (!found)
+    {
+        RenderMissingSection();
+    }
+    DecodeDetailImage(detailArtwork, detailData.GetNamedString(L"art", L""), detailRender, 560);
+}
+void RenderRarityChoices()
+{
     if (detailTab == L"augments")
     {
         StackPanel rarities;
@@ -357,197 +400,220 @@ void RenderDetails()
         }
         detailBody.Children().Append(rarities);
     }
-    bool found = false;
-    int rarityIndex = 0;
-    for (auto const &entry : detailData.GetNamedArray(L"sections", JsonArray()))
+}
+void RenderSectionHeading(JsonObject const &section)
+{
+    auto title = MakeText(section.GetNamedString(L"title", L""), 15, 0xe0c688);
+    title.Margin({0, 6, 0, 6});
+    detailBody.Children().Append(title);
+    auto note = section.GetNamedString(L"note", L"");
+    if (!note.empty())
     {
-        auto section = entry.GetObject();
-        if (section.GetNamedString(L"tab", L"") != detailTab)
-            continue;
-        if (detailTab == L"augments" && rarityIndex++ != detailRarity)
-            continue;
-        found = true;
-        auto title = MakeText(section.GetNamedString(L"title", L""), 15, 0xe0c688);
-        title.Margin({0, 6, 0, 6});
-        detailBody.Children().Append(title);
-        auto note = section.GetNamedString(L"note", L"");
-        if (!note.empty())
-        {
-            auto text = MakeText(note, 12, 0x91acbb);
-            text.TextWrapping(TextWrapping::Wrap);
-            text.Margin({0, 0, 0, 8});
-            detailBody.Children().Append(text);
-        }
-        auto rows = section.GetNamedArray(L"rows", JsonArray());
-        if (rows.Size() == 0)
-        {
-            auto empty = MakeText(L"来源暂无这一项数据。", 13, 0x91acbb);
-            empty.Margin({10, 6, 0, 10});
-            detailBody.Children().Append(empty);
-        }
-        if ((detailTab == L"augments" || section.GetNamedString(L"layout", L"") == L"equipment") && rows.Size() > 0)
-        {
-            Grid tiles;
-            for (int i = 0; i < 3; ++i)
-                tiles.ColumnDefinitions().Append(ColumnDefinition());
-            for (uint32_t i = 0; i < (rows.Size() + 2) / 3; ++i)
-            {
-                RowDefinition r;
-                r.Height({1, GridUnitType::Auto});
-                tiles.RowDefinitions().Append(r);
-            }
-            for (uint32_t i = 0; i < rows.Size(); ++i)
-            {
-                auto row = rows.GetObjectAt(i);
-                auto icons = row.GetNamedArray(L"icons", JsonArray());
-                if (icons.Size() == 0)
-                    continue;
-                auto icon = icons.GetObjectAt(0);
-                StackPanel card;
-                card.Padding({8});
-                card.Margin({0, 0, 6, 6});
-                card.Background(MakeBrush(0x112f3c));
-                auto name = MakeText(icon.GetNamedString(L"name", L"推荐"), 13);
-                card.Children().Append(name);
-                StackPanel metrics;
-                metrics.Orientation(Orientation::Horizontal);
-                metrics.Margin({0, 6, 0, 0});
-                Image image;
-                image.Width(40);
-                image.Height(40);
-                image.Margin({0, 0, 6, 0});
-                DecodeDetailImage(image, icon.GetNamedString(L"image", L""), detailRender);
-                metrics.Children().Append(image);
-                StackPanel rates;
-                rates.Children().Append(MakeText(row.GetNamedString(L"winRateText", L"胜率 —"), 12, 0x65d6d6));
-                rates.Children().Append(MakeText(row.GetNamedString(L"pickRateText", L"选取率 —"), 11, 0xa4bcc7));
-                metrics.Children().Append(rates);
-                card.Children().Append(metrics);
-                auto text = MakeText(icon.GetNamedString(L"name", L"") + L"\n" +
-                                         icon.GetNamedString(L"description", L"暂无说明") + L"\n" +
-                                         row.GetNamedString(L"stats", L""),
-                                     13);
-                text.TextWrapping(TextWrapping::Wrap);
-                text.MaxWidth(380);
-                ToolTip tip;
-                tip.Content(text);
-                ToolTipService::SetToolTip(card, tip);
-                Grid::SetRow(card, i / 3);
-                Grid::SetColumn(card, i % 3);
-                tiles.Children().Append(card);
-            }
-            detailBody.Children().Append(tiles);
-            continue;
-        }
-        if (detailTab == L"skills" && rows.Size() > 0 &&
-            rows.GetObjectAt(0).GetNamedArray(L"icons", JsonArray()).Size() > 0 &&
-            rows.GetObjectAt(0).GetNamedArray(L"icons").GetObjectAt(0).GetNamedString(L"kind", L"") == L"skill")
-        {
-            StackPanel choices;
-            choices.Orientation(Orientation::Horizontal);
-            choices.Margin({0, 2, 0, 10});
-            auto description = MakeText(L"", 14, 0xc0d5df);
-            description.TextWrapping(TextWrapping::Wrap);
-            description.Margin({12, 12, 12, 12});
-            Border descriptionCard;
-            descriptionCard.Background(MakeBrush(0x112f3c));
-            descriptionCard.Child(description);
-            for (uint32_t i = 0; i < rows.Size() && i < 5; ++i)
-            {
-                auto row = rows.GetObjectAt(i);
-                auto icon = row.GetNamedArray(L"icons").GetObjectAt(0);
-                auto title = row.GetNamedString(L"title", L"");
-                auto text = title + L"\n\n" + row.GetNamedString(L"description", L"暂无说明");
-                StackPanel content;
-                Image image;
-                image.Width(44);
-                image.Height(44);
-                DecodeDetailImage(image, icon.GetNamedString(L"image", L""), detailRender);
-                content.Children().Append(image);
-                auto key = MakeText(icon.GetNamedString(L"key", L""), 13, 0xe0c688);
-                key.HorizontalAlignment(HorizontalAlignment::Center);
-                content.Children().Append(key);
-                auto button = DetailButton(L"");
-                button.Content(content);
-                button.MinWidth(72);
-                button.Margin({0, 0, 8, 0});
-                button.Click([description, text](auto &&, auto &&) { description.Text(text); });
-                auto tip = MakeText(text, 13);
-                tip.TextWrapping(TextWrapping::Wrap);
-                tip.MaxWidth(380);
-                ToolTip tooltip;
-                tooltip.Content(tip);
-                ToolTipService::SetToolTip(button, tooltip);
-                choices.Children().Append(button);
-                if (i == 0)
-                    description.Text(text);
-            }
-            detailBody.Children().Append(choices);
-            detailBody.Children().Append(descriptionCard);
-            continue;
-        }
-        for (auto const &value : rows)
-        {
-            auto row = value.GetObject();
-            StackPanel body;
-            body.Padding({12, 8, 12, 8});
-            body.Background(MakeBrush(0x112f3c));
-            body.Margin({0, 0, 6, 6});
-            auto icons = row.GetNamedArray(L"icons", JsonArray());
-            auto name = row.GetNamedString(L"title", L"");
-            if (name.empty() && icons.Size() > 0)
-                name = icons.GetObjectAt(0).GetNamedString(L"name", L"");
-            auto heading = MakeText(name, 14);
-            heading.TextWrapping(TextWrapping::Wrap);
-            body.Children().Append(heading);
-            if (icons.Size() > 0)
-                body.Children().Append(DetailIcons(icons));
-            auto stats = row.GetNamedString(L"stats", L"");
-            if (!stats.empty())
-            {
-                auto text = MakeText(stats, 12, 0x65d6d6);
-                text.TextWrapping(TextWrapping::Wrap);
-                body.Children().Append(text);
-            }
-            auto description = row.GetNamedString(L"description", L"");
-            if (!description.empty())
-            {
-                auto text = MakeText(description, 13, 0xb4cad4);
-                text.TextWrapping(TextWrapping::Wrap);
-                text.Margin({0, 5, 0, 2});
-                body.Children().Append(text);
-            }
-            auto later = row.GetNamedArray(L"later", JsonArray());
-            if (later.Size() > 0)
-            {
-                auto button = DetailButton(L"后续可选装备 ▾");
-                button.Margin({0, 6, 0, 0});
-                auto choices = DetailIcons(later);
-                choices.Visibility(Visibility::Collapsed);
-                button.Click(
-                    [choices](auto &&, auto &&)
-                    {
-                        choices.Visibility(choices.Visibility() == Visibility::Visible ? Visibility::Collapsed
-                                                                                       : Visibility::Visible);
-                    });
-                body.Children().Append(button);
-                body.Children().Append(choices);
-            }
-            detailBody.Children().Append(body);
-        }
-    }
-    if (!found)
-    {
-        auto text =
-            MakeText(detailData.GetNamedString(L"state", L"loading") == L"loading" ? L"正在读取这一页的数据…"
-                                                                                   : L"当前模式暂无这一项数据。",
-                     14,
-                     0x91acbb);
-        text.Margin({12, 20, 12, 20});
+        auto text = MakeText(note, 12, 0x91acbb);
         text.TextWrapping(TextWrapping::Wrap);
+        text.Margin({0, 0, 0, 8});
         detailBody.Children().Append(text);
     }
-    DecodeDetailImage(detailArtwork, detailData.GetNamedString(L"art", L""), detailRender, 560);
+}
+void RenderDetailSection(JsonObject const &section)
+{
+    RenderSectionHeading(section);
+    auto rows = section.GetNamedArray(L"rows", JsonArray());
+    if (rows.Size() == 0)
+    {
+        auto empty = MakeText(L"来源暂无这一项数据。", 13, 0x91acbb);
+        empty.Margin({10, 6, 0, 10});
+        detailBody.Children().Append(empty);
+        return;
+    }
+    if (detailTab == L"augments" || section.GetNamedString(L"layout", L"") == L"equipment")
+    {
+        RenderRecommendationTiles(rows);
+        return;
+    }
+    if (detailTab == L"skills" && rows.GetObjectAt(0).GetNamedArray(L"icons", JsonArray()).Size() > 0 &&
+        rows.GetObjectAt(0).GetNamedArray(L"icons").GetObjectAt(0).GetNamedString(L"kind", L"") == L"skill")
+    {
+        RenderSkillChoices(rows);
+        return;
+    }
+    for (auto const &value : rows)
+    {
+        detailBody.Children().Append(CreateDetailRow(value.GetObject()));
+    }
+}
+void RenderRecommendationTiles(JsonArray const &rows)
+{
+    Grid tiles;
+    for (int i = 0; i < 3; ++i)
+    {
+        tiles.ColumnDefinitions().Append(ColumnDefinition());
+    }
+    for (uint32_t i = 0; i < (rows.Size() + 2) / 3; ++i)
+    {
+        RowDefinition row;
+        row.Height({1, GridUnitType::Auto});
+        tiles.RowDefinitions().Append(row);
+    }
+    for (uint32_t i = 0; i < rows.Size(); ++i)
+    {
+        auto row = rows.GetObjectAt(i);
+        auto icons = row.GetNamedArray(L"icons", JsonArray());
+        if (icons.Size() == 0)
+        {
+            continue;
+        }
+        auto card = CreateRecommendationTile(row, icons);
+        Grid::SetRow(card, i / 3);
+        Grid::SetColumn(card, i % 3);
+        tiles.Children().Append(card);
+    }
+    detailBody.Children().Append(tiles);
+}
+StackPanel CreateRecommendationTile(JsonObject const &row, JsonArray const &icons)
+{
+    auto icon = icons.GetObjectAt(0);
+    StackPanel card;
+    card.Padding({8});
+    card.Margin({0, 0, 6, 6});
+    card.Background(MakeBrush(0x112f3c));
+    auto name = MakeText(icon.GetNamedString(L"name", L"推荐"), 13);
+    card.Children().Append(name);
+    StackPanel metrics;
+    metrics.Orientation(Orientation::Horizontal);
+    metrics.Margin({0, 6, 0, 0});
+    Image image;
+    image.Width(40);
+    image.Height(40);
+    image.Margin({0, 0, 6, 0});
+    DecodeDetailImage(image, icon.GetNamedString(L"image", L""), detailRender);
+    metrics.Children().Append(image);
+    StackPanel rates;
+    rates.Children().Append(MakeText(row.GetNamedString(L"winRateText", L"胜率 —"), 12, 0x65d6d6));
+    rates.Children().Append(MakeText(row.GetNamedString(L"pickRateText", L"选取率 —"), 11, 0xa4bcc7));
+    metrics.Children().Append(rates);
+    card.Children().Append(metrics);
+    auto text = MakeText(icon.GetNamedString(L"name", L"") + L"\n" + icon.GetNamedString(L"description", L"暂无说明") +
+                             L"\n" + row.GetNamedString(L"stats", L""),
+                         13);
+    text.TextWrapping(TextWrapping::Wrap);
+    text.MaxWidth(380);
+    ToolTip tip;
+    tip.Content(text);
+    ToolTipService::SetToolTip(card, tip);
+    return card;
+}
+void RenderSkillChoices(JsonArray const &rows)
+{
+    StackPanel choices;
+    choices.Orientation(Orientation::Horizontal);
+    choices.Margin({0, 2, 0, 10});
+    auto description = MakeText(L"", 14, 0xc0d5df);
+    description.TextWrapping(TextWrapping::Wrap);
+    description.Margin({12, 12, 12, 12});
+    Border descriptionCard;
+    descriptionCard.Background(MakeBrush(0x112f3c));
+    descriptionCard.Child(description);
+    for (uint32_t i = 0; i < rows.Size() && i < 5; ++i)
+    {
+        auto row = rows.GetObjectAt(i);
+        if (row.GetNamedArray(L"icons", JsonArray()).Size() == 0)
+        {
+            continue;
+        }
+        choices.Children().Append(CreateSkillChoice(row, description, i == 0));
+    }
+    detailBody.Children().Append(choices);
+    detailBody.Children().Append(descriptionCard);
+}
+Button CreateSkillChoice(JsonObject const &row, TextBlock const &description, bool initial)
+{
+    auto icon = row.GetNamedArray(L"icons").GetObjectAt(0);
+    auto title = row.GetNamedString(L"title", L"");
+    auto text = title + L"\n\n" + row.GetNamedString(L"description", L"暂无说明");
+    StackPanel content;
+    Image image;
+    image.Width(44);
+    image.Height(44);
+    DecodeDetailImage(image, icon.GetNamedString(L"image", L""), detailRender);
+    content.Children().Append(image);
+    auto key = MakeText(icon.GetNamedString(L"key", L""), 13, 0xe0c688);
+    key.HorizontalAlignment(HorizontalAlignment::Center);
+    content.Children().Append(key);
+    auto button = DetailButton(L"");
+    button.Content(content);
+    button.MinWidth(72);
+    button.Margin({0, 0, 8, 0});
+    button.Click([description, text](auto &&, auto &&) { description.Text(text); });
+    auto tip = MakeText(text, 13);
+    tip.TextWrapping(TextWrapping::Wrap);
+    tip.MaxWidth(380);
+    ToolTip tooltip;
+    tooltip.Content(tip);
+    ToolTipService::SetToolTip(button, tooltip);
+    if (initial)
+    {
+        description.Text(text);
+    }
+    return button;
+}
+StackPanel CreateDetailRow(JsonObject const &row)
+{
+    StackPanel body;
+    body.Padding({12, 8, 12, 8});
+    body.Background(MakeBrush(0x112f3c));
+    body.Margin({0, 0, 6, 6});
+    auto icons = row.GetNamedArray(L"icons", JsonArray());
+    auto name = row.GetNamedString(L"title", L"");
+    if (name.empty() && icons.Size() > 0)
+        name = icons.GetObjectAt(0).GetNamedString(L"name", L"");
+    auto heading = MakeText(name, 14);
+    heading.TextWrapping(TextWrapping::Wrap);
+    body.Children().Append(heading);
+    if (icons.Size() > 0)
+        body.Children().Append(DetailIcons(icons));
+    auto stats = row.GetNamedString(L"stats", L"");
+    if (!stats.empty())
+    {
+        auto text = MakeText(stats, 12, 0x65d6d6);
+        text.TextWrapping(TextWrapping::Wrap);
+        body.Children().Append(text);
+    }
+    auto description = row.GetNamedString(L"description", L"");
+    if (!description.empty())
+    {
+        auto text = MakeText(description, 13, 0xb4cad4);
+        text.TextWrapping(TextWrapping::Wrap);
+        text.Margin({0, 5, 0, 2});
+        body.Children().Append(text);
+    }
+    auto later = row.GetNamedArray(L"later", JsonArray());
+    if (later.Size() > 0)
+    {
+        auto button = DetailButton(L"后续可选装备 ▾");
+        button.Margin({0, 6, 0, 0});
+        auto choices = DetailIcons(later);
+        choices.Visibility(Visibility::Collapsed);
+        button.Click(
+            [choices](auto &&, auto &&)
+            {
+                choices.Visibility(choices.Visibility() == Visibility::Visible ? Visibility::Collapsed
+                                                                               : Visibility::Visible);
+            });
+        body.Children().Append(button);
+        body.Children().Append(choices);
+    }
+    return body;
+}
+void RenderMissingSection()
+{
+    auto text = MakeText(detailData.GetNamedString(L"state", L"loading") == L"loading" ? L"正在读取这一页的数据…"
+                                                                                       : L"当前模式暂无这一项数据。",
+                         14,
+                         0x91acbb);
+    text.Margin({12, 20, 12, 20});
+    text.TextWrapping(TextWrapping::Wrap);
+    detailBody.Children().Append(text);
 }
 fire_and_forget ReadDetails()
 {
@@ -593,6 +659,7 @@ fire_and_forget ReadDetails()
     }
     catch (...)
     {
+        // The main process may be replacing the reply atomically; retry the current selection on the next poll.
     }
     if (!stopped && request == detailRequest && Now() - detailRequestedAt > 50000 &&
         detailData.GetNamedString(L"state", L"loading") == L"loading")

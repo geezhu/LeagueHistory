@@ -104,20 +104,32 @@ void ResetChat()
     chatStatus.Text(L"发送到游戏聊天 · 需以管理员身份运行 League · 点击后按 Win＋G 返回游戏。");
     UpdateChatButtons();
 }
-void QueueChat(hstring const &target, hstring const &kind)
+bool CanQueueChat(hstring const &target, hstring const &kind) const
 {
-    if (!widget || fixturePreview || !supportsChat || chatPending || chatCleanup || voiceRunning || voiceCleanup ||
-        !enabled || !active || Now() - lastGood > 15000)
-        return;
+    if (stopped || !widget || fixturePreview || !supportsChat || chatPending || chatCleanup || voiceRunning ||
+        voiceCleanup || !enabled || !active || Now() - lastGood > 15000)
+        return false;
     if ((kind != L"tier" && kind != L"mastery" && kind != L"deathStreak" && kind != L"voice") ||
         (kind == L"mastery" && !supportsMasteryChat) || (kind == L"deathStreak" && !supportsDeathStreakChat))
-        return;
+        return false;
+    if (kind != L"voice" && target != L"own" && target != L"enemy" && target != L"single")
+    {
+        return false;
+    }
     if (kind == L"voice" && (!supportsVoiceChat || target != L"text" || chatText.empty()))
-        return;
+        return false;
     if (target == L"single" && (selectedCard < 0 || cards[selectedCard].hero <= 0))
-        return;
+        return false;
     if (kind != L"voice" && target != L"single" && !chatTeams)
+        return false;
+    return true;
+}
+void QueueChat(hstring const &target, hstring const &kind)
+{
+    if (!CanQueueChat(target, kind))
+    {
         return;
+    }
     if (kind != L"voice")
         chatText = L"";
     std::wstring id;
@@ -149,6 +161,12 @@ void SaveChatRequest()
     if (!widget || fixturePreview || !chatPending || stopped)
         return;
     chatDismissed = widget.GameBarDisplayMode() == XboxGameBarDisplayMode::PinnedOnly;
+    auto request = CreateChatRequest();
+    pendingChatWrite = request.Stringify();
+    WriteChatRequest();
+}
+JsonObject CreateChatRequest() const
+{
     JsonObject request;
     request.Insert(L"protocol", JsonValue::CreateNumberValue(1));
     request.Insert(L"id", JsonValue::CreateStringValue(chatId));
@@ -165,8 +183,7 @@ void SaveChatRequest()
     request.Insert(L"updatedAt", JsonValue::CreateNumberValue(double(chatCreated)));
     request.Insert(L"dismissed", JsonValue::CreateBooleanValue(chatDismissed));
     request.Insert(L"cancelled", JsonValue::CreateBooleanValue(chatCancelled));
-    pendingChatWrite = request.Stringify();
-    WriteChatRequest();
+    return request;
 }
 fire_and_forget WriteChatRequest()
 {
@@ -214,25 +231,11 @@ fire_and_forget ReadChatStatus()
             throw hresult_invalid_argument();
         auto text = co_await FileIO::ReadTextAsync(file);
         auto data = JsonObject::Parse(text);
-        if (!stopped && id == chatId && data.GetNamedNumber(L"protocol", 0) == 1 &&
-            data.GetNamedString(L"requestId", L"") == chatId && data.GetNamedString(L"session", L"") == chatSession)
-        {
-            chatStatus.Text(data.GetNamedString(L"message", L"正在处理发送…"));
-            if (data.GetNamedBoolean(L"complete", false))
-            {
-                chatPending = false;
-                if (chatKind == L"voice")
-                {
-                    if (data.GetNamedString(L"state", L"") == L"input-complete")
-                        voiceEditor.Text(L"");
-                    SetVoiceHint(L"");
-                    ForgetVoiceRequest();
-                }
-            }
-        }
+        ApplyChatStatus(data, id);
     }
     catch (...)
     {
+        // An atomic bridge update may temporarily remove the reply; keep polling until completion or timeout.
     }
     if (!stopped && chatPending && Now() - chatCreated > 32000)
     {
@@ -243,6 +246,25 @@ fire_and_forget ReadChatStatus()
     }
     chatReading = false;
     UpdateChatButtons();
+}
+void ApplyChatStatus(JsonObject const &data, hstring const &id)
+{
+    if (!stopped && id == chatId && data.GetNamedNumber(L"protocol", 0) == 1 &&
+        data.GetNamedString(L"requestId", L"") == chatId && data.GetNamedString(L"session", L"") == chatSession)
+    {
+        chatStatus.Text(data.GetNamedString(L"message", L"正在处理发送…"));
+        if (data.GetNamedBoolean(L"complete", false))
+        {
+            chatPending = false;
+            if (chatKind == L"voice")
+            {
+                if (data.GetNamedString(L"state", L"") == L"input-complete")
+                    voiceEditor.Text(L"");
+                SetVoiceHint(L"");
+                ForgetVoiceRequest();
+            }
+        }
+    }
 }
 fire_and_forget ForgetVoiceRequest()
 {
@@ -270,6 +292,7 @@ fire_and_forget ForgetVoiceRequest()
     }
     catch (...)
     {
+        // Cleanup is idempotent: the main process may have consumed and removed the request already.
     }
     chatText = L"";
     chatCleanup = false;
