@@ -45,9 +45,12 @@ public sealed class DesktopVoiceSession : IDesktopVoiceSession
                 || r.Culture.Name.Equals("zh-Hans-CN", StringComparison.OrdinalIgnoreCase)
             );
         if (info == null)
+        {
             throw new InvalidOperationException(
                 "当前没有可用的中文离线语音引擎，请检查 Windows 中文语音组件；也可以直接输入文字。"
             );
+        }
+
         var engine = new SpeechRecognitionEngine(info);
         try
         {
@@ -68,14 +71,20 @@ public sealed class DesktopVoiceSession : IDesktopVoiceSession
     public Task<VoiceRecognitionOutcome> RunAsync(CancellationToken token)
     {
         if (Interlocked.Exchange(ref _started, 1) != 0)
+        {
             throw new InvalidOperationException("录音会话已经使用。");
+        }
+
         return Task.Run(
             async () =>
             {
                 token.ThrowIfCancellationRequested();
                 using var engine = CreateChineseEngine();
                 if (token.IsCancellationRequested || Volatile.Read(ref _stop) != 0)
+                {
                     return new VoiceRecognitionOutcome(true);
+                }
+
                 var completed = new TaskCompletionSource<VoiceRecognitionOutcome>(
                     TaskCreationOptions.RunContinuationsAsynchronously
                 );
@@ -85,9 +94,13 @@ public sealed class DesktopVoiceSession : IDesktopVoiceSession
                 void Finished(object? sender, RecognizeCompletedEventArgs args)
                 {
                     if (args.Error != null)
+                    {
                         completed.TrySetException(args.Error);
+                    }
                     else
+                    {
                         completed.TrySetResult(new(args.Cancelled));
+                    }
                 }
                 engine.SpeechRecognized += Recognized;
                 engine.SpeechHypothesized += Hypothesis;
@@ -96,7 +109,10 @@ public sealed class DesktopVoiceSession : IDesktopVoiceSession
                 {
                     _input(engine);
                     if (token.IsCancellationRequested || Volatile.Read(ref _stop) != 0)
+                    {
                         return new VoiceRecognitionOutcome(true);
+                    }
+
                     engine.RecognizeAsync(RecognizeMode.Multiple);
                     Emit(new("", false));
                     var watch = Stopwatch.StartNew();
@@ -140,7 +156,9 @@ public sealed class DesktopVoiceSession : IDesktopVoiceSession
                 void Emit(VoiceRecognitionUpdate value)
                 {
                     if (!token.IsCancellationRequested && Volatile.Read(ref _stop) != 2)
+                    {
                         Update?.Invoke(value);
+                    }
                 }
             },
             token

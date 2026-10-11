@@ -25,7 +25,9 @@ public static class VoiceMicrophoneDevices
         foreach (var device in enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
         {
             using (device)
+            {
                 result.Add(new(device.ID, device.FriendlyName));
+            }
         }
         return result;
     }
@@ -39,7 +41,10 @@ public static class VoiceMicrophoneDevices
                 ? enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console)
                 : enumerator.GetDevice(selected);
             if (device.State == DeviceState.Active && device.DataFlow == DataFlow.Capture)
+            {
                 return device;
+            }
+
             device.Dispose();
         }
         catch (COMException) { }

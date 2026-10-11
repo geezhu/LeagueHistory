@@ -41,11 +41,13 @@ public sealed class ChatSendDiagnostics
             }
         }
         foreach (var subscriber in Changed?.GetInvocationList() ?? [])
+        {
             try
             {
                 ((Action)subscriber)();
             }
             catch { }
+        }
     }
 
     public async Task FlushAsync()
@@ -54,11 +56,18 @@ public sealed class ChatSendDiagnostics
         {
             Task writer;
             lock (_gate)
+            {
                 writer = _writer;
+            }
+
             await writer;
             lock (_gate)
+            {
                 if (!_writing)
+                {
                     return;
+                }
+            }
         }
     }
 
@@ -79,7 +88,10 @@ public sealed class ChatSendDiagnostics
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
                 if (File.Exists(LogPath) && new FileInfo(LogPath).Length > 256 * 1024)
+                {
                     File.Move(LogPath, LogPath + ".previous", true);
+                }
+
                 File.AppendAllText(LogPath, line + Environment.NewLine, Encoding.UTF8);
                 LogError = null;
             }

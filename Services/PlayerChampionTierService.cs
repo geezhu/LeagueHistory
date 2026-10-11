@@ -15,9 +15,15 @@ public sealed record PlayerChampionTier(string Tier, string Rate, string Note, i
     public static int NormalizeQueue(int queue, string mode)
     {
         if (queue == 3270 || mode.Equals("KIWI", StringComparison.OrdinalIgnoreCase))
+        {
             return 2400;
+        }
+
         if (queue == 2400 || OpggQuery.ModeForQueue(queue) != null)
+        {
             return queue;
+        }
+
         return mode.ToUpperInvariant() switch
         {
             "ARAM" => 450,
@@ -44,9 +50,15 @@ public sealed record PlayerChampionTier(string Tier, string Rate, string Note, i
         };
         bool reference = ranked && position == "none";
         if (reference)
+        {
             position = OpggQuery.PositionForChampion(rows, hero, null) ?? "none";
+        }
+
         if (!ranked)
+        {
             position = "none";
+        }
+
         var row = rows.FirstOrDefault(c =>
             c.ChampionId == hero && (!ranked || c.Position.Equals(position, StringComparison.OrdinalIgnoreCase))
         );
@@ -70,13 +82,22 @@ public sealed record PlayerChampionTier(string Tier, string Rate, string Note, i
         };
         string rate = row?.WinRate is double win ? $"胜 {win:P1}" : "暂无数据";
         if (ranked)
+        {
             rate += " · " + (reference ? "参考" : "") + lane;
+        }
+
         string note =
             $"OP.GG · {title} · 全球 / 全段位 · {version}\n选用率 {(row?.PickRate is double pick ? pick.ToString("P1") : "—")}";
         if (ranked)
+        {
             note += $"\n{(reference ? "参考分路" : "玩家分路")}：{lane}";
+        }
+
         if (reference)
+        {
             note += "\n未读取到玩家分路，优先使用该英雄选用率最高的可用分路；不代表玩家实际位置。";
+        }
+
         return new(row?.Tier is int tier ? "T" + tier : "—", rate, note, queue, position)
         {
             ReferencePosition = reference,
@@ -166,16 +187,21 @@ internal sealed class PlayerChampionTierService : IDisposable
         }
         string? key = OpggQuery.ModeForQueue(queue);
         if (key == null)
+        {
             return new("—", "暂无梯队", "当前模式暂无对应统计。", queue, "none");
+        }
         // The ranking endpoint returns all positions together; one request serves every player.
         if (
             !_tiers.TryGetValue(key, out var saved)
             || DateTime.UtcNow - saved.Time > TimeSpan.FromMinutes(saved.Load.IsFaulted ? 0.5 : 15)
         )
+        {
             _tiers[key] = saved = (
                 DateTime.UtcNow,
                 _opgg.GetTiersAsync(new("global", key, "all", key == "ranked" ? "mid" : "none", 0), false, _life.Token)
             );
+        }
+
         var data = await saved.Load;
         var players = (context["gameData"]?["teamOne"] as JArray ?? new JArray())
             .Concat(context["gameData"]?["teamTwo"] as JArray ?? new JArray())

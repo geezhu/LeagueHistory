@@ -50,7 +50,10 @@ public sealed class GameBarVoiceRecognition : IDisposable
     )
     {
         if (_disposed || directory.Length == 0 || !await _poll.WaitAsync(0, token).ConfigureAwait(false))
+        {
             return;
+        }
+
         try
         {
             long now = time ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -73,7 +76,10 @@ public sealed class GameBarVoiceRecognition : IDisposable
                 return;
             }
             if (!enabled)
+            {
                 return;
+            }
+
             var request = await ReadAsync(now).ConfigureAwait(false);
             var recording = _recording;
             if (request == null)
@@ -91,7 +97,10 @@ public sealed class GameBarVoiceRecognition : IDisposable
                 await DeleteAsync("voice-status.json").ConfigureAwait(false);
                 // Wait for the previous microphone to be released before accepting a new start.
                 if (!recording.Completion.IsCompleted)
+                {
                     return;
+                }
+
                 recording = null;
             }
             if (recording == null)
@@ -102,7 +111,10 @@ public sealed class GameBarVoiceRecognition : IDisposable
                     || _seen.Count >= 256
                     || !_seen.Add(request.Id)
                 )
+                {
                     return;
+                }
+
                 var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
                 cancellation.CancelAfter(TimeSpan.FromSeconds(55));
                 recording = new(request, _factory(), cancellation);
@@ -149,9 +161,13 @@ public sealed class GameBarVoiceRecognition : IDisposable
             }
             // Acknowledged text is removed from transport; the editable draft lives in the widget.
             if (status == null)
+            {
                 await DeleteAsync("voice-status.json").ConfigureAwait(false);
+            }
             else
+            {
                 await WriteAsync(status).ConfigureAwait(false);
+            }
         }
         catch (Exception e)
             when (e
@@ -175,17 +191,25 @@ public sealed class GameBarVoiceRecognition : IDisposable
             lock (_gate)
             {
                 if (_disposed || recording.Cancelled || recording.Complete || _recording != recording)
+                {
                     return;
+                }
+
                 if (update.Final)
                 {
                     string words = Clean(update.Text, 180);
                     if (words.Length == 0)
+                    {
                         return;
+                    }
+
                     recording.Text = Clean(recording.Text + (recording.Text.Length > 0 ? " " : "") + words, 180);
                     recording.Hint = update.Confidence < .4f ? "请检查识别文字。" : "";
                     recording.State = "decoding";
                     if (recording.Text.Length >= 180)
+                    {
                         recording.Recognizer.Stop();
+                    }
                 }
                 else if (recording.State != "stopping" || update.Stage == "decoding")
                 {
@@ -201,9 +225,14 @@ public sealed class GameBarVoiceRecognition : IDisposable
         {
             var result = await recording.Recognizer.RunAsync(recording.Cancellation.Token).ConfigureAwait(false);
             if (result.Message.Length > 0)
+            {
                 failure = result.Message;
+            }
+
             if (result.Cancelled && !recording.Cancelled)
+            {
                 failure = "录音已取消，请重新录音或直接输入。";
+            }
         }
         catch (OperationCanceledException)
         {
@@ -250,7 +279,10 @@ public sealed class GameBarVoiceRecognition : IDisposable
         {
             string path = Path.Combine(_directory, "voice-request.json");
             if (!File.Exists(path) || new FileInfo(path).Length > 4096)
+            {
                 return null;
+            }
+
             return OverlayVoiceRequest.Parse(
                 JObject.Parse(await File.ReadAllTextAsync(path).ConfigureAwait(false)),
                 _session,
@@ -284,7 +316,10 @@ public sealed class GameBarVoiceRecognition : IDisposable
                 )
                 .ConfigureAwait(false);
             if (_disposed || _recording?.Cancelled == true)
+            {
                 return;
+            }
+
             File.Move(temporary, Path.Combine(_directory, "voice-status.json"), true);
         }
         finally
@@ -312,7 +347,10 @@ public sealed class GameBarVoiceRecognition : IDisposable
         lock (_gate)
         {
             if (_recording == null || _recording.Cancelled)
+            {
                 return;
+            }
+
             _recording.Cancelled = true;
             _recording.Text = "";
             _recording.Hint = "";
@@ -328,16 +366,25 @@ public sealed class GameBarVoiceRecognition : IDisposable
     {
         string clean = new(text.Select(c => char.IsControl(c) || c is '\u2028' or '\u2029' ? ' ' : c).ToArray());
         if (clean.Length > limit)
+        {
             clean = clean[..limit];
+        }
+
         if (clean.Length > 0 && char.IsHighSurrogate(clean[^1]))
+        {
             clean = clean[..^1];
+        }
+
         return clean;
     }
 
     public void Dispose()
     {
         if (_disposed)
+        {
             return;
+        }
+
         _disposed = true;
         Cancel();
         if (_directory.Length > 0)

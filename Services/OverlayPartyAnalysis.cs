@@ -16,7 +16,10 @@ public static class OverlayPartyAnalysis
     {
         var result = new Dictionary<string, OverlayPartyMarker>();
         if (roster == null)
+        {
             return result;
+        }
+
         var infos = cached.Where(c => c?.Player != null).ToArray();
         static string Identity(LoadingPlayer p) =>
             LoadingRosterIdentityService.HasPuuid(p.Puuid) ? "p:" + p.Puuid
@@ -30,7 +33,10 @@ public static class OverlayPartyAnalysis
             {
                 string identity = Identity(p);
                 if (p.IdentityHidden || identity.Length == 0 || identities[identity] != 1)
+                {
                     continue;
+                }
+
                 var matches = infos
                     .Where(c =>
                         LoadingRosterIdentityService.HasPuuid(p.Puuid)
@@ -40,7 +46,9 @@ public static class OverlayPartyAnalysis
                     .Take(2)
                     .ToArray();
                 if (matches.Length != 1)
+                {
                     continue;
+                }
                 // A PUUID entry and a summoner-ID-only entry must not count the same account twice.
                 if (
                     roster.Players.Count(q =>
@@ -52,7 +60,10 @@ public static class OverlayPartyAnalysis
                         )
                     ) != 1
                 )
+                {
                     continue;
+                }
+
                 entries.Add(
                     (
                         p,
@@ -63,18 +74,29 @@ public static class OverlayPartyAnalysis
             int[] parents = Enumerable.Range(0, entries.Count).ToArray();
             int Root(int i) => parents[i] == i ? i : parents[i] = Root(parents[i]);
             for (int i = 0; i < entries.Count; i++)
-            for (int j = i + 1; j < entries.Count; j++)
-                if (
-                    entries[i].Matches.Intersect(entries[j].Matches).Take(PartyDetector.DefaultMatchThreshold).Count()
-                    >= PartyDetector.DefaultMatchThreshold
-                )
-                    parents[Root(j)] = Root(i);
+            {
+                for (int j = i + 1; j < entries.Count; j++)
+                {
+                    if (
+                        entries[i]
+                            .Matches.Intersect(entries[j].Matches)
+                            .Take(PartyDetector.DefaultMatchThreshold)
+                            .Count() >= PartyDetector.DefaultMatchThreshold
+                    )
+                    {
+                        parents[Root(j)] = Root(i);
+                    }
+                }
+            }
+
             int color = team.Key == 100 ? 0 : 2;
             foreach (var group in Enumerable.Range(0, entries.Count).GroupBy(Root).Where(g => g.Count() >= 2))
             {
                 var marker = new OverlayPartyMarker(group.Count(), Colors[color++]);
                 foreach (int index in group)
+                {
                     result[entries[index].Player.Key] = marker;
+                }
             }
         }
         return result;

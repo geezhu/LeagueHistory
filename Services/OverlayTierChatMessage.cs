@@ -11,7 +11,10 @@ public static class OverlayTierChatMessage
         {
             int[] teams = self?.Team == 200 ? [200, 100] : [100, 200];
             if (request.Slot is < 0 or >= 10)
+            {
                 return [];
+            }
+
             var player = roster
                 .Players.Where(p => p.Team == teams[request.Slot / 5])
                 .Take(5)
@@ -19,7 +22,10 @@ public static class OverlayTierChatMessage
             return player?.ChampionId == request.ChampionId ? [player] : [];
         }
         if (self == null || request.Target is not ("own" or "enemy"))
+        {
             return [];
+        }
+
         return roster
             .Players.Where(p =>
                 p.ChampionId > 0 && (request.Target == "own" ? p.Team == self.Team : p.Team != self.Team)
@@ -37,9 +43,15 @@ public static class OverlayTierChatMessage
     {
         var players = Select(roster, request);
         if (players.Length == 0)
+        {
             throw new InvalidOperationException("未发送：无法确定所选阵营或英雄，请等待名单更新。");
+        }
+
         if (!players.Any(p => ranks.GetValueOrDefault(p.Key)?.WinRateValue != null))
+        {
             throw new InvalidOperationException("未发送：英雄统计尚未就绪或当前模式暂无统计，请稍后重试。");
+        }
+
         bool mayhem = PlayerChampionTier.NormalizeQueue(roster.Queue, roster.Mode) == 2400;
         var messages = new List<string>();
         foreach (var versionGroup in players.GroupBy(p => ranks.GetValueOrDefault(p.Key)?.Version ?? ""))
@@ -49,6 +61,7 @@ public static class OverlayTierChatMessage
                 var rank = ranks.GetValueOrDefault(p.Key);
                 string name = champion(p.ChampionId);
                 if (rank?.Position is string pos && pos != "none")
+                {
                     name +=
                         "（"
                         + (rank.ReferencePosition ? "参考" : "")
@@ -64,6 +77,8 @@ public static class OverlayTierChatMessage
                             }
                         )
                         + "）";
+                }
+
                 return new ChampionTierChatEntry(
                     name,
                     rank?.Tier is string tier && tier != "—" ? tier : "暂无梯队",

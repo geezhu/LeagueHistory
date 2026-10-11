@@ -52,7 +52,10 @@ public sealed class VoiceModelStore
             try
             {
                 if (HasFiles(DirectoryPath))
+                {
                     return DirectoryPath;
+                }
+
                 string bundled = Path.Combine(AppContext.BaseDirectory, "VoiceModels", "SenseVoice");
                 return HasFiles(bundled) ? bundled : null;
             }
@@ -77,12 +80,22 @@ public sealed class VoiceModelStore
             var info = new FileInfo(path);
             string signature = info.Length + ":" + info.LastWriteTimeUtc.Ticks;
             lock (_checked)
+            {
                 if (_checked.GetValueOrDefault(path) == signature)
+                {
                     continue;
+                }
+            }
+
             if (!await MatchesAsync(path, file, token).ConfigureAwait(false))
+            {
                 throw new VoiceRecognitionException("语音模型校验失败，请在设置 → 消息发送重新下载模型。");
+            }
+
             lock (_checked)
+            {
                 _checked[path] = signature;
+            }
         }
         return directory;
     }
@@ -134,14 +147,20 @@ public sealed class VoiceModelStore
                     {
                         bytes += count;
                         if (bytes > file.Size)
+                        {
                             throw new IOException("语音模型下载内容大小不正确。");
+                        }
+
                         await output.WriteAsync(buffer.AsMemory(0, count), timeout.Token).ConfigureAwait(false);
                         received += count;
                         Report();
                     }
                 }
                 if (!await MatchesAsync(part, file, timeout.Token).ConfigureAwait(false))
+                {
                     throw new IOException("语音模型下载校验失败，请重试。");
+                }
+
                 File.Move(part, destination, true);
             }
             // Keep the upstream model license reference with the local weights.
@@ -167,11 +186,14 @@ public sealed class VoiceModelStore
         finally
         {
             foreach (string path in temporary)
+            {
                 try
                 {
                     File.Delete(path);
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            }
+
             _download.Release();
         }
     }
@@ -179,7 +201,10 @@ public sealed class VoiceModelStore
     private static async Task<bool> MatchesAsync(string path, VoiceModelFile file, CancellationToken token)
     {
         if (!File.Exists(path) || new FileInfo(path).Length != file.Size)
+        {
             return false;
+        }
+
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 128 * 1024, true);
         return Convert
             .ToHexString(await SHA256.HashDataAsync(stream, token).ConfigureAwait(false))

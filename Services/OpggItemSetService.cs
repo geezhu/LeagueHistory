@@ -33,12 +33,18 @@ public static class OpggItemSetService
     public static OpggBuild FromAramMeta(AramMetaPage page, int hero)
     {
         if (page.Detail == null)
+        {
             throw new InvalidDataException("出装详情尚未加载。");
+        }
+
         var data = new JObject();
         foreach (
             var (source, target) in new[] { ("items", "core_items"), ("singleItems", "last_items"), ("boots", "boots") }
         )
+        {
             data[target] = new JArray(AramMetaRecommendation.Read(page, hero, source).Select(r => r.ToOption()));
+        }
+
         return new OpggBuild(
             new("global", "mayhem", "all", "", hero),
             page.Index.Patch,
@@ -58,9 +64,15 @@ public static class OpggItemSetService
     )
     {
         if (source is not ("OP.GG" or "arammeta"))
+        {
             throw new ArgumentException("Unknown equipment source", nameof(source));
+        }
+
         if (Ids(core).Length == 0)
+        {
             throw new InvalidDataException("没有可用的核心装备。");
+        }
+
         string scope =
             $"League:{(source == "OP.GG" ? "OPGG" : "arammeta")}:{build.Query.ChampionId}:{build.Query.Mode}:{build.Query.Position}";
         string uid = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(scope)).Take(16).ToArray()).ToString();
@@ -71,7 +83,9 @@ public static class OpggItemSetService
                 ids.GroupBy(id => id).Select(g => new JObject { ["id"] = g.Key.ToString(), ["count"] = g.Count() })
             );
             if (items.Count > 0)
+            {
                 blocks.Add(new JObject { ["type"] = title, ["items"] = items });
+            }
         }
         Block("出门装", Ids(starter));
         Block("鞋子", Ids(boots));
@@ -130,11 +144,17 @@ public static class OpggItemSetService
             var summoner = JObject.Parse(await client.GetStringAsync("/lol-summoner/v1/current-summoner", token));
             long id = (long?)summoner["summonerId"] ?? 0;
             if (id <= 0)
+            {
                 throw new InvalidOperationException("无法读取当前账号。");
+            }
+
             string path = $"/lol-item-sets/v1/item-sets/{id}/sets";
             var payload = JObject.Parse(await client.GetStringAsync(path, token));
             if (payload["itemSets"] is not JArray sets)
+            {
                 throw new InvalidDataException("物品套装数据不完整，未进行覆盖。");
+            }
+
             var existing = sets.OfType<JObject>().FirstOrDefault(s => (string?)s["uid"] == (string?)itemSet["uid"]);
             string existingTitle = (string?)existing?["title"] ?? "";
             bool arammeta = ((string?)itemSet["title"] ?? "").StartsWith("[arammeta] ", StringComparison.Ordinal);
@@ -143,11 +163,19 @@ public static class OpggItemSetService
                 : existingTitle.StartsWith("[League] OP.GG ", StringComparison.Ordinal)
                     || existingTitle.StartsWith("[OP.GG] ", StringComparison.Ordinal);
             if (existing != null && !managed)
+            {
                 throw new InvalidOperationException("同名标识属于其他套装，未进行覆盖。");
+            }
+
             if (existing != null)
+            {
                 existing.Replace(itemSet.DeepClone());
+            }
             else
+            {
                 sets.Add(itemSet.DeepClone());
+            }
+
             using var body = new StringContent(payload.ToString(), Encoding.UTF8, "application/json");
             using var response = await client.PutAsync(path, body, token);
             response.EnsureSuccessStatusCode();
@@ -163,9 +191,14 @@ public static class OpggItemSetService
                     && JToken.DeepEquals(result["associatedChampions"], itemSet["associatedChampions"])
                     && JToken.DeepEquals(result["associatedMaps"], itemSet["associatedMaps"])
                 )
+                {
                     return;
+                }
+
                 if (attempt < 2)
+                {
                     await Task.Delay(150, token);
+                }
             }
             throw new InvalidOperationException("未确认物品套装保存成功，请检查客户端。");
         }

@@ -28,7 +28,10 @@ public static class ChampionTierChatMessage
         {
             string tier = Clean(champion.Tier);
             if (tier.Length == 0 || tier == "暂无梯队")
+            {
                 tier = "—";
+            }
+
             string item = $"{Clean(champion.Name)} {tier} {Rate(champion.WinRate)}/{Rate(champion.PickRate)}";
             if (line.Length > prefix.Length && line.Length + item.Length + 2 > 180)
             {
@@ -38,7 +41,10 @@ public static class ChampionTierChatMessage
             line += (line.Length > prefix.Length ? "、" : "") + item;
         }
         if (line.Length > prefix.Length)
+        {
             messages.Add(line);
+        }
+
         return messages;
     }
 }

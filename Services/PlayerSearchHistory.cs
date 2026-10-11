@@ -22,6 +22,7 @@ public sealed class PlayerSearchHistory
         try
         {
             if (File.Exists(_path))
+            {
                 _items.AddRange(
                     (JsonConvert.DeserializeObject<string[]>(File.ReadAllText(_path)) ?? Array.Empty<string>())
                         .Where(IsValid)
@@ -29,6 +30,7 @@ public sealed class PlayerSearchHistory
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .Take(Limit)
                 );
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -39,7 +41,10 @@ public sealed class PlayerSearchHistory
     private static bool IsValid(string? id)
     {
         if (string.IsNullOrWhiteSpace(id))
+        {
             return false;
+        }
+
         var parts = id.Trim().Split('#');
         return parts.Length == 2 && parts.All(p => !string.IsNullOrWhiteSpace(p));
     }
@@ -47,12 +52,18 @@ public sealed class PlayerSearchHistory
     public void Add(string id)
     {
         if (!IsValid(id))
+        {
             return;
+        }
+
         id = id.Trim();
         _items.RemoveAll(s => string.Equals(s, id, StringComparison.OrdinalIgnoreCase));
         _items.Insert(0, id);
         if (_items.Count > Limit)
+        {
             _items.RemoveRange(Limit, _items.Count - Limit);
+        }
+
         Save();
     }
 
@@ -86,7 +97,9 @@ public sealed class PlayerSearchHistory
             try
             {
                 if (File.Exists(temporary))
+                {
                     File.Delete(temporary);
+                }
             }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }

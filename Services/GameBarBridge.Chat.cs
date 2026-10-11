@@ -15,16 +15,25 @@ public sealed partial class GameBarBridge
         var scope = _detailScope;
         string directory = _testDirectory ?? _directory;
         if (_disposed || scope.Session.Length == 0 || directory.Length == 0)
+        {
             return null;
+        }
+
         try
         {
             string path = Path.Combine(directory, "chat-request.json");
             if (!File.Exists(path) || new FileInfo(path).Length > 4096)
+            {
                 return null;
+            }
+
             var value = JObject.Parse(await File.ReadAllTextAsync(path).ConfigureAwait(false));
             var current = _detailScope;
             if (current.Session != scope.Session || !current.Heroes.SequenceEqual(scope.Heroes))
+            {
                 return null;
+            }
+
             return OverlayChatRequest.Parse(
                 value,
                 current.Session,
@@ -49,7 +58,10 @@ public sealed partial class GameBarBridge
     public void PublishChatStatus(OverlayChatRequest request, string state, string message, bool complete)
     {
         if (_disposed || request.Session != _detailScope.Session)
+        {
             return;
+        }
+
         _chatPending.Writer.TryWrite(
             new JObject
             {
@@ -70,7 +82,10 @@ public sealed partial class GameBarBridge
         {
             string directory = _testDirectory ?? _directory;
             if (directory.Length == 0 || (string?)data["session"] != _detailScope.Session)
+            {
                 continue;
+            }
+
             string temporary = Path.Combine(directory, "chat-" + _instance + ".tmp");
             try
             {
@@ -89,7 +104,9 @@ public sealed partial class GameBarBridge
                 try
                 {
                     if (File.Exists(temporary))
+                    {
                         File.Delete(temporary);
+                    }
                 }
                 catch (IOException) { }
             }

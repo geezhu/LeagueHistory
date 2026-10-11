@@ -17,18 +17,30 @@ public sealed partial class GameBarBridge
     {
         var scope = _detailScope;
         if (_disposed || scope.Session.Length == 0)
+        {
             return null;
+        }
+
         string directory = _testDirectory ?? _directory;
         if (directory.Length == 0)
+        {
             return null;
+        }
+
         try
         {
             string path = Path.Combine(directory, "detail-request.json");
             if (!File.Exists(path) || new FileInfo(path).Length > 4096)
+            {
                 return null;
+            }
+
             var value = JObject.Parse(await File.ReadAllTextAsync(path).ConfigureAwait(false));
             if (scope != _detailScope)
+            {
                 return null;
+            }
+
             return OverlayDetailRequest.Parse(
                 value,
                 scope.Session,
@@ -60,7 +72,10 @@ public sealed partial class GameBarBridge
             || request.Slot >= scope.Heroes.Length
             || scope.Heroes[request.Slot] != request.ChampionId
         )
+        {
             return;
+        }
+
         var data = (JObject)content.DeepClone();
         data["protocol"] = 1;
         data["requestId"] = request.Id;
@@ -77,7 +92,10 @@ public sealed partial class GameBarBridge
         {
             string directory = _testDirectory ?? _directory;
             if (directory.Length == 0 || (string?)data["session"] != _detailScope.Session)
+            {
                 continue;
+            }
+
             string temporary = Path.Combine(directory, "detail-" + _instance + ".tmp");
             try
             {
@@ -96,7 +114,9 @@ public sealed partial class GameBarBridge
                 try
                 {
                     if (File.Exists(temporary))
+                    {
                         File.Delete(temporary);
+                    }
                 }
                 catch (IOException) { }
             }

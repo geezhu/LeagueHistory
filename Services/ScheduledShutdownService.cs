@@ -15,7 +15,9 @@ public sealed record ShutdownPlan(bool Enabled, string Time, int CountdownSecond
             !TimeOnly.TryParseExact(Time, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out _)
             || CountdownSeconds is < 0 or > 300
         )
+        {
             throw new ArgumentException("请选择有效的每日时间，关机倒计时范围为 0～300 秒。");
+        }
     }
 
     public DateTime NextOccurrence(DateTime now)
@@ -84,7 +86,10 @@ public sealed class ScheduledShutdownService
     {
         var task = _tasks.Read();
         if (task == null)
+        {
             return new(new(false, "23:00", 30), false, false, false, "设置时间后点击“创建计划”即可生效。", null);
+        }
+
         var xml = XDocument.Parse(task.Xml);
         bool managed = (string?)xml.Root?.Element(Ns + "RegistrationInfo")?.Element(Ns + "Description") == Marker;
         string time = DateTime.TryParse((string?)xml.Descendants(Ns + "StartBoundary").FirstOrDefault(), out var start)
@@ -108,16 +113,28 @@ public sealed class ScheduledShutdownService
             }
         }
         else if (managed && status != null)
+        {
             message += "\n最近状态：" + (string?)status["Message"];
+        }
+
         var cancel = managed ? ReadJson(Path.Combine(_directory, "cancel.json")) : null;
         var nextRun = new ShutdownPlan(task.Enabled, time, delay).NextOccurrence(_now());
         if (start > nextRun)
+        {
             nextRun = start;
+        }
+
         string next = nextRun.ToString("yyyy-MM-ddTHH:mm:ss");
         if ((string?)cancel?["Occurrence"] == next)
+        {
             message += "\n下一次计划已跳过（" + next.Replace('T', ' ') + "）；重新创建可恢复。";
+        }
+
         if ((string?)cancel?["Occurrence"] == next)
+        {
             nextRun = nextRun.AddDays(1);
+        }
+
         return new(new(task.Enabled, time, delay), true, managed, task.Running, message, occurrence)
         {
             NextRun = task.Enabled ? nextRun : null,
@@ -132,10 +149,16 @@ public sealed class ScheduledShutdownService
         plan.Validate();
         var existing = _tasks.Read();
         if (existing != null && !CanAdopt(existing.Xml))
+        {
             throw new InvalidOperationException("同名计划任务的内容无法识别，未覆盖；请先在任务计划程序中核对。");
+        }
+
         Directory.CreateDirectory(_directory);
         if (existing != null && !File.Exists(Path.Combine(_directory, "original-task.xml")))
+        {
             AtomicWrite(Path.Combine(_directory, "original-task.xml"), existing.Xml);
+        }
+
         string configPath = Path.Combine(_directory, "plan.json");
         string? previous = File.Exists(configPath) ? File.ReadAllText(configPath) : null;
         var config = new
@@ -151,7 +174,10 @@ public sealed class ScheduledShutdownService
         try
         {
             if (existing?.Running == true)
+            {
                 _tasks.Stop();
+            }
+
             using var resource =
                 typeof(ScheduledShutdownService).Assembly.GetManifestResourceStream("League.ScheduledShutdown.ps1")
                 ?? throw new InvalidOperationException("关机脚本资源缺失。");
@@ -187,7 +213,10 @@ public sealed class ScheduledShutdownService
                 throw new InvalidOperationException("保存未完成，计划已停用；请重试保存。", ex);
             }
             if (previous != null)
+            {
                 AtomicWrite(configPath, previous);
+            }
+
             throw;
         }
         return Read();
@@ -198,13 +227,21 @@ public sealed class ScheduledShutdownService
         {
             var existing = _tasks.Read();
             if (existing == null)
+            {
                 return Read();
+            }
+
             if (!CanAdopt(existing.Xml))
+            {
                 throw new InvalidOperationException("同名计划任务的内容无法识别，未删除。");
+            }
+
             Directory.CreateDirectory(_directory);
             string backup = Path.Combine(_directory, "original-task.xml");
             if (!File.Exists(backup))
+            {
                 AtomicWrite(backup, existing.Xml);
+            }
             // Disarm before stopping/removing the trigger. Keep the script and logs for diagnosis.
             AtomicWrite(
                 Path.Combine(_directory, "plan.json"),
@@ -212,7 +249,10 @@ public sealed class ScheduledShutdownService
             );
             _tasks.SetEnabled(false);
             if (existing.Running)
+            {
                 _tasks.Stop();
+            }
+
             _tasks.Delete();
             return Read();
         });
@@ -231,7 +271,10 @@ public sealed class ScheduledShutdownService
                     "League.ScheduledShutdown.ps1"
                 )!;
                 using (var reader = new StreamReader(resource))
+                {
                     File.WriteAllText(temporary, reader.ReadToEnd(), new UTF8Encoding(true));
+                }
+
                 var start = new System.Diagnostics.ProcessStartInfo(PowerShellPath())
                 {
                     UseShellExecute = false,
@@ -252,7 +295,10 @@ public sealed class ScheduledShutdownService
                         "-Probe",
                     }
                 )
+                {
                     start.ArgumentList.Add(arg);
+                }
+
                 using var process =
                     System.Diagnostics.Process.Start(start)
                     ?? throw new InvalidOperationException("无法启动状态检测。");
@@ -266,7 +312,10 @@ public sealed class ScheduledShutdownService
                 string text = output.GetAwaiter().GetResult();
                 _ = error.GetAwaiter().GetResult();
                 if (process.ExitCode != 0)
+                {
                     throw new InvalidOperationException("无法检测游戏状态，请查看权限或稍后重试。");
+                }
+
                 var state = Newtonsoft.Json.Linq.JObject.Parse(text);
                 return "检测结果：" + (string?)state["Reason"] + "。此操作仅检测，不会关机。";
             }
@@ -298,7 +347,10 @@ public sealed class ScheduledShutdownService
         try
         {
             if (!File.Exists(path) || new FileInfo(path).Length >= 16384)
+            {
                 return null;
+            }
+
             using var text = new StringReader(File.ReadAllText(path));
             using var reader = new JsonTextReader(text) { DateParseHandling = DateParseHandling.None };
             return Newtonsoft.Json.Linq.JObject.Load(reader);
@@ -320,7 +372,9 @@ public sealed class ScheduledShutdownService
         finally
         {
             if (File.Exists(temporary))
+            {
                 File.Delete(temporary);
+            }
         }
     }
 
@@ -336,7 +390,10 @@ public sealed class ScheduledShutdownService
     {
         var xml = XDocument.Parse(text);
         if ((string?)xml.Root?.Element(Ns + "RegistrationInfo")?.Element(Ns + "Description") == Marker)
+        {
             return true;
+        }
+
         var actions = xml.Descendants(Ns + "Exec").ToArray();
         if (
             actions.Length != 1
@@ -346,7 +403,10 @@ public sealed class ScheduledShutdownService
                 StringComparison.OrdinalIgnoreCase
             )
         )
+        {
             return false;
+        }
+
         var file = System.Text.RegularExpressions.Regex.Match(
             (string?)actions[0].Element(Ns + "Arguments") ?? "",
             "(?:^|\\s)-File\\s+(?:\"(?<path>[^\"]+)\"|(?<path>\\S+))(?:\\s|$)",
@@ -439,7 +499,10 @@ internal sealed class WindowsShutdownTaskStore : IShutdownTaskStore
         finally
         {
             if (folder != null)
+            {
                 Marshal.FinalReleaseComObject(folder);
+            }
+
             Marshal.FinalReleaseComObject(service);
         }
     }
@@ -456,7 +519,9 @@ internal sealed class WindowsShutdownTaskStore : IShutdownTaskStore
             finally
             {
                 if (task != null)
+                {
                     Marshal.FinalReleaseComObject(task);
+                }
             }
         });
 

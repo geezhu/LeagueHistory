@@ -43,7 +43,9 @@ public sealed class RoomPlayerLoader : IDisposable
         get
         {
             lock (_gate)
+            {
                 return _generation;
+            }
         }
     }
 
@@ -70,7 +72,10 @@ public sealed class RoomPlayerLoader : IDisposable
         {
             ++_generation;
             foreach (var entry in _entries.Values)
+            {
                 Retire(entry);
+            }
+
             _entries.Clear();
             _log.Report(_generation, "reset");
             return _generation;
@@ -85,7 +90,10 @@ public sealed class RoomPlayerLoader : IDisposable
         lock (_gate)
         {
             if (_disposed || generation != _generation)
+            {
                 return;
+            }
+
             var wanted = normalized.Select((p, i) => TeamKey(ally, Identity(p, i))).ToHashSet();
             foreach (var pair in _entries.Where(p => p.Value.State.Ally == ally && !wanted.Contains(p.Key)).ToArray())
             {
@@ -134,14 +142,19 @@ public sealed class RoomPlayerLoader : IDisposable
                 changed = true;
             }
             if (changed)
+            {
                 _log.Report(
                     generation,
                     "roster",
                     detail: $"team={(ally ? "ally" : "enemy")} input={players.Count} unique={normalized.Count}"
                 );
+            }
         }
         if (!changed)
+        {
             return;
+        }
+
         try
         {
             await RenderAsync(generation);
@@ -149,9 +162,15 @@ public sealed class RoomPlayerLoader : IDisposable
         finally
         {
             lock (_gate)
+            {
                 foreach (var entry in start)
+                {
                     if (IsCurrent(entry))
+                    {
                         entry.Work = Task.Run(() => LoadAsync(entry));
+                    }
+                }
+            }
         }
     }
 
@@ -166,7 +185,10 @@ public sealed class RoomPlayerLoader : IDisposable
                 || !_entries.TryGetValue(key, out var old)
                 || !old.State.CanRetry
             )
+            {
                 return;
+            }
+
             Retire(old);
             replacement = new Entry
             {
@@ -181,8 +203,12 @@ public sealed class RoomPlayerLoader : IDisposable
         finally
         {
             lock (_gate)
+            {
                 if (IsCurrent(replacement))
+                {
                     replacement.Work = Task.Run(() => LoadAsync(replacement));
+                }
+            }
         }
     }
 
@@ -214,7 +240,10 @@ public sealed class RoomPlayerLoader : IDisposable
                     lock (_gate)
                     {
                         if (!IsCurrent(entry))
+                        {
                             return;
+                        }
+
                         player = (JObject)entry.State.Player.DeepClone();
                     }
                     _log.Report(
@@ -226,18 +255,27 @@ public sealed class RoomPlayerLoader : IDisposable
                     // WaitAsync also protects UI delivery from resource loaders that do not accept cancellation.
                     var info = await _fetch(player, deadline.Token).WaitAsync(deadline.Token);
                     if (info?.Player == null || info.Player.GameName == "失败")
+                    {
                         throw new InvalidOperationException("Player data unavailable");
+                    }
+
                     string expectedPuuid = PublicPuuid(player);
                     if (
                         !string.IsNullOrEmpty(info.Player.Puuid)
                         && expectedPuuid.Length > 0
                         && info.Player.Puuid != expectedPuuid
                     )
+                    {
                         throw new InvalidDataException("Player identity mismatch");
+                    }
+
                     lock (_gate)
                     {
                         if (!IsCurrent(entry))
+                        {
                             return;
+                        }
+
                         entry.State = entry.State with
                         {
                             Info = info,
@@ -271,7 +309,10 @@ public sealed class RoomPlayerLoader : IDisposable
                     lock (_gate)
                     {
                         if (!IsCurrent(entry))
+                        {
                             return;
+                        }
+
                         entry.State = entry.State with
                         {
                             Status =
@@ -293,10 +334,14 @@ public sealed class RoomPlayerLoader : IDisposable
                 finally
                 {
                     if (acquired)
+                    {
                         _requests.Release();
+                    }
                 }
                 if (attempt < 2)
+                {
                     await Task.Delay(_retryDelay, token);
+                }
             }
         }
         catch (OperationCanceledException)
@@ -321,7 +366,10 @@ public sealed class RoomPlayerLoader : IDisposable
             lock (_gate)
             {
                 if (_disposed || generation != _generation)
+                {
                     return;
+                }
+
                 _render(
                     _entries.Values.Select(e => e.State).OrderByDescending(s => s.Ally).ThenBy(s => s.Column).ToArray()
                 );
@@ -344,14 +392,25 @@ public sealed class RoomPlayerLoader : IDisposable
                 || (id > 0 && ids.Contains(id))
                 || (puuid.Length == 0 && id == 0 && cell.HasValue && !cells.Add(cell.Value))
             )
+            {
                 continue;
+            }
+
             if (puuid.Length > 0)
+            {
                 puuids.Add(puuid);
+            }
+
             if (id > 0)
+            {
                 ids.Add(id);
+            }
+
             result.Add(player.DeepClone());
             if (result.Count == 5)
+            {
                 break;
+            }
         }
         return result;
     }
@@ -363,10 +422,15 @@ public sealed class RoomPlayerLoader : IDisposable
         {
             string puuid = PublicPuuid(player);
             if (puuid.Length == 0)
+            {
                 continue;
+            }
+
             var selected = selections.FirstOrDefault(s => PublicPuuid(s) == puuid);
             if (selected?.Value<int?>("championId") is > 0 and var champion)
+            {
                 player["championId"] = champion;
+            }
         }
         return result;
     }
@@ -388,14 +452,20 @@ public sealed class RoomPlayerLoader : IDisposable
             || rawOne.Count > 5
             || rawTwo.Count > 5
         )
+        {
             return (one, two);
+        }
+
         var selectedIds = selections.Select(PublicPuuid).ToArray();
         if (
             selectedIds.Any(string.IsNullOrEmpty)
             || selectedIds.Distinct(StringComparer.Ordinal).Count() != 10
             || selections.Any(p => p.Value<int?>("championId") is not > 0)
         )
+        {
             return (one, two);
+        }
+
         var oneIds = one.Select(PublicPuuid).ToArray();
         var twoIds = two.Select(PublicPuuid).ToArray();
         var knownIds = oneIds.Concat(twoIds).ToArray();
@@ -403,13 +473,19 @@ public sealed class RoomPlayerLoader : IDisposable
             knownIds.Any(p => !selectedIds.Contains(p, StringComparer.Ordinal))
             || knownIds.Distinct(StringComparer.Ordinal).Count() != knownIds.Length
         )
+        {
             return (one, two);
+        }
+
         JArray? incomplete =
             one.Count == 5 && two.Count < 5 ? two
             : two.Count == 5 && one.Count < 5 ? one
             : null;
         if (incomplete == null)
+        {
             return (one, two);
+        }
+
         foreach (
             var pick in selections
                 .OfType<JObject>()
@@ -471,7 +547,10 @@ public sealed class RoomPlayerLoader : IDisposable
         lock (_gate)
         {
             if (_disposed)
+            {
                 return;
+            }
+
             Reset();
             _disposed = true;
         }
