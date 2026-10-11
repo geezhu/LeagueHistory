@@ -7,7 +7,9 @@ internal static class GameBarBridgeChecks
     private static void Check(bool condition, string message)
     {
         if (!condition)
+        {
             throw new Exception(message);
+        }
     }
 
     public static void Run()
@@ -117,7 +119,10 @@ internal static class GameBarBridgeChecks
             Check(SpinWait.SpinUntil(() => File.Exists(file), 5000), "Game Bar snapshot is written asynchronously");
             var first = JObject.Parse(File.ReadAllText(file));
             for (int i = 0; i < 100; i++)
+            {
                 Publish();
+            }
+
             bridge.Dispose();
             bridge.Completion.GetAwaiter().GetResult();
             var latest = JObject.Parse(File.ReadAllText(file));
@@ -205,7 +210,9 @@ internal static class GameBarBridgeChecks
         finally
         {
             if (Directory.Exists(folder))
+            {
                 Directory.Delete(folder, true);
+            }
         }
     }
 }

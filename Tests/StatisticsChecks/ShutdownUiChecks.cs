@@ -6,7 +6,9 @@ internal static class ShutdownUiChecks
     private static void Check(bool value, string message)
     {
         if (!value)
+        {
             throw new Exception(message);
+        }
     }
 
     public static void Run()
@@ -87,7 +89,10 @@ internal static class ShutdownUiChecks
         public ShutdownTaskRecord? Read()
         {
             if (Error is { } error)
+            {
                 throw error;
+            }
+
             return null;
         }
 

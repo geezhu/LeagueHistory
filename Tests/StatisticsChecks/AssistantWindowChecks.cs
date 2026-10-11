@@ -6,7 +6,9 @@ internal static class AssistantWindowChecks
     private static void Check(bool value, string message)
     {
         if (!value)
+        {
             throw new Exception(message);
+        }
     }
 
     public static void Run()
@@ -42,7 +44,10 @@ internal static class AssistantWindowChecks
             other.Show();
             Raise(other.Handle);
             for (int i = 0; i < 5; i++)
+            {
                 Check(layer.Attach(client.Handle), "Repeated follow ticks remain attached");
+            }
+
             Check(
                 Above(other.Handle, assistant.Handle),
                 "Following the client must not raise the assistant above unrelated applications"
@@ -107,8 +112,13 @@ internal static class AssistantWindowChecks
     private static bool Above(IntPtr first, IntPtr second)
     {
         for (IntPtr window = GetWindow(first, 2); window != IntPtr.Zero; window = GetWindow(window, 2)) // GW_HWNDNEXT
+        {
             if (window == second)
+            {
                 return true;
+            }
+        }
+
         return false;
     }
 

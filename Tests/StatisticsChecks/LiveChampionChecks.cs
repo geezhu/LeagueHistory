@@ -9,7 +9,9 @@ internal static class LiveChampionChecks
     private static void Check(bool value, string note)
     {
         if (!value)
+        {
             throw new Exception(note);
+        }
     }
 
     private static readonly Champion[] Heroes =
@@ -87,7 +89,10 @@ internal static class LiveChampionChecks
                 "Character_Seraphine\nMorgana_Name",
             }
         )
+        {
             Check(LiveChampionIdentity.ReadAlias(raw) == "", "Malformed keys must not use substring guesses");
+        }
+
         Check(
             LiveChampionIdentity.Resolve(Sample("changed-key").Players.Single(), Heroes)?.Id == 147,
             "Exact localized resource names recover omitted or changed keys"
@@ -241,7 +246,9 @@ internal static class LiveChampionChecks
             bridge.Dispose();
             await bridge.Completion;
             if (Directory.Exists(folder))
+            {
                 Directory.Delete(folder, true);
+            }
         }
     }
 

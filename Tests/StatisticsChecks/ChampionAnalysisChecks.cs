@@ -10,7 +10,9 @@ internal static class ChampionAnalysisChecks
         void Check(bool condition, string message)
         {
             if (!condition)
+            {
                 throw new Exception(message);
+            }
         }
         JObject Load(string alias) =>
             JObject.Parse(
@@ -38,7 +40,10 @@ internal static class ChampionAnalysisChecks
             foreach (var value in report.Attributes.Concat(report.Spells.SelectMany(s => s.Parameters)))
             {
                 if (value.Path.StartsWith("derived:"))
+                {
                     continue;
+                }
+
                 JToken? token = original;
                 foreach (string part in value.Path.Split('/').Skip(1))
                 {
@@ -103,6 +108,8 @@ internal static class ChampionAnalysisChecks
             "Champion analysis checks passed: three captured champions, source paths, ranges, control duration, shield formulas, unknowns and recursion."
         );
         if (output != null)
+        {
             Console.WriteLine("Reports: " + Path.GetFullPath(output));
+        }
     }
 }

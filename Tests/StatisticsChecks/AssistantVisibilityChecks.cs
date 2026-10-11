@@ -8,7 +8,9 @@ internal static class AssistantVisibilityChecks
         void Check(bool result, string message)
         {
             if (!result)
+            {
                 throw new Exception(message);
+            }
         }
         Check(state.ShouldShow(true, false, true, true, false, 0), "Focused client shows assistant");
         Check(state.ShouldShow(true, false, false, false, false, 100), "Transient missing handle retains panel");

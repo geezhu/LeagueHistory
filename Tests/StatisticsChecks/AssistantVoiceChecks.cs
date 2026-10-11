@@ -11,7 +11,9 @@ internal static class AssistantVoiceChecks
     private static void Check(bool value, string message)
     {
         if (!value)
+        {
             throw new Exception(message);
+        }
     }
 
     public static void Run()
@@ -58,17 +60,26 @@ internal static class AssistantVoiceChecks
                 }
                 reads++;
                 if (path.EndsWith("gameflow-phase"))
+                {
                     return Json(new JValue(phase));
+                }
+
                 if (path.EndsWith("conversations"))
                 {
                     if (changeAfterRooms)
+                    {
                         phase = "InProgress";
+                    }
+
                     var rooms = new JArray(
                         new JObject { ["id"] = "private", ["type"] = "chat" },
                         new JObject { ["id"] = room, ["type"] = "championSelect" }
                     );
                     if (ambiguous)
+                    {
                         rooms.Add(new JObject { ["id"] = "old-room", ["type"] = "champSelect" });
+                    }
+
                     return Json(rooms);
                 }
                 throw new Exception("Unexpected voice chat endpoint");
@@ -335,7 +346,9 @@ internal static class AssistantVoiceChecks
         session.Update += update =>
         {
             if (update.Final)
+            {
                 recognized += update.Text;
+            }
         };
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
         var outcome = session.RunAsync(timeout.Token).GetAwaiter().GetResult();

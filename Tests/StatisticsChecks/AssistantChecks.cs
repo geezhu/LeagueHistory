@@ -11,24 +11,39 @@ internal static class AssistantChecks
         var screen = new Rectangle(0, 0, 1920, 1080);
         var right = Place(new Rectangle(100, 100, 1000, 700), screen, new Size(320, 630));
         if (right.Left != 1106 || !screen.Contains(right))
+        {
             throw new Exception("Assistant should fall back to the right when the left cannot fit");
+        }
+
         var left = Place(new Rectangle(500, 100, 800, 700), screen, new Size(320, 630));
         if (left.Left != 174 || !screen.Contains(left))
+        {
             throw new Exception("Assistant should prefer the left when both sides can fit");
+        }
+
         var secondary = new Rectangle(-1280, 0, 1280, 720);
         var center = type.GetMethod("EquipmentEditorBounds", BindingFlags.Static | BindingFlags.NonPublic)!;
         var centered = (Rectangle)
             center.Invoke(null, new object[] { new Rectangle(400, 100, 1000, 700), screen, new Size(660, 620) })!;
         if (centered.Location != new Point(570, 140))
+        {
             throw new Exception("Equipment editor must center on LOL, not the assistant");
+        }
+
         var fitted = (Rectangle)center.Invoke(null, new object[] { secondary, secondary, new Size(1500, 900) })!;
         if (!secondary.Contains(fitted))
+        {
             throw new Exception("Equipment editor must fit a small secondary monitor");
+        }
+
         var clamped = Place(new Rectangle(-1280, 0, 1280, 720), secondary, new Size(320, 900));
         if (clamped.Left != secondary.Left || !secondary.Contains(clamped))
+        {
             throw new Exception(
                 "Assistant must stay on the left inside a smaller secondary monitor when neither side can fit"
             );
+        }
+
         Console.WriteLine("PASS: assistant prefers left, falls back right, and stays inside monitor bounds.");
     }
 
@@ -44,14 +59,20 @@ internal static class AssistantChecks
         var best = ((Newtonsoft.Json.Linq.JObject?, Newtonsoft.Json.Linq.JObject?))
             selectSpells.Invoke(null, new object[] { spellOptions })!;
         if ((int?)best.Item1?["ids"]?[1] != 14 || (int?)best.Item2?["ids"]?[1] != 12)
+        {
             throw new Exception("Summoner spell usage and win-rate recommendations must be selected independently");
+        }
+
         var empty = ((Newtonsoft.Json.Linq.JObject?, Newtonsoft.Json.Linq.JObject?))
             selectSpells.Invoke(
                 null,
                 new object[] { Newtonsoft.Json.Linq.JArray.Parse("[{\"ids\":[4,12],\"play\":0,\"win\":0}]") }
             )!;
         if (empty.Item1 != null || empty.Item2 != null)
+        {
             throw new Exception("Missing spell rates must not be treated as zero-rate recommendations");
+        }
+
         var data = Newtonsoft.Json.Linq.JObject.Parse(
             "{\"passive\":{\"name\":\"Passive\",\"description\":\"First<br>Second\"},\"spells\":[{\"spellKey\":\"w\",\"name\":\"Shield\"},{\"spellKey\":\"q\",\"name\":\"Strike\"}]}"
         );
@@ -62,7 +83,10 @@ internal static class AssistantChecks
             || (string?)parsed[2]?["Key"] != "W"
             || ((string?)parsed[0]?["Description"])?.Contains("<br>") == true
         )
+        {
             throw new Exception("Skill descriptions must preserve passive and map ability keys while removing markup");
+        }
+
         using var owner = new League.FormMain();
         using var assistant = (Form)Activator.CreateInstance(type, new object[] { owner })!;
         var flags = BindingFlags.Instance | BindingFlags.NonPublic;
@@ -80,7 +104,10 @@ internal static class AssistantChecks
                             request.Content!.ReadAsStringAsync().GetAwaiter().GetResult()
                         );
                         if ((int?)payload["spell1Id"] != 14 || (int?)payload["spell2Id"] != 4)
+                        {
                             throw new Exception("Flash must retain its existing slot");
+                        }
+
                         if (accept)
                         {
                             first = 14;
@@ -117,7 +144,9 @@ internal static class AssistantChecks
             }
             catch (InvalidOperationException) { }
             if (success != accept)
+            {
                 throw new Exception("Spell configuration must verify the resulting client state");
+            }
         }
         Console.WriteLine("PASS: summoner spell application preserves slots and verifies actual changes.");
         var modeFilter = (ComboBox)type.GetField("_mode", flags)!.GetValue(assistant)!;
@@ -130,16 +159,28 @@ internal static class AssistantChecks
         tierFilter.SelectedIndex = 5;
         laneFilter.SelectedIndex = 1;
         if (Query().Region != "kr" || Query().Tier != "diamond_plus" || Query().Position != "top")
+        {
             throw new Exception("Assistant filters must feed the request");
+        }
+
         modeFilter.SelectedIndex = 2;
         if (Query().Mode != "aram" || Query().Tier != "all" || laneFilter.Enabled)
+        {
             throw new Exception("ARAM must use its own tier and disable lanes");
+        }
+
         modeFilter.SelectedIndex = 1;
         if (Query().Tier != "diamond_plus")
+        {
             throw new Exception("Mode-specific tier must survive switching");
+        }
+
         modeFilter.SelectedIndex = 3;
         if (regionFilter.Enabled || tierFilter.Enabled || laneFilter.Enabled)
+        {
             throw new Exception("Mayhem must disable unsupported filters");
+        }
+
         modeFilter.SelectedIndex = 0;
         regionFilter.SelectedIndex = 0;
         tierFilter.SelectedIndex = 0;
@@ -153,16 +194,25 @@ internal static class AssistantChecks
             {
                 string path = request.RequestUri!.AbsolutePath;
                 if (path.EndsWith("gameflow-phase"))
+                {
                     return new(System.Net.HttpStatusCode.OK) { Content = new StringContent("\"" + phase + "\"") };
+                }
+
                 if (path.EndsWith("conversations"))
+                {
                     return new(System.Net.HttpStatusCode.OK)
                     {
                         Content = new StringContent(
                             "[{\"id\":\"private\",\"type\":\"chat\"},{\"id\":\"room\",\"type\":\"championSelect\"}]"
                         ),
                     };
+                }
+
                 if (path != "/lol-chat/v1/conversations/room/messages" || request.Method != HttpMethod.Post)
+                {
                     throw new Exception("Notice must target champion select only");
+                }
+
                 notices++;
                 return new(reject ? System.Net.HttpStatusCode.Forbidden : System.Net.HttpStatusCode.OK);
             })
@@ -179,14 +229,23 @@ internal static class AssistantChecks
                 .GetAwaiter()
                 .GetResult();
         if (!Announce("configured") || !Announce("configured") || notices != 1)
+        {
             throw new Exception("Repeated rune notice must be deduplicated");
+        }
+
         phase = "InProgress";
         if (Announce("another") || notices != 1)
+        {
             throw new Exception("Notice must not send outside champion select");
+        }
+
         phase = "ChampSelect";
         reject = true;
         if (Announce("another"))
+        {
             throw new Exception("Chat rejection must be reported as unsent");
+        }
+
         Console.WriteLine("PASS: rune notices use champion-select chat, deduplicate, and report rejection.");
         var schemes = new[]
         {
@@ -198,10 +257,16 @@ internal static class AssistantChecks
         var popular = (string[])highlights.Invoke(null, new object[] { tagged[0], tagged })!;
         var winner = (string[])highlights.Invoke(null, new object[] { tagged[1], tagged })!;
         if (popular.Length != 1 || popular[0] != "使用率最高" || winner.Length != 1 || winner[0] != "胜率最高")
+        {
             throw new Exception("Rune highlights must independently compare wins and usage");
+        }
+
         var missing = schemes[0] with { WinRate = null, PickRate = null };
         if (((string[])highlights.Invoke(null, new object[] { missing, new[] { missing } })!).Length != 0)
+        {
             throw new Exception("Missing rates must not receive highest labels");
+        }
+
         var resources = League.FormMain.Globals.resLoading.Runes;
         var original = resources.Runes.ToArray();
         resources.Runes.Clear();
@@ -233,12 +298,17 @@ internal static class AssistantChecks
             var select = body.Controls[0].Controls.OfType<ComboBox>().Single();
             select.SelectedIndex = 1;
             if (!ReferenceEquals(type.GetField("_runes", flags)!.GetValue(assistant), schemes[1]))
+            {
                 throw new Exception("Switching rune schemes must change the applied payload");
+            }
+
             var labels = body.Controls[0].Controls.OfType<Label>().ToArray();
             if (
                 !select.Items[1]!.ToString()!.Contains("Second keystone") || labels.Any(l => l.Text.Contains("summary"))
             )
+            {
                 throw new Exception("Scheme selector must retain client rune names without expanded descriptions");
+            }
         }
         finally
         {
@@ -256,6 +326,7 @@ internal static class AssistantChecks
         var runeIcons = scroll.Controls[3].Controls.OfType<FlowLayoutPanel>().Single();
         runeIcons.Controls.Clear();
         for (int i = 0; i < 9; i++)
+        {
             runeIcons.Controls.Add(
                 new PictureBox
                 {
@@ -264,6 +335,8 @@ internal static class AssistantChecks
                     BackColor = Color.Teal,
                 }
             );
+        }
+
         Line("Core items / Q > W > E");
         var equipmentData = Newtonsoft.Json.Linq.JObject.Parse(
             "{\"core_items\":[{\"ids\":[99991,99992,99993],\"pick_rate\":0.6,\"play\":100,\"win\":52},{\"ids\":[99991,99992,99994],\"pick_rate\":0.3,\"play\":100,\"win\":55}],\"starter_items\":[{\"ids\":[99990,99989,99989]}],\"boots\":[{\"ids\":[99988]}],\"last_items\":[{\"ids\":[99991]},{\"ids\":[99994]},{\"ids\":[99995]}]}"
@@ -276,6 +349,7 @@ internal static class AssistantChecks
             Array.Empty<League.Models.OpggRunes>()
         );
         foreach (int id in Enumerable.Range(99800, 26))
+        {
             ((Newtonsoft.Json.Linq.JArray)equipmentData["last_items"]!).Add(
                 new Newtonsoft.Json.Linq.JObject
                 {
@@ -284,6 +358,8 @@ internal static class AssistantChecks
                     ["play"] = 100,
                 }
             );
+        }
+
         type.GetMethod("AddEquipmentChoices", flags)!
             .Invoke(assistant, new object[] { equipmentBuild, CancellationToken.None });
         Line("Summoner spells");
@@ -304,6 +380,7 @@ internal static class AssistantChecks
                 var icons = card.Controls.OfType<FlowLayoutPanel>().Single();
                 icons.Controls.Clear();
                 for (int i = 0; i < 2; i++)
+                {
                     icons.Controls.Add(
                         new PictureBox
                         {
@@ -312,13 +389,17 @@ internal static class AssistantChecks
                             BackColor = Color.Teal,
                         }
                     );
+                }
             }
         }
         ReplaceSpellIcons(scroll.Controls[7]);
         assistant.Show();
         Application.DoEvents();
         if (scroll.VerticalScroll.Visible || scroll.HorizontalScroll.Visible)
+        {
             throw new Exception("Normal assistant recommendations should fit a single page");
+        }
+
         using (var preview = new Bitmap(assistant.Width, assistant.Height))
         {
             assistant.DrawToBitmap(preview, new Rectangle(Point.Empty, preview.Size));
@@ -328,7 +409,10 @@ internal static class AssistantChecks
         modeFilter.SelectedIndex = 3;
         Application.DoEvents();
         if (regionFilter.Visible || tierFilter.Visible || laneFilter.Visible || modeFilter.Parent!.Height != 44)
+        {
             throw new Exception("Mayhem must hide irrelevant filters and remove their row");
+        }
+
         using (var mayhemPreview = new Bitmap(assistant.Width, assistant.Height))
         {
             assistant.DrawToBitmap(mayhemPreview, new Rectangle(Point.Empty, mayhemPreview.Size));
@@ -337,7 +421,10 @@ internal static class AssistantChecks
         modeFilter.SelectedIndex = 0;
         Application.DoEvents();
         if (!regionFilter.Visible || !tierFilter.Visible || !laneFilter.Visible)
+        {
             throw new Exception("Ranked filters must reappear when switching back");
+        }
+
         bool editorRendered = false;
         using (var closeEditor = new System.Windows.Forms.Timer { Interval = 300 })
         {
@@ -345,7 +432,10 @@ internal static class AssistantChecks
             {
                 var editor = Application.OpenForms.Cast<Form>().FirstOrDefault(f => f.Text == "OP.GG 出装方案");
                 if (editor == null)
+                {
                     return;
+                }
+
                 closeEditor.Stop();
                 var choices = editor.Controls.OfType<TableLayoutPanel>().Single().Controls.OfType<ComboBox>().ToArray();
                 choices[0].SelectedIndex = 1;
@@ -360,7 +450,10 @@ internal static class AssistantChecks
             scroll.Controls[5].Controls.OfType<Button>().Single().PerformClick();
         }
         if (!editorRendered)
+        {
             throw new Exception("Equipment editor must open from assistant");
+        }
+
         type.GetMethod("ClearBody", flags)!.Invoke(assistant, null);
         scroll.Controls.Add(new Panel { Size = new Size(270, 650) });
         (
@@ -376,6 +469,7 @@ internal static class AssistantChecks
             var icons = card.Controls.OfType<FlowLayoutPanel>().Single();
             icons.Controls.Clear();
             for (int i = 0; i < 2; i++)
+            {
                 icons.Controls.Add(
                     new PictureBox
                     {
@@ -384,6 +478,7 @@ internal static class AssistantChecks
                         BackColor = Color.Teal,
                     }
                 );
+            }
         }
         assistant.Show();
         Application.DoEvents();
@@ -395,15 +490,20 @@ internal static class AssistantChecks
             Application.DoEvents();
             var footer = assistant.Controls.Cast<Control>().Single(c => c.Dock == DockStyle.Bottom);
             if (scroll.Bottom > footer.Top || scroll.HorizontalScroll.Visible)
+            {
                 throw new Exception("Assistant content must stay above fixed actions without horizontal scrolling");
+            }
+
             foreach (Control card in columns.Controls)
             {
                 var rate = card.Controls.OfType<Label>().Last();
                 var bounds = scroll.RectangleToClient(rate.RectangleToScreen(rate.ClientRectangle));
                 if (bounds.Top < 0 || bounds.Bottom > scroll.ClientSize.Height - 12)
+                {
                     throw new Exception(
                         $"Final spell rate must be fully visible: rate={bounds}, viewport={scroll.ClientSize}, card={card.Bounds}, columns={columns.Bounds}, display={scroll.DisplayRectangle}"
                     );
+                }
             }
         }
         using (var bitmap = new Bitmap(assistant.Width, assistant.Height))

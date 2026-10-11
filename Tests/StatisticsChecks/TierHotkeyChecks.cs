@@ -27,23 +27,32 @@ internal static class TierHotkeyChecks
                 int id = index + 1;
                 bool registered = (bool)type.GetMethod("Handles")!.Invoke(window, new object[] { key })!;
                 if (!registered)
+                {
                     throw new Exception(
                         "Test shortcut registration failed; inspect registration diagnostics before retrying"
                     );
+                }
                 // Deliver WM_HOTKEY directly to this isolated receiver; never inject keyboard input.
                 var message = Message.Create(native.Handle, 0x0312, new IntPtr(id), IntPtr.Zero);
                 type.GetMethod("WndProc", BindingFlags.NonPublic | BindingFlags.Instance)!
                     .Invoke(window, new object[] { message });
             }
             if (!events.SequenceEqual(keys))
+            {
                 throw new Exception("Native shortcut dispatch must preserve each side's key");
+            }
         }
         using (
             var replacement = (IDisposable)
                 Activator.CreateInstance(type, new object[] { (Action<Keys>)(_ => { }), keys })!
         )
+        {
             if (!(bool)type.GetMethod("Handles")!.Invoke(replacement, new object[] { Keys.F23 })!)
+            {
                 throw new Exception("Shortcut disposal must release registration");
+            }
+        }
+
         SynchronizationContext.SetSynchronizationContext(context);
         Console.WriteLine(
             "PASS: five native hotkey registrations, distinct plain/Ctrl dispatch and release; no keys or chat messages sent."

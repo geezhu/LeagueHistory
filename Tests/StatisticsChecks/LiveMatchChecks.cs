@@ -22,7 +22,9 @@ internal static class LiveMatchChecks
     private static void Check(bool condition, string message)
     {
         if (!condition)
+        {
             throw new Exception(message);
+        }
     }
 
     private sealed class Handler : HttpMessageHandler

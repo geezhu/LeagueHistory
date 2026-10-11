@@ -8,7 +8,9 @@ internal static class ChampionCompositionChecks
     private static void Check(bool condition, string message)
     {
         if (!condition)
+        {
             throw new Exception(message);
+        }
     }
 
     private sealed class Handler : HttpMessageHandler
@@ -24,7 +26,10 @@ internal static class ChampionCompositionChecks
             Interlocked.Increment(ref Calls);
             await Task.Delay(20, token);
             if (Fail)
+            {
                 return new(HttpStatusCode.ServiceUnavailable);
+            }
+
             string alias = Path.GetFileNameWithoutExtension(
                 Path.GetFileNameWithoutExtension(request.RequestUri!.AbsolutePath)
             );
@@ -93,7 +98,9 @@ internal static class ChampionCompositionChecks
         finally
         {
             if (Directory.Exists(directory))
+            {
                 Directory.Delete(directory, true);
+            }
         }
         Console.WriteLine("Champion composition cache checks passed.");
     }
@@ -385,7 +392,10 @@ internal static class ChampionCompositionChecks
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic
             )!;
             for (int i = 0; i < 100; i++)
+            {
                 queue.Invoke(view, null);
+            }
+
             var watch = System.Diagnostics.Stopwatch.StartNew();
             while (watch.ElapsedMilliseconds < 450)
             {
@@ -429,7 +439,9 @@ internal static class ChampionCompositionChecks
         finally
         {
             if (Directory.Exists(directory))
+            {
                 Directory.Delete(directory, true);
+            }
         }
         Console.WriteLine("Champion composition UI checks passed.");
     }

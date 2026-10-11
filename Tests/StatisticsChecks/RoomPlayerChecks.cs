@@ -12,7 +12,9 @@ internal static class RoomPlayerChecks
     private static void Check(bool condition, string message)
     {
         if (!condition)
+        {
             throw new Exception(message);
+        }
     }
 
     private static JObject Player(int id, int champion = 0) =>
@@ -44,7 +46,10 @@ internal static class RoomPlayerChecks
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (!condition() && DateTime.UtcNow < deadline)
+        {
             await Task.Delay(5);
+        }
+
         Check(condition(), message);
     }
 
@@ -216,7 +221,10 @@ internal static class RoomPlayerChecks
             async (p, token) =>
             {
                 if (Interlocked.Increment(ref attempts) <= 2)
+                {
                     await Task.Delay(Timeout.Infinite, token);
+                }
+
                 return Info(8);
             },
             action =>
@@ -641,7 +649,9 @@ internal static class RoomPlayerChecks
         {
             yield return child;
             foreach (var descendant in Descendants(child))
+            {
                 yield return descendant;
+            }
         }
     }
 

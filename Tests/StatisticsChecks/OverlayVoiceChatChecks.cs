@@ -7,7 +7,9 @@ internal static class OverlayVoiceChatChecks
     private static void Check(bool value, string message)
     {
         if (!value)
+        {
             throw new Exception(message);
+        }
     }
 
     public static void Run()
@@ -190,7 +192,9 @@ internal static class OverlayVoiceChatChecks
             bridge.Dispose();
             await bridge.Completion;
             if (Directory.Exists(folder))
+            {
                 Directory.Delete(folder, true);
+            }
         }
     }
 }

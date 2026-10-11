@@ -22,9 +22,15 @@ internal static class ChampionTierChatChecks
             || !messages[0].Contains("arammeta 16.17")
             || !messages[0].Contains("莫甘娜 — —/—")
         )
+        {
             throw new Exception("Tier notice source, map and missing data");
+        }
+
         if (!messages[0].Contains("调整后胜率/样本选取率：拉克丝 T1 53.2%/8.6%"))
+        {
             throw new Exception("Mayhem rate definitions and compact values");
+        }
+
         var team = ChampionTierChatMessage.Build(
             "海克斯大乱斗",
             "arammeta",
@@ -36,7 +42,10 @@ internal static class ChampionTierChatChecks
             true
         );
         if (team.Count != 1 || team[0].Length > 180)
+        {
             throw new Exception("A five-player team should fit one compact chat message");
+        }
+
         var many = Enumerable.Range(0, 30).Select(i => new ChampionTierChatEntry($"英雄{i}", "T2", .5, .01)).ToArray();
         var split = ChampionTierChatMessage.Build("大乱斗", "OP.GG", "16.17", "交换池", many);
         if (
@@ -44,7 +53,10 @@ internal static class ChampionTierChatChecks
             || split.Any(s => s.Length > 180)
             || many.Any(row => !string.Join("|", split).Contains(row.Name + " T2 50.0%/1.0%"))
         )
+        {
             throw new Exception("Tier notice chunking must retain every hero and rates");
+        }
+
         var zero = ChampionTierChatMessage.Build(
             "大乱斗",
             "OP.GG",
@@ -53,13 +65,19 @@ internal static class ChampionTierChatChecks
             new[] { new ChampionTierChatEntry("测试", "T5", 0, double.NaN) }
         );
         if (!zero[0].Contains("胜率/登场率：测试 T5 0.0%/—"))
+        {
             throw new Exception("Zero and invalid rates differ");
+        }
+
         if (
             ChampionTierChatMessage
                 .Build("大乱斗", "OP.GG", "16.17", "我方", Array.Empty<ChampionTierChatEntry>())
                 .Count != 0
         )
+        {
             throw new Exception("Empty roster must not send");
+        }
+
         var players = new[]
         {
             new League.Models.LiveMatchPlayer("a", "self", "Lux", "拉克丝", "CHAOS", true, 9, []),
@@ -72,9 +90,12 @@ internal static class ChampionTierChatChecks
             || League.Models.LiveMatchMode.RecommendationQueue(3270, match with { Mode = "CLASSIC", Map = 11 }) != 0
             || League.Models.LiveMatchMode.RecommendationQueue(3270, match with { Mode = "UNKNOWN" }) != 0
         )
+        {
             throw new Exception(
                 "Special queues must use actual ARAM/KIWI mode; unknown queues and map alone cannot select statistics"
             );
+        }
+
         var heroes = new[]
         {
             new League.Models.Champion
@@ -103,7 +124,10 @@ internal static class ChampionTierChatChecks
             || !enemy.Contains("莫甘娜 T2 51.0%/10.0%")
             || enemy.Contains("拉克丝")
         )
+        {
             throw new Exception("In-game tier chat must choose sides using actual self team");
+        }
+
         if (
             LiveTierChatService
                 .BuildMessages(
@@ -119,9 +143,15 @@ internal static class ChampionTierChatChecks
                 )
                 .Count != 0
         )
+        {
             throw new Exception("Unknown self must not send guessed opponents");
+        }
+
         if (LiveTierChatService.BuildMessages(match, 420, false, heroes, ranks, "16.17").Count != 0)
+        {
             throw new Exception("Unsupported modes must not use ARAM statistics");
+        }
+
         Console.WriteLine("PASS: tier chat source, map, unknown tiers, empty roster and chunking.");
     }
 }

@@ -13,7 +13,9 @@ internal static class AramMetaChecks
     private static void Check(bool value, string message)
     {
         if (!value)
+        {
             throw new Exception(message);
+        }
     }
 
     private sealed class Handler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send)
@@ -81,7 +83,10 @@ internal static class AramMetaChecks
                 {
                     calls++;
                     if (fail)
+                    {
                         throw new HttpRequestException("offline");
+                    }
+
                     return Task.FromResult(
                         Json(Fixture(r.RequestUri!.AbsolutePath.EndsWith("tier-list.json") ? "index" : "103"))
                     );
@@ -143,7 +148,10 @@ internal static class AramMetaChecks
                 (r, t) =>
                 {
                     if (!r.RequestUri!.AbsolutePath.EndsWith("tier-list.json"))
+                    {
                         return Task.FromResult(Json(Fixture("103")));
+                    }
+
                     var tag = "\"" + version + "\"";
                     if (r.Headers.IfNoneMatch.Any(v => v.Tag == tag))
                     {
@@ -189,7 +197,10 @@ internal static class AramMetaChecks
                     cacheFile
                 )
             )
+            {
                 await writer.GetAsync(103, false, default);
+            }
+
             Check(File.Exists(cacheFile), "Statistics snapshot is persisted");
             int requests = 0;
             var lifetime = TimeSpan.FromHours(1);
@@ -244,7 +255,9 @@ internal static class AramMetaChecks
         finally
         {
             if (File.Exists(cacheFile))
+            {
                 File.Delete(cacheFile);
+            }
         }
         Check(
             Newtonsoft.Json.JsonConvert.DeserializeObject<LeagueConfig>("{}")!.AramMetaCacheMinutes == 1440,
@@ -258,7 +271,10 @@ internal static class AramMetaChecks
                 async (r, t) =>
                 {
                     if (r.RequestUri!.AbsolutePath.EndsWith("tier-list.json"))
+                    {
                         return Json(Fixture("index"));
+                    }
+
                     detailStarted.TrySetResult();
                     await releaseDetail.Task.WaitAsync(t);
                     return Json(Fixture("103"));
@@ -295,7 +311,10 @@ internal static class AramMetaChecks
                 {
                     Interlocked.Increment(ref requests);
                     if (r.RequestUri!.AbsolutePath.EndsWith("tier-list.json"))
+                    {
                         return Json(Fixture("index"));
+                    }
+
                     started.TrySetResult();
                     await release.Task.WaitAsync(t);
                     return Json(Fixture("103"));
@@ -359,17 +378,22 @@ internal static class AramMetaChecks
                 path
             );
             foreach (var hero in new[] { 103, 157 })
+            {
                 Check(
                     (await restarted.GetAsync(hero, false, default)).Detail != null,
                     "Restart restores every shared hero detail"
                 );
+            }
+
             Check(offlineRequests == 0, "Restarted pages use persisted statistics without network");
         }
         finally
         {
             release.TrySetResult();
             if (File.Exists(path))
+            {
                 File.Delete(path);
+            }
         }
     }
 
@@ -492,6 +516,7 @@ internal static class AramMetaChecks
                 Application.DoEvents();
                 Thread.Sleep(5);
                 if (DateTime.UtcNow > deadline)
+                {
                     throw new Exception(
                         "Timed out: "
                             + method
@@ -502,6 +527,7 @@ internal static class AramMetaChecks
                             + " / "
                             + SynchronizationContext.Current?.GetType().Name
                     );
+                }
             }
             task.GetAwaiter().GetResult();
             Application.DoEvents();

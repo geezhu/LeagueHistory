@@ -9,7 +9,9 @@ internal static class ShutdownSettingsChecks
     private static void Check(bool value, string message)
     {
         if (!value)
+        {
             throw new Exception(message);
+        }
     }
 
     public static void Run() => Task.Run(Core).GetAwaiter().GetResult();
@@ -45,9 +47,15 @@ internal static class ShutdownSettingsChecks
         finally
         {
             if (validated != null && Marshal.IsComObject(validated))
+            {
                 Marshal.FinalReleaseComObject(validated);
+            }
+
             if (folder != null)
+            {
                 Marshal.FinalReleaseComObject(folder);
+            }
+
             Marshal.FinalReleaseComObject(scheduler);
         }
     }
@@ -242,7 +250,9 @@ internal static class ShutdownSettingsChecks
         finally
         {
             if (Directory.Exists(root))
+            {
                 Directory.Delete(root, true);
+            }
         }
         Console.WriteLine(
             "PASS: daily shutdown create/replace/delete uses a fake scheduler; migration, timing, worker cancellation, retained logs and failure handling checked. No system task changed."
@@ -309,7 +319,10 @@ internal static class ShutdownSettingsChecks
         public void Register(string xml)
         {
             if (Fail)
+            {
                 throw new InvalidOperationException("Simulated registration failure");
+            }
+
             XNamespace ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
             Record = new(
                 xml,
@@ -322,20 +335,28 @@ internal static class ShutdownSettingsChecks
         public void Stop()
         {
             if (Record != null)
+            {
                 Record = Record with { Running = false };
+            }
+
             Stops++;
         }
 
         public void SetEnabled(bool enabled)
         {
             if (Record != null)
+            {
                 Record = Record with { Enabled = enabled };
+            }
         }
 
         public void Delete()
         {
             if (FailDelete)
+            {
                 throw new InvalidOperationException("Simulated delete failure");
+            }
+
             Record = null;
             Deletes++;
         }

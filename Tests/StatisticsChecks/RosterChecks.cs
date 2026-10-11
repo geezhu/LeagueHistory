@@ -27,9 +27,12 @@ internal static class RosterChecks
             || roster.Team[4].ChampionId != 0
             || !roster.Bench.SequenceEqual(new[] { 134 })
         )
+        {
             throw new Exception(
                 "Roster must retain team slots, distinguish previews and ignore bans/duplicate bench entries"
             );
+        }
+
         using var owner = new League.FormMain();
         var type = typeof(League.FormMain).Assembly.GetType("League.ChampionSelectAssistant")!;
         var flags = BindingFlags.Instance | BindingFlags.NonPublic;
@@ -41,7 +44,10 @@ internal static class RosterChecks
             {
                 requests++;
                 if (!r.RequestUri!.AbsolutePath.EndsWith("tier-list.json"))
+                {
                     throw new Exception("Roster must not fetch individual builds");
+                }
+
                 return new(HttpStatusCode.OK)
                 {
                     Content = new StringContent(
@@ -63,7 +69,10 @@ internal static class RosterChecks
         }
         var entry = (Button)type.GetField("_rosterButton", flags)!.GetValue(assistant)!;
         if (!entry.Visible || entry.Parent!.GetChildAtPoint(new Point(entry.Left + 5, entry.Top + 5)) != entry)
+        {
             throw new Exception("Roster entry must be visible and unobscured");
+        }
+
         type.GetMethod("ShowRoster", flags)!.Invoke(assistant, null);
         Application.DoEvents();
         var window = (Form)type.GetField("_rosterWindow", flags)!.GetValue(assistant)!;
@@ -75,6 +84,7 @@ internal static class RosterChecks
         }
         Application.DoEvents();
         if (requests != 1)
+        {
             throw new Exception(
                 "Roster uses one complete index: "
                     + requests
@@ -90,13 +100,18 @@ internal static class RosterChecks
                             )
                     )
             );
+        }
+
         session["benchChampions"] = new JArray(
             Enumerable.Range(90000, 18).Select(id => new JObject { ["championId"] = id })
         );
         type.GetMethod("UpdateRoster", flags)!.Invoke(assistant, new object[] { session, 2400 });
         Application.DoEvents();
         if (requests != 1)
+        {
             throw new Exception("Roster changes must reuse loaded tiers");
+        }
+
         using (var bitmap = new Bitmap(window.Width, window.Height))
         {
             window.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
@@ -111,7 +126,10 @@ internal static class RosterChecks
         }
         type.GetMethod("Reset", flags)!.Invoke(assistant, null);
         if (!window.IsDisposed)
+        {
             throw new Exception("Leaving champion select must close roster");
+        }
+
         Console.WriteLine("PASS: roster team/bench parsing, shared rankings, updates and phase cleanup.");
     }
 }
