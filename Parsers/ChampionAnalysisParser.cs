@@ -119,28 +119,7 @@ public static class ChampionAnalysisParser
                 values.Add(new(name, unit, array.Select(Number).ToArray(), path + "/" + field));
             }
         }
-        var data = new Dictionary<string, JArray>(StringComparer.Ordinal);
-        if (spell["DataValues"] is JArray dataValues)
-        {
-            for (int i = 0; i < dataValues.Count; i++)
-            {
-                var row = dataValues[i];
-                if (row["name"]?.Type != JTokenType.String || row["values"] is not JArray array)
-                {
-                    continue;
-                }
-
-                string name = (string)row["name"]!;
-                if (!data.TryAdd(name, array))
-                {
-                    warnings.Add($"参数 {name} 重复，公式引用需要人工核对。");
-                }
-                // Names are evidence, not sufficient to classify control type or shield behavior.
-                values.Add(
-                    new(name, "原始单位待验证", array.Select(Number).ToArray(), path + $"/DataValues/{i}/values")
-                );
-            }
-        }
+        var data = ReadDataValues(spell, path, values, warnings);
         var formulas = new List<AnalysisFormula>();
         if (spell["mSpellCalculations"] is JObject calculations)
         {
@@ -186,6 +165,38 @@ public static class ChampionAnalysisParser
 
         var tags = spell["mSpellTags"] as JArray;
         return new(key, path, targeting, values, formulas, tags?.Select(t => t.ToString()).ToArray() ?? [], warnings);
+    }
+
+    private static Dictionary<string, JArray> ReadDataValues(
+        JObject spell,
+        string path,
+        List<AnalysisValue> values,
+        List<string> warnings
+    )
+    {
+        var data = new Dictionary<string, JArray>(StringComparer.Ordinal);
+        if (spell["DataValues"] is JArray dataValues)
+        {
+            for (int i = 0; i < dataValues.Count; i++)
+            {
+                var row = dataValues[i];
+                if (row["name"]?.Type != JTokenType.String || row["values"] is not JArray array)
+                {
+                    continue;
+                }
+
+                string name = (string)row["name"]!;
+                if (!data.TryAdd(name, array))
+                {
+                    warnings.Add($"参数 {name} 重复，公式引用需要人工核对。");
+                }
+                // Names are evidence, not sufficient to classify control type or shield behavior.
+                values.Add(
+                    new(name, "原始单位待验证", array.Select(Number).ToArray(), path + $"/DataValues/{i}/values")
+                );
+            }
+        }
+        return data;
     }
 
     private static (string Text, bool Known) Formula(
