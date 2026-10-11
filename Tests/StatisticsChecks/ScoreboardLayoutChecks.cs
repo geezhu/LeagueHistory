@@ -15,7 +15,13 @@ internal static class ScoreboardLayoutChecks
         RowContents();
         ResizeAndMetricPages();
         PlayerCardLayout();
-        Console.WriteLine("PASS: scoreboard values, tied maxima, responsive metric pages and player card layout.");
+        DetailNavigation();
+        TeamSorting();
+        BanSlots();
+        RequestRetirement();
+        Console.WriteLine(
+            "PASS: scoreboard values, metric pages, player cards, lazy tabs, team sorting, bans and request retirement."
+        );
     }
 
     private static void Check(bool condition, string message)
@@ -198,6 +204,154 @@ internal static class ScoreboardLayoutChecks
             row.Controls["Cell592"]!.Visible && !row.Controls["Cell880"]!.Visible,
             "A second flip must restore primary metrics"
         );
+    }
+
+    private static void DetailNavigation()
+    {
+        using var match = new MatchInfo { AllParticipants = new(), RawGameData = new JObject() };
+        using var detail = new MatchDetailView(match);
+        var tabType = typeof(MatchDetailView).GetNestedType("DetailTab", BindingFlags.NonPublic)!;
+        Check(detail.Controls.Count == 2, "Secondary tabs must not be created before selection");
+        foreach (string tab in new[] { "Statistics", "Charts", "Timeline", "Scoreboard", "Charts" })
+        {
+            Invoke(detail, "SelectTab", Enum.Parse(tabType, tab));
+            Check(detail.Controls.Count <= 5, "Returning to a tab must reuse its view");
+        }
+        Check(detail.Controls.Count == 5, "Each secondary tab must be created exactly once");
+        var views = detail.Controls.Cast<Control>().Where(c => c.Name != "MatchHeader").ToArray();
+        Check(
+            views.Count(c => c.Visible) == 1 && views.Single(c => c.Visible) is MatchChartsView,
+            "Only the selected tab may remain visible"
+        );
+        var actions = detail.Controls["MatchHeader"]!.Controls.OfType<FlowLayoutPanel>().Single();
+        Check(
+            actions
+                .Controls.Cast<Button>()
+                .Select(b => b.Text)
+                .SequenceEqual(new[] { "查看回放", "基础数据", "统计", "图表", "时间线" }),
+            "Navigation order and labels must remain unchanged"
+        );
+    }
+
+    private static void TeamSorting()
+    {
+        var players = new List<JObject> { Player(2, 1), Player(9, 3), Player(3, 5) };
+        foreach (var player in players)
+        {
+            player["teamId"] = 100;
+        }
+        players[0]["goldEarned"] = 9000;
+        players[1]["goldEarned"] = 15000;
+        players[2]["goldEarned"] = 10000;
+        using var match = new MatchInfo { AllParticipants = players, RawGameData = new JObject() };
+        using var detail = new MatchDetailView(match);
+        using var panel = new Panel();
+        var team = Invoke(detail, "CreateScoreboardTeam", panel, match, 100, 8)!;
+        var section = (Panel)team.GetType().GetProperty("Section")!.GetValue(team)!;
+        var rows = (System.Collections.IList)team.GetType().GetProperty("Rows")!.GetValue(team)!;
+        foreach (var player in players)
+        {
+            var row = new Panel
+            {
+                Top = 64 + rows.Count * 44,
+                Height = 44,
+                Tag = player,
+            };
+            section.Controls.Add(row);
+            rows.Add((player, row));
+        }
+        section.Visible = true;
+        var gold = section.Controls.OfType<Button>().Single(b => b.Text == "经济");
+        gold.PerformClick();
+        CheckSortedPlayer(section, players[1], "Gold must sort descending on first click");
+        gold.PerformClick();
+        CheckSortedPlayer(section, players[0], "The same metric must reverse its sort order");
+        var kda = section.Controls.OfType<Button>().Single(b => b.Text == "KDA");
+        kda.PerformClick();
+        CheckSortedPlayer(section, players[1], "Changing metrics must start with descending KDA");
+        Check(gold.Text == "经济" && kda.Text == "KDA ↓", "Only the active sort heading may retain an arrow");
+    }
+
+    private static void CheckSortedPlayer(Panel section, JObject player, string message) =>
+        Check(ReferenceEquals(section.Controls.OfType<Panel>().OrderBy(r => r.Top).First().Tag, player), message);
+
+    private static void BanSlots()
+    {
+        using var match = new MatchInfo { AllParticipants = new(), RawGameData = new JObject() };
+        using var detail = new MatchDetailView(match);
+        var bans = JArray.Parse(
+            "[{\"pickTurn\":3,\"championId\":12},{\"pickTurn\":1,\"championId\":-1},{\"pickTurn\":2,\"championId\":5}]"
+        );
+        var (content, slots) = ((FlowLayoutPanel, List<(PictureBox Picture, int Id)>))
+            Invoke(detail, "CreateBanSlots", bans)!;
+        using (content)
+        {
+            Check(
+                slots.Select(s => s.Id).SequenceEqual(new[] { -1, 5, 12 }),
+                "Bans must preserve pick order and unpicked slots"
+            );
+            Check(
+                content.Controls.Count == 3 && slots.All(s => s.Picture.Size == new Size(34, 34)),
+                "Each ban must retain its icon slot"
+            );
+        }
+    }
+
+    private static void RequestRetirement()
+    {
+        using var match = new MatchInfo { AllParticipants = new(), RawGameData = new JObject() };
+        using var detail = new MatchDetailView(match);
+        var cancellation = (CancellationTokenSource)
+            typeof(MatchDetailView).GetField("_requestCancellation", PrivateInstance)!.GetValue(detail)!;
+        var worker = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var callbackStarted = new ManualResetEventSlim();
+        using var callbackRelease = new ManualResetEventSlim();
+        using var registration = cancellation.Token.Register(() =>
+        {
+            callbackStarted.Set();
+            // This callback deliberately stays pending after cancellation to verify retirement order.
+            callbackRelease.Wait(CancellationToken.None);
+        });
+        try
+        {
+            Invoke(detail, "TrackRequest", worker.Task);
+            detail.Dispose();
+            Check(
+                cancellation.Token.IsCancellationRequested && !worker.Task.IsCompleted,
+                "Closing a detail view must cancel immediately without blocking for its worker"
+            );
+            Check(
+                callbackStarted.Wait(2000, CancellationToken.None),
+                "Retirement must run registered cancellation callbacks"
+            );
+            worker.SetResult();
+            Check(!SourceDisposed(cancellation), "Pending cancellation callbacks must also retain the source");
+            callbackRelease.Set();
+            Check(
+                SpinWait.SpinUntil(() => SourceDisposed(cancellation), 2000),
+                "Cancellation source must be released after the worker and callbacks finish"
+            );
+            detail.Dispose();
+        }
+        finally
+        {
+            callbackRelease.Set();
+            worker.TrySetResult();
+        }
+    }
+
+    private static bool SourceDisposed(CancellationTokenSource cancellation)
+    {
+        try
+        {
+            _ = cancellation.Token;
+            return false;
+        }
+        catch (ObjectDisposedException)
+        {
+            // Token access confirms that retirement released the source after its worker.
+            return true;
+        }
     }
 
     private static void PlayerCardLayout()

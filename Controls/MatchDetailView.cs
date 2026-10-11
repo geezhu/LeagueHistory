@@ -21,110 +21,104 @@ public partial class MatchDetailView : UserControl
     public event Action<string>? PlayerProfileRequested;
     public event Action? ReplayRequested;
 
+    private enum DetailTab
+    {
+        Scoreboard,
+        Statistics,
+        Charts,
+        Timeline,
+    }
+
+    private readonly Dictionary<DetailTab, Button> _tabButtons = new();
+
     public MatchDetailView(MatchInfo match)
     {
         _match = match;
         DoubleBuffered = true;
         BackColor = Color.FromArgb(244, 247, 251);
-        var replay = new Button
-        {
-            Text = "查看回放",
-            Width = 76,
-            Height = 32,
-            FlatStyle = FlatStyle.Flat,
-        };
-        replay.Click += (_, _) => ReplayRequested?.Invoke();
         _scoreboard = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true };
-        var basic = new Button
-        {
-            Text = "基础数据",
-            Width = 76,
-            Height = 32,
-            FlatStyle = FlatStyle.Flat,
-        };
-        var timeline = new Button
-        {
-            Text = "时间线",
-            Width = 68,
-            Height = 32,
-            FlatStyle = FlatStyle.Flat,
-        };
-        var statistics = new Button
-        {
-            Text = "统计",
-            Width = 58,
-            Height = 32,
-            FlatStyle = FlatStyle.Flat,
-        };
-        var charts = new Button
-        {
-            Text = "图表",
-            Width = 58,
-            Height = 32,
-            FlatStyle = FlatStyle.Flat,
-        };
-        void SelectTab(Button selected)
-        {
-            foreach (var button in new[] { basic, statistics, charts, timeline })
-            {
-                bool active = button == selected;
-                button.BackColor = active ? Color.FromArgb(225, 237, 253) : BackColor;
-                button.ForeColor = active ? Color.FromArgb(46, 103, 190) : Color.FromArgb(111, 123, 139);
-                button.FlatAppearance.BorderColor = active ? Color.FromArgb(46, 103, 190) : BackColor;
-            }
-            _scoreboard.Visible = selected == basic;
-            if (_timeline != null)
-            {
-                _timeline.Visible = selected == timeline;
-            }
-
-            if (_statistics != null)
-            {
-                _statistics.Visible = selected == statistics;
-            }
-
-            if (_charts != null)
-            {
-                _charts.Visible = selected == charts;
-            }
-        }
-        basic.Click += (_, _) => SelectTab(basic);
-        charts.Click += (_, _) =>
-        {
-            if (_charts == null)
-            {
-                _charts = new MatchChartsView(_match);
-                Controls.Add(_charts);
-                _charts.BringToFront();
-            }
-            SelectTab(charts);
-        };
-        statistics.Click += (_, _) =>
-        {
-            if (_statistics == null)
-            {
-                _statistics = new MatchStatisticsView(_match);
-                Controls.Add(_statistics);
-                _statistics.BringToFront();
-            }
-            SelectTab(statistics);
-        };
-        timeline.Click += (_, _) =>
-        {
-            if (_timeline == null)
-            {
-                _timeline = new TimelineView(_match) { Dock = DockStyle.Fill };
-                Controls.Add(_timeline);
-                _timeline.BringToFront();
-            }
-            _scoreboard.Visible = false;
-            _timeline.Visible = true;
-            SelectTab(timeline);
-        };
-        SelectTab(basic);
+        var actions = CreateNavigation();
         Controls.Add(_scoreboard);
-        Controls.Add(CreateMatchHeader(match, replay, basic, statistics, charts, timeline));
+        Controls.Add(CreateMatchHeader(match, actions));
         _scoreboard.SizeChanged += (_, _) => ReflowScoreboard();
+    }
+
+    private Button[] CreateNavigation()
+    {
+        var replay = NavigationButton("查看回放", 76);
+        replay.Click += (_, _) => ReplayRequested?.Invoke();
+        foreach (
+            var (tab, text, width) in new[]
+            {
+                (DetailTab.Scoreboard, "基础数据", 76),
+                (DetailTab.Statistics, "统计", 58),
+                (DetailTab.Charts, "图表", 58),
+                (DetailTab.Timeline, "时间线", 68),
+            }
+        )
+        {
+            var button = NavigationButton(text, width);
+            _tabButtons[tab] = button;
+            button.Click += (_, _) => SelectTab(tab);
+        }
+        SelectTab(DetailTab.Scoreboard);
+        return new[] { replay }.Concat(_tabButtons.Values).ToArray();
+    }
+
+    private static Button NavigationButton(string text, int width) =>
+        new()
+        {
+            Text = text,
+            Width = width,
+            Height = 32,
+            FlatStyle = FlatStyle.Flat,
+        };
+
+    private void SelectTab(DetailTab selected)
+    {
+        EnsureTabContent(selected);
+        foreach (var (tab, button) in _tabButtons)
+        {
+            bool active = tab == selected;
+            button.BackColor = active ? Color.FromArgb(225, 237, 253) : BackColor;
+            button.ForeColor = active ? Color.FromArgb(46, 103, 190) : Color.FromArgb(111, 123, 139);
+            button.FlatAppearance.BorderColor = active ? Color.FromArgb(46, 103, 190) : BackColor;
+        }
+        _scoreboard.Visible = selected == DetailTab.Scoreboard;
+        if (_timeline != null)
+        {
+            _timeline.Visible = selected == DetailTab.Timeline;
+        }
+        if (_statistics != null)
+        {
+            _statistics.Visible = selected == DetailTab.Statistics;
+        }
+        if (_charts != null)
+        {
+            _charts.Visible = selected == DetailTab.Charts;
+        }
+    }
+
+    private void EnsureTabContent(DetailTab selected)
+    {
+        Control? content = null;
+        switch (selected)
+        {
+            case DetailTab.Charts when _charts == null:
+                content = _charts = new MatchChartsView(_match);
+                break;
+            case DetailTab.Statistics when _statistics == null:
+                content = _statistics = new MatchStatisticsView(_match);
+                break;
+            case DetailTab.Timeline when _timeline == null:
+                content = _timeline = new TimelineView(_match) { Dock = DockStyle.Fill };
+                break;
+        }
+        if (content != null)
+        {
+            Controls.Add(content);
+            content.BringToFront();
+        }
     }
 
     protected override void OnLoad(EventArgs e)
@@ -133,7 +127,7 @@ public partial class MatchDetailView : UserControl
         _ = PrepareAsync();
     }
 
-    public Task PrepareAsync() => _preparation ??= PrepareCoreAsync();
+    public Task PrepareAsync() => IsDisposed ? Task.CompletedTask : _preparation ??= PrepareCoreAsync();
 
     private async Task PrepareCoreAsync()
     {
@@ -148,9 +142,16 @@ public partial class MatchDetailView : UserControl
             _scoreboard.Controls.Add(new Label { Text = "这场比赛暂无可展示的详细数据。", AutoSize = true });
             return;
         }
+        var token = _requestCancellation.Token;
         var layout = new DetailedViewLayoutManager(_toolTip)
         {
-            ResolvePlayerProfile = async id => await FormMain.Globals.lcuClient.GetGameNameBySummonerId(id),
+            ResolvePlayerProfile = async id =>
+            {
+                token.ThrowIfCancellationRequested();
+                var request = FormMain.Globals.lcuClient.GetGameNameBySummonerId(id, token);
+                TrackRequest(request);
+                return await request;
+            },
         };
         layout.PlayerProfileRequested += id => PlayerProfileRequested?.Invoke(id);
         await CreateDetailedPlayerViews(_scoreboard, _match, layout);
@@ -160,8 +161,7 @@ public partial class MatchDetailView : UserControl
     {
         if (disposing)
         {
-            _rankRequests.Cancel();
-            _rankRequests.Dispose();
+            RetireRequests();
             foreach (var popup in _banPopups.ToArray())
             {
                 foreach (var host in popup.Items.OfType<ToolStripControlHost>())

@@ -15,6 +15,17 @@ public partial class MatchDetailView
             BackColor = BackColor,
             Font = new Font("Microsoft YaHei UI", 9f),
         };
+        var info = CreateMatchMetadata(match);
+        var buttons = CreateHeaderActions(header.Font, match, actions);
+        header.Controls.Add(info);
+        header.Controls.Add(buttons);
+        header.SizeChanged += (_, _) => ArrangeMatchHeader(header, info, buttons);
+        ArrangeMatchHeader(header, info, buttons);
+        return header;
+    }
+
+    private TableLayoutPanel CreateMatchMetadata(MatchInfo match)
+    {
         var info = new TableLayoutPanel
         {
             ColumnCount = 5,
@@ -74,6 +85,11 @@ public partial class MatchDetailView
             );
             info.Controls.Add(cell, i, 0);
         }
+        return info;
+    }
+
+    private FlowLayoutPanel CreateHeaderActions(Font font, MatchInfo match, Button[] actions)
+    {
         var buttons = new FlowLayoutPanel
         {
             Width = actions.Sum(action => action.Width + 6),
@@ -84,23 +100,20 @@ public partial class MatchDetailView
         foreach (var action in actions)
         {
             action.Margin = new Padding(0, 0, 6, 0);
-            action.Font = header.Font;
+            action.Font = font;
             buttons.Controls.Add(action);
         }
         actions[0].FlatAppearance.BorderSize = 0;
         actions[0].ForeColor = Color.FromArgb(46, 103, 190);
         _toolTip.SetToolTip(actions[0], $"查看比赛 {match.GameId} 的回放");
-        header.Controls.Add(info);
-        header.Controls.Add(buttons);
-        void Arrange()
-        {
-            bool narrow = header.Width < buttons.Width + 620;
-            header.Height = narrow ? 112 : 76;
-            info.SetBounds(12, 10, Math.Max(1, header.Width - (narrow ? 24 : buttons.Width + 30)), 52);
-            buttons.Location = new Point(Math.Max(12, header.Width - buttons.Width - 12), narrow ? 70 : 24);
-        }
-        header.SizeChanged += (_, _) => Arrange();
-        Arrange();
-        return header;
+        return buttons;
+    }
+
+    private static void ArrangeMatchHeader(Control header, Control info, Control buttons)
+    {
+        bool narrow = header.Width < buttons.Width + 620;
+        header.Height = narrow ? 112 : 76;
+        info.SetBounds(12, 10, Math.Max(1, header.Width - (narrow ? 24 : buttons.Width + 30)), 52);
+        buttons.Location = new Point(Math.Max(12, header.Width - buttons.Width - 12), narrow ? 70 : 24);
     }
 }
