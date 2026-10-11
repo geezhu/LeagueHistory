@@ -1,0 +1,16 @@
+<Project>
+  <PropertyGroup>
+    <CodeQualityAnalyzer Condition="'$(CodeQualityAnalyzer)' == ''">$(NuGetPackageRoot)meziantou.analyzer/3.0.294/analyzers/dotnet/roslyn4.8/cs/Meziantou.Analyzer.dll</CodeQualityAnalyzer>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+  <ItemGroup>
+    <Analyzer Include="$(CodeQualityAnalyzer)" />
+    <!-- Start from upstream's disabled preset, then enable only our scoped rules in .editorconfig. -->
+    <GlobalAnalyzerConfigFiles Include="$(CodeQualityDefaults)" />
+    <EditorConfigFiles Include="$(CodeQualityDefaults)" />
+  </ItemGroup>
+  <Target Name="ValidateCodeQualityAnalyzer" BeforeTargets="CoreCompile">
+    <Error Condition="!Exists('$(CodeQualityAnalyzer)')" Text="Restore Tools/CodeQuality/CodeQuality.proj before running code quality checks." />
+    <Error Condition="!Exists('$(CodeQualityDefaults)')" Text="The pinned Meziantou disabled-rule preset is missing." />
+  </Target>
+</Project>
