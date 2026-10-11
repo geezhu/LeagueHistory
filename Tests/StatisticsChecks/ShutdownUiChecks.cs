@@ -11,11 +11,15 @@ internal static class ShutdownUiChecks
         }
     }
 
-    public static void Run()
+    public static void Run() =>
+        WinFormsCheckHost.Run(() =>
+        {
+            Render();
+            RefreshSerializationAndClosure();
+        });
+
+    private static void Render()
     {
-        var previous = SynchronizationContext.Current;
-        using var context = new WindowsFormsSynchronizationContext();
-        SynchronizationContext.SetSynchronizationContext(context);
         using var owner = new League.FormMain();
         using var preview = new Form { ClientSize = new Size(760, 400) };
         var flow = new FlowLayoutPanel
@@ -66,7 +70,72 @@ internal static class ShutdownUiChecks
         finally
         {
             preview.Close();
-            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+
+    private static void RefreshSerializationAndClosure()
+    {
+        using var owner = new League.FormMain();
+        using var flow = new FlowLayoutPanel();
+        using var tasks = new DelayedTasks();
+        var type = typeof(League.FormMain).Assembly.GetType("League.Controls.ShutdownSettingsController")!;
+        using var controller = (IDisposable)
+            Activator.CreateInstance(type, owner, owner.Font, new ScheduledShutdownService(tasks: tasks))!;
+        var controls = (Control[])type.GetProperty("Content")!.GetValue(controller)!;
+        typeof(League.FormMain)
+            .GetMethod("SettingsCard", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(owner, new object[] { flow, "模拟计划", controls });
+        type.GetMethod("Attach")!.Invoke(controller, null);
+        var work = (Task)
+            type.GetMethod("RefreshAsync", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(controller, null)!;
+        Pump(() => tasks.Started.IsSet);
+        var create = controls
+            .OfType<FlowLayoutPanel>()
+            .SelectMany(row => row.Controls.OfType<Button>())
+            .Single(button => button.Name == "CreateShutdownPlan");
+        Check(!create.Enabled, "A pending refresh disables mutations so a stale read cannot overwrite a change.");
+        typeof(Control)
+            .GetMethod("OnClick", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(create, new object[] { EventArgs.Empty });
+        Check(tasks.Mutations == 0, "An explicit event while reading still cannot mutate the plan.");
+        flow.Dispose();
+        tasks.Release.Set();
+        Pump(() => work.IsCompleted);
+        work.GetAwaiter().GetResult();
+        Check(
+            tasks.Mutations == 0 && controls.All(control => control.IsDisposed),
+            "A late read after card disposal cannot resurrect UI or mutate the task."
+        );
+    }
+
+    private sealed class DelayedTasks : IShutdownTaskStore, IDisposable
+    {
+        public ManualResetEventSlim Started { get; } = new();
+        public ManualResetEventSlim Release { get; } = new();
+        public int Mutations { get; private set; }
+
+        public ShutdownTaskRecord? Read()
+        {
+            Started.Set();
+            if (!Release.Wait(TimeSpan.FromSeconds(5)))
+            {
+                throw new TimeoutException("The simulated read was not released.");
+            }
+            return null;
+        }
+
+        public void Register(string xml) => Mutations++;
+
+        public void Stop() => Mutations++;
+
+        public void Delete() => Mutations++;
+
+        public void SetEnabled(bool enabled) => Mutations++;
+
+        public void Dispose()
+        {
+            Started.Dispose();
+            Release.Dispose();
         }
     }
 
