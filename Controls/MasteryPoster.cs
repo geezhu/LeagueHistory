@@ -6,6 +6,8 @@ namespace League.Controls;
 internal sealed class MasteryPoster : PictureBox
 {
     private static readonly HttpClient Client = new() { Timeout = TimeSpan.FromSeconds(12) };
+
+    // The download cache lives for the application; each poster owns the image copy it receives.
     private static readonly ImageCacheService Cache = new(Client);
     private readonly int _rank;
 

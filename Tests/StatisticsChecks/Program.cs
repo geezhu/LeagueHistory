@@ -17,6 +17,11 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--selection-control-checks"))
+        {
+            SelectionControlChecks.Run();
+            return;
+        }
         if (args.Contains("--player-champion-checks"))
         {
             PlayerChampionChecks.Run();
