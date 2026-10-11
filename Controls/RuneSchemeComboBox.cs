@@ -8,6 +8,7 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
     private readonly Func<OpggRunes, string[]> _highlights;
     private readonly Dictionary<int, Image> _icons = new();
     private readonly CancellationTokenSource _images;
+    private readonly Task _imageWork;
 
     public RuneSchemeComboBox(OpggRunes[] schemes, Func<OpggRunes, string[]> highlights, CancellationToken token)
     {
@@ -23,7 +24,7 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
         DropDownHeight = 304;
         BackColor = Color.FromArgb(16, 45, 57);
         ForeColor = Color.FromArgb(215, 225, 226);
-        _ = LoadIconsAsync();
+        _imageWork = LoadIconsAsync();
     }
 
     private async Task LoadIconsAsync()
@@ -49,8 +50,10 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
                     Invalidate();
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                // A failed optional icon leaves its placeholder usable; continue loading the other choices.
+                System.Diagnostics.Debug.WriteLine($"Selection icon: {ex.GetType().Name}");
                 if (IsDisposed || _images.IsCancellationRequested)
                 {
                     return;
@@ -127,8 +130,19 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
     {
         if (disposing && !IsDisposed)
         {
-            _images.Cancel();
-            _images.Dispose();
+            // Keep the linked source alive while the current resource load and cancellation callbacks finish.
+            var cancellation = _images.CancelAsync();
+            _ = Task.WhenAll(_imageWork, cancellation)
+                .ContinueWith(
+                    completed =>
+                    {
+                        _ = completed.Exception;
+                        _images.Dispose();
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default
+                );
             foreach (var icon in _icons.Values)
             {
                 icon.Dispose();

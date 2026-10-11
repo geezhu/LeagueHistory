@@ -15,6 +15,7 @@ internal sealed class TeamSummaryHeader : Control
     {
         _title = title;
         _summary = summary;
+        // The containing detail view owns the shared tooltip and its lifetime.
         _tips = tips;
         ForeColor = color;
         DoubleBuffered = true;

@@ -9,6 +9,7 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
     private readonly JObject[] _options;
     private readonly Dictionary<int, Image> _icons = new();
     private readonly CancellationTokenSource _images;
+    private readonly Task _imageWork;
     private readonly string _kind;
 
     public EquipmentComboBox(JObject[] options, CancellationToken token, string kind = "item")
@@ -50,7 +51,7 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
         );
         Enabled = options.Length > 0;
         SelectedIndex = 0;
-        _ = LoadImagesAsync();
+        _imageWork = LoadImagesAsync();
     }
 
     private async Task LoadImagesAsync()
@@ -79,8 +80,10 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
                     Invalidate();
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                // A failed optional icon leaves its placeholder usable; continue loading the other choices.
+                System.Diagnostics.Debug.WriteLine($"Selection icon: {ex.GetType().Name}");
                 if (IsDisposed || _images.IsCancellationRequested)
                 {
                     return;
@@ -158,8 +161,19 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
     {
         if (disposing && !IsDisposed)
         {
-            _images.Cancel();
-            _images.Dispose();
+            // Keep the linked source alive while the current resource load and cancellation callbacks finish.
+            var cancellation = _images.CancelAsync();
+            _ = Task.WhenAll(_imageWork, cancellation)
+                .ContinueWith(
+                    completed =>
+                    {
+                        _ = completed.Exception;
+                        _images.Dispose();
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default
+                );
             foreach (var image in _icons.Values)
             {
                 image.Dispose();
