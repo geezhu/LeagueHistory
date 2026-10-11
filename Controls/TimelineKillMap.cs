@@ -39,20 +39,26 @@ internal sealed class TimelineKillMap : Control
 
     public static PointF? Normalize(int mapId, int x, int y)
     {
-        var bounds = mapId switch
+        (double MinimumX, double MinimumY, double MaximumX, double MaximumY) bounds = mapId switch
         {
             11 => (-120d, -120d, 14870d, 14980d),
             12 => (-28d, -19d, 12849d, 12858d),
             _ => (0d, 0d, 0d, 0d),
         };
-        if (bounds.Item3 == 0 || x < bounds.Item1 || x > bounds.Item3 || y < bounds.Item2 || y > bounds.Item4)
+        if (
+            bounds.MaximumX == 0
+            || x < bounds.MinimumX
+            || x > bounds.MaximumX
+            || y < bounds.MinimumY
+            || y > bounds.MaximumY
+        )
         {
             return null;
         }
 
         return new PointF(
-            (float)((x - bounds.Item1) / (bounds.Item3 - bounds.Item1)),
-            1 - (float)((y - bounds.Item2) / (bounds.Item4 - bounds.Item2))
+            (float)((x - bounds.MinimumX) / (bounds.MaximumX - bounds.MinimumX)),
+            1 - (float)((y - bounds.MinimumY) / (bounds.MaximumY - bounds.MinimumY))
         );
     }
 
