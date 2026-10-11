@@ -36,7 +36,10 @@ public sealed record OverlayChatRequest(
             || value["dismissed"]?.Type != JTokenType.Boolean
             || value["cancelled"]?.Type != JTokenType.Boolean
         )
+        {
             return null;
+        }
+
         if (
             !long.TryParse(value["updatedAt"]!.ToString(), out long stamp)
             || stamp < 0
@@ -45,7 +48,10 @@ public sealed record OverlayChatRequest(
             || !int.TryParse(value["slot"]!.ToString(), out int slot)
             || !int.TryParse(value["championId"]!.ToString(), out int hero)
         )
+        {
             return null;
+        }
+
         string target = (string)value["target"]!;
         if (
             value["kind"] != null
@@ -54,7 +60,10 @@ public sealed record OverlayChatRequest(
                 || (string?)value["kind"] is not ("tier" or "mastery" or "deathStreak" or "voice")
             )
         )
+        {
             return null;
+        }
+
         string kind = (string?)value["kind"] ?? "tier";
         if (kind == "voice")
         {
@@ -67,7 +76,10 @@ public sealed record OverlayChatRequest(
                 || value["text"]?.Type != JTokenType.String
                 || !OverlayVoiceChatText.TryNormalize((string?)value["text"], out string text)
             )
+            {
                 return null;
+            }
+
             return new(
                 id.ToString("N"),
                 session,
@@ -83,13 +95,19 @@ public sealed record OverlayChatRequest(
             );
         }
         if (value["text"] != null || value["confirmed"] != null)
+        {
             return null;
+        }
+
         if (
             target == "single"
                 ? slot < 0 || slot >= heroes.Length || hero <= 0 || heroes[slot] != hero
                 : target is not ("own" or "enemy") || slot != -1 || hero != 0
         )
+        {
             return null;
+        }
+
         return new(
             id.ToString("N"),
             session,
@@ -123,19 +141,29 @@ public static class OverlayVoiceChatText
     {
         text = "";
         if (input == null || input.Length > MaxLength)
+        {
             return false;
+        }
+
         for (int i = 0; i < input.Length; i++)
         {
             char c = input[i];
             if (char.IsControl(c) || c is '\u2028' or '\u2029')
+            {
                 return false;
+            }
+
             if (char.IsHighSurrogate(c))
             {
                 if (i + 1 >= input.Length || !char.IsLowSurrogate(input[++i]))
+                {
                     return false;
+                }
             }
             else if (char.IsLowSurrogate(c))
+            {
                 return false;
+            }
         }
         text = input.Trim();
         // This feature sends one chat message, never a game slash command.
@@ -157,7 +185,10 @@ public static class OverlayVoiceChatText
             || request.ChampionId != 0
             || !TryNormalize(request.Text, out string text)
         )
+        {
             throw new InvalidOperationException("未发送：请确认一条不超过 180 字符的聊天文字；不支持换行或斜杠命令。");
+        }
+
         return [text];
     }
 }
@@ -194,9 +225,15 @@ public sealed class OverlayChatReady(OverlayChatRequest request)
     public OverlayChatReadiness Observe(OverlayChatRequest? latest, long now, bool gameReady)
     {
         if (latest == null || !request.SameCommand(latest) || latest.Cancelled)
+        {
             return OverlayChatReadiness.Cancelled;
+        }
+
         if (now < request.CreatedAt || now - request.CreatedAt >= 20000)
+        {
             return OverlayChatReadiness.TimedOut;
+        }
+
         if (!latest.Dismissed || !gameReady)
         {
             _stableSince = null;

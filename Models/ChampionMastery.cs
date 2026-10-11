@@ -56,21 +56,33 @@ public sealed record PlayerChampionMastery(
         get
         {
             if (!Available)
+            {
                 return Message;
+            }
+
             string text = Points.HasValue
                 ? $"英雄成就：{(Level.HasValue ? Level + " 级 · " : "")}{Points:N0} 点"
                 : "客户端未返回该英雄的成就记录。";
             if (LastPlayTime is > 0 && LastPlayTime <= 253402300799999)
+            {
                 text +=
                     "\n最近使用："
                     + DateTimeOffset
                         .FromUnixTimeMilliseconds(LastPlayTime.Value)
                         .ToLocalTime()
                         .ToString("yyyy-MM-dd HH:mm");
+            }
+
             if (FetchedAt.HasValue)
+            {
                 text += "\n数据更新：" + FetchedAt.Value.ToLocalTime().ToString("MM-dd HH:mm");
+            }
+
             if (Stale)
+            {
                 text += "\n正在使用旧缓存" + (Message.Length > 0 ? "：" + Message : "，后台检查更新。");
+            }
+
             return text + "\n成就为该玩家的长期积累，不区分游戏模式。";
         }
     }

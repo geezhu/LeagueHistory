@@ -52,7 +52,10 @@ public sealed class CareerStatistics
             }
             long id = game["gameId"]!.Value<long>();
             if (id <= 0 || seen.Contains(id))
+            {
                 continue;
+            }
+
             var identity = (game["participantIdentities"] as JArray)
                 ?.OfType<JObject>()
                 .FirstOrDefault(p => p["player"]?["puuid"]?.ToString() == puuid);

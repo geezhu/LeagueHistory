@@ -60,7 +60,9 @@ public static class CompositionTactics
                         .Select(v => v!.Value)
                         .ToArray();
                     if (values.Length > 0)
+                    {
                         spellRanges.Add((slot.Id, key, values.Max()));
+                    }
                 }
                 if (
                     spell?.Tags.Contains("Trait_ImmobilizingCCSpell") == true
@@ -71,6 +73,7 @@ public static class CompositionTactics
                             && !Has(sentence, "免疫|解除|抵抗|无法被|不会被")
                         )
                 )
+                {
                     control.Add(
                         (
                             slot.Id,
@@ -81,6 +84,7 @@ public static class CompositionTactics
                                 && text.Length > 0
                         )
                     );
+                }
             }
             var protective = slot
                 .Skills.Where(s =>
@@ -101,10 +105,15 @@ public static class CompositionTactics
             bool physical = slot.Skills.Any(s => s.Description.Contains("物理伤害"));
             bool magic = slot.Skills.Any(s => s.Description.Contains("魔法伤害"));
             if (physical || magic)
+            {
                 damage.Add((slot.Id, physical, magic));
+            }
+
             var attack = slot.Report?.Attributes.FirstOrDefault(a => a.Name == "普攻距离")?.Values.FirstOrDefault();
             if (attack is > 0)
+            {
                 ranges.Add((slot.Id, attack.Value));
+            }
         }
         var findings = new List<CompositionFinding>();
         // Count positions, not unique champion IDs: duplicate champions still provide independent abilities.

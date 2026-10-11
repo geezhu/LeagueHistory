@@ -32,40 +32,58 @@ public sealed record LoadingRoster(string GameId, int Queue, string Mode, Loadin
         var selections = (data["playerChampionSelections"] as JArray ?? new()).OfType<JObject>().ToArray();
         var players = new List<LoadingPlayer>();
         foreach (var (field, team) in new[] { ("teamOne", 100), ("teamTwo", 200) })
-        foreach (var row in (data[field] as JArray ?? new()).OfType<JObject>())
         {
-            string puuid = (string?)row["puuid"] ?? "";
-            long id = (long?)row["summonerId"] ?? 0;
-            if (!Clients.LoadingRosterIdentityService.HasPuuid(puuid))
-                puuid = "";
-            var pick = selections.FirstOrDefault(s =>
-                puuid.Length > 0 && (string?)s["puuid"] == puuid || id > 0 && (long?)s["summonerId"] == id
-            );
-            int hero = (int?)row["championId"] ?? 0;
-            if (hero <= 0)
-                hero = (int?)pick?["championId"] ?? 0;
-            if (puuid.Length == 0 && Clients.LoadingRosterIdentityService.HasPuuid((string?)pick?["puuid"] ?? ""))
-                puuid = (string)pick!["puuid"]!;
-            string name = (string?)row["gameName"] ?? "";
-            if (name.Length == 0)
-                name = (string?)row["summonerName"] ?? "";
-            string tag = (string?)row["tagLine"] ?? "";
-            if (tag.Length > 0 && name.Length > 0)
-                name += "#" + tag;
-            players.Add(
-                new(
-                    puuid.Length > 0 ? puuid
-                        : id > 0 ? id.ToString()
-                        : $"{team}:{players.Count}",
-                    name,
-                    puuid,
-                    id,
-                    hero,
-                    team,
-                    puuid.Length > 0 && puuid == ownPuuid
-                )
-            );
+            foreach (var row in (data[field] as JArray ?? new()).OfType<JObject>())
+            {
+                string puuid = (string?)row["puuid"] ?? "";
+                long id = (long?)row["summonerId"] ?? 0;
+                if (!Clients.LoadingRosterIdentityService.HasPuuid(puuid))
+                {
+                    puuid = "";
+                }
+
+                var pick = selections.FirstOrDefault(s =>
+                    puuid.Length > 0 && (string?)s["puuid"] == puuid || id > 0 && (long?)s["summonerId"] == id
+                );
+                int hero = (int?)row["championId"] ?? 0;
+                if (hero <= 0)
+                {
+                    hero = (int?)pick?["championId"] ?? 0;
+                }
+
+                if (puuid.Length == 0 && Clients.LoadingRosterIdentityService.HasPuuid((string?)pick?["puuid"] ?? ""))
+                {
+                    puuid = (string)pick!["puuid"]!;
+                }
+
+                string name = (string?)row["gameName"] ?? "";
+                if (name.Length == 0)
+                {
+                    name = (string?)row["summonerName"] ?? "";
+                }
+
+                string tag = (string?)row["tagLine"] ?? "";
+                if (tag.Length > 0 && name.Length > 0)
+                {
+                    name += "#" + tag;
+                }
+
+                players.Add(
+                    new(
+                        puuid.Length > 0 ? puuid
+                            : id > 0 ? id.ToString()
+                            : $"{team}:{players.Count}",
+                        name,
+                        puuid,
+                        id,
+                        hero,
+                        team,
+                        puuid.Length > 0 && puuid == ownPuuid
+                    )
+                );
+            }
         }
+
         return new(
             (string?)data["gameId"] ?? "",
             (int?)data["queue"]?["id"] ?? 0,
@@ -98,7 +116,10 @@ public sealed record LoadingRoster(string GameId, int Queue, string Mode, Loadin
                         && (known.Team == 0 || known.Team == team)
                         && (Clients.LoadingRosterIdentityService.HasPuuid(known.Puuid) || known.SummonerId > 0)
                     )
+                    {
                         hero = known.ChampionId;
+                    }
+
                     return new LoadingPlayer(
                         known?.Key ?? p.Key,
                         hidden ? "隐藏玩家" : p.Name,

@@ -14,7 +14,10 @@ public sealed class MatchMetricSelection
         if (selected && Count == Limit)
         {
             if (distinct.Length > Limit)
+            {
                 return false;
+            }
+
             _keys.Clear();
         }
         return Set(distinct, selected);
@@ -25,13 +28,20 @@ public sealed class MatchMetricSelection
     {
         var distinct = keys.Distinct().ToArray();
         if (selected && _keys.Union(distinct).Count() > Limit)
+        {
             return false;
+        }
+
         foreach (var key in distinct)
         {
             if (selected)
+            {
                 _keys.Add(key);
+            }
             else
+            {
                 _keys.Remove(key);
+            }
         }
         return true;
     }

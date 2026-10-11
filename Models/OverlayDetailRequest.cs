@@ -14,14 +14,20 @@ public sealed record OverlayDetailRequest(string Id, string Session, int Slot, i
             || (string?)value["session"] != session
             || session.Length == 0
         )
+        {
             return null;
+        }
+
         if (
             value["id"]?.Type != JTokenType.String
             || value["updatedAt"]?.Type != JTokenType.Integer
             || value["slot"]?.Type != JTokenType.Integer
             || value["championId"]?.Type != JTokenType.Integer
         )
+        {
             return null;
+        }
+
         string id = (string?)value["id"] ?? "";
         if (
             !long.TryParse(value["updatedAt"]!.ToString(), out long stamp)
@@ -30,12 +36,21 @@ public sealed record OverlayDetailRequest(string Id, string Session, int Slot, i
             || !int.TryParse(value["slot"]!.ToString(), out int slot)
             || !int.TryParse(value["championId"]!.ToString(), out int hero)
         )
+        {
             return null;
+        }
+
         long age = now - stamp;
         if (!Guid.TryParse(id, out _) || age < 0 || age > 30000)
+        {
             return null;
+        }
+
         if (slot == -1 && hero == 0)
+        {
             return new(id, session, slot, hero);
+        }
+
         return slot >= 0 && slot < heroes.Length && hero > 0 && heroes[slot] == hero
             ? new(id, session, slot, hero)
             : null;

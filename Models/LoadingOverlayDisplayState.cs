@@ -16,11 +16,17 @@ public sealed class LoadingOverlayDisplayState
             _active = false;
             Suppressed = false;
             if (!Preview)
+            {
                 Requested = false;
+            }
+
             return;
         }
         if (!_active)
+        {
             Suppressed = false;
+        }
+
         _active = true;
         if (automatic && !Suppressed)
         {

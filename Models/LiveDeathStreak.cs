@@ -24,7 +24,10 @@ public static class LiveDeathStreakAnalysis
             p =>
             {
                 if (p.IdentityHidden)
+                {
                     return LiveDeathStreak.Unavailable("玩家身份隐藏，不能唯一匹配死亡事件。");
+                }
+
                 var matches =
                     snapshot
                         ?.Players.Where(l =>
@@ -48,7 +51,10 @@ public static class LiveDeathStreakAnalysis
     {
         var results = snapshot.Players.ToDictionary(p => p.Key, _ => LiveDeathStreak.Unavailable());
         if (snapshot.Events == null)
+        {
             return results;
+        }
+
         var aliases = snapshot
             .Players.Where(p => p.Name.Trim() != "#")
             .SelectMany(p => p.EventAliases.Distinct().Select(name => (name, p.Key)))

@@ -31,14 +31,20 @@ public sealed class MatchTimeline
     {
         var result = new MatchTimeline();
         if (data is not JObject)
+        {
             return result;
+        }
+
         var root = data["json"] as JObject ?? (JObject)data;
         root = root["info"] as JObject ?? root;
         result.FrameInterval =
             root["frameInterval"]?.Type == JTokenType.Integer ? root["frameInterval"]!.Value<long>() : null;
         var frames = root["frames"] as JArray;
         if (frames == null)
+        {
             return result;
+        }
+
         var players = participants
             .Where(p => p["participantId"]?.Type == JTokenType.Integer)
             .GroupBy(p => p["participantId"]!.Value<int>())
@@ -63,7 +69,10 @@ public sealed class MatchTimeline
         {
             long time = (long)frame["timestamp"]!;
             if (time < 0)
+            {
                 continue;
+            }
+
             var values = frame["participantFrames"] as JObject;
             long? Total(int team)
             {
@@ -74,7 +83,10 @@ public sealed class MatchTimeline
                     || values == null
                     || ids.Any(id => values[id.ToString()]?["totalGold"]?.Type != JTokenType.Integer)
                 )
+                {
                     return null;
+                }
+
                 return ids.Sum(id => values[id.ToString()]!["totalGold"]!.Value<long>());
             }
             result.Frames.Add(new(time, Total(100), Total(200)));
@@ -82,7 +94,10 @@ public sealed class MatchTimeline
             {
                 string kind = ev["type"]?.ToString() ?? ev["eventType"]?.ToString() ?? "";
                 if (kind is not ("CHAMPION_KILL" or "ELITE_MONSTER_KILL" or "BUILDING_KILL"))
+                {
                     continue;
+                }
+
                 long stamp = ev["timestamp"]?.Value<long>() ?? time;
                 int killer = ev["killerId"]?.Value<int>() ?? 0;
                 string description = kind switch
