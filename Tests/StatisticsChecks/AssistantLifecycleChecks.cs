@@ -16,6 +16,7 @@ internal static class AssistantLifecycleChecks
         ClosePendingRecommendation();
         RetireCancellationCallback();
         CloseEquipmentPreview();
+        CloseMayhemDetails();
         Console.WriteLine(
             "PASS: assistant closing waits for recommendation work and cancellation callbacks before cleanup. No live requests."
         );
@@ -170,6 +171,43 @@ internal static class AssistantLifecycleChecks
             lateImage != null && ImageDisposed(lateImage),
             "The closed equipment preview disposes late item artwork."
         );
+    }
+
+    private static void CloseMayhemDetails()
+    {
+        using var host = new FlowLayoutPanel();
+        using var tips = new ToolTip();
+        var type = typeof(FormMain).Assembly.GetType("League.Controls.AssistantMayhemBrowser")!;
+        var index = AramMetaIndex.Parse(
+            JObject.Parse(
+                File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "AramMeta", "index.json"))
+            )
+        );
+        var page = new AramMetaPage(index, null, true, DateTime.UtcNow);
+        var release = new TaskCompletionSource<AramMetaPage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var browser = (IDisposable)
+            Activator.CreateInstance(
+                type,
+                new object[]
+                {
+                    page,
+                    103,
+                    CancellationToken.None,
+                    host,
+                    1,
+                    0,
+                    tips,
+                    Color.White,
+                    (Func<CancellationToken, Task<AramMetaPage>>)(_ => release.Task),
+                    (Func<int[], int, CancellationToken, Task>)((_, _, _) => Task.CompletedTask),
+                }
+            )!;
+        browser.Dispose();
+        var completion = (Task)type.GetProperty("Completion")!.GetValue(browser)!;
+        Check(!completion.IsCompleted, "Closed mayhem browser retains its shared detail request.");
+        release.TrySetResult(page with { Detail = new JObject() });
+        PumpUntil(() => completion.IsCompleted);
+        Check(completion.IsCompletedSuccessfully, "Late mayhem detail is cancelled before replacing closed rows.");
     }
 
     private static bool ImageDisposed(Image image)

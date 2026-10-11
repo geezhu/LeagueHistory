@@ -960,6 +960,8 @@ internal sealed partial class ChampionSelectAssistant : Form
             CancelHeroRequest();
             RetireAssistantSource(_poll);
             _poll = null;
+            ClearBody();
+            ClearRoster();
             _windowLayer.Dispose();
             var pending = PendingAssistantWork();
             _cleanupWork = Task.Run(() => CleanupAssistantResourcesAsync(pending), CancellationToken.None);
