@@ -20,6 +20,9 @@ public sealed class GameBarVoiceRecognition : IDisposable
         public string Text = "",
             State = "preparing",
             Hint = "";
+
+        // Complete means worker cleanup finished; Cancelled suppresses publication. Both may be true.
+        // State strings remain compatible with the widget protocol.
         public bool Complete,
             Cancelled,
             StopRequested;
@@ -57,25 +60,7 @@ public sealed class GameBarVoiceRecognition : IDisposable
         try
         {
             long now = time ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            if (!_cleaned || _directory != directory)
-            {
-                _directory = directory;
-                _cleaned = true;
-                // A new main process must not replay a recording left by a previous instance.
-                await DeleteAsync("voice-request.json").ConfigureAwait(false);
-                await DeleteAsync("voice-status.json").ConfigureAwait(false);
-            }
-            if (_session != session || _enabled != enabled || token.IsCancellationRequested)
-            {
-                Cancel();
-                _seen.Clear();
-                _session = session;
-                _enabled = enabled;
-                await DeleteAsync("voice-status.json").ConfigureAwait(false);
-                await DeleteAsync("voice-request.json").ConfigureAwait(false);
-                return;
-            }
-            if (!enabled)
+            if (!await PrepareSessionAsync(directory, session, enabled, token).ConfigureAwait(false))
             {
                 return;
             }
@@ -91,36 +76,10 @@ public sealed class GameBarVoiceRecognition : IDisposable
                 }
                 return;
             }
-            if (recording != null && !recording.Request.SameRecording(request))
-            {
-                Cancel();
-                await DeleteAsync("voice-status.json").ConfigureAwait(false);
-                // Wait for the previous microphone to be released before accepting a new start.
-                if (!recording.Completion.IsCompleted)
-                {
-                    return;
-                }
-
-                recording = null;
-            }
+            recording = await AcceptRequestAsync(request, now, token).ConfigureAwait(false);
             if (recording == null)
             {
-                if (
-                    request.Action != "start"
-                    || now - request.CreatedAt > 3000
-                    || _seen.Count >= 256
-                    || !_seen.Add(request.Id)
-                )
-                {
-                    return;
-                }
-
-                var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
-                cancellation.CancelAfter(TimeSpan.FromSeconds(55));
-                recording = new(request, _factory(), cancellation);
-                _recording = recording;
-                recording.Completion = RunAsync(recording);
-                ChatSendDiagnostics.Shared.Report("voice-recording", "本机中文识别开始。");
+                return;
             }
             _lastLease = request.UpdatedAt;
             if (request.Action == "cancel")
@@ -140,34 +99,7 @@ public sealed class GameBarVoiceRecognition : IDisposable
                 }
                 recording.Recognizer.Stop();
             }
-            JObject? status;
-            lock (_gate)
-            {
-                status =
-                    recording.Cancelled || request.Ack >= recording.Sequence
-                        ? null
-                        : new JObject
-                        {
-                            ["protocol"] = 1,
-                            ["id"] = request.Id,
-                            ["session"] = request.Session,
-                            ["sequence"] = recording.Sequence,
-                            ["state"] = recording.State,
-                            ["complete"] = recording.Complete,
-                            ["text"] = recording.Text,
-                            ["hint"] = recording.Hint,
-                            ["updatedAt"] = now,
-                        };
-            }
-            // Acknowledged text is removed from transport; the editable draft lives in the widget.
-            if (status == null)
-            {
-                await DeleteAsync("voice-status.json").ConfigureAwait(false);
-            }
-            else
-            {
-                await WriteAsync(status).ConfigureAwait(false);
-            }
+            await PublishStatusAsync(request, recording, now).ConfigureAwait(false);
         }
         catch (Exception e)
             when (e
@@ -177,48 +109,155 @@ public sealed class GameBarVoiceRecognition : IDisposable
                         or FormatException
                         or OverflowException
                         or ArgumentException
-            ) { }
+            )
+        {
+            // A partial or concurrently replaced bridge file is retried on the next poll.
+        }
         finally
         {
             _poll.Release();
         }
     }
 
-    private async Task RunAsync(Recording recording)
+    private async Task<bool> PrepareSessionAsync(
+        string directory,
+        string session,
+        bool enabled,
+        CancellationToken token
+    )
     {
-        void Update(VoiceRecognitionUpdate update)
+        if (!_cleaned || _directory != directory)
         {
-            lock (_gate)
+            _directory = directory;
+            _cleaned = true;
+            // A new main process must not replay a recording left by a previous instance.
+            await DeleteAsync("voice-request.json").ConfigureAwait(false);
+            await DeleteAsync("voice-status.json").ConfigureAwait(false);
+        }
+        if (_session != session || _enabled != enabled || token.IsCancellationRequested)
+        {
+            Cancel();
+            _seen.Clear();
+            _session = session;
+            _enabled = enabled;
+            await DeleteAsync("voice-status.json").ConfigureAwait(false);
+            await DeleteAsync("voice-request.json").ConfigureAwait(false);
+            return false;
+        }
+        if (!enabled)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task<Recording?> AcceptRequestAsync(OverlayVoiceRequest request, long now, CancellationToken token)
+    {
+        var recording = _recording;
+        if (recording != null && !recording.Request.SameRecording(request))
+        {
+            Cancel();
+            await DeleteAsync("voice-status.json").ConfigureAwait(false);
+            // Wait for the previous microphone to be released before accepting a new start.
+            if (!recording.Completion.IsCompleted)
             {
-                if (_disposed || recording.Cancelled || recording.Complete || _recording != recording)
+                return null;
+            }
+
+            recording = null;
+        }
+        if (recording == null)
+        {
+            if (
+                request.Action != "start"
+                || now - request.CreatedAt > 3000
+                || _seen.Count >= 256
+                || !_seen.Add(request.Id)
+            )
+            {
+                return null;
+            }
+
+            var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
+            cancellation.CancelAfter(TimeSpan.FromSeconds(55));
+            recording = new(request, _factory(), cancellation);
+            _recording = recording;
+            recording.Completion = RunAsync(recording);
+            ChatSendDiagnostics.Shared.Report("voice-recording", "本机中文识别开始。");
+        }
+        return recording;
+    }
+
+    private async Task PublishStatusAsync(OverlayVoiceRequest request, Recording recording, long now)
+    {
+        JObject? status;
+        lock (_gate)
+        {
+            status =
+                recording.Cancelled || request.Ack >= recording.Sequence
+                    ? null
+                    : new JObject
+                    {
+                        ["protocol"] = 1,
+                        ["id"] = request.Id,
+                        ["session"] = request.Session,
+                        ["sequence"] = recording.Sequence,
+                        ["state"] = recording.State,
+                        ["complete"] = recording.Complete,
+                        ["text"] = recording.Text,
+                        ["hint"] = recording.Hint,
+                        ["updatedAt"] = now,
+                    };
+        }
+        // Acknowledged text is removed from transport; the editable draft lives in the widget.
+        if (status == null)
+        {
+            await DeleteAsync("voice-status.json").ConfigureAwait(false);
+        }
+        else
+        {
+            await WriteAsync(status).ConfigureAwait(false);
+        }
+    }
+
+    private void ApplyUpdate(Recording recording, VoiceRecognitionUpdate update)
+    {
+        lock (_gate)
+        {
+            if (_disposed || recording.Cancelled || recording.Complete || _recording != recording)
+            {
+                return;
+            }
+
+            if (update.Final)
+            {
+                string words = Clean(update.Text, 180);
+                if (words.Length == 0)
                 {
                     return;
                 }
 
-                if (update.Final)
+                recording.Text = Clean(recording.Text + (recording.Text.Length > 0 ? " " : "") + words, 180);
+                recording.Hint = update.Confidence < .4f ? "请检查识别文字。" : "";
+                recording.State = "decoding";
+                if (recording.Text.Length >= 180)
                 {
-                    string words = Clean(update.Text, 180);
-                    if (words.Length == 0)
-                    {
-                        return;
-                    }
-
-                    recording.Text = Clean(recording.Text + (recording.Text.Length > 0 ? " " : "") + words, 180);
-                    recording.Hint = update.Confidence < .4f ? "请检查识别文字。" : "";
-                    recording.State = "decoding";
-                    if (recording.Text.Length >= 180)
-                    {
-                        recording.Recognizer.Stop();
-                    }
+                    recording.Recognizer.Stop();
                 }
-                else if (recording.State != "stopping" || update.Stage == "decoding")
-                {
-                    recording.Hint = update.Stage == "recording" ? update.Message : "";
-                    recording.State = update.Stage;
-                }
-                recording.Sequence++;
             }
+            else if (recording.State != "stopping" || update.Stage == "decoding")
+            {
+                recording.Hint = update.Stage == "recording" ? update.Message : "";
+                recording.State = update.Stage;
+            }
+            recording.Sequence++;
         }
+    }
+
+    private async Task RunAsync(Recording recording)
+    {
+        void Update(VoiceRecognitionUpdate value) => ApplyUpdate(recording, value);
         string failure = "";
         recording.Recognizer.Update += Update;
         try
@@ -273,6 +312,7 @@ public sealed class GameBarVoiceRecognition : IDisposable
         }
     }
 
+    // Transport outlives an individual recognizer token, including acknowledgement after cleanup.
     private async Task<OverlayVoiceRequest?> ReadAsync(long now)
     {
         try
@@ -284,7 +324,7 @@ public sealed class GameBarVoiceRecognition : IDisposable
             }
 
             return OverlayVoiceRequest.Parse(
-                JObject.Parse(await File.ReadAllTextAsync(path).ConfigureAwait(false)),
+                JObject.Parse(await File.ReadAllTextAsync(path, CancellationToken.None).ConfigureAwait(false)),
                 _session,
                 now
             );
@@ -312,7 +352,8 @@ public sealed class GameBarVoiceRecognition : IDisposable
             await File.WriteAllTextAsync(
                     temporary,
                     status.ToString(Newtonsoft.Json.Formatting.None),
-                    new UTF8Encoding(false)
+                    new UTF8Encoding(false),
+                    CancellationToken.None
                 )
                 .ConfigureAwait(false);
             if (_disposed || _recording?.Cancelled == true)
@@ -328,7 +369,10 @@ public sealed class GameBarVoiceRecognition : IDisposable
             {
                 File.Delete(temporary);
             }
-            catch (IOException) { }
+            catch (IOException)
+            {
+                // Preserve the publication result while cleaning a locked temporary file.
+            }
         }
     }
 
@@ -338,7 +382,10 @@ public sealed class GameBarVoiceRecognition : IDisposable
         {
             File.Delete(Path.Combine(_directory, name));
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Bridge cleanup is best effort; lease/session checks still prevent replay.
+        }
         return Task.CompletedTask;
     }
 
