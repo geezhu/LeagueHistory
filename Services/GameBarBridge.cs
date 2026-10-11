@@ -71,53 +71,7 @@ public sealed partial class GameBarBridge : IDisposable
                     rows.Add(new JObject());
                     continue;
                 }
-                if (!_images.ContainsKey(p.ChampionId) && icons.TryGetValue(p.ChampionId, out var icon))
-                {
-                    using var small = new Bitmap(icon, new Size(48, 48));
-                    using var buffer = new MemoryStream();
-                    small.Save(buffer, ImageFormat.Png);
-                    _images[p.ChampionId] = Convert.ToBase64String(buffer.ToArray());
-                }
-                var rank = ranks.GetValueOrDefault(p.Key);
-                var mastery = masteries?.GetValueOrDefault(p.Key);
-                if (mastery?.ChampionId != p.ChampionId)
-                {
-                    mastery = null;
-                }
-
-                var streak = deathStreaks?.GetValueOrDefault(p.Key) ?? LiveDeathStreak.Unavailable();
-                var party = p.IdentityHidden ? null : parties?.GetValueOrDefault(p.Key);
-                if (party?.Size is not (>= 2 and <= 5))
-                {
-                    party = null;
-                }
-
-                rows.Add(
-                    new JObject
-                    {
-                        ["championId"] = p.ChampionId,
-                        ["champion"] = champion(p.ChampionId),
-                        ["name"] = p.Name + (p.Self ? " · 自己" : ""),
-                        ["tier"] = rank?.Tier ?? "—",
-                        ["color"] = AramMetaView.TierColor(rank?.Tier ?? "—").ToArgb() & 0xffffff,
-                        ["stats"] = rank == null ? "统计读取中…" : rank.Rate + " · 选用率 " + rank.PickRate,
-                        ["mastery"] = p.ChampionId > 0 ? mastery?.Text ?? "成就读取中…" : "等待英雄确认",
-                        ["masteryDetails"] = mastery?.Description ?? "正在读取该玩家使用此英雄的成就。",
-                        ["deathStreak"] = p.ChampionId > 0 ? streak.Text : "",
-                        ["deathStreakDetails"] = streak.Rule,
-                        ["currentDeathStreak"] = streak.Current,
-                        ["maxDeathStreak"] = streak.Highest,
-                        ["deathStreakComplete"] = streak.Complete,
-                        ["party"] = party?.Badge ?? "",
-                        ["partySize"] = party?.Size ?? 0,
-                        ["partyLabel"] = party?.Label ?? "",
-                        ["partyColor"] = party?.Color ?? 0,
-                        ["partyDetails"] = party?.Description ?? "",
-                        ["details"] =
-                            champion(p.ChampionId) + " · " + details(p) + "\n" + (rank?.Note ?? "英雄统计尚未读取。"),
-                        ["icon"] = _images.GetValueOrDefault(p.ChampionId) ?? "",
-                    }
-                );
+                rows.Add(PlayerRow(p, ranks, icons, champion, details, masteries, deathStreaks, parties));
             }
         }
         _detailScope = new(
@@ -151,6 +105,63 @@ public sealed partial class GameBarBridge : IDisposable
                 ["players"] = rows,
             }
         );
+    }
+
+    private JObject PlayerRow(
+        LoadingPlayer p,
+        IReadOnlyDictionary<string, PlayerChampionTier> ranks,
+        IReadOnlyDictionary<int, Image> icons,
+        Func<int, string> champion,
+        Func<LoadingPlayer, string> details,
+        IReadOnlyDictionary<string, PlayerChampionMastery>? masteries,
+        IReadOnlyDictionary<string, LiveDeathStreak>? deathStreaks,
+        IReadOnlyDictionary<string, OverlayPartyMarker>? parties
+    )
+    {
+        if (!_images.ContainsKey(p.ChampionId) && icons.TryGetValue(p.ChampionId, out var icon))
+        {
+            using var small = new Bitmap(icon, new Size(48, 48));
+            using var buffer = new MemoryStream();
+            small.Save(buffer, ImageFormat.Png);
+            _images[p.ChampionId] = Convert.ToBase64String(buffer.ToArray());
+        }
+        var rank = ranks.GetValueOrDefault(p.Key);
+        var mastery = masteries?.GetValueOrDefault(p.Key);
+        if (mastery?.ChampionId != p.ChampionId)
+        {
+            mastery = null;
+        }
+
+        var streak = deathStreaks?.GetValueOrDefault(p.Key) ?? LiveDeathStreak.Unavailable();
+        var party = p.IdentityHidden ? null : parties?.GetValueOrDefault(p.Key);
+        if (party?.Size is not (>= 2 and <= 5))
+        {
+            party = null;
+        }
+
+        return new JObject
+        {
+            ["championId"] = p.ChampionId,
+            ["champion"] = champion(p.ChampionId),
+            ["name"] = p.Name + (p.Self ? " · 自己" : ""),
+            ["tier"] = rank?.Tier ?? "—",
+            ["color"] = AramMetaView.TierColor(rank?.Tier ?? "—").ToArgb() & 0xffffff,
+            ["stats"] = rank == null ? "统计读取中…" : rank.Rate + " · 选用率 " + rank.PickRate,
+            ["mastery"] = p.ChampionId > 0 ? mastery?.Text ?? "成就读取中…" : "等待英雄确认",
+            ["masteryDetails"] = mastery?.Description ?? "正在读取该玩家使用此英雄的成就。",
+            ["deathStreak"] = p.ChampionId > 0 ? streak.Text : "",
+            ["deathStreakDetails"] = streak.Rule,
+            ["currentDeathStreak"] = streak.Current,
+            ["maxDeathStreak"] = streak.Highest,
+            ["deathStreakComplete"] = streak.Complete,
+            ["party"] = party?.Badge ?? "",
+            ["partySize"] = party?.Size ?? 0,
+            ["partyLabel"] = party?.Label ?? "",
+            ["partyColor"] = party?.Color ?? 0,
+            ["partyDetails"] = party?.Description ?? "",
+            ["details"] = champion(p.ChampionId) + " · " + details(p) + "\n" + (rank?.Note ?? "英雄统计尚未读取。"),
+            ["icon"] = _images.GetValueOrDefault(p.ChampionId) ?? "",
+        };
     }
 
     private string FindDirectory()

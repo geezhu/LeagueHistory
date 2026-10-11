@@ -124,38 +124,18 @@ public sealed class VoiceModelStore
                 }
                 string part = destination + "." + Guid.NewGuid().ToString("N") + ".download";
                 temporary.Add(part);
-                using var response = await client
-                    .GetAsync(Source + file.Name, HttpCompletionOption.ResponseHeadersRead, timeout.Token)
-                    .ConfigureAwait(false);
-                response.EnsureSuccessStatusCode();
-                await using (var input = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false))
-                await using (
-                    var output = new FileStream(
+                await DownloadFileAsync(
+                        client,
+                        file,
                         part,
-                        FileMode.CreateNew,
-                        FileAccess.Write,
-                        FileShare.None,
-                        128 * 1024,
-                        true
-                    )
-                )
-                {
-                    byte[] buffer = new byte[128 * 1024];
-                    long bytes = 0;
-                    int count;
-                    while ((count = await input.ReadAsync(buffer, timeout.Token).ConfigureAwait(false)) > 0)
-                    {
-                        bytes += count;
-                        if (bytes > file.Size)
+                        count =>
                         {
-                            throw new IOException("语音模型下载内容大小不正确。");
-                        }
-
-                        await output.WriteAsync(buffer.AsMemory(0, count), timeout.Token).ConfigureAwait(false);
-                        received += count;
-                        Report();
-                    }
-                }
+                            received += count;
+                            Report();
+                        },
+                        timeout.Token
+                    )
+                    .ConfigureAwait(false);
                 if (!await MatchesAsync(part, file, timeout.Token).ConfigureAwait(false))
                 {
                     throw new IOException("语音模型下载校验失败，请重试。");
@@ -191,10 +171,47 @@ public sealed class VoiceModelStore
                 {
                     File.Delete(path);
                 }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    // Preserve the download result/cancellation even if a temporary file cannot be removed.
+                }
             }
 
             _download.Release();
+        }
+    }
+
+    private static async Task DownloadFileAsync(
+        HttpClient client,
+        VoiceModelFile file,
+        string part,
+        Action<int> received,
+        CancellationToken token
+    )
+    {
+        using var response = await client
+            .GetAsync(Source + file.Name, HttpCompletionOption.ResponseHeadersRead, token)
+            .ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        await using (var input = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false))
+        await using (
+            var output = new FileStream(part, FileMode.CreateNew, FileAccess.Write, FileShare.None, 128 * 1024, true)
+        )
+        {
+            byte[] buffer = new byte[128 * 1024];
+            long bytes = 0;
+            int count;
+            while ((count = await input.ReadAsync(buffer, token).ConfigureAwait(false)) > 0)
+            {
+                bytes += count;
+                if (bytes > file.Size)
+                {
+                    throw new IOException("语音模型下载内容大小不正确。");
+                }
+
+                await output.WriteAsync(buffer.AsMemory(0, count), token).ConfigureAwait(false);
+                received(count);
+            }
         }
     }
 
