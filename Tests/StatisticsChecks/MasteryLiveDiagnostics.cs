@@ -23,17 +23,7 @@ internal static class MasteryLiveDiagnostics
             return;
         }
 
-        foreach (string team in new[] { "teamOne", "teamTwo", "playerChampionSelections" })
-        {
-            int index = 0;
-            foreach (var row in (game[team] as JArray ?? new()).OfType<JObject>())
-            {
-                string puuid = (string?)row["puuid"] ?? "";
-                Console.WriteLine(
-                    $"{team}[{index++}]: fields={string.Join(',', row.Properties().Select(p => p.Name))}; puuid={puuid.Length > 0}; zero={puuid == Guid.Empty.ToString()}; id={(long?)row["summonerId"] > 0}; name={!string.IsNullOrWhiteSpace((string?)row["gameName"])}; tag={!string.IsNullOrWhiteSpace((string?)row["tagLine"])}; champion={row["championId"]}"
-                );
-            }
-        }
+        LogRosterFields(game);
         var current = await api.GetAsync("/lol-summoner/v1/current-summoner", timeout.Token);
         using var liveClient = new LiveMatchClient();
         var live = await liveClient.GetAsync(timeout.Token);
@@ -55,6 +45,30 @@ internal static class MasteryLiveDiagnostics
         Console.WriteLine(
             $"Merged players={merged.Players.Length}; confirmed PUUIDs={merged.Players.Count(p => LoadingRosterIdentityService.HasPuuid(p.Puuid))}"
         );
+        await LogMasteryAvailabilityAsync(api, merged, timeout.Token);
+    }
+
+    private static void LogRosterFields(JToken game)
+    {
+        foreach (string team in new[] { "teamOne", "teamTwo", "playerChampionSelections" })
+        {
+            int index = 0;
+            foreach (var row in (game[team] as JArray ?? new()).OfType<JObject>())
+            {
+                string puuid = (string?)row["puuid"] ?? "";
+                Console.WriteLine(
+                    $"{team}[{index++}]: fields={string.Join(',', row.Properties().Select(p => p.Name))}; puuid={puuid.Length > 0}; zero={puuid == Guid.Empty.ToString()}; id={(long?)row["summonerId"] > 0}; name={!string.IsNullOrWhiteSpace((string?)row["gameName"])}; tag={!string.IsNullOrWhiteSpace((string?)row["tagLine"])}; champion={row["championId"]}"
+                );
+            }
+        }
+    }
+
+    private static async Task LogMasteryAvailabilityAsync(
+        PlayerStatisticsService api,
+        League.Models.LoadingRoster merged,
+        CancellationToken token
+    )
+    {
         int available = 0,
             unavailable = 0;
         foreach (
@@ -63,7 +77,7 @@ internal static class MasteryLiveDiagnostics
         {
             var mastery = await api.GetAsync(
                 "/lol-champion-mastery/v1/" + Uri.EscapeDataString(player.Puuid) + "/champion-mastery",
-                timeout.Token
+                token
             );
             if (mastery.Data is JArray)
             {

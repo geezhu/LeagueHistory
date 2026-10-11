@@ -1,117 +1,133 @@
 using System.Runtime.InteropServices;
 using League.Services;
+using static StatisticsCheckSupport;
 
 internal static class AssistantWindowChecks
 {
-    private static void Check(bool value, string message)
+    private const uint NativeOwner = 4;
+    private const uint NextWindow = 2;
+    private const int ShowMinimizedWithoutActivation = 7;
+    private const int ShowWithoutActivation = 4;
+
+    public static void Run() => WinFormsCheckHost.Run(WindowLifecycle);
+
+    private static void WindowLifecycle()
     {
-        if (!value)
-        {
-            throw new Exception(message);
-        }
+        using var client = new QuietForm();
+        using var assistant = new QuietForm { TopMost = true };
+        using var layer = new AssistantWindowLayer(assistant);
+        AttachmentAndStacking(client, assistant, layer);
+        MinimizeAndRecreate(client, assistant, layer);
+        ClientReplacement(client, assistant, layer);
+        Console.WriteLine(
+            "PASS: assistant native ownership, normal z-order, no activation, dialogs, minimize, rebind and handle recreation."
+        );
     }
 
-    public static void Run()
+    private static void AttachmentAndStacking(QuietForm client, QuietForm assistant, AssistantWindowLayer layer)
     {
-        var context = SynchronizationContext.Current;
-        try
+        client.Show();
+        Application.DoEvents();
+        var foreground = GetForegroundWindow();
+        Check(layer.Attach(client.Handle), "Assistant can attach to an external HWND without a managed Form owner");
+        assistant.Show();
+        Application.DoEvents();
+        Check(
+            GetWindow(assistant.Handle, NativeOwner) == client.Handle && assistant.Owner == null,
+            "Native ownership points to the client, not the League main form"
+        );
+        Check(
+            !assistant.TopMost && (GetWindowLong(assistant.Handle, -20) & 8) == 0,
+            "Assistant must not use the global topmost band"
+        );
+        Check(
+            (GetWindowLong(assistant.Handle, -16) & 0x40000000) == 0,
+            "Assistant remains an independent top-level window"
+        );
+        Check(GetForegroundWindow() == foreground, "Attaching and showing must not steal focus");
+        Raise(client.Handle);
+        Check(Above(assistant.Handle, client.Handle), "Activating the client must not cover its assistant");
+        using var other = new QuietForm();
+        other.Show();
+        Raise(other.Handle);
+        for (int i = 0; i < 5; i++)
         {
-            using var client = new QuietForm();
-            using var assistant = new QuietForm { TopMost = true };
-            using var other = new QuietForm();
-            using var layer = new AssistantWindowLayer(assistant);
-            client.Show();
-            Application.DoEvents();
-            var foreground = GetForegroundWindow();
-            Check(layer.Attach(client.Handle), "Assistant can attach to an external HWND without a managed Form owner");
-            assistant.Show();
-            Application.DoEvents();
-            Check(
-                GetWindow(assistant.Handle, 4) == client.Handle && assistant.Owner == null,
-                "Native ownership points to the client, not the League main form"
-            );
-            Check(
-                !assistant.TopMost && (GetWindowLong(assistant.Handle, -20) & 8) == 0,
-                "Assistant must not use the global topmost band"
-            );
-            Check(
-                (GetWindowLong(assistant.Handle, -16) & 0x40000000) == 0,
-                "Assistant remains an independent top-level window"
-            );
-            Check(GetForegroundWindow() == foreground, "Attaching and showing must not steal focus");
-            Raise(client.Handle);
-            Check(Above(assistant.Handle, client.Handle), "Activating the client must not cover its assistant");
-            other.Show();
-            Raise(other.Handle);
-            for (int i = 0; i < 5; i++)
-            {
-                Check(layer.Attach(client.Handle), "Repeated follow ticks remain attached");
-            }
-
-            Check(
-                Above(other.Handle, assistant.Handle),
-                "Following the client must not raise the assistant above unrelated applications"
-            );
-
-            using var editor = new QuietForm();
-            editor.Show(assistant);
-            Check(Above(editor.Handle, assistant.Handle), "Equipment and roster dialogs remain above the assistant");
-            editor.Hide();
-            // Native minimization should hide an owned popup immediately, without waiting for a timer.
-            ShowWindow(client.Handle, 7);
-            Application.DoEvents(); // SW_SHOWMINNOACTIVE
-            Check(!IsWindowVisible(assistant.Handle), "Minimizing the client immediately hides the attached assistant");
-            ShowWindow(client.Handle, 4);
-            Application.DoEvents(); // SW_SHOWNOACTIVATE
-            assistant.Hide();
-            assistant.Show();
-            Check(
-                layer.Attach(client.Handle) && GetWindow(assistant.Handle, 4) == client.Handle,
-                "Minimize/restore and hide/show preserve native ownership"
-            );
-            assistant.Recreate();
-            Application.DoEvents();
-            Check(
-                GetWindow(assistant.Handle, 4) == client.Handle,
-                "DPI/style handle recreation reattaches the assistant"
-            );
-
-            using var replacement = new QuietForm();
-            replacement.Show();
-            Check(layer.Attach(replacement.Handle), "Client handle replacement can rebind without recreating the form");
-            client.Dispose();
-            Check(
-                !assistant.IsDisposed && IsWindowVisible(assistant.Handle),
-                "Destroying the old client does not close the rebound assistant"
-            );
-            Check(!layer.Attach(IntPtr.Zero), "Missing client handles are rejected");
-            replacement.Dispose();
-            Check(!assistant.IsDisposed, "Native client shutdown must not dispose the reusable managed assistant");
-            using var restarted = new QuietForm();
-            restarted.Show();
-            Check(layer.Attach(restarted.Handle), "Assistant can attach after the previous client HWND was destroyed");
-            assistant.Show();
-            Application.DoEvents();
-            Check(GetWindow(assistant.Handle, 4) == restarted.Handle, "Restarted client retains the correct owner");
-            layer.Detach();
-            Check(GetWindow(assistant.Handle, 4) == IntPtr.Zero, "Leaving champion select clears native ownership");
-            restarted.Dispose();
-            Check(!assistant.IsDisposed, "Detached assistant survives client shutdown");
-            Console.WriteLine(
-                "PASS: assistant native ownership, normal z-order, no activation, dialogs, minimize, rebind and handle recreation."
-            );
+            Check(layer.Attach(client.Handle), "Repeated follow ticks remain attached");
         }
-        finally
-        {
-            SynchronizationContext.SetSynchronizationContext(context);
-        }
+
+        Check(
+            Above(other.Handle, assistant.Handle),
+            "Following the client must not raise the assistant above unrelated applications"
+        );
+
+        using var editor = new QuietForm();
+        editor.Show(assistant);
+        Check(Above(editor.Handle, assistant.Handle), "Equipment and roster dialogs remain above the assistant");
+        editor.Hide();
+    }
+
+    private static void MinimizeAndRecreate(QuietForm client, QuietForm assistant, AssistantWindowLayer layer)
+    {
+        // Native minimization should hide an owned popup immediately, without waiting for a timer.
+        ShowWindow(client.Handle, ShowMinimizedWithoutActivation);
+        Application.DoEvents(); // SW_SHOWMINNOACTIVE
+        Check(!IsWindowVisible(assistant.Handle), "Minimizing the client immediately hides the attached assistant");
+        ShowWindow(client.Handle, ShowWithoutActivation);
+        Application.DoEvents(); // SW_SHOWNOACTIVATE
+        assistant.Hide();
+        assistant.Show();
+        Check(
+            layer.Attach(client.Handle) && GetWindow(assistant.Handle, NativeOwner) == client.Handle,
+            "Minimize/restore and hide/show preserve native ownership"
+        );
+        assistant.Recreate();
+        Application.DoEvents();
+        Check(
+            GetWindow(assistant.Handle, NativeOwner) == client.Handle,
+            "DPI/style handle recreation reattaches the assistant"
+        );
+    }
+
+    private static void ClientReplacement(QuietForm client, QuietForm assistant, AssistantWindowLayer layer)
+    {
+        using var replacement = new QuietForm();
+        replacement.Show();
+        Check(layer.Attach(replacement.Handle), "Client handle replacement can rebind without recreating the form");
+        client.Dispose();
+        Check(
+            !assistant.IsDisposed && IsWindowVisible(assistant.Handle),
+            "Destroying the old client does not close the rebound assistant"
+        );
+        Check(!layer.Attach(IntPtr.Zero), "Missing client handles are rejected");
+        replacement.Dispose();
+        Check(!assistant.IsDisposed, "Native client shutdown must not dispose the reusable managed assistant");
+        using var restarted = new QuietForm();
+        restarted.Show();
+        Check(layer.Attach(restarted.Handle), "Assistant can attach after the previous client HWND was destroyed");
+        assistant.Show();
+        Application.DoEvents();
+        Check(
+            GetWindow(assistant.Handle, NativeOwner) == restarted.Handle,
+            "Restarted client retains the correct owner"
+        );
+        layer.Detach();
+        Check(
+            GetWindow(assistant.Handle, NativeOwner) == IntPtr.Zero,
+            "Leaving champion select clears native ownership"
+        );
+        restarted.Dispose();
+        Check(!assistant.IsDisposed, "Detached assistant survives client shutdown");
     }
 
     private static void Raise(IntPtr window) => SetWindowPos(window, IntPtr.Zero, 0, 0, 0, 0, 0x13); // NOMOVE | NOSIZE | NOACTIVATE
 
     private static bool Above(IntPtr first, IntPtr second)
     {
-        for (IntPtr window = GetWindow(first, 2); window != IntPtr.Zero; window = GetWindow(window, 2)) // GW_HWNDNEXT
+        for (
+            IntPtr window = GetWindow(first, NextWindow);
+            window != IntPtr.Zero;
+            window = GetWindow(window, NextWindow)
+        ) // GW_HWNDNEXT
         {
             if (window == second)
             {

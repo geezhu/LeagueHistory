@@ -3,33 +3,27 @@ using League.Controls;
 using League.Models;
 using League.Services;
 using Newtonsoft.Json.Linq;
+using static StatisticsCheckSupport;
 
 internal static class LoadingOverlayChecks
 {
-    private static void Check(bool value, string message)
-    {
-        if (!value)
-        {
-            throw new Exception(message);
-        }
-    }
-
-    public static void Run()
-    {
-        var previous = SynchronizationContext.Current;
-        try
-        {
-            RunCore();
-        }
-        finally
-        {
-            SynchronizationContext.SetSynchronizationContext(previous);
-        }
-    }
+    public static void Run() => WinFormsCheckHost.Run(RunCore);
 
     private static void RunCore()
     {
         CheckFullscreenPause();
+        SavedPreferences();
+        DisplayRequests();
+        RosterParsing();
+        long elapsed = OverlaySurface();
+        CheckBackendSwitching();
+        Console.WriteLine(
+            $"PASS: automatic display before data, manual close, reentry, saved config, preview, parsing, no-activation flags, ten cards and 100 updates ({elapsed} ms)."
+        );
+    }
+
+    private static void SavedPreferences()
+    {
         foreach (var oldKey in new[] { "F6", "F8", "F10", "PrtSc" })
         {
             var defaults = Newtonsoft.Json.JsonConvert.DeserializeObject<LeagueConfig>(
@@ -45,6 +39,10 @@ internal static class LoadingOverlayChecks
             Newtonsoft.Json.JsonConvert.SerializeObject(chosen)
         )!;
         Check(!saved.AutoShowLoadingOverlay, "Automatic display preference survives settings reload");
+    }
+
+    private static void DisplayRequests()
+    {
         var display = new LoadingOverlayDisplayState();
         display.ObservePhase("ChampSelect", true);
         Check(!display.Requested, "Champion select does not open loading overlay");
@@ -69,7 +67,11 @@ internal static class LoadingOverlayChecks
         Check(display.Preview && display.Requested, "Desktop preview works outside a match");
         display.Reset();
         Check(!display.Requested && !display.Preview, "Feature shutdown also hides preview");
-        var flow = new JObject
+    }
+
+    private static JObject RosterFlow()
+    {
+        return new JObject
         {
             ["gameData"] = new JObject
             {
@@ -91,6 +93,11 @@ internal static class LoadingOverlayChecks
                 ),
             },
         };
+    }
+
+    private static void RosterParsing()
+    {
+        var flow = RosterFlow();
         var roster = LoadingRoster.Parse(flow, "a");
         Check(
             roster.Players.Length == 2 && roster.Players[0].ChampionId == 99,
@@ -134,6 +141,10 @@ internal static class LoadingOverlayChecks
             merged.Players[0].Puuid == "a" && merged.Players[1].Puuid == "",
             "Live merge never guesses identity from champion"
         );
+    }
+
+    private static long OverlaySurface()
+    {
         var type = typeof(League.FormMain).Assembly.GetType("League.LoadingOverlayForm")!;
         using var form = (Form)
             Activator.CreateInstance(
@@ -144,6 +155,12 @@ internal static class LoadingOverlayChecks
                     (Func<LoadingPlayer, string>)(_ => "单双排 钻石 · 近期 20 场 12 胜 8 负"),
                 }
             )!;
+        WindowContract(type, form);
+        return RenderRoster(type, form);
+    }
+
+    private static void WindowContract(Type type, Form form)
+    {
         var props = (CreateParams)
             type.GetProperty("CreateParams", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(form)!;
         Check(
@@ -167,6 +184,10 @@ internal static class LoadingOverlayChecks
             placement.Left >= -1920 && placement.Right <= 0,
             "Overlay placement supports negative monitor coordinates"
         );
+    }
+
+    private static LoadingRoster PreviewRoster()
+    {
         var players = Enumerable
             .Range(0, 10)
             .Select(i => new LoadingPlayer(
@@ -179,7 +200,13 @@ internal static class LoadingOverlayChecks
                 i == 0
             ))
             .ToArray();
-        var fixture = new LoadingRoster("test", 450, "ARAM", players);
+        return new LoadingRoster("test", 450, "ARAM", players);
+    }
+
+    private static long RenderRoster(Type type, Form form)
+    {
+        var fixture = PreviewRoster();
+        var players = fixture.Players;
         var ranks = players.ToDictionary(
             p => p.Key,
             p => new PlayerChampionTier("T2", "胜 52.8%", "OP.GG · 普通大乱斗 · 全球 / 全段位 · 示例", 450, "none")
@@ -199,13 +226,11 @@ internal static class LoadingOverlayChecks
         form.Show();
         view.UpdateRoster(fixture, ranks, icons, "数据已缓存 · 点击查看详情");
         Application.DoEvents();
-        IEnumerable<Control> All(Control parent) =>
-            parent.Controls.Cast<Control>().SelectMany(c => new[] { c }.Concat(All(c)));
         Check(
-            All(form).OfType<Label>().Any(c => c.Text == "对局速览 · 双方英雄"),
+            Children(form).OfType<Label>().Any(c => c.Text == "对局速览 · 双方英雄"),
             "Overlay title contains no removed shortcut hint"
         );
-        Check(All(view).Count(c => c.Tag is LoadingPlayer) == 10, "Both teams show ten player cards");
+        Check(Children(view).Count(c => c.Tag is LoadingPlayer) == 10, "Both teams show ten player cards");
         using var image = new Bitmap(form.Width, form.Height);
         form.DrawToBitmap(image, new Rectangle(Point.Empty, form.Size));
         image.Save(Path.Combine(AppContext.BaseDirectory, "loading-overlay.png"));
@@ -222,18 +247,15 @@ internal static class LoadingOverlayChecks
             new Dictionary<int, Image>(),
             "等待新对局"
         );
-        Check(!All(view).Any(c => c.Tag is LoadingPlayer), "Clearing snapshot removes all previous players");
+        Check(!Children(view).Any(c => c.Tag is LoadingPlayer), "Clearing snapshot removes all previous players");
         type.GetMethod("SetPreviewTitle")!.Invoke(form, null);
         Check(
-            All(form).OfType<Label>().Any(c => c.Text.Contains("显示测试")),
+            Children(form).OfType<Label>().Any(c => c.Text.Contains("显示测试")),
             "Desktop preview is identified as a test"
         );
         Check(form.Visible, "Preview shell can be shown without roster data");
         form.Close();
-        CheckBackendSwitching();
-        Console.WriteLine(
-            $"PASS: automatic display before data, manual close, reentry, saved config, preview, parsing, no-activation flags, ten cards and 100 updates ({watch.ElapsedMilliseconds} ms)."
-        );
+        return watch.ElapsedMilliseconds;
     }
 
     private static void CheckBackendSwitching()
