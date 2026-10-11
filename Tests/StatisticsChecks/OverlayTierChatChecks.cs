@@ -14,9 +14,38 @@ internal static class OverlayTierChatChecks
 
     public static void Run()
     {
-        const long now = 100000;
-        int[] slots = [99, 25, 0, 0, 0, 103, 0, 0, 0, 0];
-        var data = new JObject
+        var request = RequestShapes();
+        Readiness(request, 100000);
+        var roster = CreateRoster();
+        var ranks = roster.Players.ToDictionary(
+            p => p.Key,
+            p => new PlayerChampionTier("T2", "display text is not parsed", "note", 2400, "none")
+            {
+                WinRateValue = .527,
+                PickRateValue = .086,
+                Version = "16.18",
+            }
+        );
+        string Hero(int id) =>
+            id switch
+            {
+                99 => "拉克丝",
+                25 => "莫甘娜",
+                _ => "阿狸",
+            };
+        TeamRatesAndSelection(roster, request, ranks, Hero);
+        RiftReferenceAndMissingRates(roster, request, ranks, Hero);
+        CheckMastery(roster, request, Hero);
+        CheckDeathStreak(roster, request, Hero);
+        Task.Run(CheckBridge).GetAwaiter().GetResult();
+        Console.WriteLine(
+            "PASS: Game Bar team/single chat, rates, mastery, death streaks, request validation, replay prevention, cancellation, foreground/dismissal gate and timeout. No game input sent."
+        );
+    }
+
+    private static JObject CreateRequestData(long now)
+    {
+        return new JObject
         {
             ["protocol"] = 1,
             ["id"] = Guid.NewGuid().ToString(),
@@ -28,6 +57,13 @@ internal static class OverlayTierChatChecks
             ["dismissed"] = false,
             ["cancelled"] = false,
         };
+    }
+
+    private static OverlayChatRequest RequestShapes()
+    {
+        const long now = 100000;
+        int[] slots = [99, 25, 0, 0, 0, 103, 0, 0, 0, 0];
+        var data = CreateRequestData(now);
         var request =
             OverlayChatRequest.Parse(data, "match", slots, now)
             ?? throw new Exception("Explicit current-match command rejected");
@@ -77,6 +113,11 @@ internal static class OverlayTierChatChecks
         );
         single["slot"] = 2;
         Check(OverlayChatRequest.Parse(single, "match", slots, now) == null, "Empty slot cannot send");
+        return request;
+    }
+
+    private static void Readiness(OverlayChatRequest request, long now)
+    {
         var seen = new OverlayChatRequests();
         Check(seen.Take(request) && !seen.Take(request), "The same click never sends twice");
         var other = request with { Id = Guid.NewGuid().ToString("N") };
@@ -126,8 +167,11 @@ internal static class OverlayTierChatChecks
             gate.Observe(ready, now + 20000, true) == OverlayChatReadiness.TimedOut,
             "A late return to the game never sends stale text"
         );
+    }
 
-        var roster = new LoadingRoster(
+    private static LoadingRoster CreateRoster()
+    {
+        return new LoadingRoster(
             "game",
             2400,
             "KIWI",
@@ -137,30 +181,23 @@ internal static class OverlayTierChatChecks
                 new("ally", "队友", "", 3, 25, 200, false),
             ]
         );
-        var ranks = roster.Players.ToDictionary(
-            p => p.Key,
-            p => new PlayerChampionTier("T2", "display text is not parsed", "note", 2400, "none")
-            {
-                WinRateValue = .527,
-                PickRateValue = .086,
-                Version = "16.18",
-            }
-        );
-        string Hero(int id) =>
-            id switch
-            {
-                99 => "拉克丝",
-                25 => "莫甘娜",
-                _ => "阿狸",
-            };
-        string Own() => string.Join("\n", OverlayTierChatMessage.Build(roster, request, ranks, Hero));
+    }
+
+    private static void TeamRatesAndSelection(
+        LoadingRoster roster,
+        OverlayChatRequest request,
+        Dictionary<string, PlayerChampionTier> ranks,
+        Func<int, string> hero
+    )
+    {
+        string Own() => string.Join("\n", OverlayTierChatMessage.Build(roster, request, ranks, hero));
         Check(
             Own().Contains("我方") && Own().Contains("拉克丝") && Own().Contains("莫甘娜") && !Own().Contains("阿狸"),
             "Red-side self maps to own team correctly"
         );
         string enemy = string.Join(
             "",
-            OverlayTierChatMessage.Build(roster, request with { Target = "enemy" }, ranks, Hero)
+            OverlayTierChatMessage.Build(roster, request with { Target = "enemy" }, ranks, hero)
         );
         Check(
             enemy.Contains("阿狸 T2 52.7%/8.6%")
@@ -183,6 +220,16 @@ internal static class OverlayTierChatChecks
             OverlayTierChatMessage.Select(roster, individual with { ChampionId = 99 }).Length == 0,
             "Changed hero is rejected"
         );
+    }
+
+    private static void RiftReferenceAndMissingRates(
+        LoadingRoster roster,
+        OverlayChatRequest request,
+        Dictionary<string, PlayerChampionTier> ranks,
+        Func<int, string> hero
+    )
+    {
+        string Own() => string.Join("\n", OverlayTierChatMessage.Build(roster, request, ranks, hero));
         ranks["self"] = ranks["self"] with
         {
             Position = "mid",
@@ -205,7 +252,7 @@ internal static class OverlayTierChatChecks
                     ChampionId = 99,
                 },
                 ranks,
-                Hero
+                hero
             )
         );
         Check(
@@ -227,12 +274,6 @@ internal static class OverlayTierChatChecks
             rejected = true;
         }
         Check(rejected, "Unloaded statistics do not send empty placeholder messages");
-        CheckMastery(roster, request, Hero);
-        CheckDeathStreak(roster, request, Hero);
-        Task.Run(CheckBridge).GetAwaiter().GetResult();
-        Console.WriteLine(
-            "PASS: Game Bar team/single chat, rates, mastery, death streaks, request validation, replay prevention, cancellation, foreground/dismissal gate and timeout. No game input sent."
-        );
     }
 
     private static void CheckMastery(LoadingRoster roster, OverlayChatRequest request, Func<int, string> hero)
@@ -345,6 +386,19 @@ internal static class OverlayTierChatChecks
             Message(request, hidden).Contains("莫甘娜 未知"),
             "Hidden identities do not inherit another player's counts"
         );
+        InvalidCountersAndMessageBounds(roster, request, hero, streaks);
+    }
+
+    private static void InvalidCountersAndMessageBounds(
+        LoadingRoster roster,
+        OverlayChatRequest request,
+        Func<int, string> hero,
+        Dictionary<string, LiveDeathStreak> streaks
+    )
+    {
+        string Message(OverlayChatRequest command, LoadingRoster? source = null, Func<int, string>? names = null) =>
+            string.Join("\n", OverlayDeathStreakChatMessage.Build(source ?? roster, command, streaks, names ?? hero));
+        var single = request with { Target = "single", Slot = 5, ChampionId = 103 };
         bool Rejected(OverlayChatRequest command, LoadingRoster? source = null)
         {
             try
@@ -417,8 +471,7 @@ internal static class OverlayTierChatChecks
                 );
             Publish("one");
             string snapshot = Path.Combine(folder, "snapshot.json");
-            Check(SpinWait.SpinUntil(() => File.Exists(snapshot), 5000), "Snapshot written");
-            var source = JObject.Parse(await File.ReadAllTextAsync(snapshot));
+            var source = JObject.Parse(await BridgeCheckFiles.ReadAsync(snapshot, "Snapshot written"));
             Check(
                 (int?)source["chatProtocol"] == 1
                     && (bool?)source["chatTeams"] == true
@@ -426,50 +479,7 @@ internal static class OverlayTierChatChecks
                     && (bool?)source["chatDeathStreak"] == true,
                 "Send capabilities and side identity advertised"
             );
-            var data = new JObject
-            {
-                ["protocol"] = 1,
-                ["id"] = Guid.NewGuid().ToString("N"),
-                ["session"] = source["session"],
-                ["target"] = "single",
-                ["kind"] = "mastery",
-                ["slot"] = 0,
-                ["championId"] = 99,
-                ["updatedAt"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                ["dismissed"] = false,
-                ["cancelled"] = false,
-            };
-            string file = Path.Combine(folder, "chat-request.json");
-            await File.WriteAllTextAsync(file, data.ToString());
-            var request = await bridge.ReadChatRequestAsync();
-            Check(
-                request != null && !request.Dismissed && request.Kind == "mastery",
-                "Mastery click reaches main process before dismissal"
-            );
-            data["kind"] = "deathStreak";
-            await File.WriteAllTextAsync(file, data.ToString());
-            request = await bridge.ReadChatRequestAsync();
-            Check(
-                request?.Kind == "deathStreak" && !request.Dismissed,
-                "Death streak command reaches the main process"
-            );
-            data["dismissed"] = true;
-            await File.WriteAllTextAsync(file, data.ToString());
-            var ready = await bridge.ReadChatRequestAsync();
-            Check(
-                ready!.Dismissed && ready.SameCommand(request!),
-                "Closing Game Bar updates the same command without a new send"
-            );
-            bridge.PublishChatStatus(request!, "permission", "请以管理员身份启动 League.exe。", true);
-            string status = Path.Combine(folder, "chat-status.json");
-            Check(SpinWait.SpinUntil(() => File.Exists(status), 5000), "Send outcome written");
-            var response = JObject.Parse(await File.ReadAllTextAsync(status));
-            Check(
-                (string?)response["requestId"] == request!.Id
-                    && (bool?)response["complete"] == true
-                    && !response.ToString().Contains("secret"),
-                "Outcome is scoped and excludes private player identifiers"
-            );
+            await CheckCommandRoundTripAsync(bridge, folder, source);
             Publish("two");
             Check(await bridge.ReadChatRequestAsync() == null, "A previous match cannot trigger sending");
             Publish("one", false);
@@ -490,5 +500,49 @@ internal static class OverlayTierChatChecks
                 Directory.Delete(folder, true);
             }
         }
+    }
+
+    private static async Task CheckCommandRoundTripAsync(GameBarBridge bridge, string folder, JObject source)
+    {
+        var data = new JObject
+        {
+            ["protocol"] = 1,
+            ["id"] = Guid.NewGuid().ToString("N"),
+            ["session"] = source["session"],
+            ["target"] = "single",
+            ["kind"] = "mastery",
+            ["slot"] = 0,
+            ["championId"] = 99,
+            ["updatedAt"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            ["dismissed"] = false,
+            ["cancelled"] = false,
+        };
+        string file = Path.Combine(folder, "chat-request.json");
+        await File.WriteAllTextAsync(file, data.ToString());
+        var request = await bridge.ReadChatRequestAsync();
+        Check(
+            request != null && !request.Dismissed && request.Kind == "mastery",
+            "Mastery click reaches main process before dismissal"
+        );
+        data["kind"] = "deathStreak";
+        await File.WriteAllTextAsync(file, data.ToString());
+        request = await bridge.ReadChatRequestAsync();
+        Check(request?.Kind == "deathStreak" && !request.Dismissed, "Death streak command reaches the main process");
+        data["dismissed"] = true;
+        await File.WriteAllTextAsync(file, data.ToString());
+        var ready = await bridge.ReadChatRequestAsync();
+        Check(
+            ready!.Dismissed && ready.SameCommand(request!),
+            "Closing Game Bar updates the same command without a new send"
+        );
+        bridge.PublishChatStatus(request!, "permission", "请以管理员身份启动 League.exe。", true);
+        string status = Path.Combine(folder, "chat-status.json");
+        var response = JObject.Parse(await BridgeCheckFiles.ReadAsync(status, "Send outcome written"));
+        Check(
+            (string?)response["requestId"] == request!.Id
+                && (bool?)response["complete"] == true
+                && !response.ToString().Contains("secret"),
+            "Outcome is scoped and excludes private player identifiers"
+        );
     }
 }
