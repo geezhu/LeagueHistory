@@ -21,24 +21,12 @@ public sealed record OverlayChatRequest(
 
     public static OverlayChatRequest? Parse(JObject value, string session, int[] heroes, long now)
     {
-        if (
-            value["protocol"]?.Type != JTokenType.Integer
-            || value["protocol"]!.ToString() != "1"
-            || value["session"]?.Type != JTokenType.String
-            || (string?)value["session"] != session
-            || session.Length == 0
-            || value["id"]?.Type != JTokenType.String
-            || !Guid.TryParse((string?)value["id"], out var id)
-            || value["target"]?.Type != JTokenType.String
-            || value["updatedAt"]?.Type != JTokenType.Integer
-            || value["slot"]?.Type != JTokenType.Integer
-            || value["championId"]?.Type != JTokenType.Integer
-            || value["dismissed"]?.Type != JTokenType.Boolean
-            || value["cancelled"]?.Type != JTokenType.Boolean
-        )
+        var commandId = ReadCommandId(value, session);
+        if (commandId == null)
         {
             return null;
         }
+        Guid id = commandId.Value;
 
         if (
             !long.TryParse(value["updatedAt"]!.ToString(), out long stamp)
@@ -67,32 +55,7 @@ public sealed record OverlayChatRequest(
         string kind = (string?)value["kind"] ?? "tier";
         if (kind == "voice")
         {
-            if (
-                target != "text"
-                || slot != -1
-                || hero != 0
-                || value["confirmed"]?.Type != JTokenType.Boolean
-                || (bool?)value["confirmed"] != true
-                || value["text"]?.Type != JTokenType.String
-                || !OverlayVoiceChatText.TryNormalize((string?)value["text"], out string text)
-            )
-            {
-                return null;
-            }
-
-            return new(
-                id.ToString("N"),
-                session,
-                target,
-                slot,
-                hero,
-                stamp,
-                (bool)value["dismissed"]!,
-                (bool)value["cancelled"]!,
-                kind,
-                text,
-                true
-            );
+            return ReadVoice(value, session, id, target, slot, hero, stamp);
         }
         if (value["text"] != null || value["confirmed"] != null)
         {
@@ -118,6 +81,68 @@ public sealed record OverlayChatRequest(
             (bool)value["dismissed"]!,
             (bool)value["cancelled"]!,
             kind
+        );
+    }
+
+    private static Guid? ReadCommandId(JObject value, string session)
+    {
+        if (
+            value["protocol"]?.Type != JTokenType.Integer
+            || value["protocol"]!.ToString() != "1"
+            || value["session"]?.Type != JTokenType.String
+            || (string?)value["session"] != session
+            || session.Length == 0
+            || value["id"]?.Type != JTokenType.String
+            || !Guid.TryParse((string?)value["id"], out var id)
+            || value["target"]?.Type != JTokenType.String
+            || value["updatedAt"]?.Type != JTokenType.Integer
+            || value["slot"]?.Type != JTokenType.Integer
+            || value["championId"]?.Type != JTokenType.Integer
+            || value["dismissed"]?.Type != JTokenType.Boolean
+            || value["cancelled"]?.Type != JTokenType.Boolean
+        )
+        {
+            return null;
+        }
+
+        return id;
+    }
+
+    private static OverlayChatRequest? ReadVoice(
+        JObject value,
+        string session,
+        Guid id,
+        string target,
+        int slot,
+        int hero,
+        long stamp
+    )
+    {
+        if (
+            target != "text"
+            || slot != -1
+            || hero != 0
+            || value["confirmed"]?.Type != JTokenType.Boolean
+            || (bool?)value["confirmed"] != true
+            || value["text"]?.Type != JTokenType.String
+            || !OverlayVoiceChatText.TryNormalize((string?)value["text"], out string text)
+        )
+        {
+            return null;
+        }
+
+        return new(
+            id.ToString("N"),
+            session,
+            target,
+            slot,
+            hero,
+            stamp,
+            (bool)value["dismissed"]!,
+            (bool)value["cancelled"]!,
+            "voice",
+            text,
+            true
         );
     }
 

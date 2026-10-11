@@ -55,11 +55,6 @@ public sealed class MatchTimeline
             && participants.All(p => p["teamId"]?.Type == JTokenType.Integer);
         result.BluePlayers = players.Values.Count(p => (int?)p["teamId"] == 100);
         result.RedPlayers = players.Values.Count(p => (int?)p["teamId"] == 200);
-        string Player(int id) =>
-            id == 0 ? "环境"
-            : players.TryGetValue(id, out var player)
-                ? player["riotIdGameName"]?.ToString() ?? player["summonerName"]?.ToString() ?? $"玩家 {id}"
-            : $"玩家 {id}";
         foreach (
             var frame in frames
                 .OfType<JObject>()
@@ -67,60 +62,75 @@ public sealed class MatchTimeline
                 .OrderBy(f => (long)f["timestamp"]!)
         )
         {
-            long time = (long)frame["timestamp"]!;
-            if (time < 0)
+            result.ReadFrame(frame, players, completeMapping);
+        }
+        result.Events.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
+        return result;
+    }
+
+    private void ReadFrame(JObject frame, Dictionary<int, JObject> players, bool completeMapping)
+    {
+        long time = (long)frame["timestamp"]!;
+        if (time < 0)
+        {
+            return;
+        }
+
+        var values = frame["participantFrames"] as JObject;
+        long? Total(int team)
+        {
+            var ids = players.Where(p => p.Value["teamId"]?.Value<int>() == team).Select(p => p.Key).ToArray();
+            if (
+                !completeMapping
+                || ids.Length == 0
+                || values == null
+                || ids.Any(id => values[id.ToString()]?["totalGold"]?.Type != JTokenType.Integer)
+            )
+            {
+                return null;
+            }
+
+            return ids.Sum(id => values[id.ToString()]!["totalGold"]!.Value<long>());
+        }
+        Frames.Add(new(time, Total(100), Total(200)));
+        ReadEvents(frame, players, time);
+    }
+
+    private void ReadEvents(JObject frame, Dictionary<int, JObject> players, long time)
+    {
+        string Player(int id) =>
+            id == 0 ? "环境"
+            : players.TryGetValue(id, out var player)
+                ? player["riotIdGameName"]?.ToString() ?? player["summonerName"]?.ToString() ?? $"玩家 {id}"
+            : $"玩家 {id}";
+        foreach (var ev in (frame["events"] as JArray ?? new JArray()).OfType<JObject>())
+        {
+            string kind = ev["type"]?.ToString() ?? ev["eventType"]?.ToString() ?? "";
+            if (kind is not ("CHAMPION_KILL" or "ELITE_MONSTER_KILL" or "BUILDING_KILL"))
             {
                 continue;
             }
 
-            var values = frame["participantFrames"] as JObject;
-            long? Total(int team)
+            long stamp = ev["timestamp"]?.Value<long>() ?? time;
+            int killer = ev["killerId"]?.Value<int>() ?? 0;
+            string description = kind switch
             {
-                var ids = players.Where(p => p.Value["teamId"]?.Value<int>() == team).Select(p => p.Key).ToArray();
-                if (
-                    !completeMapping
-                    || ids.Length == 0
-                    || values == null
-                    || ids.Any(id => values[id.ToString()]?["totalGold"]?.Type != JTokenType.Integer)
+                "CHAMPION_KILL" => "击杀 " + Player(ev["victimId"]?.Value<int>() ?? 0),
+                "ELITE_MONSTER_KILL" => "击杀 " + Monster(ev["monsterType"]?.ToString()),
+                _ => ev["buildingType"]?.ToString() == "INHIBITOR_BUILDING" ? "摧毁水晶" : "摧毁防御塔",
+            };
+            Events.Add(
+                new(
+                    stamp,
+                    kind,
+                    Player(killer),
+                    description,
+                    ev["position"]?["x"]?.Value<int>(),
+                    ev["position"]?["y"]?.Value<int>(),
+                    players.TryGetValue(killer, out var killerPlayer) ? (int?)killerPlayer["teamId"] : null
                 )
-                {
-                    return null;
-                }
-
-                return ids.Sum(id => values[id.ToString()]!["totalGold"]!.Value<long>());
-            }
-            result.Frames.Add(new(time, Total(100), Total(200)));
-            foreach (var ev in (frame["events"] as JArray ?? new JArray()).OfType<JObject>())
-            {
-                string kind = ev["type"]?.ToString() ?? ev["eventType"]?.ToString() ?? "";
-                if (kind is not ("CHAMPION_KILL" or "ELITE_MONSTER_KILL" or "BUILDING_KILL"))
-                {
-                    continue;
-                }
-
-                long stamp = ev["timestamp"]?.Value<long>() ?? time;
-                int killer = ev["killerId"]?.Value<int>() ?? 0;
-                string description = kind switch
-                {
-                    "CHAMPION_KILL" => "击杀 " + Player(ev["victimId"]?.Value<int>() ?? 0),
-                    "ELITE_MONSTER_KILL" => "击杀 " + Monster(ev["monsterType"]?.ToString()),
-                    _ => ev["buildingType"]?.ToString() == "INHIBITOR_BUILDING" ? "摧毁水晶" : "摧毁防御塔",
-                };
-                result.Events.Add(
-                    new(
-                        stamp,
-                        kind,
-                        Player(killer),
-                        description,
-                        ev["position"]?["x"]?.Value<int>(),
-                        ev["position"]?["y"]?.Value<int>(),
-                        players.TryGetValue(killer, out var killerPlayer) ? (int?)killerPlayer["teamId"] : null
-                    )
-                );
-            }
+            );
         }
-        result.Events.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
-        return result;
     }
 
     private static string Monster(string? type) =>
