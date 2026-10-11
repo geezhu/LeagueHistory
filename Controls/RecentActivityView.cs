@@ -14,6 +14,7 @@ internal sealed class RecentActivityView : Control
         _classified;
     private string _status = "正在加载近期对局…";
     private CancellationTokenSource? _request;
+    private Task? _requestWork;
     public event Action<CareerGame[], string>? OverviewLoaded;
     private readonly ToolTip _tip = new();
     private readonly Image[] _roleIcons = Roles
@@ -78,127 +79,193 @@ internal sealed class RecentActivityView : Control
         return weights;
     }
 
-    public async void LoadPlayer(string puuid)
+    public void LoadPlayer(string puuid)
     {
-        _request?.Cancel();
-        _request?.Dispose();
+        if (IsDisposed)
+        {
+            return;
+        }
+        CancelRequest();
         var request = _request = new CancellationTokenSource();
         ClearImages();
         _sample = _classified = 0;
         _weights = new double[6];
         _status = "正在加载近期对局…";
         Invalidate();
-        OverviewLoaded?.Invoke(Array.Empty<CareerGame>(), "正在加载最近 50 场…");
+        _requestWork = LoadRecentAsync(puuid, request.Token);
+    }
+
+    private async Task LoadRecentAsync(string puuid, CancellationToken token)
+    {
+        // Register the worker before notifying subscribers, which may switch or dispose this view.
+        await Task.Yield();
         try
         {
+            token.ThrowIfCancellationRequested();
+            OverviewLoaded?.Invoke(Array.Empty<CareerGame>(), "正在加载最近 50 场…");
+            token.ThrowIfCancellationRequested();
             var service = new PlayerStatisticsService(() => FormMain.Globals.lcuClient.Client);
-            var records = new JArray();
-            CareerGame[] games = Array.Empty<CareerGame>();
-            bool partial = false;
-            // Share a bounded fifty-match sample with the overview; the hero strip uses its first twenty.
-            for (int start = 0; start < 50; start += 20)
+            var (games, partial) = await ReadRecentGamesAsync(puuid, service, token);
+            if (IsDisposed || token.IsCancellationRequested)
             {
-                int count = Math.Min(20, 50 - start);
-                var response = await service.GetAsync(
-                    $"/lol-match-history/v1/products/lol/{Uri.EscapeDataString(puuid)}/matches?begIndex={start}&endIndex={start + count - 1}",
-                    request.Token
-                );
-                var batch = CareerStatistics.Records(response.Data);
-                if (batch == null && response.Status is not (0 or 401 or 403))
-                {
-                    batch = await FormMain.Globals.sgpClient.SgpFetchLatestMatches(
-                        puuid,
-                        start,
-                        count,
-                        cancellationToken: request.Token
-                    );
-                }
-
-                if (IsDisposed || request.IsCancellationRequested)
-                {
-                    return;
-                }
-
-                if (batch == null)
-                {
-                    if (records.Count == 0)
-                    {
-                        _status = "近期对局暂不可用，请稍后重新打开主页。";
-                        OverviewLoaded?.Invoke(Array.Empty<CareerGame>(), "近期对局暂不可用");
-                        Invalidate();
-                        return;
-                    }
-                    partial = true;
-                    break;
-                }
-                foreach (var record in batch)
-                {
-                    records.Add(record.DeepClone());
-                }
-
-                games = CareerStatistics
-                    .Parse(records, puuid, includeRemakes: true)
-                    .Games.Where(g => g.Champion > 0)
-                    .OrderByDescending(g => g.Created)
-                    .ThenByDescending(g => g.Id)
-                    .Take(50)
-                    .ToArray();
-                if (batch.Count < count)
-                {
-                    break;
-                }
+                return;
             }
-            OverviewLoaded?.Invoke(games, $"最近 {games.Length} 场" + (partial ? " · 部分记录暂不可用" : ""));
-            games = games.Take(20).ToArray();
-            _sample = games.Length;
-            if (_sample == 0)
+            if (games == null)
             {
-                _status = "暂无可统计的近期对局。";
+                _status = "近期对局暂不可用，请稍后重新打开主页。";
+                OverviewLoaded?.Invoke(Array.Empty<CareerGame>(), "近期对局暂不可用");
                 Invalidate();
                 return;
             }
-            _status = $"最近 {_sample} 场对局" + (partial ? " · 部分记录暂不可用" : "");
+            OverviewLoaded?.Invoke(games, $"最近 {games.Length} 场" + (partial ? " · 部分记录暂不可用" : ""));
+            token.ThrowIfCancellationRequested();
+            games = games.Take(20).ToArray();
+            _sample = games.Length;
+            _status =
+                _sample == 0
+                    ? "暂无可统计的近期对局。"
+                    : $"最近 {_sample} 场对局" + (partial ? " · 部分记录暂不可用" : "");
             Invalidate();
-            var catalogTask = service.GetAsync("/lol-game-data/assets/v1/champion-summary.json", request.Token);
-            var masteryTask = ChampionMasteryService.Shared.GetAsync(puuid, request.Token);
-            await Task.WhenAll(catalogTask, masteryTask);
-            if (IsDisposed || request.IsCancellationRequested)
+            if (_sample > 0)
             {
-                return;
+                await LoadRecentAssetsAsync(puuid, games, service, token);
             }
-
-            _weights = CountRoles(games, catalogTask.Result.Data as JArray ?? new JArray(), out _classified);
-            var mastery = ProfileMasteryView.SelectAll(masteryTask.Result.Data);
-            foreach (
-                var group in games
-                    .GroupBy(g => g.Champion)
-                    .OrderByDescending(g => g.Count())
-                    .ThenByDescending(g => g.Max(m => m.Created))
-                    .Take(3)
-            )
-            {
-                var resource = await FormMain.Globals.resLoading.GetChampionInfoAsync(group.Key);
-                if (IsDisposed || request.IsCancellationRequested)
-                {
-                    resource.image?.Dispose();
-                    return;
-                }
-                int? level = (int?)mastery.FirstOrDefault(m => (int?)m["championId"] == group.Key)?["championLevel"];
-                _heroes.Add((resource.name, group.Count(), level, resource.image));
-            }
-            Invalidate();
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // Switching players or closing the view retires the previous sample and assets.
+        }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Recent activity: {ex.GetType().Name}");
-            if (!IsDisposed && !request.IsCancellationRequested)
+            if (!IsDisposed && !token.IsCancellationRequested)
             {
                 _status = "近期统计加载失败，请稍后重新打开主页。";
                 OverviewLoaded?.Invoke(Array.Empty<CareerGame>(), "统计加载失败");
                 Invalidate();
             }
         }
+    }
+
+    private async Task<(CareerGame[]? Games, bool Partial)> ReadRecentGamesAsync(
+        string puuid,
+        PlayerStatisticsService service,
+        CancellationToken token
+    )
+    {
+        var records = new JArray();
+        CareerGame[] games = Array.Empty<CareerGame>();
+        bool partial = false;
+        // Share a bounded fifty-match sample with the overview; the hero strip uses its first twenty.
+        for (int start = 0; start < 50; start += 20)
+        {
+            int count = Math.Min(20, 50 - start);
+            var response = await service.GetAsync(
+                $"/lol-match-history/v1/products/lol/{Uri.EscapeDataString(puuid)}/matches?begIndex={start}&endIndex={start + count - 1}",
+                token
+            );
+            var batch = CareerStatistics.Records(response.Data);
+            if (batch == null && response.Status is not (0 or 401 or 403))
+            {
+                batch = await FormMain.Globals.sgpClient.SgpFetchLatestMatches(
+                    puuid,
+                    start,
+                    count,
+                    cancellationToken: token
+                );
+            }
+
+            token.ThrowIfCancellationRequested();
+
+            if (batch == null)
+            {
+                if (records.Count == 0)
+                {
+                    return (null, false);
+                }
+                partial = true;
+                break;
+            }
+            foreach (var record in batch)
+            {
+                records.Add(record.DeepClone());
+            }
+
+            games = CareerStatistics
+                .Parse(records, puuid, includeRemakes: true)
+                .Games.Where(g => g.Champion > 0)
+                .OrderByDescending(g => g.Created)
+                .ThenByDescending(g => g.Id)
+                .Take(50)
+                .ToArray();
+            if (batch.Count < count)
+            {
+                break;
+            }
+        }
+        return (games, partial);
+    }
+
+    private async Task LoadRecentAssetsAsync(
+        string puuid,
+        CareerGame[] games,
+        PlayerStatisticsService service,
+        CancellationToken token
+    )
+    {
+        var catalogTask = service.GetAsync("/lol-game-data/assets/v1/champion-summary.json", token);
+        var masteryTask = ChampionMasteryService.Shared.GetAsync(puuid, token);
+        await Task.WhenAll(catalogTask, masteryTask);
+        if (IsDisposed || token.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _weights = CountRoles(games, (await catalogTask).Data as JArray ?? new JArray(), out _classified);
+        var mastery = ProfileMasteryView.SelectAll((await masteryTask).Data);
+        foreach (
+            var group in games
+                .GroupBy(g => g.Champion)
+                .OrderByDescending(g => g.Count())
+                .ThenByDescending(g => g.Max(m => m.Created))
+                .Take(3)
+        )
+        {
+            var resource = await FormMain.Globals.resLoading.GetChampionInfoAsync(group.Key);
+            if (IsDisposed || token.IsCancellationRequested)
+            {
+                resource.image?.Dispose();
+                return;
+            }
+            int? level = (int?)mastery.FirstOrDefault(m => (int?)m["championId"] == group.Key)?["championLevel"];
+            _heroes.Add((resource.name, group.Count(), level, resource.image));
+        }
+        Invalidate();
+    }
+
+    private void CancelRequest()
+    {
+        var request = _request;
+        var work = _requestWork;
+        _request = null;
+        _requestWork = null;
+        if (request == null)
+        {
+            return;
+        }
+        // The retired worker and cancellation callbacks may still use this source.
+        var cancellation = request.CancelAsync();
+        _ = Task.WhenAll(work ?? Task.CompletedTask, cancellation)
+            .ContinueWith(
+                completed =>
+                {
+                    _ = completed.Exception;
+                    request.Dispose();
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default
+            );
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -294,8 +361,7 @@ internal sealed class RecentActivityView : Control
     {
         if (disposing)
         {
-            _request?.Cancel();
-            _request?.Dispose();
+            CancelRequest();
             _tip.Dispose();
             ClearImages();
             foreach (var icon in _roleIcons)

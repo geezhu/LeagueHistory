@@ -48,6 +48,18 @@ public sealed class CompositionRadar : Control
             Math.Max(290, (int)(Font.Height / 15f * 290))
         );
 
+    private readonly record struct RadarPlot(PointF Center, float Radius, float Unit)
+    {
+        public PointF Point(int index, float fraction)
+        {
+            double angle = -Math.PI / 2 + 2 * Math.PI * index / 5;
+            return new(
+                Center.X + (float)Math.Cos(angle) * Radius * fraction,
+                Center.Y + (float)Math.Sin(angle) * Radius * fraction
+            );
+        }
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
@@ -55,39 +67,41 @@ public sealed class CompositionRadar : Control
         {
             return;
         }
-
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         float unit = Font.Height / 15f;
-        float radius = Math.Max(30, Math.Min(Width / 2f - 78 * unit, Height / 2f - 46 * unit));
-        var center = new PointF(Width / 2f, Height / 2f + 3 * unit);
-        PointF Point(int i, float fraction)
-        {
-            double angle = -Math.PI / 2 + 2 * Math.PI * i / 5;
-            return new(
-                center.X + (float)Math.Cos(angle) * radius * fraction,
-                center.Y + (float)Math.Sin(angle) * radius * fraction
-            );
-        }
+        var plot = new RadarPlot(
+            new PointF(Width / 2f, Height / 2f + 3 * unit),
+            Math.Max(30, Math.Min(Width / 2f - 78 * unit, Height / 2f - 46 * unit)),
+            unit
+        );
+        DrawGrid(g, plot);
+        var values = DrawEvidence(g, plot);
+        DrawAxisLabels(g, plot, values);
+    }
+
+    private static void DrawGrid(Graphics g, RadarPlot plot)
+    {
         using var grid = new Pen(Color.FromArgb(43, 76, 86));
         using var spoke = new Pen(Color.FromArgb(54, 85, 94)) { DashStyle = DashStyle.Dot };
-        using var ink = new SolidBrush(ForeColor);
-        using var muted = new SolidBrush(Color.FromArgb(132, 163, 177));
-        using var accent = new Pen(Color.FromArgb(45, 208, 203), 2);
-        using var pointBrush = new SolidBrush(accent.Color);
-        using var fill = new SolidBrush(Color.FromArgb(48, 45, 208, 203));
         for (int ring = 1; ring <= 4; ring++)
         {
-            g.DrawPolygon(grid, Enumerable.Range(0, 5).Select(i => Point(i, ring / 4f)).ToArray());
+            g.DrawPolygon(grid, Enumerable.Range(0, 5).Select(i => plot.Point(i, ring / 4f)).ToArray());
         }
-
         for (int i = 0; i < 5; i++)
         {
-            g.DrawLine(spoke, center, Point(i, 1));
+            g.DrawLine(spoke, plot.Center, plot.Point(i, 1));
         }
+    }
 
+    private PointF?[] DrawEvidence(Graphics g, RadarPlot plot)
+    {
+        using var accent = new Pen(Color.FromArgb(45, 208, 203), 2);
+        using var fill = new SolidBrush(Color.FromArgb(48, 45, 208, 203));
         var values = _axes
-            .Select((a, i) => a.Score is double score ? Point(i, (float)Math.Clamp(score / 100, 0, 1)) : (PointF?)null)
+            .Select(
+                (a, i) => a.Score is double score ? plot.Point(i, (float)Math.Clamp(score / 100, 0, 1)) : (PointF?)null
+            )
             .ToArray();
         if (values.All(p => p.HasValue))
         {
@@ -106,6 +120,15 @@ public sealed class CompositionRadar : Control
             }
         }
 
+        return values;
+    }
+
+    private void DrawAxisLabels(Graphics g, RadarPlot plot, PointF?[] values)
+    {
+        using var ink = new SolidBrush(ForeColor);
+        using var muted = new SolidBrush(Color.FromArgb(132, 163, 177));
+        using var pointBrush = new SolidBrush(Color.FromArgb(45, 208, 203));
+        using var spoke = new Pen(Color.FromArgb(54, 85, 94)) { DashStyle = DashStyle.Dot };
         _targets.Clear();
         using var format = new StringFormat
         {
@@ -115,10 +138,10 @@ public sealed class CompositionRadar : Control
         for (int i = 0; i < 5; i++)
         {
             var a = _axes[i];
-            var outer = Point(i, 1);
-            var label = Point(i, 1.32f);
-            float labelWidth = 102 * unit,
-                labelHeight = 40 * unit;
+            var outer = plot.Point(i, 1);
+            var label = plot.Point(i, 1.32f);
+            float labelWidth = 102 * plot.Unit,
+                labelHeight = 40 * plot.Unit;
             var rect = new RectangleF(
                 Math.Clamp(label.X - labelWidth / 2, 0, Math.Max(0, Width - labelWidth)),
                 Math.Clamp(label.Y - labelHeight / 2, 0, Math.Max(0, Height - labelHeight)),
