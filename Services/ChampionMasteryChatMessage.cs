@@ -18,16 +18,26 @@ public static class ChampionMasteryChatMessage
         foreach (var entry in rows)
         {
             var mastery = entry.Mastery;
-            string text = mastery?.Available != true ? mastery?.Message.Contains("未公开") == true ? "身份未公开" : "暂不可用"
-                : mastery.Points.HasValue ? (mastery.Level.HasValue ? $"{mastery.Level}级 / " : "") + $"{mastery.Points.Value:N0}点"
-                : "暂无成就记录";
-            if (mastery is { Available: true, Stale: true }) text += "（缓存）";
+            string text =
+                mastery?.Available != true
+                    ? mastery?.Message.Contains("未公开") == true
+                        ? "身份未公开"
+                        : "暂不可用"
+                    : mastery.Points.HasValue
+                        ? (mastery.Level.HasValue ? $"{mastery.Level}级 / " : "") + $"{mastery.Points.Value:N0}点"
+                        : "暂无成就记录";
+            if (mastery is { Available: true, Stale: true })
+                text += "（缓存）";
             string item = Clean(entry.Champion) + " " + text;
             if (line.Length > prefix.Length && line.Length + item.Length + 1 > 180)
-            { messages.Add(line); line = prefix; }
+            {
+                messages.Add(line);
+                line = prefix;
+            }
             line += (line.Length > prefix.Length ? "、" : "") + item;
         }
-        if (line.Length > prefix.Length) messages.Add(line);
+        if (line.Length > prefix.Length)
+            messages.Add(line);
         return messages;
     }
 }
