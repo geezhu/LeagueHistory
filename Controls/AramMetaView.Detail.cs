@@ -12,6 +12,10 @@ internal sealed partial class AramMetaView
 
     private Task<Image?> ImageAsync(string? url, string kind = "", int id = 0)
     {
+        if (_closing || IsDisposed)
+        {
+            return Task.FromResult<Image?>(null);
+        }
         // ID-based recommendations use the existing game resources without a public URL.
         string? fallback = null;
         if (
@@ -41,15 +45,16 @@ internal sealed partial class AramMetaView
             return pending;
         }
 
-        return _imageLoads[key] = FetchImageAsync(key, fallback, kind, id);
+        return _imageLoads[key] = TrackWork(FetchImageAsync(key, fallback, kind, id));
     }
 
     private async Task<Image?> FetchImageAsync(string key, string? url, string kind, int id)
     {
-        await _imageGate.WaitAsync();
+        // Downloads are shared by grid and detail waiters; one render cancellation must not cancel the cache load.
+        await _imageGate.WaitAsync(CancellationToken.None);
         try
         {
-            if (IsDisposed)
+            if (_closing || IsDisposed)
             {
                 return null;
             }
@@ -61,22 +66,24 @@ internal sealed partial class AramMetaView
                 try
                 {
                     // Disk hits still decode bitmaps and draw augment frames; do that off the UI thread.
-                    image = await Task.Run(async () =>
-                        kind switch
-                        {
-                            "champion" => (await resources.GetChampionInfoAsync(id)).image,
-                            "item" => (await resources.GetItemInfoAsync(id)).image,
-                            "spell" => (await resources.GetSpellInfoAsync(id)).image,
-                            "augment" => (await resources.GetAugmentInfoAsync(id)).image,
-                            _ => null,
-                        }
+                    image = await Task.Run(
+                        async () =>
+                            kind switch
+                            {
+                                "champion" => (await resources.GetChampionInfoAsync(id)).image,
+                                "item" => (await resources.GetItemInfoAsync(id)).image,
+                                "spell" => (await resources.GetSpellInfoAsync(id)).image,
+                                "augment" => (await resources.GetAugmentInfoAsync(id)).image,
+                                _ => null,
+                            },
+                        CancellationToken.None
                     );
                 }
                 catch
                 { /* Missing client resources fall back to the public image cache. */
                 }
             }
-            if (IsDisposed)
+            if (_closing || IsDisposed)
             {
                 image?.Dispose();
                 return null;
@@ -87,15 +94,17 @@ internal sealed partial class AramMetaView
                     Convert.ToHexString(
                         System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(url))
                     ) + ".png";
-                image = await Task.Run(() =>
-                    new League.Infrastructure.ImageCacheService(_imageHttp).GetOrDownloadImageAsync(
-                        url,
-                        "arammeta",
-                        filename
-                    )
+                image = await Task.Run(
+                    () =>
+                        new League.Infrastructure.ImageCacheService(_imageHttp).GetOrDownloadImageAsync(
+                            url,
+                            "arammeta",
+                            filename
+                        ),
+                    CancellationToken.None
                 );
             }
-            if (IsDisposed)
+            if (_closing || IsDisposed)
             {
                 image?.Dispose();
                 return null;
@@ -107,8 +116,10 @@ internal sealed partial class AramMetaView
 
             return image;
         }
-        catch
+        catch (Exception ex)
         {
+            // Keep the recommendation usable with its placeholder when optional artwork fails.
+            System.Diagnostics.Debug.WriteLine($"arammeta image: {ex.GetType().Name}");
             return null;
         }
         finally
@@ -122,12 +133,21 @@ internal sealed partial class AramMetaView
         try
         {
             var image = await ImageAsync((string?)champion.Data["image"], "champion", champion.Id).WaitAsync(token);
-            if (image != null && !IsDisposed && !token.IsCancellationRequested && row.DataGridView == _grid)
+            if (
+                image != null
+                && !_closing
+                && !IsDisposed
+                && !token.IsCancellationRequested
+                && row.DataGridView == _grid
+            )
             {
                 row.Cells[0].Value = image;
             }
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // The old render no longer owns this icon; the shared download may still finish for other waiters.
+        }
     }
 
     private PictureBox Icon(
@@ -149,19 +169,22 @@ internal sealed partial class AramMetaView
         };
         parent.Controls.Add(picture);
         _tips.SetToolTip(picture, tooltip);
-        _ = Load();
+        _ = TrackWork(Load());
         return picture;
         async Task Load()
         {
             try
             {
                 var image = await ImageAsync(url, kind, id).WaitAsync(token);
-                if (!picture.IsDisposed && !token.IsCancellationRequested)
+                if (!_closing && !picture.IsDisposed && !token.IsCancellationRequested)
                 {
                     picture.Image = image;
                 }
             }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                // The retired render must not publish into a removed icon.
+            }
         }
     }
 
@@ -181,7 +204,7 @@ internal sealed partial class AramMetaView
             {
                 Text = title,
                 AutoSize = true,
-                Font = new Font(Font, FontStyle.Bold),
+                Font = _sectionHeadingFont ??= new Font(Font, FontStyle.Bold),
                 Margin = new Padding(0, 0, 0, 8),
             }
         );

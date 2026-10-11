@@ -159,19 +159,7 @@ internal sealed partial class AramMetaView
         foreach (var (key, title) in new[] { ("items", "核心装备"), ("boots", "鞋子") })
         {
             host.Controls.Add(Text(title));
-            var options = Recommendations(key);
-            var chooser = new EquipmentComboBox(options.Select(r => r.ToOption()).ToArray(), _detailToken)
-            {
-                Width = 430,
-            };
-            host.Controls.Add(chooser);
-            chooser.SelectedIndex = Math.Clamp(
-                _recommendationChoices.GetValueOrDefault($"{_detailHero}:{key}"),
-                0,
-                chooser.Items.Count - 1
-            );
-            chooser.SelectedIndexChanged += (_, _) =>
-                _recommendationChoices[$"{_detailHero}:{key}"] = chooser.SelectedIndex;
+            CreateEquipmentChooser(host, key, Recommendations(key));
         }
         var more = new Button
         {
@@ -238,8 +226,40 @@ internal sealed partial class AramMetaView
     private void RenderAugmentComparison()
     {
         var host = _detailBody!;
+        RenderRarityFilters(host);
+        int width = Math.Max(510, host.Width - 24);
+        bool wide = width >= 850;
+        var split = Row(host);
+        var list = new FlowLayoutPanel
+        {
+            Tag = "comparison-list",
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Width = wide ? width - 285 : width,
+            MaximumSize = new Size(wide ? width - 285 : width, 0),
+        };
+        var information = new Label
+        {
+            Tag = "comparison-info",
+            Text = "点击强化查看完整介绍与统计依据",
+            AutoSize = true,
+            MaximumSize = new Size(wide ? 260 : width, 0),
+            MinimumSize = new Size(wide ? 260 : width, 80),
+            Padding = new Padding(12),
+            BackColor = Color.FromArgb(226, 241, 244),
+        };
+        split.Controls.AddRange(new Control[] { list, information });
+        RenderAugmentTools(host, list, information);
+        host.Controls.SetChildIndex(split, host.Controls.Count - 1);
+        PopulateAugments(list, information);
+    }
+
+    private void RenderRarityFilters(Control host)
+    {
         var filters = Row(host);
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < RarityNames.Length; i++)
         {
             int rarity = i;
             var button = new Button
@@ -258,6 +278,10 @@ internal sealed partial class AramMetaView
                 RenderDetailBody();
             };
         }
+    }
+
+    private void RenderAugmentTools(Control host, FlowLayoutPanel list, Label information)
+    {
         var tools = Row(host);
         var search = new TextBox
         {
@@ -269,107 +293,85 @@ internal sealed partial class AramMetaView
         sort.Items.AddRange(new object[] { "来源推荐顺序", "调整后胜率", "选取率" });
         sort.SelectedIndex = _augmentSort;
         tools.Controls.AddRange(new Control[] { search, sort });
-        int width = Math.Max(510, host.Width - 24);
-        bool wide = width >= 850;
-        var split = Row(host);
-        var list = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            Width = wide ? width - 285 : width,
-            MaximumSize = new Size(wide ? width - 285 : width, 0),
-        };
-        list.Tag = "comparison-list";
-        var information = new Label
-        {
-            Tag = "comparison-info",
-            Text = "点击强化查看完整介绍与统计依据",
-            AutoSize = true,
-            MaximumSize = new Size(wide ? 260 : width, 0),
-            MinimumSize = new Size(wide ? 260 : width, 80),
-            Padding = new Padding(12),
-            BackColor = Color.FromArgb(226, 241, 244),
-        };
-        split.Controls.AddRange(new Control[] { list, information });
-        void Populate()
-        {
-            list.SuspendLayout();
-            try
-            {
-                foreach (Control child in list.Controls.Cast<Control>().ToArray())
-                {
-                    child.Dispose();
-                }
-
-                AddStatsRow(list, null, "强化", "调整后胜率", "选取率", "样本量", true);
-                var entries = AramMetaRecommendation
-                    .Sort(Recommendations(RarityKeys[_rarity]), _augmentSort)
-                    .Where(r =>
-                        RecommendationName(r, true).Contains(_augmentSearch, StringComparison.OrdinalIgnoreCase)
-                    )
-                    .ToArray();
-                foreach (var entry in entries)
-                {
-                    var icons = new FlowLayoutPanel { Dock = DockStyle.Fill, Margin = Padding.Empty };
-                    Icon(icons, null, RecommendationName(entry, true), _detailToken, 36, "augment", entry.Ids[0]);
-                    var row = AddStatsRow(
-                        list,
-                        icons,
-                        RecommendationName(entry, true),
-                        $"{entry.WinRate:P1}",
-                        $"{entry.PickRate:P1}",
-                        entry.Games?.ToString("N0") ?? "—"
-                    );
-                    void Select()
-                    {
-                        foreach (Control sibling in list.Controls)
-                        {
-                            sibling.BackColor = Color.FromArgb(247, 250, 252);
-                        }
-
-                        row.BackColor = Color.FromArgb(218, 241, 243);
-                        string desc =
-                            FormMain.Globals.resLoading.GetAugmentById(entry.Ids[0])?.Description ?? entry.Description;
-                        information.Text =
-                            RecommendationName(entry, true)
-                            + "\n\n"
-                            + TooltipText.PlainText(desc)
-                            + $"\n\n调整后胜率 {entry.WinRate:P2}\n选取率 {entry.PickRate:P2}\n来源样本 {entry.Games:N0} 场\n\n来源推荐顺序不等于胜率排名，各项统计并不证明与某套出装存在联动。";
-                    }
-                    void Clickable(Control c)
-                    {
-                        c.Cursor = Cursors.Hand;
-                        c.Click += (_, _) => Select();
-                        foreach (Control child in c.Controls)
-                        {
-                            Clickable(child);
-                        }
-                    }
-                    Clickable(row);
-                }
-                if (entries.Length == 0)
-                {
-                    list.Controls.Add(Text("没有匹配的强化"));
-                }
-            }
-            finally
-            {
-                list.ResumeLayout(true);
-            }
-        }
         search.TextChanged += (_, _) =>
         {
             _augmentSearch = search.Text;
-            Populate();
+            PopulateAugments(list, information);
         };
         sort.SelectedIndexChanged += (_, _) =>
         {
             _augmentSort = sort.SelectedIndex;
-            Populate();
+            PopulateAugments(list, information);
         };
-        Populate();
+    }
+
+    private void PopulateAugments(FlowLayoutPanel list, Label information)
+    {
+        list.SuspendLayout();
+        try
+        {
+            foreach (Control child in list.Controls.Cast<Control>().ToArray())
+            {
+                child.Dispose();
+            }
+            AddStatsRow(list, null, "强化", "调整后胜率", "选取率", "样本量", true);
+            var entries = AramMetaRecommendation
+                .Sort(Recommendations(RarityKeys[_rarity]), _augmentSort)
+                .Where(r => RecommendationName(r, true).Contains(_augmentSearch, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            foreach (var entry in entries)
+            {
+                AddAugmentComparisonRow(list, information, entry);
+            }
+            if (entries.Length == 0)
+            {
+                list.Controls.Add(Text("没有匹配的强化"));
+            }
+        }
+        finally
+        {
+            list.ResumeLayout(true);
+        }
+    }
+
+    private void AddAugmentComparisonRow(FlowLayoutPanel list, Label information, AramMetaRecommendation entry)
+    {
+        var icons = new FlowLayoutPanel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        Icon(icons, null, RecommendationName(entry, true), _detailToken, 36, "augment", entry.Ids[0]);
+        var row = AddStatsRow(
+            list,
+            icons,
+            RecommendationName(entry, true),
+            $"{entry.WinRate:P1}",
+            $"{entry.PickRate:P1}",
+            entry.Games?.ToString("N0") ?? "—"
+        );
+        BindComparisonSelection(row, () => SelectAugment(list, row, information, entry));
+    }
+
+    private void SelectAugment(Control list, Control row, Label information, AramMetaRecommendation entry)
+    {
+        foreach (Control sibling in list.Controls)
+        {
+            sibling.BackColor = Color.FromArgb(247, 250, 252);
+        }
+        row.BackColor = Color.FromArgb(218, 241, 243);
+        string description = FormMain.Globals.resLoading.GetAugmentById(entry.Ids[0])?.Description ?? entry.Description;
+        information.Text =
+            RecommendationName(entry, true)
+            + "\n\n"
+            + TooltipText.PlainText(description)
+            + $"\n\n调整后胜率 {entry.WinRate:P2}\n选取率 {entry.PickRate:P2}\n来源样本 {entry.Games:N0} 场\n\n来源推荐顺序不等于胜率排名，各项统计并不证明与某套出装存在联动。";
+    }
+
+    private static void BindComparisonSelection(Control control, Action select)
+    {
+        control.Cursor = Cursors.Hand;
+        control.Click += (_, _) => select();
+        foreach (Control child in control.Controls)
+        {
+            BindComparisonSelection(child, select);
+        }
     }
 
     private void RenderBuildComparison()
@@ -383,85 +385,81 @@ internal sealed partial class AramMetaView
         var cores = Recommendations("items");
         var selection = Row(host);
         selection.Controls.Add(Text("装备组合"));
-        var core = new EquipmentComboBox(cores.Select(r => r.ToOption()).ToArray(), _detailToken) { Width = 430 };
-        selection.Controls.Add(core);
-        core.SelectedIndex = Math.Clamp(
-            _recommendationChoices.GetValueOrDefault($"{_detailHero}:items"),
-            0,
-            core.Items.Count - 1
-        );
+        var core = CreateEquipmentChooser(selection, "items", cores);
         var later = Row(host);
         later.FlowDirection = FlowDirection.TopDown;
         later.WrapContents = false;
-        void Update()
-        {
-            later.SuspendLayout();
-            try
-            {
-                foreach (Control child in later.Controls.Cast<Control>().ToArray())
-                {
-                    child.Dispose();
-                }
-
-                if (cores.Length == 0)
-                {
-                    later.Controls.Add(Text("暂无装备组合"));
-                    return;
-                }
-                _recommendationChoices[$"{_detailHero}:items"] = core.SelectedIndex;
-                var chosen = cores[core.SelectedIndex];
-                later.Controls.Add(Text("单件备选 · 已排除所选组合中的装备（不是固定购买顺序）"));
-                var excluded = chosen.Ids.ToHashSet();
-                var seen = new HashSet<int>();
-                foreach (
-                    var item in Recommendations("singleItems")
-                        .Where(r => r.Ids.All(id => !excluded.Contains(id)) && seen.Add(r.Ids[0]))
-                )
-                {
-                    RecommendationRow(later, item);
-                }
-            }
-            finally
-            {
-                later.ResumeLayout(true);
-            }
-        }
-        core.SelectedIndexChanged += (_, _) => Update();
-        Update();
-        foreach (var (key, title) in new[] { ("boots", "鞋子") })
-        {
-            host.Controls.Add(Text(title));
-            var options = Recommendations(key);
-            var chooser = new EquipmentComboBox(
-                options.Select(r => r.ToOption()).ToArray(),
-                _detailToken,
-                key == "spells" ? "spell" : "item"
-            )
-            {
-                Width = 430,
-            };
-            host.Controls.Add(chooser);
-            chooser.SelectedIndex = Math.Clamp(
-                _recommendationChoices.GetValueOrDefault($"{_detailHero}:{key}"),
-                0,
-                chooser.Items.Count - 1
-            );
-            var statistics = new Label { AutoSize = true, Margin = new Padding(8) };
-            host.Controls.Add(statistics);
-            void Describe()
-            {
-                if (options.Length > 0)
-                {
-                    _recommendationChoices[$"{_detailHero}:{key}"] = chooser.SelectedIndex;
-                    var choice = options[chooser.SelectedIndex];
-                    statistics.Text = $"胜率 {choice.WinRate:P1} · 选取率 {choice.PickRate:P1} · {choice.Games:N0} 场";
-                }
-            }
-            chooser.SelectedIndexChanged += (_, _) => Describe();
-            Describe();
-        }
+        core.SelectedIndexChanged += (_, _) => RenderLaterEquipment(later, cores, core.SelectedIndex);
+        RenderLaterEquipment(later, cores, core.SelectedIndex);
+        RenderBootsSelection(host);
         host.Controls.SetChildIndex(later, host.Controls.Count - 1);
         RenderSpellHighlights(host);
+    }
+
+    private EquipmentComboBox CreateEquipmentChooser(Control host, string category, AramMetaRecommendation[] options)
+    {
+        var chooser = new EquipmentComboBox(options.Select(r => r.ToOption()).ToArray(), _detailToken) { Width = 430 };
+        host.Controls.Add(chooser);
+        chooser.SelectedIndex = Math.Clamp(
+            _recommendationChoices.GetValueOrDefault($"{_detailHero}:{category}"),
+            0,
+            chooser.Items.Count - 1
+        );
+        chooser.SelectedIndexChanged += (_, _) =>
+            _recommendationChoices[$"{_detailHero}:{category}"] = chooser.SelectedIndex;
+        return chooser;
+    }
+
+    private void RenderLaterEquipment(Control host, AramMetaRecommendation[] cores, int selectedIndex)
+    {
+        host.SuspendLayout();
+        try
+        {
+            foreach (Control child in host.Controls.Cast<Control>().ToArray())
+            {
+                child.Dispose();
+            }
+            if (cores.Length == 0)
+            {
+                host.Controls.Add(Text("暂无装备组合"));
+                return;
+            }
+            _recommendationChoices[$"{_detailHero}:items"] = selectedIndex;
+            var excluded = cores[selectedIndex].Ids.ToHashSet();
+            var seen = new HashSet<int>();
+            host.Controls.Add(Text("单件备选 · 已排除所选组合中的装备（不是固定购买顺序）"));
+            foreach (
+                var item in Recommendations("singleItems")
+                    .Where(r => r.Ids.All(id => !excluded.Contains(id)) && seen.Add(r.Ids[0]))
+            )
+            {
+                RecommendationRow(host, item);
+            }
+        }
+        finally
+        {
+            host.ResumeLayout(true);
+        }
+    }
+
+    private void RenderBootsSelection(Control host)
+    {
+        host.Controls.Add(Text("鞋子"));
+        var options = Recommendations("boots");
+        var chooser = CreateEquipmentChooser(host, "boots", options);
+        var statistics = new Label { AutoSize = true, Margin = new Padding(8) };
+        host.Controls.Add(statistics);
+        void DescribeChoice()
+        {
+            if (options.Length == 0)
+            {
+                return;
+            }
+            var choice = options[chooser.SelectedIndex];
+            statistics.Text = $"胜率 {choice.WinRate:P1} · 选取率 {choice.PickRate:P1} · {choice.Games:N0} 场";
+        }
+        chooser.SelectedIndexChanged += (_, _) => DescribeChoice();
+        DescribeChoice();
     }
 
     private void ResizeComparison(Control root, int width)
