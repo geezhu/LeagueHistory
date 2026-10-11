@@ -13,14 +13,19 @@ internal sealed class OverlayFullscreenGuard
 
     public bool ShouldPause(long now, bool force = false)
     {
-        if (!force && now < _nextCheck) return _exclusive;
+        if (!force && now < _nextCheck)
+            return _exclusive;
         _nextCheck = now + 1000;
         // QUNS_BUSY also covers borderless windows and presentations; only value 3 is exclusive D3D.
         _exclusive = _query() == 3;
         return _exclusive;
     }
 
-    public void Reset() { _nextCheck = 0; _exclusive = false; }
+    public void Reset()
+    {
+        _nextCheck = 0;
+        _exclusive = false;
+    }
 
     private static int? QueryState() => SHQueryUserNotificationState(out int state) == 0 ? state : null;
 
