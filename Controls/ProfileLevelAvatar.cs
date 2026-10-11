@@ -72,6 +72,7 @@ public sealed class ProfileLevelAvatar : PictureBox
         clip.AddEllipse(portrait);
         var state = g.Save();
         g.SetClip(clip);
+        // The caller owns the avatar image; drawing only borrows PictureBox.Image.
         if (Image != null)
         {
             g.DrawImage(Image, portrait);

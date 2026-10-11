@@ -3,22 +3,25 @@ namespace League.Controls;
 // Retains the native editable dropdown and autocomplete, with a quiet border/arrow.
 public sealed class SearchComboBox : ComboBox
 {
+    private const int WmPaint = 0x000F;
+    private const int WmPrintClient = 0x0318;
+
     public SearchComboBox()
     {
         FlatStyle = FlatStyle.Flat;
     }
 
-    protected override void WndProc(ref Message m)
+    protected override void WndProc(ref Message message)
     {
-        base.WndProc(ref m);
-        if (m.Msg == 0x000F && IsHandleCreated)
+        base.WndProc(ref message);
+        if (message.Msg == WmPaint && IsHandleCreated)
         {
             using var graphics = CreateGraphics();
             PaintChrome(graphics);
         }
-        else if (m.Msg == 0x0318 && m.WParam != IntPtr.Zero)
+        else if (message.Msg == WmPrintClient && message.WParam != IntPtr.Zero)
         {
-            using var graphics = Graphics.FromHdc(m.WParam);
+            using var graphics = Graphics.FromHdc(message.WParam);
             PaintChrome(graphics);
         }
     }

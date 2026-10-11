@@ -2,6 +2,10 @@
 
 internal class DarkSelectionComboBox : ComboBox
 {
+    private const int WmPaint = 0x000F;
+    private const int WmPrint = 0x0317;
+    private const int WmPrintClient = 0x0318;
+
     protected override void WndProc(ref Message message)
     {
         base.WndProc(ref message);
@@ -11,12 +15,12 @@ internal class DarkSelectionComboBox : ComboBox
             return;
         }
 
-        if (message.Msg == 0x000F)
+        if (message.Msg == WmPaint)
         {
             using var graphics = Graphics.FromHwnd(Handle);
             DrawFrame(graphics);
         }
-        else if ((message.Msg == 0x0317 || message.Msg == 0x0318) && message.WParam != IntPtr.Zero)
+        else if ((message.Msg == WmPrint || message.Msg == WmPrintClient) && message.WParam != IntPtr.Zero)
         {
             using var graphics = Graphics.FromHdc(message.WParam);
             DrawFrame(graphics);
