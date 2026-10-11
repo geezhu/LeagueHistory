@@ -1,8 +1,8 @@
+using System.Diagnostics;
+using System.Drawing.Drawing2D;
 using League.Models;
 using League.Parsers;
 using Newtonsoft.Json.Linq;
-using System.Diagnostics;
-using System.Drawing.Drawing2D;
 
 namespace League.Controls;
 
@@ -12,7 +12,8 @@ public partial class PlayerCardControl
 
     private async Task OpenProfileAsync()
     {
-        if (CurrentSummonerId <= 0 || IsDisposed) return;
+        if (CurrentSummonerId <= 0 || IsDisposed)
+            return;
         if (SummaryPanel.FindForm() is FormMain main)
             await main.OpenPlayerProfileAsync(CurrentSummonerId.ToString());
     }
@@ -20,19 +21,25 @@ public partial class PlayerCardControl
     public async Task LoadSummonerProfileAsync()
     {
         long summonerId = CurrentSummonerId;
-        if (summonerId <= 0) return;
+        if (summonerId <= 0)
+            return;
         try
         {
             var profile = await new PlayerMatchDataFetcher().GetGameNameBySummonerIdAsync(summonerId.ToString());
-            if (IsDisposed || CurrentSummonerId != summonerId || profile == null) return;
+            if (IsDisposed || CurrentSummonerId != summonerId || profile == null)
+                return;
             int level = profile["summonerLevel"]?.Value<int>() ?? 0;
             _summonerAvatar.SetProfile(null, level);
             int iconId = profile["profileIconId"]?.Value<int>() ?? 0;
             using var image = await Profileicon.GetProfileIconAsync(iconId);
-            if (IsDisposed || CurrentSummonerId != summonerId) return;
+            if (IsDisposed || CurrentSummonerId != summonerId)
+                return;
             _summonerAvatar.SetProfile(image, level);
         }
-        catch (Exception ex) { Debug.WriteLine($"Room profile: {ex.GetType().Name}"); }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Room profile: {ex.GetType().Name}");
+        }
     }
 
     private sealed class SummonerAvatar : Control
@@ -70,7 +77,8 @@ public partial class PlayerCardControl
             clip.AddEllipse(circle);
             var state = g.Save();
             g.SetClip(clip);
-            if (_image != null) g.DrawImage(_image, circle);
+            if (_image != null)
+                g.DrawImage(_image, circle);
             else
             {
                 using var background = new SolidBrush(Color.FromArgb(216, 227, 237));
@@ -81,13 +89,21 @@ public partial class PlayerCardControl
             }
             g.Restore(state);
             if (_level > 0)
-                TextRenderer.DrawText(g, _level.ToString(), Font, new Rectangle(0, Height - 16, Width, 16),
-                    Color.FromArgb(0, 142, 160), BackColor, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                TextRenderer.DrawText(
+                    g,
+                    _level.ToString(),
+                    Font,
+                    new Rectangle(0, Height - 16, Width, 16),
+                    Color.FromArgb(0, 142, 160),
+                    BackColor,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
+                );
         }
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _image?.Dispose();
+            if (disposing)
+                _image?.Dispose();
             base.Dispose(disposing);
         }
     }

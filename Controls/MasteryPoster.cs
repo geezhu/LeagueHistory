@@ -1,5 +1,5 @@
-using League.Infrastructure;
 using System.Drawing.Drawing2D;
+using League.Infrastructure;
 
 namespace League.Controls;
 
@@ -23,22 +23,35 @@ internal sealed class MasteryPoster : PictureBox
         try
         {
             string? alias = FormMain.Globals.resLoading.GetChampionById(championId)?.Alias;
-            if (string.IsNullOrEmpty(alias) || !alias.All(char.IsAsciiLetterOrDigit)) return;
+            if (string.IsNullOrEmpty(alias) || !alias.All(char.IsAsciiLetterOrDigit))
+                return;
             var image = await Cache.GetOrDownloadImageAsync(
-                $"https://ddragon.leagueoflegends.com/cdn/img/champion/loading/{alias}_0.jpg", "mastery-posters", $"{alias}_0.png");
-            if (IsDisposed || Disposing) { image?.Dispose(); return; }
-            if (image == null) return;
+                $"https://ddragon.leagueoflegends.com/cdn/img/champion/loading/{alias}_0.jpg",
+                "mastery-posters",
+                $"{alias}_0.png"
+            );
+            if (IsDisposed || Disposing)
+            {
+                image?.Dispose();
+                return;
+            }
+            if (image == null)
+                return;
             var previous = Image;
             Image = image;
             previous?.Dispose();
             Invalidate();
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Mastery poster: {ex.GetType().Name}"); }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Mastery poster: {ex.GetType().Name}");
+        }
     }
 
     protected override void OnPaint(PaintEventArgs e)
     {
-        if (Width <= 0 || Height <= 0) return;
+        if (Width <= 0 || Height <= 0)
+            return;
         var g = e.Graphics;
         g.Clear(BackColor);
         if (Image != null)
@@ -54,21 +67,40 @@ internal sealed class MasteryPoster : PictureBox
             InterpolationColors = new ColorBlend
             {
                 Colors = new[] { clear, clear, Color.FromArgb(245, 12, 20, 30) },
-                Positions = new[] { 0f, 1f / 3f, 1f }
-            }
+                Positions = new[] { 0f, 1f / 3f, 1f },
+            },
         };
         g.FillRectangle(shade, ClientRectangle);
-        if (_rank > 3) return;
-        Color accent = _rank == 1 ? Color.FromArgb(207, 168, 78) : _rank == 2 ? Color.FromArgb(145, 166, 186) : Color.FromArgb(185, 125, 85);
+        if (_rank > 3)
+            return;
+        Color accent =
+            _rank == 1 ? Color.FromArgb(207, 168, 78)
+            : _rank == 2 ? Color.FromArgb(145, 166, 186)
+            : Color.FromArgb(185, 125, 85);
         using var badge = new SolidBrush(accent);
-        g.FillPolygon(badge, new[] { new Point(10,0), new Point(38,0), new Point(38,30), new Point(24,39), new Point(10,30) });
+        g.FillPolygon(
+            badge,
+            new[] { new Point(10, 0), new Point(38, 0), new Point(38, 30), new Point(24, 39), new Point(10, 30) }
+        );
         using var font = new Font("Segoe UI", 13f, FontStyle.Bold);
-        TextRenderer.DrawText(g, _rank.ToString(), font, new Rectangle(10,2,28,28), Color.White, TextFormatFlags.HorizontalCenter);
+        TextRenderer.DrawText(
+            g,
+            _rank.ToString(),
+            font,
+            new Rectangle(10, 2, 28, 28),
+            Color.White,
+            TextFormatFlags.HorizontalCenter
+        );
     }
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { var image = Image; Image = null; image?.Dispose(); }
+        if (disposing)
+        {
+            var image = Image;
+            Image = null;
+            image?.Dispose();
+        }
         base.Dispose(disposing);
     }
 }

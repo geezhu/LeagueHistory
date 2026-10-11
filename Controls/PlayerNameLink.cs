@@ -23,22 +23,31 @@ public sealed class PlayerNameLink : LinkLabel
     protected override void OnLinkClicked(LinkLabelLinkClickedEventArgs e)
     {
         base.OnLinkClicked(e);
-        if (!string.IsNullOrWhiteSpace(SummonerId) && SummonerId != "0") ProfileRequested?.Invoke(SummonerId);
+        if (!string.IsNullOrWhiteSpace(SummonerId) && SummonerId != "0")
+            ProfileRequested?.Invoke(SummonerId);
     }
 
     protected override async void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        if (_loaded) return;
+        if (_loaded)
+            return;
         _loaded = true;
         Text = PlayerName;
         bool canNavigate = !string.IsNullOrWhiteSpace(SummonerId) && SummonerId != "0";
-        if (!canNavigate) { Links.Clear(); TabStop = false; return; }
-        if (ResolveProfile == null) return;
+        if (!canNavigate)
+        {
+            Links.Clear();
+            TabStop = false;
+            return;
+        }
+        if (ResolveProfile == null)
+            return;
         try
         {
             var profile = await ResolveProfile(SummonerId);
-            if (IsDisposed || Disposing) return;
+            if (IsDisposed || Disposing)
+                return;
             League.UIHelpers.PlayerNamePresentation.Apply(this, PlayerName, PlayerPrivacy.IsPublic(profile));
             foreach (Label badge in Controls.OfType<Label>())
                 badge.Click += (_, _) => ProfileRequested?.Invoke(SummonerId);
