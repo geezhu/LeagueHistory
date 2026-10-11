@@ -4,6 +4,14 @@ public partial class FormMain
 {
     private void ConfigureSettingsLayout()
     {
+        ConfigureSettingsTabs();
+        ConfigureGeneralSettings();
+        ConfigureMessageSettings();
+        MoveAdditionalSettings();
+    }
+
+    private void ConfigureSettingsTabs()
+    {
         tabControl1.Font = new Font("Microsoft YaHei UI", 9);
         tabControl1.SizeMode = TabSizeMode.Fixed;
         tabControl1.ItemSize = new Size(116, 36);
@@ -27,12 +35,25 @@ public partial class FormMain
                 e.Graphics.FillRectangle(line, e.Bounds.X + 18, e.Bounds.Bottom - 3, e.Bounds.Width - 36, 3);
             }
         };
+    }
+
+    private void ConfigureGeneralSettings()
+    {
         var general = SettingsPage(
             tabPage4,
             "功能辅助",
             "配置对局流程、英雄预选和客户端维护。多数选项自动保存，定时关机计划单独管理。"
         );
-        chkAutoAccept.Text = "自动接受对局";
+        ConfigureHistorySettings(general);
+        ConfigureAutomationSettings(general);
+        ConfigureShutdownSettings(general);
+        ConfigureAssistantSetting(general);
+        ConfigureOverlaySettings(general);
+        ConfigureClientMaintenanceSettings(general);
+    }
+
+    private void ConfigureHistorySettings(FlowLayoutPanel general)
+    {
         var historyCount = new ComboBox
         {
             Name = "CardMatchHistoryCount",
@@ -54,6 +75,13 @@ public partial class FormMain
             _matchQueryProcessor?.SetMatchHistoryCount(_appConfig.CardMatchHistoryCount);
             SaveAppConfig();
         };
+        checkBoxFilterMode.Text = "按当前模式查询近期战绩，其他模式查询全模式战绩。";
+        SettingsCard(general, "选人战绩", checkBoxFilterMode, new Label { Text = "每位玩家查询场数" }, historyCount);
+    }
+
+    private void ConfigureAutomationSettings(FlowLayoutPanel general)
+    {
+        chkAutoAccept.Text = "自动接受对局";
         var acceptDelay = new ComboBox
         {
             Name = "AutoAcceptDelaySeconds",
@@ -84,10 +112,11 @@ public partial class FormMain
             };
             SaveAppConfig();
         };
-        checkBoxFilterMode.Text = "按当前模式查询近期战绩，其他模式查询全模式战绩。";
-        SettingsCard(general, "选人战绩", checkBoxFilterMode, new Label { Text = "每位玩家查询场数" }, historyCount);
         SettingsCard(general, "对局自动化", chkAutoAccept, acceptDelay, chkSkipHonor, chkSkipEndOfGameStats);
-        ConfigureShutdownSettings(general);
+    }
+
+    private void ConfigureAssistantSetting(FlowLayoutPanel general)
+    {
         var assistant = new CheckBox
         {
             Text = "选人时自动显示侧边助手",
@@ -111,6 +140,10 @@ public partial class FormMain
                     "默认贴靠客户端左侧显示英雄推荐，空间不足时自动调整；可固定位置或收起，离开选人后自动隐藏。符文仅在点击“应用符文”时修改。",
             }
         );
+    }
+
+    private void ConfigureOverlaySettings(FlowLayoutPanel general)
+    {
         var overlay = new CheckBox
         {
             Text = "启用加载界面 / 游戏内十人速览",
@@ -143,16 +176,7 @@ public partial class FormMain
             Text = _loadingOverlay?.GameBarStatus ?? "",
             Visible = overlayBackend.SelectedIndex == 1,
         };
-        var overlayStatusTimer = new System.Windows.Forms.Timer { Interval = 2000 };
-        overlayStatusTimer.Tick += (_, _) =>
-        {
-            if (gameBarStatus.Visible)
-            {
-                gameBarStatus.Text = _loadingOverlay?.GameBarStatus ?? "";
-            }
-        };
-        gameBarStatus.Disposed += (_, _) => overlayStatusTimer.Dispose();
-        overlayStatusTimer.Start();
+        TrackGameBarSettingsStatus(gameBarStatus);
         void SaveOverlay()
         {
             if (_appConfig == null)
@@ -187,6 +211,24 @@ public partial class FormMain
                     "Game Bar：按 Win＋G，从小组件列表打开「League 对局速览」。需要保留在游戏上方时，点击组件右上角图钉；关闭后可从 Win＋G 重新打开。保持 League 主程序运行以同步对局数据。\n桌面窗口：支持窗口 / 无边框模式，检测到独占全屏时暂停弹窗。测试桌面显示仅检查桌面窗口。",
             }
         );
+    }
+
+    private void TrackGameBarSettingsStatus(Label gameBarStatus)
+    {
+        var overlayStatusTimer = new System.Windows.Forms.Timer { Interval = 2000 };
+        overlayStatusTimer.Tick += (_, _) =>
+        {
+            if (gameBarStatus.Visible)
+            {
+                gameBarStatus.Text = _loadingOverlay?.GameBarStatus ?? "";
+            }
+        };
+        gameBarStatus.Disposed += (_, _) => overlayStatusTimer.Dispose();
+        overlayStatusTimer.Start();
+    }
+
+    private void ConfigureClientMaintenanceSettings(FlowLayoutPanel general)
+    {
         lkbPreliminary.Text = "配置预选英雄 →";
         SettingsCard(
             general,
@@ -205,7 +247,10 @@ public partial class FormMain
         groupBox1.Dispose();
         groupBox2.Dispose();
         groupBox3.Dispose();
+    }
 
+    private void ConfigureMessageSettings()
+    {
         var messages = SettingsPage(tabPage5, "消息发送", "选择发送内容，并配置显示方式。实际发送仍由快捷键触发。");
         label2.Text =
             "【游戏内快捷键需要管理员权限】请以管理员身份运行本程序。\n选人窗口：Ctrl + F7 发送我方战绩。游戏内：F9 发送我方战绩，F11 发送双方战绩。\n大乱斗 / 海克斯大乱斗：Ctrl + F9 发送我方梯队与胜率，Ctrl + F11 发送对方梯队与胜率（发到当前游戏聊天频道）。";
@@ -214,6 +259,11 @@ public partial class FormMain
         SettingsCard(messages, "发送内容", rbModeMatch, rbModeCustom, label2, label3, txtCustomContent);
         SettingsCard(messages, "战绩显示", chkHideSelf, chkUseChampionName);
         ConfigureVoiceSettings(messages);
+        ConfigureMessageDiagnostics(messages);
+    }
+
+    private void ConfigureMessageDiagnostics(FlowLayoutPanel messages)
+    {
         var logButton = new Button { Text = "打开快捷发送日志", AutoSize = true };
         logButton.Click += (_, _) =>
         {
@@ -246,6 +296,10 @@ public partial class FormMain
                     + Services.ChatSendDiagnostics.Shared.LogPath,
             }
         );
+    }
+
+    private void MoveAdditionalSettings()
+    {
         foreach (TabPage page in tabControl1.TabPages)
         {
             if (page == tabPage4 || page == tabPage5)

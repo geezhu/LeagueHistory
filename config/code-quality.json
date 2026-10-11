@@ -179,6 +179,7 @@
     "Forms/FormMain.PlayerNavigation.cs",
     "Forms/FormMain.RoomMatchNavigation.cs",
     "Forms/FormMain.SearchHistory.cs",
+    "Forms/FormMain.SettingsLayout.cs",
     "Forms/LoadingOverlayForm.cs",
     "GameBar/ChampionDetailView.inl",
     "GameBar/TierChatView.inl",
