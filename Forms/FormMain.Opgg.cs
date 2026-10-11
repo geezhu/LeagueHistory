@@ -1,11 +1,37 @@
 using League.Controls;
+using League.Models;
+using Newtonsoft.Json.Linq;
 
 namespace League;
 
 public partial class FormMain
 {
-    internal async void OpenAssistantGuide(int hero, int queue, string? position, League.Models.OpggQuery? query = null)
+    internal async void OpenAssistantGuide(int hero, int queue, string? position, OpggQuery? query = null)
     {
+        try
+        {
+            await OpenAssistantGuideAsync(hero, queue, position, query);
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigating or closing a guide retires its outstanding request.
+        }
+        catch (Exception error)
+        {
+            System.Diagnostics.Debug.WriteLine($"Assistant guide: {error}");
+            if (!IsDisposed && !Disposing)
+            {
+                MessageBox.Show(this, "英雄攻略打开失败，请稍后重试。", "英雄攻略");
+            }
+        }
+    }
+
+    internal async Task OpenAssistantGuideAsync(int hero, int queue, string? position, OpggQuery? query = null)
+    {
+        if (IsDisposed || Disposing || hero <= 0)
+        {
+            return;
+        }
         Show();
         WindowState = FormWindowState.Normal;
         Activate();
@@ -31,80 +57,61 @@ public partial class FormMain
 
     private void ConfigureOpgg()
     {
-        var icon = new Bitmap(40, 40);
-        using (var graphics = Graphics.FromImage(icon))
-        using (var font = new Font("Segoe UI", 10, FontStyle.Bold))
-        {
-            graphics.Clear(Color.FromArgb(48, 118, 218));
-            TextRenderer.DrawText(
-                graphics,
-                "OP\nGG",
-                font,
-                new Rectangle(0, 0, 40, 40),
-                Color.White,
-                TextFormatFlags.HorizontalCenter
-            );
-        }
-        var page = new TabPage("OP.GG 英雄攻略") { Tag = icon };
-        page.Controls.Add(new OpggView());
-        page.Disposed += (_, _) => icon.Dispose();
-        imageTabControl1.TabPages.Add(page);
-        var aramIcon = new Bitmap(40, 40);
-        using (var graphics = Graphics.FromImage(aramIcon))
-        using (var font = new Font("Segoe UI", 12, FontStyle.Bold))
-        {
-            graphics.Clear(Color.FromArgb(0, 145, 151));
-            TextRenderer.DrawText(
-                graphics,
-                "AM",
-                font,
-                new Rectangle(0, 0, 40, 40),
-                Color.White,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
-            );
-        }
-        var aramPage = new TabPage("arammeta · 海克斯大乱斗") { Tag = aramIcon };
-        aramPage.Controls.Add(
-            new AramMetaView(() => TimeSpan.FromMinutes(Math.Clamp(_appConfig?.AramMetaCacheMinutes ?? 1440, 1, 10080)))
+        AddGuidePage("OP.GG 英雄攻略", "OP\nGG", Color.FromArgb(48, 118, 218), 10, new OpggView());
+        AddGuidePage(
+            "arammeta · 海克斯大乱斗",
+            "AM",
+            Color.FromArgb(0, 145, 151),
+            12,
+            new AramMetaView(MainWindowAramMetaLifetime)
         );
-        aramPage.Disposed += (_, _) => aramIcon.Dispose();
-        imageTabControl1.TabPages.Add(aramPage);
-        var liveIcon = new Bitmap(40, 40);
-        using (var graphics = Graphics.FromImage(liveIcon))
-        using (var font = new Font("Microsoft YaHei UI", 10, FontStyle.Bold))
-        {
-            graphics.Clear(Color.FromArgb(16, 70, 85));
-            TextRenderer.DrawText(
-                graphics,
-                "对局",
-                font,
-                new Rectangle(0, 0, 40, 40),
-                Color.White,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
-            );
-        }
-        var livePage = new TabPage("当前对局") { Tag = liveIcon };
-        livePage.Controls.Add(
+        AddGuidePage(
+            "当前对局",
+            "对局",
+            Color.FromArgb(16, 70, 85),
+            10,
             new LiveMatchView(
-                async () =>
-                {
-                    var client = Globals.lcuClient?.Client;
-                    if (client == null)
-                    {
-                        return 0;
-                    }
-
-                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-                    var flow = Newtonsoft.Json.Linq.JObject.Parse(
-                        await client.GetStringAsync("/lol-gameflow/v1/session", timeout.Token)
-                    );
-                    return (int?)flow["gameData"]?["queue"]?["id"] ?? 0;
-                },
+                CurrentMatchQueueAsync,
                 (hero, queue) => OpenAssistantGuide(hero, queue, "none"),
-                () => TimeSpan.FromMinutes(Math.Clamp(_appConfig?.AramMetaCacheMinutes ?? 1440, 1, 10080))
+                MainWindowAramMetaLifetime
             )
         );
-        livePage.Disposed += (_, _) => liveIcon.Dispose();
-        imageTabControl1.TabPages.Add(livePage);
+    }
+
+    private TimeSpan MainWindowAramMetaLifetime() =>
+        TimeSpan.FromMinutes(Math.Clamp(_appConfig?.AramMetaCacheMinutes ?? 1440, 1, 10080));
+
+    private static async Task<int> CurrentMatchQueueAsync()
+    {
+        var client = Globals.lcuClient?.Client;
+        if (client == null)
+        {
+            return 0;
+        }
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        var flow = JObject.Parse(await client.GetStringAsync("/lol-gameflow/v1/session", timeout.Token));
+        return (int?)flow["gameData"]?["queue"]?["id"] ?? 0;
+    }
+
+    private void AddGuidePage(string title, string label, Color color, float fontSize, Control content)
+    {
+        var icon = new Bitmap(40, 40);
+        using (var graphics = Graphics.FromImage(icon))
+        using (var font = new Font("Microsoft YaHei UI", fontSize, FontStyle.Bold))
+        {
+            graphics.Clear(color);
+            TextRenderer.DrawText(
+                graphics,
+                label,
+                font,
+                new Rectangle(0, 0, 40, 40),
+                Color.White,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
+            );
+        }
+        var page = new TabPage(title) { Tag = icon };
+        page.Controls.Add(content);
+        page.Disposed += (_, _) => icon.Dispose();
+        imageTabControl1.TabPages.Add(page);
     }
 }

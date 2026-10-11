@@ -7,15 +7,84 @@ namespace League;
 public partial class FormMain
 {
     private Panel? _roomMatchSurface;
+    private Func<JObject, JObject, Task<Panel?>>? _parseRoomMatch;
+    private Func<MatchDetailView, Task>? _prepareRoomMatchDetail;
 
     public async Task OpenRoomMatchAsync(MatchMetadata metadata, string puuid)
     {
-        if (metadata.GameData == null || metadata.GameId <= 0)
+        if (IsDisposed || Disposing || metadata.GameData == null || metadata.GameId <= 0)
         {
             return;
         }
-
         _roomMatchSurface?.Dispose();
+        var (surface, status) = CreateRoomMatchSurface();
+        MatchListPanel? source = null;
+        MatchDetailView? detail = null;
+        try
+        {
+            var game = (JObject)metadata.GameData.DeepClone();
+            var participant = (game["participants"] as JArray)
+                ?.OfType<JObject>()
+                .FirstOrDefault(player => player["puuid"]?.ToString() == puuid);
+            if (participant == null)
+            {
+                status.Text = "无法确定这场战绩中的玩家。";
+                return;
+            }
+            var parsed = await ParseRoomMatchAsync(game, participant);
+            source = parsed as MatchListPanel;
+            if (source == null)
+            {
+                parsed?.Dispose();
+                if (!surface.IsDisposed)
+                {
+                    status.Text = "这场比赛暂时无法加载详情。";
+                }
+                return;
+            }
+            if (surface.IsDisposed)
+            {
+                return;
+            }
+            if (
+                source.MatchInfo.AllParticipants == null
+                || !source.MatchInfo.AllParticipants.Any(player => (int?)player["teamId"] is 100 or 200)
+            )
+            {
+                status.Text = "这场比赛暂不支持计分板详情。";
+                return;
+            }
+            detail = CreateRoomMatchDetail(surface, source);
+            await (_prepareRoomMatchDetail?.Invoke(detail) ?? detail.PrepareAsync());
+            if (surface.IsDisposed || detail.IsDisposed)
+            {
+                return;
+            }
+            status.Dispose();
+            detail.Visible = true;
+            // Replay and detail tabs retain the parsed match until the page closes.
+            var replaySource = source;
+            surface.Disposed += (_, _) => replaySource.Dispose();
+            source = null;
+            detail = null;
+        }
+        catch (Exception error)
+        {
+            System.Diagnostics.Debug.WriteLine($"Room match detail: {error}");
+            if (!surface.IsDisposed)
+            {
+                status.Text = "加载详情失败，请返回后重试。";
+            }
+        }
+        finally
+        {
+            detail?.Dispose();
+            source?.Dispose();
+        }
+    }
+
+    private (Panel Surface, Label Status) CreateRoomMatchSurface()
+    {
         var surface = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(244, 247, 251) };
         _roomMatchSurface = surface;
         var back = new Button
@@ -52,81 +121,31 @@ public partial class FormMain
                 _roomMatchSurface = null;
             }
         };
-        MatchListPanel? source = null;
-        MatchDetailView? detail = null;
-        try
-        {
-            var game = (JObject)metadata.GameData.DeepClone();
-            var participant = (game["participants"] as JArray)
-                ?.OfType<JObject>()
-                .FirstOrDefault(p => p["puuid"]?.ToString() == puuid);
-            if (participant == null)
-            {
-                status.Text = "无法确定这场战绩中的玩家。";
-                return;
-            }
-            var parsed = await ParseGameToPanelAsync(
-                game,
-                participant["summonerId"]?.ToString() ?? "",
-                participant["riotIdGameName"]?.ToString() ?? "",
-                participant["riotIdTagline"]?.ToString() ?? "",
-                0
-            );
-            source = parsed as MatchListPanel;
-            if (source == null)
-            {
-                parsed?.Dispose();
-                if (!surface.IsDisposed)
-                {
-                    status.Text = "这场比赛暂时无法加载详情。";
-                }
+        return (surface, status);
+    }
 
-                return;
-            }
-            if (surface.IsDisposed)
-            {
-                return;
-            }
-
-            if (
-                source.MatchInfo.AllParticipants == null
-                || !source.MatchInfo.AllParticipants.Any(p => (int?)p["teamId"] is 100 or 200)
-            )
-            {
-                status.Text = "这场比赛暂不支持计分板详情。";
-                return;
-            }
-            detail = new MatchDetailView(source.MatchInfo) { Dock = DockStyle.Fill, Visible = false };
-            surface.Controls.Add(detail);
-            detail.BringToFront();
-            detail.PlayerProfileRequested += async id => await OpenPlayerProfileAsync(id);
-            var replaySource = source;
-            detail.ReplayRequested += replaySource.RequestReplay;
-            await detail.PrepareAsync();
-            if (surface.IsDisposed || detail.IsDisposed)
-            {
-                return;
-            }
-
-            status.Dispose();
-            detail.Visible = true;
-            // Keep the parsed match alive for replay and detail tabs until the page closes.
-            surface.Disposed += (_, _) => replaySource.Dispose();
-            source = null;
-            detail = null;
-        }
-        catch (Exception ex)
+    private async Task<Panel?> ParseRoomMatchAsync(JObject game, JObject participant)
+    {
+        if (_parseRoomMatch != null)
         {
-            System.Diagnostics.Debug.WriteLine($"Room match detail: {ex}");
-            if (!surface.IsDisposed)
-            {
-                status.Text = "加载详情失败，请返回后重试。";
-            }
+            return await _parseRoomMatch(game, participant);
         }
-        finally
-        {
-            detail?.Dispose();
-            source?.Dispose();
-        }
+        return await ParseGameToPanelAsync(
+            game,
+            participant["summonerId"]?.ToString() ?? "",
+            participant["riotIdGameName"]?.ToString() ?? "",
+            participant["riotIdTagline"]?.ToString() ?? "",
+            0
+        );
+    }
+
+    private MatchDetailView CreateRoomMatchDetail(Panel surface, MatchListPanel source)
+    {
+        var detail = new MatchDetailView(source.MatchInfo) { Dock = DockStyle.Fill, Visible = false };
+        surface.Controls.Add(detail);
+        detail.BringToFront();
+        detail.PlayerProfileRequested += async id => await OpenPlayerProfileAsync(id);
+        detail.ReplayRequested += source.RequestReplay;
+        return detail;
     }
 }

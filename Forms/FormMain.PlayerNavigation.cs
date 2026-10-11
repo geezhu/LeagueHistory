@@ -1,4 +1,4 @@
-﻿using League.States;
+using League.States;
 using Newtonsoft.Json.Linq;
 
 namespace League;
@@ -10,7 +10,13 @@ public partial class FormMain
     // Shared by history player icons and detail player names.
     public async Task OpenPlayerProfileAsync(string summonerId)
     {
-        if (_openingPlayerProfile || string.IsNullOrWhiteSpace(summonerId) || summonerId == "0")
+        if (
+            IsDisposed
+            || Disposing
+            || _openingPlayerProfile
+            || string.IsNullOrWhiteSpace(summonerId)
+            || summonerId == "0"
+        )
         {
             return;
         }
@@ -20,10 +26,18 @@ public partial class FormMain
         try
         {
             JObject? summoner = await Globals.lcuClient.GetGameNameBySummonerId(summonerId);
+            if (IsDisposed || Disposing)
+            {
+                return;
+            }
             if (summoner != null && !string.IsNullOrWhiteSpace(summoner["puuid"]?.ToString()))
             {
                 RefreshState.ForceMatchRefresh = true;
                 var rankedStats = await GetRankedStatsAsync(summoner["puuid"]?.ToString() ?? "");
+                if (IsDisposed || Disposing)
+                {
+                    return;
+                }
                 string privacyStatus = GetPrivacyStatus(summoner);
 
                 _matchTabContent?.CreateNewTab(
@@ -47,12 +61,19 @@ public partial class FormMain
         }
         catch (Exception ex)
         {
-            MessageBox.Show("查询失败: " + ex.Message);
+            System.Diagnostics.Debug.WriteLine($"Player profile navigation: {ex}");
+            if (!IsDisposed && !Disposing)
+            {
+                MessageBox.Show(this, "查询失败: " + ex.Message);
+            }
         }
         finally
         {
             _openingPlayerProfile = false;
-            _uiManager!.HideLoadingIndicator();
+            if (!IsDisposed && !Disposing)
+            {
+                _uiManager!.HideLoadingIndicator();
+            }
         }
     }
 }

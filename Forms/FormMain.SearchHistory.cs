@@ -1,4 +1,4 @@
-﻿using League.Services;
+using League.Services;
 
 namespace League;
 
@@ -11,6 +11,13 @@ public partial class FormMain
     private readonly PlayerSearchHistory _searchHistory = new();
 
     private void InitializeSearchHistory()
+    {
+        ConfigureSearchSurface();
+        ConfigureSearchInput();
+        ConfigureSearchHistoryMenu();
+    }
+
+    private void ConfigureSearchSurface()
     {
         var toolbar = new Panel
         {
@@ -31,26 +38,8 @@ public partial class FormMain
             Height = 28,
             BackColor = SearchBackground,
         };
-        void RoundSearch()
-        {
-            if (search.Width < 16 || search.Height < 16)
-            {
-                return;
-            }
-
-            using var path = new System.Drawing.Drawing2D.GraphicsPath();
-            const int diameter = 12;
-            path.AddArc(0, 0, diameter, diameter, 180, 90);
-            path.AddArc(search.Width - diameter, 0, diameter, diameter, 270, 90);
-            path.AddArc(search.Width - diameter, search.Height - diameter, diameter, diameter, 0, 90);
-            path.AddArc(0, search.Height - diameter, diameter, diameter, 90, 90);
-            path.CloseFigure();
-            var oldRegion = search.Region;
-            search.Region = new Region(path);
-            oldRegion?.Dispose();
-        }
-        search.SizeChanged += (_, _) => RoundSearch();
-        RoundSearch();
+        search.SizeChanged += (_, _) => RoundSearch(search);
+        RoundSearch(search);
         search.Paint += (_, e) =>
         {
             using var pen = new Pen(Color.FromArgb(111, 123, 139), 1.6f);
@@ -79,6 +68,29 @@ public partial class FormMain
         tabPage1.BackColor = toolbar.BackColor;
         tabPage1.Controls.Add(toolbar);
         panelMatchList.BringToFront();
+    }
+
+    private static void RoundSearch(Panel search)
+    {
+        if (search.Width < 16 || search.Height < 16)
+        {
+            return;
+        }
+
+        using var path = new System.Drawing.Drawing2D.GraphicsPath();
+        const int diameter = 12;
+        path.AddArc(0, 0, diameter, diameter, 180, 90);
+        path.AddArc(search.Width - diameter, 0, diameter, diameter, 270, 90);
+        path.AddArc(search.Width - diameter, search.Height - diameter, diameter, diameter, 0, 90);
+        path.AddArc(0, search.Height - diameter, diameter, diameter, 90, 90);
+        path.CloseFigure();
+        var oldRegion = search.Region;
+        search.Region = new Region(path);
+        oldRegion?.Dispose();
+    }
+
+    private void ConfigureSearchInput()
+    {
         txtGameName.DropDownStyle = ComboBoxStyle.DropDown;
         txtGameName.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
         txtGameName.AutoCompleteSource = AutoCompleteSource.ListItems;
@@ -101,6 +113,10 @@ public partial class FormMain
             txtGameName.DroppedDown = false;
             await SubmitPlayerSearchAsync();
         };
+    }
+
+    private void ConfigureSearchHistoryMenu()
+    {
         components ??= new System.ComponentModel.Container();
         var hint = new ToolTip(components);
         hint.SetToolTip(txtGameName, "输入或选择 Riot ID，按回车查询");
@@ -153,10 +169,16 @@ public partial class FormMain
     {
         string input = txtGameName.Text;
         txtGameName.BeginUpdate();
-        txtGameName.Items.Clear();
-        txtGameName.Items.AddRange(_searchHistory.Items.Cast<object>().ToArray());
-        txtGameName.Text = input;
-        txtGameName.EndUpdate();
+        try
+        {
+            txtGameName.Items.Clear();
+            txtGameName.Items.AddRange(_searchHistory.Items.Cast<object>().ToArray());
+            txtGameName.Text = input;
+        }
+        finally
+        {
+            txtGameName.EndUpdate();
+        }
     }
 
     private void AttachSearchToPlayerTabs()
