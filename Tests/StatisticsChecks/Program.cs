@@ -9,12 +9,19 @@ internal static class Program
     private static void Check(bool condition, string message)
     {
         if (!condition)
+        {
             throw new Exception(message);
+        }
     }
 
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--model-checks"))
+        {
+            Task.Run(ModelChecks.RunAsync).GetAwaiter().GetResult();
+            return;
+        }
         if (args.Contains("--sensevoice-checks"))
         {
             Task.Run(SenseVoiceChecks.RunAsync).GetAwaiter().GetResult();
@@ -192,11 +199,17 @@ internal static class Program
         Task.Run(ChatSendDiagnosticsChecks.RunAsync).GetAwaiter().GetResult();
         LiveMatchChecks.Run();
         if (args.Contains("--live-match-checks"))
+        {
             return;
+        }
+
         Task.Run(ChampionCompositionChecks.RunAsync).GetAwaiter().GetResult();
         ChampionCompositionChecks.Render();
         if (args.Contains("--composition-checks"))
+        {
             return;
+        }
+
         Task.Run(OpggChecks.RunAsync).GetAwaiter().GetResult();
         OpggChecks.Render();
         Task.Run(AramMetaChecks.RunAsync).GetAwaiter().GetResult();
@@ -229,7 +242,10 @@ internal static class Program
             history.Add("invalid");
             Check(history.Items.Count == 2, "Invalid ID excluded");
             for (int i = 0; i < 25; i++)
+            {
                 history.Add($"Player{i}#123");
+            }
+
             Check(history.Items.Count == 20 && history.Items[0] == "Player24#123", "Search history bounded");
             history.Remove("player24#123");
             Check(history.Items.Count == 19, "History removal ignores case");
@@ -244,7 +260,9 @@ internal static class Program
         finally
         {
             if (File.Exists(historyFile))
+            {
                 File.Delete(historyFile);
+            }
         }
         Check(
             LcuProcessDiscovery.TryParse(
@@ -374,10 +392,13 @@ internal static class Program
                 RawGameData = new JObject { ["json"] = new JObject { ["info"] = remake.DeepClone() } },
             }
         )
+        {
             Check(
                 remakeInfo.ResultText == "重开" && remakeInfo.ResultColor == MatchResult.RemakeColor,
                 "Remake overrides win text and color"
             );
+        }
+
         Check(MatchResult.IsRemake(new JObject { ["gameEndedInEarlySurrender"] = true }), "Root remake flag");
         Check(
             MatchResult.IsRemake(null, new[] { new JObject { ["gameEndedInEarlySurrender"] = true } }),
@@ -673,10 +694,12 @@ internal static class Program
             using var rendered = new Bitmap(160, height);
             poster.DrawToBitmap(rendered, new Rectangle(0, 0, 160, height));
             for (int y = height / 3 - 2; y <= height / 3 + 2; y++)
+            {
                 Check(
                     Math.Abs(rendered.GetPixel(80, y).R - rendered.GetPixel(80, y - 1).R) <= 3,
                     "Poster gradient starts without a dark seam"
                 );
+            }
         }
         var activityType = typeof(ProfileMasteryView).Assembly.GetType("League.Controls.RecentActivityView")!;
         League.Models.CareerGame OverviewGame(int id, int queue, int kills, int deaths, int assists) =>
@@ -901,7 +924,10 @@ internal static class Program
         )
         {
             for (int i = 0; i < 5; i++)
+            {
                 teamTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+            }
+
             teamTable.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
             teamTable.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
             teamForm.Controls.Add(teamTable);
@@ -1027,15 +1053,21 @@ internal static class Program
             teamForm.Close();
         }
         foreach (var queue in new[] { "400", "420", "430", "440", "450", "480", "490", "2400" })
+        {
             Check(
                 League.Parsers.PlayerMatchDataFetcher.GetQueueFilter(queue) == "q_" + queue,
                 "Room history filters supported queue " + queue
             );
+        }
+
         foreach (var queue in new[] { "", "0", "900", "1700", "700", "99999" })
+        {
             Check(
                 League.Parsers.PlayerMatchDataFetcher.GetQueueFilter(queue) == "",
                 "Other room modes use global history " + queue
             );
+        }
+
         var launcherFixtureRoot = Path.Combine(
             AppContext.BaseDirectory,
             "launcher-fixture-" + Guid.NewGuid().ToString("N")
@@ -1131,7 +1163,9 @@ internal static class Program
                 Path.GetFullPath(launcherFixtureRoot)
                     .StartsWith(Path.GetFullPath(AppContext.BaseDirectory), StringComparison.OrdinalIgnoreCase)
             )
+            {
                 Directory.Delete(launcherFixtureRoot, true);
+            }
         }
         var roomCache = new League.Parsers.PlayerMatchCacheManager();
         using (var headerMatch = new MatchInfo { AllParticipants = new(), RawGameData = new JObject() })
