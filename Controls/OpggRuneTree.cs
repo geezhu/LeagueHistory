@@ -14,6 +14,8 @@ internal sealed class OpggRuneTree : Control
     private readonly ToolTip _tips = new();
     private int _hover = -1;
     private string? _notice;
+    private int _planRevision;
+    private bool _closing;
 
     public OpggRuneTree()
     {
@@ -30,108 +32,167 @@ internal sealed class OpggRuneTree : Control
 
     public async Task SetPlanAsync(OpggRunes plan, RuneResourceLoader? resources, CancellationToken token)
     {
+        token.ThrowIfCancellationRequested();
+        if (_closing)
+        {
+            return;
+        }
+        int revision = ++_planRevision;
+        BuildNodes(plan, resources);
+        Invalidate();
+        await LoadNodeImagesAsync(_nodes.ToArray(), resources, revision, token);
+    }
+
+    private void BuildNodes(OpggRunes plan, RuneResourceLoader? resources)
+    {
         _nodes.Clear();
         _hover = -1;
         _tips.SetToolTip(this, null);
-        void Add(int id, int x, int y, int size, bool selected, string? name = null, string? path = null)
-        {
-            var rune = resources?.GetById(id);
-            _nodes.Add(
-                new(
-                    id,
-                    new Rectangle(x, y, size, size),
-                    selected,
-                    name ?? rune?.name ?? $"符文 {id}",
-                    rune?.longDesc ?? "",
-                    path ?? rune?.iconPath ?? ""
-                )
-            );
-        }
         var primary = resources?.Styles.GetValueOrDefault(plan.Primary);
         var secondary = resources?.Styles.GetValueOrDefault(plan.Secondary);
         _notice = primary == null || secondary == null ? "符文树资源暂不可用，显示当前方案" : null;
-        if (primary != null && secondary != null)
-        {
-            Add(primary.Id, 65, 4, 30, true, primary.Name, primary.IconPath);
-            Add(secondary.Id, 237, 4, 30, true, secondary.Name, secondary.IconPath);
-            for (int row = 0; row < Math.Min(4, primary.Slots.Length); row++)
-            {
-                var ids = primary.Slots[row];
-                int size = row == 0 ? 36 : 28,
-                    step = row == 0 ? 39 : 38;
-                for (int col = 0; col < ids.Length; col++)
-                {
-                    Add(
-                        ids[col],
-                        (166 - ids.Length * step) / 2 + col * step,
-                        46 + row * 40,
-                        size,
-                        IsSelected(plan, ids[col])
-                    );
-                }
-            }
-            for (int row = 1; row < Math.Min(4, secondary.Slots.Length); row++)
-            {
-                var ids = secondary.Slots[row];
-                for (int col = 0; col < ids.Length; col++)
-                {
-                    Add(ids[col], 190 + col * 36, 46 + row * 40, 28, IsSelected(plan, ids[col]));
-                }
-            }
-            for (int row = 0; row < Math.Min(3, primary.Slots.Length - 4); row++)
-            {
-                for (int col = 0; col < primary.Slots[row + 4].Length; col++)
-                {
-                    int id = primary.Slots[row + 4][col];
-                    Add(id, 314 + col * 33, 88 + row * 40, 24, IsSelected(plan, id, row));
-                }
-            }
-        }
-        else
+        if (primary == null || secondary == null)
         {
             for (int i = 0; i < plan.Perks.Length; i++)
             {
-                Add(plan.Perks[i], 20 + (i % 5) * 60, 65 + (i / 5) * 50, 32, true);
+                AddNode(resources, plan.Perks[i], new Rectangle(20 + (i % 5) * 60, 65 + (i / 5) * 50, 32, 32), true);
+            }
+            return;
+        }
+        AddNode(resources, primary.Id, new Rectangle(65, 4, 30, 30), true, primary.Name, primary.IconPath);
+        AddNode(resources, secondary.Id, new Rectangle(237, 4, 30, 30), true, secondary.Name, secondary.IconPath);
+        AddPrimaryNodes(plan, resources, primary);
+        AddSecondaryNodes(plan, resources, secondary);
+        AddShardNodes(plan, resources, primary);
+    }
+
+    private void AddNode(
+        RuneResourceLoader? resources,
+        int id,
+        Rectangle bounds,
+        bool selected,
+        string? name = null,
+        string? path = null
+    )
+    {
+        var rune = resources?.GetById(id);
+        _nodes.Add(
+            new Node(
+                id,
+                bounds,
+                selected,
+                name ?? rune?.name ?? $"符文 {id}",
+                rune?.longDesc ?? "",
+                path ?? rune?.iconPath ?? ""
+            )
+        );
+    }
+
+    private void AddPrimaryNodes(OpggRunes plan, RuneResourceLoader resources, RuneResourceLoader.RuneStyle primary)
+    {
+        for (int row = 0; row < Math.Min(4, primary.Slots.Length); row++)
+        {
+            var ids = primary.Slots[row];
+            int size = row == 0 ? 36 : 28;
+            int step = row == 0 ? 39 : 38;
+            for (int col = 0; col < ids.Length; col++)
+            {
+                AddNode(
+                    resources,
+                    ids[col],
+                    new Rectangle((166 - ids.Length * step) / 2 + col * step, 46 + row * 40, size, size),
+                    IsSelected(plan, ids[col])
+                );
             }
         }
+    }
 
-        Invalidate();
-        foreach (var node in _nodes.ToArray())
+    private void AddSecondaryNodes(OpggRunes plan, RuneResourceLoader resources, RuneResourceLoader.RuneStyle secondary)
+    {
+        for (int row = 1; row < Math.Min(4, secondary.Slots.Length); row++)
+        {
+            var ids = secondary.Slots[row];
+            for (int col = 0; col < ids.Length; col++)
+            {
+                AddNode(
+                    resources,
+                    ids[col],
+                    new Rectangle(190 + col * 36, 46 + row * 40, 28, 28),
+                    IsSelected(plan, ids[col])
+                );
+            }
+        }
+    }
+
+    private void AddShardNodes(OpggRunes plan, RuneResourceLoader resources, RuneResourceLoader.RuneStyle primary)
+    {
+        for (int row = 0; row < Math.Min(3, primary.Slots.Length - 4); row++)
+        {
+            for (int col = 0; col < primary.Slots[row + 4].Length; col++)
+            {
+                int id = primary.Slots[row + 4][col];
+                AddNode(resources, id, new Rectangle(314 + col * 33, 88 + row * 40, 24, 24), IsSelected(plan, id, row));
+            }
+        }
+    }
+
+    private async Task LoadNodeImagesAsync(
+        Node[] nodes,
+        RuneResourceLoader? resources,
+        int revision,
+        CancellationToken token
+    )
+    {
+        foreach (var node in nodes)
         {
             token.ThrowIfCancellationRequested();
+            if (_closing || revision != _planRevision)
+            {
+                return;
+            }
             if (resources == null || _images.ContainsKey(node.Id))
             {
                 continue;
             }
-
-            var task = resources.GetIconAsync(node.Path);
+            var task = Task.Run(() => resources.GetIconAsync(node.Path), CancellationToken.None);
             Image? image;
             try
             {
                 image = await task.WaitAsync(token);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
-                _ = task.ContinueWith(
-                    t =>
-                    {
-                        if (t.Status == TaskStatus.RanToCompletion)
-                        {
-                            t.Result?.Dispose();
-                        }
-                    },
-                    TaskScheduler.Default
-                );
+                _ = DisposeLateIconAsync(task);
                 throw;
             }
-            if (IsDisposed || token.IsCancellationRequested)
+            if (_closing || token.IsCancellationRequested || revision != _planRevision)
             {
                 image?.Dispose();
                 token.ThrowIfCancellationRequested();
                 return;
             }
+            if (_images.ContainsKey(node.Id))
+            {
+                // Concurrent plan requests may share a node ID; retain only one owned copy.
+                image?.Dispose();
+                continue;
+            }
             _images[node.Id] = image;
             Invalidate();
+        }
+    }
+
+    private static async Task DisposeLateIconAsync(Task<Image?> work)
+    {
+        try
+        {
+            var image = await work.ConfigureAwait(false);
+            image?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            // The shared cache task still needs its failure observed after render cancellation.
+            System.Diagnostics.Debug.WriteLine($"OP.GG retired rune: {ex.GetType().Name}");
         }
     }
 
@@ -188,8 +249,9 @@ internal sealed class OpggRuneTree : Control
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
+        if (disposing && !_closing)
         {
+            _closing = true;
             _tips.Dispose();
             foreach (var image in _images.Values)
             {
@@ -197,6 +259,7 @@ internal sealed class OpggRuneTree : Control
             }
 
             _images.Clear();
+            _nodes.Clear();
         }
         base.Dispose(disposing);
     }
