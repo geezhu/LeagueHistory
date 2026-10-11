@@ -303,143 +303,31 @@ internal sealed partial class LoadingOverlayManager : IDisposable
                 return;
             }
             var flow = JObject.Parse(await client.GetStringAsync("/lol-gameflow/v1/session", timeout.Token));
-            if (_own.Length == 0)
-            {
-                try
-                {
-                    _own =
-                        (string?)
-                            JObject.Parse(
-                                await client.GetStringAsync("/lol-summoner/v1/current-summoner", timeout.Token)
-                            )["puuid"]
-                        ?? "";
-                }
-                catch { }
-            }
+            await ReadOwnIdentityAsync(client, timeout.Token);
             var roster = LoadingRoster.Parse(flow, _own);
             int clientPlayers = roster.Players.Length,
                 livePlayers = 0;
             LiveMatchSnapshot? liveSnapshot = null;
-            if (LoadingRoster.CanDisplay(phase))
-            {
-                try
-                {
-                    var live = await _live.GetAsync(timeout.Token);
-                    liveSnapshot = live;
-                    livePlayers = live.Players.Length;
-                    if (live.Players.Length >= roster.Players.Length)
-                    {
-                        roster = await _rosterIdentity.MergeAsync(
-                            roster,
-                            flow,
-                            _own,
-                            live,
-                            p =>
-                                LiveChampionIdentity
-                                    .Resolve(p, FormMain.Globals.resLoading?.Champions.Champions ?? [])
-                                    ?.Id
-                                ?? 0,
-                            timeout.Token
-                        );
-                        int normalized = PlayerChampionTier.NormalizeQueue(roster.Queue, live.Mode);
-                        roster = roster with { Queue = normalized };
-                        if (flow["gameData"] is not JObject)
-                        {
-                            flow["gameData"] = new JObject();
-                        }
-
-                        if (flow["gameData"]!["queue"] is not JObject)
-                        {
-                            flow["gameData"]!["queue"] = new JObject();
-                        }
-
-                        flow["gameData"]!["queue"]!["id"] = normalized;
-                    }
-                }
-                catch
-                { /* Loading can precede Live Client availability. Keep placeholders. */
-                }
-            }
+            var source = await ReadLiveRosterAsync(roster, flow, phase, timeout.Token);
+            roster = source.Roster;
+            liveSnapshot = source.Live;
+            livePlayers = liveSnapshot?.Players.Length ?? 0;
             if (_disposed || timeout.IsCancellationRequested || !(_owner.GetAppConfig()?.EnableLoadingOverlay ?? true))
             {
                 return;
             }
 
-            string match =
-                roster.GameId.Length > 0
-                    ? roster.GameId
-                    : $"{roster.Queue}:" + string.Join("|", roster.Players.Select(p => p.Key));
-            match += "/" + roster.Queue;
-            if (_match != match)
-            {
-                CancelDetail();
-                _generation++;
-                _ranks.Clear();
-                _rankRequests.Clear();
-                _rankRetry.Clear();
-                _masteries.Clear();
-                _match = match;
-            }
-            _roster = roster;
-            _deathStreaks = LiveDeathStreakAnalysis.ForRoster(roster, liveSnapshot);
-            _lastDeathStreakRead = liveSnapshot != null ? Environment.TickCount64 : 0;
-            if (liveSnapshot != null)
-            {
-                var catalog = FormMain.Globals.resLoading?.Champions.Champions ?? [];
-                var unknown = liveSnapshot
-                    .Players.Where(p => LiveChampionIdentity.Resolve(p, catalog) == null)
-                    .ToArray();
-                string issue =
-                    unknown.Length == 0
-                        ? ""
-                        : $"catalog={catalog.Count} unresolved={unknown.Length} raw="
-                            + string.Join(
-                                ",",
-                                unknown
-                                    .Select(p => p.RawChampionName[..Math.Min(80, p.RawChampionName.Length)])
-                                    .Distinct()
-                            );
-                if (issue != _championIssue)
-                {
-                    _championIssue = issue;
-                    RoomLoadDiagnostics.Shared.Report(
-                        _generation,
-                        "overlay-heroes",
-                        detail: issue.Length > 0 ? issue : "英雄识别已恢复。"
-                    );
-                }
-            }
-            string identitySummary =
-                $"lcu={clientPlayers} live={livePlayers} roster={roster.Players.Length} confirmed={roster.Players.Count(p => LoadingRosterIdentityService.HasPuuid(p.Puuid))} hidden={roster.Players.Count(p => p.IdentityHidden)}";
-            if (identitySummary != _identitySummary)
-            {
-                _identitySummary = identitySummary;
-                RoomLoadDiagnostics.Shared.Report(_generation, "overlay-identities", detail: identitySummary);
-            }
-            _status =
-                $"{(phase == "ChampSelect" ? "准备进入对局" : "当前对局")} · 已读取 {roster.Players.Length} 人 · {DateTime.Now:HH:mm:ss} · 点击卡片查看{(UseGameBar ? "英雄详情" : "缓存战绩")}";
-            foreach (var p in roster.Players.Where(p => p.ChampionId > 0))
-            {
-                _ = LoadRank(p, _generation, flow);
-                _ = LoadIcon(p.ChampionId);
-                _ = LoadMastery(p, _generation);
-            }
-            SchedulePaint();
+            ApplyRoster(roster, liveSnapshot);
+            ReportRosterDiagnostics(roster, liveSnapshot, clientPlayers, livePlayers);
+            RequestRosterStatistics(roster, flow, phase);
         }
-        catch (OperationCanceledException) when (_life.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (_life.IsCancellationRequested)
+        {
+            // Shutdown cancels the poll without reporting a connection failure.
+        }
         catch
         {
-            if (!_disposed && Environment.TickCount64 - _lastPhaseRead > 15000)
-            {
-                _phase = "";
-                ClearMatch();
-                ReportVisibility("客户端阶段读取中断，暂停自动展示。");
-            }
-            else if (!_disposed)
-            {
-                _status = "连接暂时中断，显示本局已缓存信息…";
-                SchedulePaint();
-            }
+            HandlePollFailure();
         }
         finally
         {
@@ -448,6 +336,160 @@ internal sealed partial class LoadingOverlayManager : IDisposable
             {
                 _poll.Interval = _wanted || UseGameBar || _phase is "ChampSelect" or "GameStart" ? 3000 : 10000;
             }
+        }
+    }
+
+    private void HandlePollFailure()
+    {
+        if (!_disposed && Environment.TickCount64 - _lastPhaseRead > 15000)
+        {
+            _phase = "";
+            ClearMatch();
+            ReportVisibility("客户端阶段读取中断，暂停自动展示。");
+        }
+        else if (!_disposed)
+        {
+            _status = "连接暂时中断，显示本局已缓存信息…";
+            SchedulePaint();
+        }
+    }
+
+    private void RequestRosterStatistics(LoadingRoster roster, JObject flow, string phase)
+    {
+        _status =
+            $"{(phase == "ChampSelect" ? "准备进入对局" : "当前对局")} · 已读取 {roster.Players.Length} 人 · {DateTime.Now:HH:mm:ss} · 点击卡片查看{(UseGameBar ? "英雄详情" : "缓存战绩")}";
+        foreach (var p in roster.Players.Where(p => p.ChampionId > 0))
+        {
+            _ = LoadRank(p, _generation, flow);
+            _ = LoadIcon(p.ChampionId);
+            _ = LoadMastery(p, _generation);
+        }
+        SchedulePaint();
+    }
+
+    private async Task ReadOwnIdentityAsync(HttpClient client, CancellationToken token)
+    {
+        if (_own.Length == 0)
+        {
+            try
+            {
+                _own =
+                    (string?)
+                        JObject.Parse(await client.GetStringAsync("/lol-summoner/v1/current-summoner", token))["puuid"]
+                    ?? "";
+            }
+            catch
+            {
+                // The current identity may be unavailable during login; retry on the next poll.
+            }
+        }
+    }
+
+    private async Task<(LoadingRoster Roster, LiveMatchSnapshot? Live)> ReadLiveRosterAsync(
+        LoadingRoster roster,
+        JObject flow,
+        string phase,
+        CancellationToken token
+    )
+    {
+        LiveMatchSnapshot? snapshot = null;
+        if (LoadingRoster.CanDisplay(phase))
+        {
+            try
+            {
+                var live = await _live.GetAsync(token);
+                snapshot = live;
+                if (live.Players.Length >= roster.Players.Length)
+                {
+                    roster = await _rosterIdentity.MergeAsync(
+                        roster,
+                        flow,
+                        _own,
+                        live,
+                        p =>
+                            LiveChampionIdentity.Resolve(p, FormMain.Globals.resLoading?.Champions.Champions ?? [])?.Id
+                            ?? 0,
+                        token
+                    );
+                    int normalized = PlayerChampionTier.NormalizeQueue(roster.Queue, live.Mode);
+                    roster = roster with { Queue = normalized };
+                    if (flow["gameData"] is not JObject)
+                    {
+                        flow["gameData"] = new JObject();
+                    }
+
+                    if (flow["gameData"]!["queue"] is not JObject)
+                    {
+                        flow["gameData"]!["queue"] = new JObject();
+                    }
+
+                    flow["gameData"]!["queue"]!["id"] = normalized;
+                }
+            }
+            catch
+            { /* Loading can precede Live Client availability. Keep placeholders. */
+            }
+        }
+        return (roster, snapshot);
+    }
+
+    private void ApplyRoster(LoadingRoster roster, LiveMatchSnapshot? liveSnapshot)
+    {
+        string match =
+            roster.GameId.Length > 0
+                ? roster.GameId
+                : $"{roster.Queue}:" + string.Join("|", roster.Players.Select(p => p.Key));
+        match += "/" + roster.Queue;
+        if (_match != match)
+        {
+            CancelDetail();
+            _generation++;
+            _ranks.Clear();
+            _rankRequests.Clear();
+            _rankRetry.Clear();
+            _masteries.Clear();
+            _match = match;
+        }
+        _roster = roster;
+        _deathStreaks = LiveDeathStreakAnalysis.ForRoster(roster, liveSnapshot);
+        _lastDeathStreakRead = liveSnapshot != null ? Environment.TickCount64 : 0;
+    }
+
+    private void ReportRosterDiagnostics(
+        LoadingRoster roster,
+        LiveMatchSnapshot? liveSnapshot,
+        int clientPlayers,
+        int livePlayers
+    )
+    {
+        if (liveSnapshot != null)
+        {
+            var catalog = FormMain.Globals.resLoading?.Champions.Champions ?? [];
+            var unknown = liveSnapshot.Players.Where(p => LiveChampionIdentity.Resolve(p, catalog) == null).ToArray();
+            string issue =
+                unknown.Length == 0
+                    ? ""
+                    : $"catalog={catalog.Count} unresolved={unknown.Length} raw="
+                        + string.Join(
+                            ",",
+                            unknown.Select(p => p.RawChampionName[..Math.Min(80, p.RawChampionName.Length)]).Distinct()
+                        );
+            if (issue != _championIssue)
+            {
+                _championIssue = issue;
+                RoomLoadDiagnostics.Shared.Report(
+                    _generation,
+                    "overlay-heroes",
+                    detail: issue.Length > 0 ? issue : "英雄识别已恢复。"
+                );
+            }
+        }
+        string identitySummary =
+            $"lcu={clientPlayers} live={livePlayers} roster={roster.Players.Length} confirmed={roster.Players.Count(p => LoadingRosterIdentityService.HasPuuid(p.Puuid))} hidden={roster.Players.Count(p => p.IdentityHidden)}";
+        if (identitySummary != _identitySummary)
+        {
+            _identitySummary = identitySummary;
+            RoomLoadDiagnostics.Shared.Report(_generation, "overlay-identities", detail: identitySummary);
         }
     }
 
@@ -514,7 +556,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
 
             SchedulePaint();
         }
-        catch { }
+        catch
+        {
+            // An unavailable optional icon must not hide the roster; allow a later request to retry.
+        }
         finally
         {
             _iconRequests.Remove(id);

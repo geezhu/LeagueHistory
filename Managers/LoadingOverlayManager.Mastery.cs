@@ -44,7 +44,10 @@ internal sealed partial class LoadingOverlayManager
                 SchedulePaint();
             }
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            // A retired match must not publish its mastery response.
+        }
         catch (Exception)
         {
             if (

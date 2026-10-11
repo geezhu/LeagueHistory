@@ -9,14 +9,25 @@ internal sealed partial class LoadingOverlayManager
     private readonly System.Windows.Forms.Timer _detailPoll = new() { Interval = 400 };
     private readonly OverlayChampionDetailService _championDetails;
     private CancellationTokenSource? _detailCancellation;
+    private Task _detailWork = Task.CompletedTask;
     private string _lastDetailRequest = "";
     private bool _readingDetail;
 
     private void CancelDetail()
     {
-        _detailCancellation?.Cancel();
-        _detailCancellation?.Dispose();
+        var cancellation = _detailCancellation;
         _detailCancellation = null;
+        if (cancellation != null)
+        {
+            cancellation.Cancel();
+            // The cancelled loader may still be joining its skill/image work; retire its source afterwards.
+            _ = _detailWork.ContinueWith(
+                _ => cancellation.Dispose(),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default
+            );
+        }
         _lastDetailRequest = "";
     }
 
@@ -60,7 +71,7 @@ internal sealed partial class LoadingOverlayManager
 
             _detailCancellation = CancellationTokenSource.CreateLinkedTokenSource(_life.Token);
             _detailCancellation.CancelAfter(TimeSpan.FromSeconds(45));
-            _ = LoadChampionDetail(
+            _detailWork = LoadChampionDetail(
                 request,
                 player,
                 _roster.Queue,
@@ -68,7 +79,10 @@ internal sealed partial class LoadingOverlayManager
                 _detailCancellation.Token
             );
         }
-        catch (Exception e) when (e is IOException or Newtonsoft.Json.JsonException) { }
+        catch (Exception e) when (e is IOException or Newtonsoft.Json.JsonException)
+        {
+            // Widget requests can be replaced mid-read; the next poll retries the current selection.
+        }
         finally
         {
             _readingDetail = false;

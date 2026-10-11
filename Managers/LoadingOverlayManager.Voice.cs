@@ -20,6 +20,9 @@ internal sealed partial class LoadingOverlayManager
                 _life.Token
             );
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            // Stopping the manager ends polling without publishing another recording state.
+        }
     }
 }
