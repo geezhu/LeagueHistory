@@ -6,6 +6,12 @@ namespace League;
 
 internal sealed class LoadingOverlayForm : Form
 {
+    private const int OverlayWidth = 1020;
+    private const int OverlayHeight = 670;
+    private const int NoActivateWindowStyle = 0x08000000;
+    private const int ToolWindowStyle = 0x00000080;
+    private const int MouseActivateMessage = 0x0021;
+    private const int MouseNoActivate = 3;
     public LoadingOverlayView View { get; }
     public event Action? Dismissed;
     private readonly Label _title = new()
@@ -24,7 +30,15 @@ internal sealed class LoadingOverlayForm : Form
         StartPosition = FormStartPosition.Manual;
         BackColor = Color.FromArgb(8, 29, 40);
         ForeColor = Color.WhiteSmoke;
-        ClientSize = new Size(1020, 670);
+        ClientSize = new Size(OverlayWidth, OverlayHeight);
+        View = new LoadingOverlayView(champion, details);
+        Controls.Add(View);
+        Controls.Add(CreateHeader());
+        SetRosterTitle();
+    }
+
+    private Panel CreateHeader()
+    {
         var header = new Panel
         {
             Dock = DockStyle.Top,
@@ -43,10 +57,7 @@ internal sealed class LoadingOverlayForm : Form
         close.Click += (_, _) => Dismissed?.Invoke();
         header.Controls.Add(_title);
         header.Controls.Add(close);
-        View = new LoadingOverlayView(champion, details);
-        Controls.Add(View);
-        Controls.Add(header);
-        SetRosterTitle();
+        return header;
     }
 
     public void SetRosterTitle() => _title.Text = "对局速览 · 双方英雄";
@@ -58,35 +69,29 @@ internal sealed class LoadingOverlayForm : Form
     {
         get
         {
-            var p = base.CreateParams;
-            p.ExStyle |= 0x08000000 | 0x00000080;
-            return p;
+            var parameters = base.CreateParams;
+            parameters.ExStyle |= NoActivateWindowStyle | ToolWindowStyle;
+            return parameters;
         }
     }
 
     protected override void WndProc(ref Message m)
     {
-        if (m.Msg == 0x0021)
+        if (m.Msg == MouseActivateMessage)
         {
-            m.Result = new IntPtr(3);
+            // Mouse clicks work without taking game keyboard focus.
+            m.Result = new IntPtr(MouseNoActivate);
             return;
-        } // MA_NOACTIVATE: mouse clicks work without taking game keyboard focus.
+        }
         base.WndProc(ref m);
     }
 
-    public static Rectangle Placement(Rectangle game, Rectangle work) =>
-        new(
-            Math.Clamp(
-                game.Left + (game.Width - Math.Min(1020, work.Width)) / 2,
-                work.Left,
-                Math.Max(work.Left, work.Right - Math.Min(1020, work.Width))
-            ),
-            Math.Clamp(
-                game.Top + (game.Height - Math.Min(670, work.Height)) / 2,
-                work.Top,
-                Math.Max(work.Top, work.Bottom - Math.Min(670, work.Height))
-            ),
-            Math.Min(1020, work.Width),
-            Math.Min(670, work.Height)
-        );
+    public static Rectangle Placement(Rectangle game, Rectangle work)
+    {
+        int width = Math.Min(OverlayWidth, work.Width);
+        int height = Math.Min(OverlayHeight, work.Height);
+        int left = Math.Clamp(game.Left + (game.Width - width) / 2, work.Left, Math.Max(work.Left, work.Right - width));
+        int top = Math.Clamp(game.Top + (game.Height - height) / 2, work.Top, Math.Max(work.Top, work.Bottom - height));
+        return new(left, top, width, height);
+    }
 }

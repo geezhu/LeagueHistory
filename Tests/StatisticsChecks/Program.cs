@@ -17,6 +17,11 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--settings-surface-checks"))
+        {
+            WinFormsCheckHost.Run(SettingsSurfaceChecks.Run);
+            return;
+        }
         if (args.Contains("--loading-view-checks"))
         {
             WinFormsCheckHost.Run(LoadingViewChecks.Run);
