@@ -11,17 +11,26 @@ public static class PlayerNamePresentation
         {
             badge = new League.Controls.IdentityIcon
             {
-                Name = "PrivacyLock", Width = 18,
-                Font = new Font("Segoe UI Emoji", 9f), ForeColor = Color.FromArgb(180, 135, 40),
-                BackColor = Color.Transparent, TextAlign = ContentAlignment.MiddleCenter,
-                UseCompatibleTextRendering = false, AccessibleName = "生涯不公开"
+                Name = "PrivacyLock",
+                Width = 18,
+                Font = new Font("Segoe UI Emoji", 9f),
+                ForeColor = Color.FromArgb(180, 135, 40),
+                BackColor = Color.Transparent,
+                TextAlign = ContentAlignment.MiddleCenter,
+                UseCompatibleTextRendering = false,
+                AccessibleName = "生涯不公开",
             };
             link.Controls.Add(badge);
             void PositionBadge()
             {
                 int width = Math.Max(18, link.Font.Height + 4);
                 int textWidth = TextRenderer.MeasureText(link.Text, link.Font).Width;
-                badge.SetBounds(Math.Max(0, Math.Min(textWidth, link.ClientSize.Width - width)), 0, width, link.ClientSize.Height);
+                badge.SetBounds(
+                    Math.Max(0, Math.Min(textWidth, link.ClientSize.Width - width)),
+                    0,
+                    width,
+                    link.ClientSize.Height
+                );
             }
             link.SizeChanged += (_, _) => PositionBadge();
             link.TextChanged += (_, _) => PositionBadge();
