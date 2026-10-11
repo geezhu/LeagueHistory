@@ -19,7 +19,10 @@ internal static class MasteryLiveDiagnostics
         Console.WriteLine($"Phase: {phase.Data}; flow HTTP {flow.Status}");
         var game = flow.Data?["gameData"];
         if (game == null)
+        {
             return;
+        }
+
         foreach (string team in new[] { "teamOne", "teamTwo", "playerChampionSelections" })
         {
             int index = 0;
@@ -63,9 +66,13 @@ internal static class MasteryLiveDiagnostics
                 timeout.Token
             );
             if (mastery.Data is JArray)
+            {
                 available++;
+            }
             else
+            {
                 unavailable++;
+            }
         }
         Console.WriteLine(
             $"Mastery lists available={available}; unavailable={unavailable}; hidden skipped={merged.Players.Count(p => p.IdentityHidden)}"

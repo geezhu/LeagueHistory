@@ -9,7 +9,9 @@ internal static class LoadingOverlayChecks
     private static void Check(bool value, string message)
     {
         if (!value)
+        {
             throw new Exception(message);
+        }
     }
 
     public static void Run()
@@ -188,7 +190,10 @@ internal static class LoadingOverlayChecks
         var view = (LoadingOverlayView)type.GetProperty("View")!.GetValue(form)!;
         using var icon = new Bitmap(48, 48);
         using (var graphics = Graphics.FromImage(icon))
+        {
             graphics.Clear(Color.Teal);
+        }
+
         var icons = new Dictionary<int, Image> { [99] = icon, [25] = icon };
         form.ClientSize = new Size(1020, 670);
         form.Show();
@@ -206,7 +211,10 @@ internal static class LoadingOverlayChecks
         image.Save(Path.Combine(AppContext.BaseDirectory, "loading-overlay.png"));
         var watch = System.Diagnostics.Stopwatch.StartNew();
         for (int i = 0; i < 100; i++)
+        {
             view.UpdateRoster(fixture, ranks, icons, "已缓存");
+        }
+
         Check(watch.Elapsed < TimeSpan.FromSeconds(5), "Cached updates stay bounded");
         view.UpdateRoster(
             null,
@@ -284,7 +292,10 @@ internal static class LoadingOverlayChecks
         Check(pause(0, false), "Exclusive fullscreen suspends desktop overlay presentation");
         state = 2;
         for (int i = 1; i < 1000; i++)
+        {
             Check(pause(i, false), "Fullscreen state is cached between checks");
+        }
+
         Check(reads == 1, "Following the game does not query fullscreen state on every tick");
         Check(!pause(1000, false), "Borderless/fullscreen-window busy state resumes overlay presentation");
         state = 3;

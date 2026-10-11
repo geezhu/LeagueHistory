@@ -7,7 +7,9 @@ internal static class OverlayChampionDetailChecks
     private static void Check(bool value, string message)
     {
         if (!value)
+        {
             throw new Exception(message);
+        }
     }
 
     public static void Run()
@@ -79,6 +81,7 @@ internal static class OverlayChampionDetailChecks
                 "OP.GG individual equipment comes from this hero's single-item statistics"
             );
             for (int i = 0; i < singles.Length; i++)
+            {
                 Check(
                     (string?)equipment["rows"]![i]!["winRateText"]
                         == "胜率 "
@@ -90,6 +93,8 @@ internal static class OverlayChampionDetailChecks
                             ),
                     "Single-item win rate must not use a build-combination win rate"
                 );
+            }
+
             var coreOnly = OverlayChampionDetailService.FromOpgg(
                 build with
                 {
@@ -150,11 +155,14 @@ internal static class OverlayChampionDetailChecks
             "Mayhem individual recommendations retain the selected hero's source ordering"
         );
         for (int i = 0; i < mayhemSingles.Length; i++)
+        {
             Check(
                 (string?)mayhemEquipment["rows"]![i]!["pickRateText"]
                     == "使用率 " + (mayhemSingles[i].PickRate?.ToString("P1") ?? "—"),
                 "Mayhem individual item usage is retained"
             );
+        }
+
         Check(
             (
                 (JArray)
@@ -220,7 +228,9 @@ internal static class OverlayChampionDetailChecks
             bridge.Dispose();
             await bridge.Completion;
             if (Directory.Exists(folder))
+            {
                 Directory.Delete(folder, true);
+            }
         }
     }
 }

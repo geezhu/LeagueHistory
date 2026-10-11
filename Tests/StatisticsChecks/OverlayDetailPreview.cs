@@ -12,7 +12,10 @@ internal static class OverlayDetailPreview
         string Encode(string path, int width = 48, int height = 48)
         {
             if (!File.Exists(path))
+            {
                 return "";
+            }
+
             using var source = Image.FromFile(path);
             using var small = new Bitmap(source, new Size(width, height));
             using var stream = new MemoryStream();
@@ -35,7 +38,9 @@ internal static class OverlayDetailPreview
                 (string?)s["tab"] == "runes"
             )
         )
+        {
             ((JArray)content["sections"]!).Add(section.DeepClone());
+        }
         ((JArray)content["sections"]!).Insert(
             0,
             OverlayChampionDetailService.Section(
@@ -65,7 +70,9 @@ internal static class OverlayDetailPreview
             int id = (int?)icon["id"] ?? 0;
             string? path = null;
             if (kind == "skill")
+            {
                 path = Path.Combine(assetDirectory, "skills", $"{id}-{(string?)icon["key"]}.png");
+            }
             else
             {
                 string folder = Path.Combine(
@@ -79,6 +86,7 @@ internal static class OverlayDetailPreview
                     }
                 );
                 if (Directory.Exists(folder))
+                {
                     path = Directory
                         .EnumerateFiles(folder)
                         .FirstOrDefault(f =>
@@ -86,9 +94,12 @@ internal static class OverlayDetailPreview
                             || Path.GetFileNameWithoutExtension(f).StartsWith(id + "_")
                             || Path.GetFileNameWithoutExtension(f).EndsWith("_" + id)
                         );
+                }
             }
             if (path != null)
+            {
                 icon["image"] = Encode(path);
+            }
         }
         string heroIcon = Encode(Path.Combine(assetDirectory, "champion", "九尾妖狐.png"));
         content["art"] = Encode(Path.Combine(assetDirectory, "profile-backgrounds", "21000.png"), 560, 280);

@@ -7,7 +7,9 @@ internal static class GameBarVoiceRecognitionChecks
     private static void Check(bool value, string note)
     {
         if (!value)
+        {
             throw new Exception(note);
+        }
     }
 
     public static async Task RunAsync()

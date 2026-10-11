@@ -40,9 +40,15 @@ internal static class AramBalanceChecks
             || !text.Contains("技能急速 +10\n")
             || !text.Contains("+2.5%")
         )
+        {
             throw new Exception("Balance alias matching and numeric units");
+        }
+
         if (!AramBalanceClient.Describe(data, "Unknown").Contains("暂未匹配"))
+        {
             throw new Exception("Unknown heroes cannot imply no adjustments");
+        }
+
         string file = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + "-balance.json");
         int calls = 0;
         try
@@ -62,7 +68,9 @@ internal static class AramBalanceChecks
                     Enumerable.Range(0, 5).Select(_ => client.GetAsync("Nunu", TimeSpan.FromDays(1), default))
                 );
                 if (calls != 1 || !File.Exists(file))
+                {
                     throw new Exception("Balance requests must coalesce and persist");
+                }
             }
             using (
                 var client = new AramBalanceClient(
@@ -77,13 +85,22 @@ internal static class AramBalanceChecks
             {
                 await client.GetAsync("Nunu", TimeSpan.FromDays(1), default);
                 if (calls != 1)
+                {
                     throw new Exception("Fresh disk cache must survive restart offline");
+                }
+
                 text = await client.GetAsync("Nunu", TimeSpan.Zero, default);
                 if (calls != 2 || !text.Contains("旧缓存"))
+                {
                     throw new Exception("Changed expiry refreshes and preserves stale data on failure");
+                }
+
                 await client.GetAsync("Nunu", TimeSpan.Zero, default);
                 if (calls != 2)
+                {
                     throw new Exception("Failed refreshes must back off");
+                }
+
                 using var cancel = new CancellationTokenSource();
                 cancel.Cancel();
                 try

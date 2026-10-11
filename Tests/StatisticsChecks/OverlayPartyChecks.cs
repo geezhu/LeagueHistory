@@ -6,7 +6,9 @@ internal static class OverlayPartyChecks
     private static void Check(bool value, string note)
     {
         if (!value)
+        {
             throw new Exception(note);
+        }
     }
 
     public static void Run()
@@ -33,12 +35,15 @@ internal static class OverlayPartyChecks
         try
         {
             for (int i = 0; i < 10; i++)
+            {
                 cache[i]
                     .MatchKeys.AddRange(
                         i < 5 ? ["a_100", "b_100"]
                         : i < 7 ? ["c_200", "d_200"]
                         : ["e_200", "f_200"]
                     );
+            }
+
             var groups = OverlayPartyAnalysis.ForRoster(roster, cache);
             Check(
                 groups.Count == 10
@@ -125,7 +130,10 @@ internal static class OverlayPartyChecks
                 "Mixed PUUID and summoner-ID entries cannot count one account twice"
             );
             foreach (var info in cache)
+            {
                 info.MatchKeys.Clear();
+            }
+
             cache[0].MatchKeys.AddRange(["one_100", "one_100", ""]);
             cache[1].MatchKeys.AddRange(["one_100", "one_100", ""]);
             Check(
@@ -146,7 +154,10 @@ internal static class OverlayPartyChecks
                 "Connected history associations preserve the existing main-page detection rule"
             );
             foreach (var info in cache)
+            {
                 info.MatchKeys.Clear();
+            }
+
             Check(
                 OverlayPartyAnalysis.ForRoster(roster, cache).Count == 0,
                 "A disappeared association does not leave a retained marker"
@@ -158,7 +169,9 @@ internal static class OverlayPartyChecks
         finally
         {
             foreach (var info in cache)
+            {
                 info.HeroIcons.Dispose();
+            }
         }
     }
 }

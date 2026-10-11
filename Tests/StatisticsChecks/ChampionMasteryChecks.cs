@@ -12,7 +12,9 @@ internal static class ChampionMasteryChecks
     private static void Check(bool value, string message)
     {
         if (!value)
+        {
             throw new Exception(message);
+        }
     }
 
     private const string Sample = """
@@ -123,7 +125,10 @@ internal static class ChampionMasteryChecks
                     {
                         int n = Interlocked.Increment(ref failedCalls);
                         if (n == 1)
+                        {
                             return Response();
+                        }
+
                         refreshStarted.TrySetResult();
                         await refreshRelease.Task.WaitAsync(token);
                         return Response("", denied ? HttpStatusCode.Forbidden : HttpStatusCode.ServiceUnavailable);
@@ -175,7 +180,9 @@ internal static class ChampionMasteryChecks
         finally
         {
             if (Directory.Exists(root))
+            {
                 Directory.Delete(root, true);
+            }
         }
     }
 
@@ -251,7 +258,10 @@ internal static class ChampionMasteryChecks
                                 return Response("\"" + phase + "\"");
                             case "/lol-chat/v1/conversations":
                                 if (changeBeforePost)
+                                {
                                     type.GetField("_hero", flags)!.SetValue(assistant, 1);
+                                }
+
                                 return Response("[{\"id\":\"room/one\",\"type\":\"championSelect\"}]");
                             default:
                                 Check(
@@ -339,7 +349,9 @@ internal static class ChampionMasteryChecks
         finally
         {
             if (Directory.Exists(root))
+            {
                 Directory.Delete(root, true);
+            }
         }
     }
 

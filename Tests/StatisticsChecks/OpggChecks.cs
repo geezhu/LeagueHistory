@@ -12,7 +12,9 @@ internal static class OpggChecks
     private static void Check(bool condition, string message)
     {
         if (!condition)
+        {
             throw new Exception(message);
+        }
     }
 
     private static JObject Fixture(string name) =>
@@ -198,6 +200,7 @@ internal static class OpggChecks
                             return Json(current);
                         }
                         if (request.Method == HttpMethod.Get)
+                        {
                             return Json(
                                 existing
                                     ? JArray.Parse(
@@ -207,6 +210,8 @@ internal static class OpggChecks
                                         "[{\"id\":99,\"name\":\"Personal\",\"isEditable\":true,\"current\":true}]"
                                     )
                             );
+                        }
+
                         method = request.Method.Method;
                         path = request.RequestUri!.AbsolutePath;
                         body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
@@ -480,7 +485,10 @@ internal static class OpggChecks
         }
         resource.Styles.Clear();
         foreach (var entry in savedStyles)
+        {
             resource.Styles.Add(entry.Key, entry.Value);
+        }
+
         form.Close();
     }
 

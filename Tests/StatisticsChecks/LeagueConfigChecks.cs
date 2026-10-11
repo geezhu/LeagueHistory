@@ -7,7 +7,9 @@ internal static class LeagueConfigChecks
     private static void Check(bool value, string message)
     {
         if (!value)
+        {
             throw new Exception(message);
+        }
     }
 
     public static void Run()
@@ -102,7 +104,9 @@ internal static class LeagueConfigChecks
         finally
         {
             if (Directory.Exists(root))
+            {
                 Directory.Delete(root, true);
+            }
         }
     }
 }

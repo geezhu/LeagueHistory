@@ -6,7 +6,9 @@ internal static class LiveDeathStreakChecks
     private static void Check(bool value, string note)
     {
         if (!value)
+        {
             throw new Exception(note);
+        }
     }
 
     public static JObject Fixture()
@@ -88,7 +90,9 @@ internal static class LiveDeathStreakChecks
             foreach (
                 var group in snapshot.DeathStreaks.Values.Where(s => !s.Current.HasValue).GroupBy(s => s.Description)
             )
+            {
                 Console.WriteLine($"Unknown reason: {group.Key} count={group.Count()}");
+            }
         }
         catch (Exception e) when (e is HttpRequestException or OperationCanceledException)
         {
@@ -111,9 +115,16 @@ internal static class LiveDeathStreakChecks
         );
         var bare = (JObject)data.DeepClone();
         foreach (var ev in ((JArray)bare["events"]!["Events"]!).OfType<JObject>())
-        foreach (string field in new[] { "KillerName", "VictimName" })
-            if (((string?)ev[field])?.StartsWith("legacy-") == true)
-                ev[field] = ((string)ev[field]!)[7..];
+        {
+            foreach (string field in new[] { "KillerName", "VictimName" })
+            {
+                if (((string?)ev[field])?.StartsWith("legacy-") == true)
+                {
+                    ev[field] = ((string)ev[field]!)[7..];
+                }
+            }
+        }
+
         Check(
             Streak(LiveMatchSnapshot.Parse(bare), 0) is { Current: 2, Highest: 3, Complete: true },
             "Actual events using bare Riot game names match unambiguously"
@@ -132,10 +143,13 @@ internal static class LiveDeathStreakChecks
             "Bots without Riot IDs use their explicit unique summoner names, rather than being treated as hidden humans"
         );
         for (int i = 0; i < 10; i++)
+        {
             Check(
                 Streak(LiveMatchSnapshot.Parse(data), 0).Current == 2,
                 "Repeated polling must not accumulate the same events"
             );
+        }
+
         var duplicate = (JObject)data.DeepClone();
         ((JArray)duplicate["events"]!["Events"]!).Add(duplicate["events"]!["Events"]![9]!.DeepClone());
         Check(Streak(LiveMatchSnapshot.Parse(duplicate), 0).Current == 2, "Repeated events are deduplicated");

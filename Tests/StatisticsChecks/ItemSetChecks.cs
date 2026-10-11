@@ -19,14 +19,20 @@ internal static class ItemSetChecks
         );
         var options = OpggItemSetService.Options(data, "core_items");
         if (OpggItemSetService.Ids(options[0])[2] != 4)
+        {
             throw new Exception("Equipment default must use highest usage");
+        }
+
         if (
             !OpggItemSetService.Later(data, options[0]).SequenceEqual(new[] { 3, 5 })
             || !OpggItemSetService.Later(data, options[1]).SequenceEqual(new[] { 4, 5 })
         )
+        {
             throw new Exception(
                 "Later items must subtract only the selected core and retain source order without duplicates"
             );
+        }
+
         var itemSet = OpggItemSetService.Create(
             build,
             "Ahri",
@@ -35,10 +41,16 @@ internal static class ItemSetChecks
             JObject.Parse("{\"ids\":[3020]}")
         );
         if ((int?)itemSet["blocks"]?[0]?["items"]?[1]?["count"] != 2)
+        {
             throw new Exception("Starter potion quantity must survive export");
+        }
+
         var alternate = OpggItemSetService.Create(build, "Ahri", options[1], null, null);
         if ((string?)alternate["uid"] != (string?)itemSet["uid"])
+        {
             throw new Exception("Changing equipment should update the same managed set");
+        }
+
         var otherMode = OpggItemSetService.Create(
             build with
             {
@@ -50,7 +62,10 @@ internal static class ItemSetChecks
             null
         );
         if ((string?)otherMode["uid"] == (string?)itemSet["uid"] || (int?)otherMode["associatedMaps"]?[0] != 12)
+        {
             throw new Exception("Equipment mode and map must be isolated");
+        }
+
         var fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "AramMeta");
         var page = new AramMetaPage(
             AramMetaIndex.Parse(JObject.Parse(File.ReadAllText(Path.Combine(fixture, "index.json")))),
@@ -73,7 +88,10 @@ internal static class ItemSetChecks
             || !((string)mayhem["title"]!).StartsWith("[arammeta] ")
             || (string?)mayhem["uid"] == (string?)otherMode["uid"]
         )
+        {
             throw new Exception("arammeta sets retain source and map without replacing OP.GG sets");
+        }
+
         if (
             OpggItemSetService
                 .Later(mayhemBuild.Data, mayhemCores[0])
@@ -81,7 +99,10 @@ internal static class ItemSetChecks
                 .Any()
             || ((JArray)mayhem["blocks"]!).Count != 3
         )
+        {
             throw new Exception("arammeta exports core, boots and later items without fabricated starter equipment");
+        }
+
         foreach (string scenario in new[] { "success", "rejected", "unverified", "malformed" })
         {
             var personal = JObject.Parse("{\"uid\":\"personal\",\"title\":\"My set\",\"custom\":123,\"blocks\":[]}");
@@ -96,21 +117,42 @@ internal static class ItemSetChecks
                 new Handler(async request =>
                 {
                     if (request.RequestUri!.AbsolutePath.EndsWith("current-summoner"))
+                    {
                         return Json(new JObject { ["summonerId"] = 7 });
+                    }
+
                     if (request.RequestUri.AbsolutePath != "/lol-item-sets/v1/item-sets/7/sets")
+                    {
                         throw new Exception("Wrong item-set account path");
+                    }
+
                     if (request.Method == HttpMethod.Get)
+                    {
                         return Json(scenario == "malformed" ? new JObject() : document);
+                    }
+
                     if (request.Method != HttpMethod.Put)
+                    {
                         throw new Exception("Unexpected item-set write");
+                    }
+
                     writes++;
                     var payload = JObject.Parse(await request.Content!.ReadAsStringAsync());
                     if (!JToken.DeepEquals(payload["itemSets"]?[0], personal) || (int?)payload["accountId"] != 123)
+                    {
                         throw new Exception("Personal sets and account metadata must be preserved");
+                    }
+
                     if (scenario == "rejected")
+                    {
                         return new(HttpStatusCode.Forbidden);
+                    }
+
                     if (scenario == "success")
+                    {
                         document = payload;
+                    }
+
                     return Json(new JObject());
                 })
             )
@@ -126,23 +168,34 @@ internal static class ItemSetChecks
             catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or HttpRequestException)
             { }
             if (success != (scenario == "success"))
+            {
                 throw new Exception("Item-set result must reflect verified save");
+            }
+
             if (scenario == "malformed" && writes != 0)
+            {
                 throw new Exception("Malformed data must not be overwritten");
+            }
+
             if (success)
             {
                 await OpggItemSetService.SaveAsync(client, alternate, CancellationToken.None);
                 if (((JArray)document["itemSets"]!).Count != 2)
+                {
                     throw new Exception("Reapplying must not accumulate item sets");
+                }
+
                 await OpggItemSetService.SaveAsync(client, mayhem, CancellationToken.None);
                 await OpggItemSetService.SaveAsync(client, mayhem, CancellationToken.None);
                 if (
                     ((JArray)document["itemSets"]!).Count != 3
                     || !JToken.DeepEquals(document["itemSets"]?[1], alternate)
                 )
+                {
                     throw new Exception(
                         "arammeta reapplication preserves both personal and OP.GG sets without duplicates"
                     );
+                }
             }
         }
         Console.WriteLine(
