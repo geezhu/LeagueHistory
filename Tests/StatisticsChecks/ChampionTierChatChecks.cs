@@ -1,8 +1,19 @@
+using League.Models;
 using League.Services;
 
 internal static class ChampionTierChatChecks
 {
     public static void Run()
+    {
+        SourceAndMissingRates();
+        TeamSizeAndChunking();
+        ZeroAndEmptyRates();
+        ModeSelection();
+        ActualTeamSelection();
+        Console.WriteLine("PASS: tier chat source, map, unknown tiers, empty roster and chunking.");
+    }
+
+    private static void SourceAndMissingRates()
     {
         var messages = ChampionTierChatMessage.Build(
             "海克斯大乱斗",
@@ -30,7 +41,10 @@ internal static class ChampionTierChatChecks
         {
             throw new Exception("Mayhem rate definitions and compact values");
         }
+    }
 
+    private static void TeamSizeAndChunking()
+    {
         var team = ChampionTierChatMessage.Build(
             "海克斯大乱斗",
             "arammeta",
@@ -56,7 +70,10 @@ internal static class ChampionTierChatChecks
         {
             throw new Exception("Tier notice chunking must retain every hero and rates");
         }
+    }
 
+    private static void ZeroAndEmptyRates()
+    {
         var zero = ChampionTierChatMessage.Build(
             "大乱斗",
             "OP.GG",
@@ -77,34 +94,46 @@ internal static class ChampionTierChatChecks
         {
             throw new Exception("Empty roster must not send");
         }
+    }
 
+    private static void ModeSelection()
+    {
         var players = new[]
         {
-            new League.Models.LiveMatchPlayer("a", "self", "Lux", "拉克丝", "CHAOS", true, 9, []),
-            new League.Models.LiveMatchPlayer("b", "enemy", "Morgana", "莫甘娜", "ORDER", false, 9, []),
+            new LiveMatchPlayer("a", "self", "Lux", "拉克丝", "CHAOS", true, 9, []),
+            new LiveMatchPlayer("b", "enemy", "Morgana", "莫甘娜", "ORDER", false, 9, []),
         };
-        var match = new League.Models.LiveMatchSnapshot("ARAM", 12, 100, players);
+        var match = new LiveMatchSnapshot("ARAM", 12, 100, players);
         if (
-            League.Models.LiveMatchMode.RecommendationQueue(3270, match with { Mode = "KIWI" }) != 2400
-            || League.Models.LiveMatchMode.RecommendationQueue(0, match) != 450
-            || League.Models.LiveMatchMode.RecommendationQueue(3270, match with { Mode = "CLASSIC", Map = 11 }) != 0
-            || League.Models.LiveMatchMode.RecommendationQueue(3270, match with { Mode = "UNKNOWN" }) != 0
+            LiveMatchMode.RecommendationQueue(3270, match with { Mode = "KIWI" }) != 2400
+            || LiveMatchMode.RecommendationQueue(0, match) != 450
+            || LiveMatchMode.RecommendationQueue(3270, match with { Mode = "CLASSIC", Map = 11 }) != 0
+            || LiveMatchMode.RecommendationQueue(3270, match with { Mode = "UNKNOWN" }) != 0
         )
         {
             throw new Exception(
                 "Special queues must use actual ARAM/KIWI mode; unknown queues and map alone cannot select statistics"
             );
         }
+    }
 
+    private static void ActualTeamSelection()
+    {
+        var players = new[]
+        {
+            new LiveMatchPlayer("a", "self", "Lux", "拉克丝", "CHAOS", true, 9, []),
+            new LiveMatchPlayer("b", "enemy", "Morgana", "莫甘娜", "ORDER", false, 9, []),
+        };
+        var match = new LiveMatchSnapshot("ARAM", 12, 100, players);
         var heroes = new[]
         {
-            new League.Models.Champion
+            new Champion
             {
                 Id = 99,
                 Alias = "Lux",
                 Name = "拉克丝",
             },
-            new League.Models.Champion
+            new Champion
             {
                 Id = 25,
                 Alias = "Morgana",
@@ -151,7 +180,5 @@ internal static class ChampionTierChatChecks
         {
             throw new Exception("Unsupported modes must not use ARAM statistics");
         }
-
-        Console.WriteLine("PASS: tier chat source, map, unknown tiers, empty roster and chunking.");
     }
 }
