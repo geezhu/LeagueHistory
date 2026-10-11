@@ -84,6 +84,7 @@ internal static class Program
 
     private static void AddUiChecks(Dictionary<string, Action> checks)
     {
+        checks["--voice-settings-checks"] = () => Ui(VoiceSettingsChecks.Run);
         checks["--settings-surface-checks"] = () => Ui(SettingsSurfaceChecks.Run);
         checks["--loading-view-checks"] = () => Ui(LoadingViewChecks.Run);
         checks["--main-navigation-checks"] = () => Ui(MainNavigationChecks.Run);

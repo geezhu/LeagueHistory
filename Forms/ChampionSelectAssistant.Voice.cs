@@ -55,32 +55,12 @@ internal sealed partial class ChampionSelectAssistant
         {
             var client = FormMain.Globals.lcuClient?.Client ?? throw new InvalidOperationException("客户端未连接。");
             string room = await ChampionSelectVoiceChatService.CaptureRoomAsync(client, timeout.Token);
-            if (IsDisposed || !_selecting || timeout.IsCancellationRequested)
+            if (IsDisposed || !Visible || !_selecting || timeout.IsCancellationRequested)
             {
                 return;
             }
 
-            VoiceInputDialog? dialog = null;
-            bool Current() =>
-                !IsDisposed
-                && _selecting
-                && dialog is { IsDisposed: false }
-                && _voiceDialog == dialog
-                && FormMain.Globals.lcuClient?.Client == client;
-            dialog = new VoiceInputDialog(
-                (text, token) => ChampionSelectVoiceChatService.SendAsync(client, room, text, token, Current),
-                Current
-            );
-            _voiceDialog = dialog;
-            dialog.Bounds = EquipmentEditorBounds(ClientBounds(), Screen.FromControl(this).WorkingArea, dialog.Size);
-            dialog.FormClosed += (_, _) =>
-            {
-                if (_voiceDialog == dialog)
-                {
-                    _voiceDialog = null;
-                }
-            };
-            dialog.Show(this);
+            OpenVoiceDialog(client, room);
         }
         catch (OperationCanceledException)
         {
@@ -112,6 +92,32 @@ internal sealed partial class ChampionSelectAssistant
                 _voiceButton.Enabled = _selecting;
             }
         }
+    }
+
+    private void OpenVoiceDialog(HttpClient client, string room)
+    {
+        VoiceInputDialog? dialog = null;
+        bool Current() =>
+            !IsDisposed
+            && Visible
+            && _selecting
+            && dialog is { IsDisposed: false }
+            && _voiceDialog == dialog
+            && FormMain.Globals.lcuClient?.Client == client;
+        dialog = new VoiceInputDialog(
+            (text, token) => ChampionSelectVoiceChatService.SendAsync(client, room, text, token, Current),
+            Current
+        );
+        _voiceDialog = dialog;
+        dialog.Bounds = EquipmentEditorBounds(ClientBounds(), Screen.FromControl(this).WorkingArea, dialog.Size);
+        dialog.FormClosed += (_, _) =>
+        {
+            if (_voiceDialog == dialog)
+            {
+                _voiceDialog = null;
+            }
+        };
+        dialog.Show(this);
     }
 
     private Rectangle ClientBounds()
