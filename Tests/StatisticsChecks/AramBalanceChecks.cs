@@ -12,6 +12,16 @@ internal static class AramBalanceChecks
 
     public static async Task RunAsync()
     {
+        var data = BalanceData();
+        DescriptionsAndUnits(data);
+        await CachePersistenceAsync(data);
+        Console.WriteLine(
+            "PASS: balance units, alias mapping, persistent cache, expiry, failure backoff and cancellation."
+        );
+    }
+
+    private static JObject BalanceData()
+    {
         var row = JObject.Parse(
             "{\"champion\":{\"name\":\"Nunu & Willump\"},\"aramDamageDealt\":1.1,\"aramDamageTaken\":0.9,\"aramHealing\":1,\"aramShielding\":1,\"aramTenacity\":1,\"aramAbilityHaste\":10,\"aramAttackSpeed\":1.025,\"aramEnergyRegen\":1}"
         );
@@ -29,6 +39,11 @@ internal static class AramBalanceChecks
         data["result"]!["data"]!["aramModifiersJson"] = JObject.Parse(
             "{\"timestamp\":\"2026-09-03T10:13:06.697856+00:00\"}"
         );
+        return data;
+    }
+
+    private static void DescriptionsAndUnits(JObject data)
+    {
         var nodes = AramBalanceClient.Nodes(data);
         nodes.Insert(0, new JObject { ["champion"] = JValue.CreateNull() });
         nodes.Insert(0, new JObject { ["champion"] = "invalid" });
@@ -48,7 +63,10 @@ internal static class AramBalanceChecks
         {
             throw new Exception("Unknown heroes cannot imply no adjustments");
         }
+    }
 
+    private static async Task CachePersistenceAsync(JObject data)
+    {
         string file = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + "-balance.json");
         int calls = 0;
         try
@@ -72,51 +90,53 @@ internal static class AramBalanceChecks
                     throw new Exception("Balance requests must coalesce and persist");
                 }
             }
-            using (
-                var client = new AramBalanceClient(
-                    new Handler(() =>
-                    {
-                        calls++;
-                        throw new HttpRequestException();
-                    }),
-                    file
-                )
-            )
-            {
-                await client.GetAsync("Nunu", TimeSpan.FromDays(1), default);
-                if (calls != 1)
-                {
-                    throw new Exception("Fresh disk cache must survive restart offline");
-                }
-
-                text = await client.GetAsync("Nunu", TimeSpan.Zero, default);
-                if (calls != 2 || !text.Contains("旧缓存"))
-                {
-                    throw new Exception("Changed expiry refreshes and preserves stale data on failure");
-                }
-
-                await client.GetAsync("Nunu", TimeSpan.Zero, default);
-                if (calls != 2)
-                {
-                    throw new Exception("Failed refreshes must back off");
-                }
-
-                using var cancel = new CancellationTokenSource();
-                cancel.Cancel();
-                try
-                {
-                    await client.GetAsync("Nunu", TimeSpan.Zero, cancel.Token);
-                    throw new Exception("Cancelled request completed");
-                }
-                catch (OperationCanceledException) { }
-            }
+            await OfflineRestartAndRefreshAsync(file, () => calls, () => calls++);
         }
         finally
         {
             File.Delete(file);
         }
-        Console.WriteLine(
-            "PASS: balance units, alias mapping, persistent cache, expiry, failure backoff and cancellation."
-        );
+    }
+
+    private static async Task OfflineRestartAndRefreshAsync(string file, Func<int> requestCount, Action recordRequest)
+    {
+        using (
+            var client = new AramBalanceClient(
+                new Handler(() =>
+                {
+                    recordRequest();
+                    throw new HttpRequestException();
+                }),
+                file
+            )
+        )
+        {
+            await client.GetAsync("Nunu", TimeSpan.FromDays(1), default);
+            if (requestCount() != 1)
+            {
+                throw new Exception("Fresh disk cache must survive restart offline");
+            }
+
+            string text = await client.GetAsync("Nunu", TimeSpan.Zero, default);
+            if (requestCount() != 2 || !text.Contains("旧缓存"))
+            {
+                throw new Exception("Changed expiry refreshes and preserves stale data on failure");
+            }
+
+            await client.GetAsync("Nunu", TimeSpan.Zero, default);
+            if (requestCount() != 2)
+            {
+                throw new Exception("Failed refreshes must back off");
+            }
+
+            using var cancel = new CancellationTokenSource();
+            await cancel.CancelAsync();
+            try
+            {
+                await client.GetAsync("Nunu", TimeSpan.Zero, cancel.Token);
+                throw new Exception("Cancelled request completed");
+            }
+            catch (OperationCanceledException) { }
+        }
     }
 }

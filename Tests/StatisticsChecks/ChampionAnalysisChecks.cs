@@ -1,3 +1,4 @@
+using League.Models;
 using League.Parsers;
 using League.Services;
 using Newtonsoft.Json;
@@ -7,20 +8,35 @@ internal static class ChampionAnalysisChecks
 {
     public static void Run(string? output = null)
     {
-        void Check(bool condition, string message)
+        var reports = ReadCapturedReports(output);
+        CheckLux(reports["lux"]);
+        CheckConditionalControlAndShield(reports);
+        CheckUnknownFieldsAndRecursion();
+        Console.WriteLine(
+            "Champion analysis checks passed: three captured champions, source paths, ranges, control duration, shield formulas, unknowns and recursion."
+        );
+        if (output != null)
         {
-            if (!condition)
-            {
-                throw new Exception(message);
-            }
+            Console.WriteLine("Reports: " + Path.GetFullPath(output));
         }
-        JObject Load(string alias) =>
-            JObject.Parse(
-                File.ReadAllText(
-                    Path.Combine(AppContext.BaseDirectory, "Fixtures", "ChampionAnalysis", alias + ".json")
-                )
-            );
-        var reports = new Dictionary<string, League.Models.ChampionAnalysisReport>();
+    }
+
+    private static void Check(bool condition, string message)
+    {
+        if (!condition)
+        {
+            throw new Exception(message);
+        }
+    }
+
+    private static JObject Load(string alias) =>
+        JObject.Parse(
+            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ChampionAnalysis", alias + ".json"))
+        );
+
+    private static Dictionary<string, ChampionAnalysisReport> ReadCapturedReports(string? output)
+    {
+        var reports = new Dictionary<string, ChampionAnalysisReport>();
         foreach (string alias in new[] { "lux", "morgana", "nautilus" })
         {
             var report = ChampionAnalysisParser.Parse(
@@ -35,37 +51,49 @@ internal static class ChampionAnalysisChecks
                 "Use root spell order, not ability order"
             );
             Check(report.Warnings.Any(w => w.Contains("未锁定")), "Unversioned samples explicitly marked");
-            // Verify every evidence pointer really resolves to the original sample.
-            var original = Load(alias);
-            foreach (var value in report.Attributes.Concat(report.Spells.SelectMany(s => s.Parameters)))
-            {
-                if (value.Path.StartsWith("derived:"))
-                {
-                    continue;
-                }
-
-                JToken? token = original;
-                foreach (string part in value.Path.Split('/').Skip(1))
-                {
-                    string decoded = part.Replace("~1", "/").Replace("~0", "~");
-                    token = token is JArray array ? array[int.Parse(decoded)] : token?[decoded];
-                }
-                Check(
-                    token != null || value.Values.All(v => v == null),
-                    "Evidence must be resolvable or unknown: " + value.Path
-                );
-            }
+            CheckEvidence(report, Load(alias));
             if (output != null)
             {
-                Directory.CreateDirectory(output);
-                File.WriteAllText(Path.Combine(output, alias + ".md"), ChampionAnalysisMarkdown.Render(report));
-                File.WriteAllText(
-                    Path.Combine(output, alias + ".json"),
-                    JsonConvert.SerializeObject(report, Formatting.Indented)
-                );
+                WriteReport(output, alias, report);
             }
         }
-        var lux = reports["lux"];
+        return reports;
+    }
+
+    private static void CheckEvidence(ChampionAnalysisReport report, JObject original)
+    {
+        foreach (var value in report.Attributes.Concat(report.Spells.SelectMany(s => s.Parameters)))
+        {
+            if (value.Path.StartsWith("derived:"))
+            {
+                continue;
+            }
+
+            JToken? token = original;
+            foreach (string part in value.Path.Split('/').Skip(1))
+            {
+                string decoded = part.Replace("~1", "/").Replace("~0", "~");
+                token = token is JArray array ? array[int.Parse(decoded)] : token?[decoded];
+            }
+            Check(
+                token != null || value.Values.All(v => v == null),
+                "Evidence must be resolvable or unknown: " + value.Path
+            );
+        }
+    }
+
+    private static void WriteReport(string output, string alias, ChampionAnalysisReport report)
+    {
+        Directory.CreateDirectory(output);
+        File.WriteAllText(Path.Combine(output, alias + ".md"), ChampionAnalysisMarkdown.Render(report));
+        File.WriteAllText(
+            Path.Combine(output, alias + ".json"),
+            JsonConvert.SerializeObject(report, Formatting.Indented)
+        );
+    }
+
+    private static void CheckLux(ChampionAnalysisReport lux)
+    {
         var q = lux.Spells[0];
         Check(q.Parameters.Single(p => p.Name == "内部施法范围").Values[1] == 10000, "Keep internal range evidence");
         Check(q.Parameters.Single(p => p.Name == "显示施法范围").Values[1] == 1175, "Keep display range distinct");
@@ -80,6 +108,10 @@ internal static class ChampionAnalysisChecks
                 && shield.Expression.Contains("缺省"),
             "Unverified default stat must not be silently AP"
         );
+    }
+
+    private static void CheckConditionalControlAndShield(IReadOnlyDictionary<string, ChampionAnalysisReport> reports)
+    {
         var morgana = reports["morgana"].Spells[3];
         Check(
             morgana.Parameters.Single(p => p.Name == "ChainDuration").Values[1] == 3
@@ -91,7 +123,10 @@ internal static class ChampionAnalysisChecks
             reports["nautilus"].Spells[1].Formulas.Any(f => f.Expression.Contains("ShieldHealthRatio") && !f.Resolved),
             "Health scaling preserved without guessing enum"
         );
+    }
 
+    private static void CheckUnknownFieldsAndRecursion()
+    {
         var mutated = Load("lux");
         string rootKey = "Characters/Lux/CharacterRecords/Root";
         ((JObject)mutated[rootKey]!).Remove("baseHPModifiable");
@@ -104,12 +139,5 @@ internal static class ChampionAnalysisChecks
         var unknown = ChampionAnalysisParser.Parse(mutated, "lux", "fixture", "test");
         Check(unknown.Attributes.Single(v => v.Name == "基础生命").Values[0] == null, "Missing is not zero");
         Check(unknown.Spells[0].Formulas.All(f => !f.Resolved), "Unknown nodes and circular references fail closed");
-        Console.WriteLine(
-            "Champion analysis checks passed: three captured champions, source paths, ranges, control duration, shield formulas, unknowns and recursion."
-        );
-        if (output != null)
-        {
-            Console.WriteLine("Reports: " + Path.GetFullPath(output));
-        }
     }
 }
