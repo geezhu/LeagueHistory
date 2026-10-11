@@ -183,6 +183,7 @@
     "Forms/ChampionSelectAssistant.Items.cs",
     "Forms/ChampionSelectAssistant.Mastery.cs",
     "Forms/ChampionSelectAssistant.Mayhem.cs",
+    "Forms/ChampionSelectAssistant.MayhemOverview.cs",
     "Forms/ChampionSelectAssistant.Runes.cs",
     "Forms/ChampionSelectAssistant.Skills.cs",
     "Forms/ChampionSelectAssistant.Spells.cs",
