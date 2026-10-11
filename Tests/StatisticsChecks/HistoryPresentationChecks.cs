@@ -24,6 +24,9 @@ internal static class HistoryPresentationChecks
         TimelineRendering();
         CareerFallback();
         RetiredRequests();
+        RecentSamples();
+        RecentNotificationDisposal();
+        OverviewRendering();
         Console.WriteLine(
             "PASS: timeline filtering and missing frames, career fallback/privacy and stale request retirement."
         );
@@ -223,6 +226,116 @@ internal static class HistoryPresentationChecks
             Field<Label>(view, "_summary").Text.Contains("KDA 5.00"),
             "A retired private response must not clear the replacement player's summary"
         );
+    }
+
+    private static Control RecentView() =>
+        (Control)
+            Activator.CreateInstance(typeof(TimelineView).Assembly.GetType("League.Controls.RecentActivityView")!)!;
+
+    private static JArray SampleRecords(int start, int count)
+    {
+        var template = Records("self")[0];
+        return new JArray(
+            Enumerable
+                .Range(start, count)
+                .Select(id =>
+                {
+                    var record = (JObject)template.DeepClone();
+                    record["gameId"] = id;
+                    record["gameCreation"] = id;
+                    return record;
+                })
+        );
+    }
+
+    private static (CareerGame[]? Games, bool Partial) RecentSample(Control view, Handler handler)
+    {
+        using var client = Client(handler);
+        var request =
+            (Task<(CareerGame[]? Games, bool Partial)>)
+                view.GetType()
+                    .GetMethod("ReadRecentGamesAsync", PrivateInstance)!
+                    .Invoke(
+                        view,
+                        new object[] { "self", new PlayerStatisticsService(() => client), CancellationToken.None }
+                    )!;
+        PumpUntil(() => request.IsCompleted);
+        return request.GetAwaiter().GetResult();
+    }
+
+    private static void RecentSamples()
+    {
+        using var view = RecentView();
+        var complete = new Handler(call =>
+            Task.FromResult(Reply(SampleRecords((call - 1) * 20 + 1, call < 3 ? 20 : 10)))
+        );
+        var sample = RecentSample(view, complete);
+        Check(
+            sample.Games?.Length == 50 && !sample.Partial && complete.Calls == 3,
+            "Recent history must remain bounded to fifty records and three pages"
+        );
+        Check(
+            sample.Games![0].Id == 50 && sample.Games[^1].Id == 1,
+            "Recent samples must retain descending date/ID order"
+        );
+        var partial = new Handler(call =>
+            Task.FromResult(call == 1 ? Reply(SampleRecords(1, 20)) : Reply(new JObject(), HttpStatusCode.Forbidden))
+        );
+        var retained = RecentSample(view, partial);
+        Check(
+            retained.Games?.Length == 20 && retained.Partial && partial.Calls == 2,
+            "A failed later page must retain the available sample and its partial-data status"
+        );
+        var unavailable = RecentSample(
+            view,
+            new Handler(_ => Task.FromResult(Reply(new JObject(), HttpStatusCode.Forbidden)))
+        );
+        var empty = RecentSample(view, new Handler(_ => Task.FromResult(Reply(new JArray()))));
+        Check(
+            unavailable.Games == null && empty.Games?.Length == 0,
+            "Unavailable recent history must remain distinct from a valid empty record set"
+        );
+    }
+
+    private static void RecentNotificationDisposal()
+    {
+        using var view = RecentView();
+        var notification = view.GetType().GetEvent("OverviewLoaded")!;
+        notification.AddEventHandler(view, (Action<CareerGame[], string>)((_, _) => view.Dispose()));
+        view.GetType().GetMethod("LoadPlayer")!.Invoke(view, new object[] { "self" });
+        var request = Field<CancellationTokenSource>(view, "_request");
+        PumpUntil(() => Disposed(request));
+        Check(
+            view.IsDisposed,
+            "Disposal during the initial overview notification must retire its already tracked worker"
+        );
+    }
+
+    private static void OverviewRendering()
+    {
+        var type = typeof(TimelineView).Assembly.GetType("League.Controls.RecentOverviewView")!;
+        using var overview = (Control)Activator.CreateInstance(type)!;
+        type.GetMethod("SetGames")!
+            .Invoke(
+                overview,
+                new object[] { CareerStatistics.Parse(SampleRecords(1, 10), "self").Games.ToArray(), "测试记录" }
+            );
+        foreach (int width in new[] { 800, 480 })
+        {
+            overview.Width = width;
+            Check(
+                overview.Height == (width == 800 ? 170 : 294),
+                "Recent overview must retain its responsive card rows"
+            );
+            using var image = new Bitmap(overview.Width, overview.Height);
+            overview.DrawToBitmap(image, overview.ClientRectangle);
+            image.Save(Path.Combine(AppContext.BaseDirectory, $"overview-quality-{width}.png"));
+            var targets = Field<List<(Rectangle Bounds, string Text)>>(overview, "_hits");
+            Check(
+                targets.Count == 5 && targets[0].Text.Contains("× 3") && targets[0].Text.Contains("紫色"),
+                "Recent overview must preserve ARAM KDA source and all five metric descriptions"
+            );
+        }
     }
 
     private static bool Disposed(CancellationTokenSource source)
