@@ -23,6 +23,9 @@ public sealed partial class ChampionCompositionView
     private readonly Panel _basic = new() { Dock = DockStyle.Fill, Visible = false };
     private readonly Dictionary<int, Image> _portraits = new();
     private readonly HashSet<int> _portraitLoads = new();
+    private Func<int, Task<Image?>> _portraitLoader = id =>
+        FormMain.Globals.resLoading?.GetChampionIconAsync(id) ?? Task.FromResult<Image?>(null);
+    private Func<HttpClient?> _skillClient = () => FormMain.Globals.lcuClient?.Client;
     private readonly Dictionary<int, ChampionSelectAssistant.Skill[]> _skills = new();
     private readonly Dictionary<string, Image> _skillIcons = new();
     private readonly HashSet<int> _skillRequests = new();
@@ -102,16 +105,6 @@ public sealed partial class ChampionCompositionView
             Padding = new Padding(6, 2, 6, 2),
         };
 
-    private Label Caption(string text, int height = 30) =>
-        new()
-        {
-            Text = text,
-            Dock = DockStyle.Top,
-            Height = height,
-            Padding = new Padding(10, 6, 8, 4),
-            ForeColor = ForeColor,
-        };
-
     private FlowLayoutPanel Card(string title, string note)
     {
         var card = new FlowLayoutPanel
@@ -175,7 +168,6 @@ public sealed partial class ChampionCompositionView
         {
             return;
         }
-
         if (_renderingDashboard)
         {
             QueueDashboardRefresh();
@@ -188,215 +180,27 @@ public sealed partial class ChampionCompositionView
         {
             _selectedHero = team.FirstOrDefault(e => e.ChampionId > 0)?.ChampionId ?? 0;
         }
-
         _heroes.SuspendLayout();
         _overview.SuspendLayout();
         try
         {
-            foreach (Control control in _heroes.Controls.Cast<Control>().ToArray())
-            {
-                control.Dispose();
-            }
-
-            foreach (Control control in _overview.Controls.Cast<Control>().ToArray())
-            {
-                control.Dispose();
-            }
-
+            ClearDashboardCards();
             foreach (var entry in team)
             {
-                int id = entry.ChampionId;
-                var card = new Panel
-                {
-                    Width = Math.Max(100, (_heroes.ClientSize.Width - 20) / Math.Max(1, team.Length)),
-                    Height = 84,
-                    BackColor = id == _selectedHero ? Color.FromArgb(25, 76, 87) : Color.FromArgb(16, 45, 57),
-                    Margin = new Padding(0, 0, 4, 0),
-                    Cursor = Cursors.Hand,
-                };
-                var portrait = new PictureBox
-                {
-                    Location = new Point(8, 8),
-                    Size = new Size(32, 32),
-                    SizeMode = PictureBoxSizeMode.Zoom,
-                };
-                if (_portraits.TryGetValue(id, out var image))
-                {
-                    portrait.Image = image;
-                }
-
-                card.Tag = id;
-                card.Controls.Add(portrait);
-                var name = new Label
-                {
-                    Text = id > 0 ? _champion(id).Name : "等待选择",
-                    Location = new Point(7, 43),
-                    Size = new Size(card.Width - 10, 19),
-                    AutoEllipsis = true,
-                };
-                card.Controls.Add(name);
-                var state = new Label
-                {
-                    Text =
-                        entry.Preview ? "预选"
-                        : entry.IsSelf ? "自己"
-                        : "队友",
-                    Location = new Point(45, 14),
-                    AutoSize = true,
-                    ForeColor = Color.FromArgb(135, 204, 214),
-                };
-                card.Controls.Add(state);
-                var status = new Label
-                {
-                    Text =
-                        _errors.ContainsKey(id) ? "读取失败"
-                        : _snapshots.TryGetValue(id, out var data)
-                            ? data.Stale ? "旧缓存"
-                                : "已读取"
-                        : id > 0 ? "读取中"
-                        : "未选择",
-                    Location = new Point(7, 63),
-                    AutoSize = true,
-                    ForeColor = Color.FromArgb(150, 177, 189),
-                };
-                card.Controls.Add(status);
-                card.Click += (_, _) => SelectHero(id);
-                foreach (Control child in card.Controls)
-                {
-                    child.Click += (_, _) => SelectHero(id);
-                }
-
-                _heroes.Controls.Add(card);
-                if (id > 0)
-                {
-                    _ = LoadPortraitAsync(id);
-                }
+                AddHeroCard(entry, team.Length);
             }
             RenderWeaknesses();
-            if ((_replacement.SelectedItem as Choice)?.Id > 0)
+            bool preview = (_replacement.SelectedItem as Choice)?.Id > 0;
+            if (preview)
             {
                 RenderSwap();
             }
-
-            int loaded = team.Count(e => _snapshots.ContainsKey(e.ChampionId));
-            var coverage = Card(
-                "能力覆盖",
-                $"已读取 {loaded}/{team.Length} 个位置。以下是技能标签记录，未记录不代表没有；不包含装备、符文、强化和地图修正。"
-            );
-            foreach (var capability in Capabilities)
-            {
-                var providers = team.Where(e => Sources(e.ChampionId, capability.Tag).Length > 0).ToArray();
-                var group = new FlowLayoutPanel
-                {
-                    AutoSize = true,
-                    MaximumSize = new Size(Math.Max(240, _overview.Width - 60), 0),
-                    Margin = new Padding(0, 2, 0, 6),
-                };
-                group.Controls.Add(
-                    new Label
-                    {
-                        Text = $"{capability.Title} · {providers.Length} 个位置有记录",
-                        AutoSize = true,
-                        Margin = new Padding(0, 7, 12, 0),
-                    }
-                );
-                foreach (var entry in providers)
-                {
-                    int hero = entry.ChampionId;
-                    var button = ActionButton(
-                        _champion(hero).Name + " · " + string.Join(" / ", Sources(hero, capability.Tag))
-                    );
-                    button.Click += (_, _) => SelectHero(hero);
-                    group.Controls.Add(button);
-                }
-                if (providers.Length == 0)
-                {
-                    group.Controls.Add(
-                        new Label
-                        {
-                            Text = "尚未确认",
-                            AutoSize = true,
-                            Margin = new Padding(0, 7, 0, 0),
-                        }
-                    );
-                }
-
-                coverage.Controls.Add(group);
-            }
-            if (((_replacement.SelectedItem as Choice)?.Id ?? 0) == 0)
+            RenderCapabilityCoverage(team);
+            if (!preview)
             {
                 RenderSwap();
             }
-
-            var selected = Card(
-                _selectedHero > 0 ? _champion(_selectedHero).Name + " · 能力来源" : "能力来源",
-                "点击英雄切换；技能标签不用于推算控制链、必中概率或实战伤害。"
-            );
-            if (_snapshots.TryGetValue(_selectedHero, out var snapshot))
-            {
-                foreach (var spell in snapshot.Report.Spells)
-                {
-                    var labels = Capabilities.Where(c => spell.Tags.Contains(c.Tag, StringComparer.Ordinal)).ToArray();
-                    var line = new FlowLayoutPanel
-                    {
-                        AutoSize = true,
-                        MaximumSize = new Size(Math.Max(240, _overview.Width - 60), 0),
-                    };
-                    var skill = _skills.GetValueOrDefault(_selectedHero)?.FirstOrDefault(s => s.Key == spell.Key);
-                    var key = ActionButton(spell.Key + (skill == null ? "" : " · " + skill.Name));
-                    if (skill != null)
-                    {
-                        if (_skillIcons.TryGetValue(skill.Icon, out var icon))
-                        {
-                            key.Image = icon;
-                            key.ImageAlign = ContentAlignment.MiddleLeft;
-                            key.TextImageRelation = TextImageRelation.ImageBeforeText;
-                        }
-                        _abilityTips.SetToolTip(key, TooltipText.Format(skill.Name, skill.Description));
-                    }
-                    line.Controls.Add(key);
-                    line.Controls.Add(
-                        new Label
-                        {
-                            Text =
-                                labels.Length > 0 ? string.Join(" · ", labels.Select(c => c.Title)) : "能力分类待确认",
-                            AutoSize = true,
-                            Margin = new Padding(0, 8, 0, 0),
-                        }
-                    );
-                    key.Click += (_, _) =>
-                    {
-                        _details.Text =
-                            $"{_champion(_selectedHero).Name} · {spell.Key}\n\n"
-                            + string.Join("\n\n", labels.Select(c => c.Note))
-                            + "\n\n"
-                            + (skill?.Description ?? "本地技能说明尚未加载")
-                            + "\n\n目标类型："
-                            + spell.Targeting
-                            + "\n\n"
-                            + string.Join("\n", spell.Warnings);
-                        _basic.Visible = true;
-                        _overview.Visible = false;
-                    };
-                    selected.Controls.Add(line);
-                }
-                selected.Controls.Add(
-                    new Label
-                    {
-                        Text =
-                            $"CommunityDragon · {snapshot.Report.Version} · {snapshot.FetchedAt.LocalDateTime:MM-dd HH:mm}",
-                        AutoSize = true,
-                        Margin = new Padding(0, 10, 0, 0),
-                        ForeColor = Color.FromArgb(150, 177, 189),
-                    }
-                );
-            }
-            else
-            {
-                selected.Controls.Add(
-                    new Label { Text = _errors.GetValueOrDefault(_selectedHero) ?? "等待英雄数据", AutoSize = true }
-                );
-            }
+            RenderSelectedAbilities();
         }
         finally
         {
@@ -406,16 +210,220 @@ public sealed partial class ChampionCompositionView
         }
         ResizeDashboard();
         _overview.AutoScrollPosition = new Point(-scroll.X, -scroll.Y);
-        foreach (
-            int id in Team()
-                .Concat(_roster?.Team.Where(e => e.IsSelf) ?? [])
-                .Select(e => e.ChampionId)
-                .Where(id => id > 0)
-                .Distinct()
-        )
+        foreach (int id in AnalysisChampions())
         {
-            _ = LoadSkillsAsync(id);
+            _ = TrackLoad(LoadSkillsAsync(id));
         }
+    }
+
+    private void ClearDashboardCards()
+    {
+        foreach (Control control in _heroes.Controls.Cast<Control>().ToArray())
+        {
+            control.Dispose();
+        }
+        foreach (Control control in _overview.Controls.Cast<Control>().ToArray())
+        {
+            control.Dispose();
+        }
+    }
+
+    private void AddHeroCard(ChampionSelectRosterEntry entry, int slots)
+    {
+        int id = entry.ChampionId;
+        var card = new Panel
+        {
+            Tag = id,
+            Width = Math.Max(100, (_heroes.ClientSize.Width - 20) / Math.Max(1, slots)),
+            Height = 84,
+            BackColor = id == _selectedHero ? Color.FromArgb(25, 76, 87) : Color.FromArgb(16, 45, 57),
+            Margin = new Padding(0, 0, 4, 0),
+            Cursor = Cursors.Hand,
+        };
+        card.Controls.Add(
+            new PictureBox
+            {
+                Location = new Point(8, 8),
+                Size = new Size(32, 32),
+                SizeMode = PictureBoxSizeMode.Zoom,
+                Image = _portraits.GetValueOrDefault(id),
+            }
+        );
+        card.Controls.Add(
+            new Label
+            {
+                Text = id > 0 ? _champion(id).Name : "等待选择",
+                Location = new Point(7, 43),
+                Size = new Size(card.Width - 10, 19),
+                AutoEllipsis = true,
+            }
+        );
+        card.Controls.Add(
+            new Label
+            {
+                Text =
+                    entry.Preview ? "预选"
+                    : entry.IsSelf ? "自己"
+                    : "队友",
+                Location = new Point(45, 14),
+                AutoSize = true,
+                ForeColor = Color.FromArgb(135, 204, 214),
+            }
+        );
+        card.Controls.Add(
+            new Label
+            {
+                Text = DataStatus(id),
+                Location = new Point(7, 63),
+                AutoSize = true,
+                ForeColor = Color.FromArgb(150, 177, 189),
+            }
+        );
+        card.Click += (_, _) => SelectHero(id);
+        foreach (Control child in card.Controls)
+        {
+            child.Click += (_, _) => SelectHero(id);
+        }
+        _heroes.Controls.Add(card);
+        if (id > 0)
+        {
+            _ = TrackLoad(LoadPortraitAsync(id));
+        }
+    }
+
+    private void RenderCapabilityCoverage(ChampionSelectRosterEntry[] team)
+    {
+        int loaded = team.Count(e => _snapshots.ContainsKey(e.ChampionId));
+        var coverage = Card(
+            "能力覆盖",
+            $"已读取 {loaded}/{team.Length} 个位置。以下是技能标签记录，未记录不代表没有；不包含装备、符文、强化和地图修正。"
+        );
+        foreach (var capability in Capabilities)
+        {
+            var providers = team.Where(e => Sources(e.ChampionId, capability.Tag).Length > 0).ToArray();
+            AddCoverageGroup(coverage, capability.Title, capability.Tag, providers);
+        }
+    }
+
+    private void AddCoverageGroup(Control coverage, string title, string tag, ChampionSelectRosterEntry[] providers)
+    {
+        var group = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            MaximumSize = new Size(Math.Max(240, _overview.Width - 60), 0),
+            Margin = new Padding(0, 2, 0, 6),
+        };
+        group.Controls.Add(
+            new Label
+            {
+                Text = $"{title} · {providers.Length} 个位置有记录",
+                AutoSize = true,
+                Margin = new Padding(0, 7, 12, 0),
+            }
+        );
+        foreach (var entry in providers)
+        {
+            int hero = entry.ChampionId;
+            var button = ActionButton(_champion(hero).Name + " · " + string.Join(" / ", Sources(hero, tag)));
+            button.Click += (_, _) => SelectHero(hero);
+            group.Controls.Add(button);
+        }
+        if (providers.Length == 0)
+        {
+            group.Controls.Add(
+                new Label
+                {
+                    Text = "尚未确认",
+                    AutoSize = true,
+                    Margin = new Padding(0, 7, 0, 0),
+                }
+            );
+        }
+        coverage.Controls.Add(group);
+    }
+
+    private void RenderSelectedAbilities()
+    {
+        int id = _selectedHero;
+        var selected = Card(
+            id > 0 ? _champion(id).Name + " · 能力来源" : "能力来源",
+            "点击英雄切换；技能标签不用于推算控制链、必中概率或实战伤害。"
+        );
+        if (!_snapshots.TryGetValue(id, out var snapshot))
+        {
+            selected.Controls.Add(
+                new Label { Text = _errors.GetValueOrDefault(id) ?? "等待英雄数据", AutoSize = true }
+            );
+            return;
+        }
+        foreach (var spell in snapshot.Report.Spells)
+        {
+            AddAbilitySource(selected, id, spell);
+        }
+        selected.Controls.Add(
+            new Label
+            {
+                Text = $"CommunityDragon · {snapshot.Report.Version} · {snapshot.FetchedAt.LocalDateTime:MM-dd HH:mm}",
+                AutoSize = true,
+                Margin = new Padding(0, 10, 0, 0),
+                ForeColor = Color.FromArgb(150, 177, 189),
+            }
+        );
+    }
+
+    private void AddAbilitySource(Control selected, int id, SpellAnalysis spell)
+    {
+        var labels = Capabilities.Where(c => spell.Tags.Contains(c.Tag, StringComparer.Ordinal)).ToArray();
+        var line = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            MaximumSize = new Size(Math.Max(240, _overview.Width - 60), 0),
+        };
+        var skill = _skills.GetValueOrDefault(id)?.FirstOrDefault(s => s.Key == spell.Key);
+        var button = CreateSkillButton(spell.Key, skill);
+        line.Controls.Add(button);
+        line.Controls.Add(
+            new Label
+            {
+                Text = labels.Length > 0 ? string.Join(" · ", labels.Select(c => c.Title)) : "能力分类待确认",
+                AutoSize = true,
+                Margin = new Padding(0, 8, 0, 0),
+            }
+        );
+        button.Click += (_, _) => ShowSkillEvidence(id, spell, skill?.Description, labels.Select(c => c.Note));
+        selected.Controls.Add(line);
+    }
+
+    private Button CreateSkillButton(string key, ChampionSelectAssistant.Skill? skill)
+    {
+        var button = ActionButton(key + (skill == null ? "" : " · " + skill.Name));
+        if (skill == null)
+        {
+            return button;
+        }
+        if (_skillIcons.TryGetValue(skill.Icon, out var icon))
+        {
+            button.Image = icon;
+            button.ImageAlign = ContentAlignment.MiddleLeft;
+            button.TextImageRelation = TextImageRelation.ImageBeforeText;
+        }
+        _abilityTips.SetToolTip(button, TooltipText.Format(skill.Name, skill.Description));
+        return button;
+    }
+
+    private void ShowSkillEvidence(int id, SpellAnalysis spell, string? description, IEnumerable<string> notes)
+    {
+        _details.Text =
+            $"{_champion(id).Name} · {spell.Key}\n\n"
+            + string.Join("\n\n", notes)
+            + "\n\n"
+            + (description ?? "本地技能说明尚未加载")
+            + "\n\n目标类型："
+            + spell.Targeting
+            + "\n\n"
+            + string.Join("\n", spell.Warnings);
+        _basic.Visible = true;
+        _overview.Visible = false;
     }
 
     private void ResizeDashboard()
@@ -533,14 +541,14 @@ public sealed partial class ChampionCompositionView
 
     private async Task LoadPortraitAsync(int id)
     {
-        if (FormMain.Globals.resLoading == null || _portraits.ContainsKey(id) || !_portraitLoads.Add(id))
+        if (_dashboardDisposed || _portraits.ContainsKey(id) || !_portraitLoads.Add(id))
         {
             return;
         }
 
         try
         {
-            var image = await FormMain.Globals.resLoading.GetChampionIconAsync(id);
+            var image = await _portraitLoader(id);
             if (image == null)
             {
                 return;
@@ -560,7 +568,11 @@ public sealed partial class ChampionCompositionView
                 }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // Optional artwork failure leaves the hero's name and analysis available.
+            System.Diagnostics.Debug.WriteLine($"composition portrait: {ex.GetType().Name}");
+        }
         finally
         {
             _portraitLoads.Remove(id);
@@ -569,15 +581,27 @@ public sealed partial class ChampionCompositionView
 
     private async Task LoadSkillsAsync(int id)
     {
-        var client = FormMain.Globals.lcuClient?.Client;
-        if (client == null || _skillRetryAfter.GetValueOrDefault(id) > DateTime.UtcNow || !_skillRequests.Add(id))
+        if (_dashboardDisposed)
+        {
+            return;
+        }
+        var client = _skillClient();
+        if (
+            client == null
+            || _skills.ContainsKey(id)
+            || _skillRetryAfter.GetValueOrDefault(id) > DateTime.UtcNow
+            || !_skillRequests.Add(id)
+        )
         {
             return;
         }
 
+        var token = _viewLifetime.Token;
         try
         {
-            var document = JObject.Parse(await client.GetStringAsync($"/lol-game-data/assets/v1/champions/{id}.json"));
+            var document = JObject.Parse(
+                await client.GetStringAsync($"/lol-game-data/assets/v1/champions/{id}.json", token)
+            );
             if (_dashboardDisposed || (int?)document["id"] != id)
             {
                 return;
@@ -586,38 +610,59 @@ public sealed partial class ChampionCompositionView
             var skills = ChampionSelectAssistant.ParseSkills(document);
             _skills[id] = skills;
             QueueDashboardRefresh();
-            var cache = new ImageCacheService(client);
-            foreach (var skill in skills.Where(s => !string.IsNullOrWhiteSpace(s.Icon)))
-            {
-                if (_skillIcons.ContainsKey(skill.Icon))
-                {
-                    continue;
-                }
-
-                using var source = await cache.GetOrDownloadImageAsync(
-                    skill.Icon,
-                    "champion-abilities",
-                    $"{id}-{skill.Key}.png"
-                );
-                if (_dashboardDisposed)
-                {
-                    return;
-                }
-
-                if (source != null && !_skillIcons.ContainsKey(skill.Icon))
-                {
-                    _skillIcons[skill.Icon] = new Bitmap(source, new Size(28, 28));
-                }
-            }
+            await LoadSkillIconsAsync(id, skills, client, token);
             if (!_dashboardDisposed && _selectedHero == id)
             {
                 QueueDashboardRefresh();
             }
         }
-        catch
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // Closing the view stops skill requests without scheduling a retry.
+        }
+        catch (Exception ex)
+        {
+            if (!_dashboardDisposed)
+            {
+                _skillRetryAfter[id] = DateTime.UtcNow.AddSeconds(30);
+            }
+            System.Diagnostics.Debug.WriteLine($"composition skills: {ex.GetType().Name}");
+        }
+        finally
         {
             _skillRequests.Remove(id);
-            _skillRetryAfter[id] = DateTime.UtcNow.AddSeconds(30);
+        }
+    }
+
+    private async Task LoadSkillIconsAsync(
+        int id,
+        ChampionSelectAssistant.Skill[] skills,
+        HttpClient client,
+        CancellationToken token
+    )
+    {
+        var cache = new ImageCacheService(client);
+        foreach (var skill in skills.Where(s => !string.IsNullOrWhiteSpace(s.Icon)))
+        {
+            token.ThrowIfCancellationRequested();
+            if (_skillIcons.ContainsKey(skill.Icon))
+            {
+                continue;
+            }
+            // The shared cache has no cancellation overload; retain the result to dispose any late bitmap.
+            using var source = await cache.GetOrDownloadImageAsync(
+                skill.Icon,
+                "champion-abilities",
+                $"{id}-{skill.Key}.png"
+            );
+            if (_dashboardDisposed)
+            {
+                return;
+            }
+            if (source != null && !_skillIcons.ContainsKey(skill.Icon))
+            {
+                _skillIcons[skill.Icon] = new Bitmap(source, new Size(28, 28));
+            }
         }
     }
 
