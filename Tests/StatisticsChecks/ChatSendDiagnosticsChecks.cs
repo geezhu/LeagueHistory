@@ -4,6 +4,16 @@ internal static class ChatSendDiagnosticsChecks
 {
     public static async Task RunAsync()
     {
+        ForegroundIdentityGuard();
+        await PersistedDiagnosticsAsync();
+        await GuardedInputAsync();
+        Console.WriteLine(
+            "PASS: chat diagnostics persistence, ordered updates, rotation and guarded input without sending."
+        );
+    }
+
+    private static void ForegroundIdentityGuard()
+    {
         if (
             !GameWindowIdentity.Matches(123, 123, "League of Legends")
             || !GameWindowIdentity.Matches(123, 123, "league of legends")
@@ -17,7 +27,10 @@ internal static class ChatSendDiagnosticsChecks
                 "Foreground guard must require both game process identity and the actual foreground PID"
             );
         }
+    }
 
+    private static async Task PersistedDiagnosticsAsync()
+    {
         string directory = Path.Combine(Path.GetTempPath(), "league-chat-diagnostics-" + Guid.NewGuid().ToString("N"));
         string path = Path.Combine(directory, "chat.log");
         var diagnostics = new ChatSendDiagnostics(path);
@@ -51,22 +64,6 @@ internal static class ChatSendDiagnosticsChecks
             {
                 throw new Exception("Diagnostic log rotates at bounded size");
             }
-
-            var input = new GameInputService();
-            if (await input.SendInGameMessageAsync("") || input.LastFailureReason == null)
-            {
-                throw new Exception("Empty input reports reason");
-            }
-
-            if (await input.SendInGameMessageAsync("测试不会实际输入", () => false))
-            {
-                throw new Exception("Guarded input must not inject keys");
-            }
-
-            if (await input.SendInGameMessageAsync("测试不会实际输入", () => false))
-            {
-                throw new Exception("Input gate must release after early stop");
-            }
         }
         finally
         {
@@ -76,8 +73,22 @@ internal static class ChatSendDiagnosticsChecks
                 Directory.Delete(directory, true);
             }
         }
-        Console.WriteLine(
-            "PASS: chat diagnostics persistence, ordered updates, rotation and guarded input without sending."
-        );
+    }
+
+    private static async Task GuardedInputAsync()
+    {
+        var input = new GameInputService();
+        if (await input.SendInGameMessageAsync("") || input.LastFailureReason == null)
+        {
+            throw new Exception("Empty input reports reason");
+        }
+        if (await input.SendInGameMessageAsync("测试不会实际输入", () => false))
+        {
+            throw new Exception("Guarded input must not inject keys");
+        }
+        if (await input.SendInGameMessageAsync("测试不会实际输入", () => false))
+        {
+            throw new Exception("Input gate must release after early stop");
+        }
     }
 }

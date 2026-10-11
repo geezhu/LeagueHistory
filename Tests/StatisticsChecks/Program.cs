@@ -17,6 +17,13 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Contains("--tier-chat-checks"))
+        {
+            ChampionTierChatChecks.Run();
+            WinFormsCheckHost.Run(TierHotkeyChecks.Run);
+            Task.Run(ChatSendDiagnosticsChecks.RunAsync).GetAwaiter().GetResult();
+            return;
+        }
         if (args.Contains("--settings-surface-checks"))
         {
             WinFormsCheckHost.Run(SettingsSurfaceChecks.Run);
