@@ -183,7 +183,7 @@ internal sealed class AssistantMayhemBrowser : IDisposable
 
     private async Task EnsureDetailsAsync(CancellationToken paintToken)
     {
-        if (_tab != BrowserTab.Augments && _page.Detail == null)
+        if (_page.Detail == null)
         {
             _rows.Controls.Add(new Label { Text = "正在读取装备与技能推荐…", AutoSize = true });
             if (_detailTask == null || _detailTask.IsFaulted || _detailTask.IsCanceled)

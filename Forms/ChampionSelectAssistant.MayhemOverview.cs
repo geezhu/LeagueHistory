@@ -57,7 +57,7 @@ internal sealed partial class ChampionSelectAssistant
             }
         )
         {
-            var heading = MayhemHeading(title);
+            var heading = MayhemHeading(title + " · 点击查看全部");
             host.Controls.Add(heading);
             heading.Click += (_, _) => BrowseMayhem(page, hero, token, 0, index);
             var row = new FlowLayoutPanel
