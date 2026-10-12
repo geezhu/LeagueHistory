@@ -9,6 +9,7 @@ TextBlock detailSource = MakeText(L"", 12, 0xa4bcc7);
 Image detailArtwork;
 std::array<Button, 10> heroButtons;
 std::array<Image, 10> heroIcons;
+std::array<Border, 10> heroIndicators;
 std::array<Button, 4> tabButtons;
 JsonObject detailData;
 hstring detailRequest, detailRevision, detailTab = L"skills";
@@ -86,13 +87,26 @@ void InitializeDetailNavigation()
     navigation.Children().Append(back);
     for (int i = 0; i < 10; ++i)
     {
+        if (i % 5 == 0)
+        {
+            auto team = MakeText(i == 0 ? L"我方" : L"敌方", 12, i == 0 ? 0x45c7ce : 0xf3b37e);
+            team.VerticalAlignment(VerticalAlignment::Center);
+            team.Margin({0, 0, 4, 0});
+            navigation.Children().Append(team);
+        }
         auto &b = heroButtons[i];
         b = DetailButton(L"");
         b.Padding({2});
         b.Margin({0, 0, i == 4 ? 10.0 : 3.0, 0});
         heroIcons[i].Width(32);
         heroIcons[i].Height(32);
-        b.Content(heroIcons[i]);
+        // A bar under the icon marks the open hero; button borders are partly hidden by the artwork.
+        heroIndicators[i].Height(3);
+        heroIndicators[i].Margin({0, 2, 0, 0});
+        StackPanel icon;
+        icon.Children().Append(heroIcons[i]);
+        icon.Children().Append(heroIndicators[i]);
+        b.Content(icon);
         b.Click([this, i](auto &&, auto &&) { OpenDetails(i); });
         navigation.Children().Append(b);
     }
@@ -155,11 +169,15 @@ void RefreshDetailHeader()
     for (int i = 0; i < 10; ++i)
     {
         heroIcons[i].Source(cards[i].icon.Source());
+        heroIndicators[i].Background(i == selectedCard ? MakeBrush(0x7ff0ee) : MakeBrush(i < 5 ? 0x1d4c57 : 0x4a3b28));
         heroButtons[i].IsEnabled(cards[i].hero > 0);
-        heroButtons[i].BorderBrush(MakeBrush(i == selectedCard     ? 0x43d8d7
+        // Selection outranks party color; team tint separates allies from enemies at a glance.
+        bool selected = i == selectedCard;
+        heroButtons[i].Background(MakeBrush(selected ? 0x1f5a66 : i < 5 ? 0x12343e : 0x352c22));
+        heroButtons[i].BorderBrush(MakeBrush(selected              ? 0x7ff0ee
                                              : cards[i].partyColor ? cards[i].partyColor
                                                                    : 0x315662));
-        heroButtons[i].BorderThickness({cards[i].partyColor ? 2.0 : 1.0});
+        heroButtons[i].BorderThickness({selected ? 3.0 : cards[i].partyColor ? 2.0 : 1.0});
         ToolTipService::SetToolTip(heroButtons[i],
                                    box_value(teams[i / 5].Text() + L" · " + cards[i].champion.Text() +
                                              (cards[i].partyLabel.empty() ? L"" : L" · " + cards[i].partyLabel)));
@@ -522,12 +540,26 @@ void RenderSkillChoices(JsonArray const &rows)
         {
             continue;
         }
-        choices.Children().Append(CreateSkillChoice(row, description, i == 0));
+        choices.Children().Append(CreateSkillChoice(row, description, choices, i == 0));
     }
+    if (choices.Children().Size() > 0)
+        SelectSkillChoice(choices, choices.Children().GetAt(0).as<Button>());
     detailBody.Children().Append(choices);
     detailBody.Children().Append(descriptionCard);
 }
-Button CreateSkillChoice(JsonObject const &row, TextBlock const &description, bool initial)
+// The description card shows one skill at a time; highlight which one it is.
+static void SelectSkillChoice(StackPanel const &choices, Button const &selected)
+{
+    for (auto const &child : choices.Children())
+    {
+        auto button = child.as<Button>();
+        bool active = button == selected;
+        button.Background(MakeBrush(active ? 0x1f5a66 : 0x143542));
+        button.BorderBrush(MakeBrush(active ? 0x7ff0ee : 0x315662));
+        button.BorderThickness({active ? 2.0 : 1.0});
+    }
+}
+Button CreateSkillChoice(JsonObject const &row, TextBlock const &description, StackPanel const &choices, bool initial)
 {
     auto icon = row.GetNamedArray(L"icons").GetObjectAt(0);
     auto title = row.GetNamedString(L"title", L"");
@@ -545,7 +577,14 @@ Button CreateSkillChoice(JsonObject const &row, TextBlock const &description, bo
     button.Content(content);
     button.MinWidth(72);
     button.Margin({0, 0, 8, 0});
-    button.Click([description, text](auto &&, auto &&) { description.Text(text); });
+    // Weak reference: the panel owns its buttons, so a strong capture would form a cycle.
+    button.Click(
+        [description, text, weakChoices = make_weak(choices)](auto const &sender, auto &&)
+        {
+            description.Text(text);
+            if (auto panel = weakChoices.get())
+                SelectSkillChoice(panel, sender.template as<Button>());
+        });
     auto tip = MakeText(text, 13);
     tip.TextWrapping(TextWrapping::Wrap);
     tip.MaxWidth(380);
