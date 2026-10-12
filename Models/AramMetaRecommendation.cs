@@ -16,10 +16,9 @@ public sealed record AramMetaRecommendation(
     {
         bool augment = category.StartsWith("k", StringComparison.Ordinal);
         var source = augment
-            ? page.Index.Champions.FirstOrDefault(c => c.Id == hero)?.Data["top"]?[category]
-            : page.Detail?[category]?["top"];
-        return (source as JArray ?? new())
-            .OfType<JObject>()
+            ? ReadAugmentRows(page, hero, category)
+            : (page.Detail?[category]?["top"] as JArray ?? new()).OfType<JObject>();
+        return source
             .Select(row =>
             {
                 int id = (int?)row["id"] ?? 0;
@@ -43,6 +42,28 @@ public sealed record AramMetaRecommendation(
             })
             .Where(r => r.Ids.Length > 0 && r.Ids.All(i => i > 0))
             .ToArray();
+    }
+
+    private static IEnumerable<JObject> ReadAugmentRows(AramMetaPage page, int hero, string category)
+    {
+        var champion = page.Index.Champions.FirstOrDefault(c => c.Id == hero);
+        if (champion == null)
+        {
+            return [];
+        }
+
+        // The overview contains only three recommendations; the cached hero pool retains every statistical row.
+        var pool = (page.Detail?["poolAugments"] as JArray ?? new())
+            .OfType<JObject>()
+            .Where(row => (string?)page.Index.Augments[((int?)row["id"] ?? 0).ToString()]?["rarity"] == category)
+            .ToArray();
+        var source =
+            pool.Length > 0
+                ? pool
+                : (
+                    page.Detail?["top"]?[category] as JArray ?? champion.Data["top"]?[category] as JArray ?? new()
+                ).OfType<JObject>();
+        return source.DistinctBy(row => (int?)row["id"]);
     }
 
     public static IEnumerable<AramMetaRecommendation> Sort(IEnumerable<AramMetaRecommendation> rows, int sort) =>
