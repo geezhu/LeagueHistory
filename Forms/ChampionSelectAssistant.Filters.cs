@@ -13,9 +13,9 @@ internal sealed partial class ChampionSelectAssistant
     {
         var box = new Controls.DarkFilterComboBox
         {
-            Width = width,
-            DropDownWidth = 170,
-            Margin = new Padding(2),
+            Width = Dip(width),
+            DropDownWidth = Dip(170),
+            Margin = DipPadding(2),
         };
         box.Items.AddRange(
             choices
@@ -88,13 +88,13 @@ internal sealed partial class ChampionSelectAssistant
             _lane.Enabled = mode == "ranked";
             _tier.Enabled = mode is not ("arena" or "mayhem");
             _region.Enabled = mode != "mayhem";
-            _region.Visible = !_collapsed && mode != "mayhem";
-            _tier.Visible = !_collapsed && mode is not ("arena" or "mayhem");
-            _lane.Visible = !_collapsed && mode == "ranked";
+            _region.Visible = mode != "mayhem";
+            _tier.Visible = mode is not ("arena" or "mayhem");
+            _lane.Visible = mode == "ranked";
             _apply.Visible = true;
             if (_mode.Parent is FlowLayoutPanel toolbar)
             {
-                toolbar.Height = _collapsed || mode == "mayhem" ? 44 : 74;
+                toolbar.Height = ToolbarHeight(mode == "mayhem");
             }
         }
         finally

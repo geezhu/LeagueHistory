@@ -91,13 +91,13 @@ internal sealed partial class ChampionSelectAssistant
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            MaximumSize = new Size(282, 0),
-            Margin = new Padding(0, 0, 0, 4),
+            MaximumSize = new Size(ContentWidth, 0),
+            Margin = DipPadding(0, 0, 0, 4),
         };
         var artwork = new ProfileBackgroundPanel
         {
-            Size = new Size(282, 80),
-            Padding = new Padding(8, 4, 8, 4),
+            Size = new Size(ContentWidth, Dip(80)),
+            Padding = DipPadding(8, 4, 8, 4),
             BackColor = Color.FromArgb(16, 31, 43),
             Margin = Padding.Empty,
         };
@@ -105,7 +105,7 @@ internal sealed partial class ChampionSelectAssistant
         {
             Text = FormMain.Globals.resLoading?.GetChampionById(hero)?.Name ?? $"英雄 {hero}",
             Dock = DockStyle.Top,
-            Height = 28,
+            Height = Dip(28),
             ForeColor = Color.WhiteSmoke,
             BackColor = Color.Transparent,
         };
@@ -115,7 +115,7 @@ internal sealed partial class ChampionSelectAssistant
         var icons = new FlowLayoutPanel
         {
             Dock = DockStyle.Bottom,
-            Height = 44,
+            Height = Dip(44),
             Margin = Padding.Empty,
             BackColor = Color.Transparent,
         };
@@ -126,9 +126,9 @@ internal sealed partial class ChampionSelectAssistant
             Text = "正在加载技能…",
             Visible = false,
             AutoSize = true,
-            MaximumSize = new Size(278, 0),
+            MaximumSize = new Size(ContentWidth - Dip(4), 0),
             ForeColor = Color.FromArgb(187, 206, 214),
-            Margin = new Padding(0, 6, 0, 4),
+            Margin = DipPadding(0, 6, 0, 4),
         };
         section.Controls.AddRange(new Control[] { artwork, description });
         _body.Controls.Add(section);
@@ -157,8 +157,8 @@ internal sealed partial class ChampionSelectAssistant
         {
             Text = "",
             AccessibleName = skill.Key + " · " + skill.Name,
-            Size = new Size(36, 36),
-            Margin = new Padding(2),
+            Size = Dip(36, 36),
+            Margin = DipPadding(2),
             FlatStyle = FlatStyle.Flat,
             ForeColor = Color.White,
             BackColor = Color.FromArgb(29, 45, 61),

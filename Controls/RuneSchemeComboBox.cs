@@ -18,10 +18,10 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
         DropDownStyle = ComboBoxStyle.DropDownList;
         FlatStyle = FlatStyle.Flat;
         DrawMode = DrawMode.OwnerDrawFixed;
-        ItemHeight = 38;
-        DropDownWidth = 420;
+        ItemHeight = LogicalToDeviceUnits(38);
+        DropDownWidth = LogicalToDeviceUnits(420);
         IntegralHeight = false;
-        DropDownHeight = 304;
+        DropDownHeight = LogicalToDeviceUnits(304);
         BackColor = Color.FromArgb(16, 45, 57);
         ForeColor = Color.FromArgb(215, 225, 226);
         _imageWork = LoadIconsAsync();
@@ -75,7 +75,12 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
 
         var scheme = _schemes[e.Index];
         int id = scheme.Perks[0];
-        var icon = new Rectangle(e.Bounds.Left + 5, e.Bounds.Top + 3, 32, 32);
+        var icon = new Rectangle(
+            e.Bounds.Left + LogicalToDeviceUnits(5),
+            e.Bounds.Top + LogicalToDeviceUnits(3),
+            LogicalToDeviceUnits(32),
+            LogicalToDeviceUnits(32)
+        );
         if (_icons.TryGetValue(id, out var image))
         {
             e.Graphics.DrawImage(image, icon);
@@ -97,7 +102,7 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
         string[] highlights = _highlights(scheme);
         string title = $"{name} · {e.Index + 1}";
         string subtitle = highlights.Length > 0 ? string.Join(" / ", highlights) : "可选方案";
-        if (e.Bounds.Width > 300)
+        if (e.Bounds.Width > LogicalToDeviceUnits(300))
         {
             string Rate(double? n) => n.HasValue ? n.Value.ToString("P1") : "—";
             subtitle = $"胜率 {Rate(scheme.WinRate)} · 使用率 {Rate(scheme.PickRate)}";
@@ -106,7 +111,12 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
                 title += " · " + string.Join(" / ", highlights);
             }
         }
-        var text = new Rectangle(e.Bounds.Left + 44, e.Bounds.Top + 1, Math.Max(0, e.Bounds.Width - 48), 19);
+        var text = new Rectangle(
+            e.Bounds.Left + LogicalToDeviceUnits(44),
+            e.Bounds.Top + 1,
+            Math.Max(0, e.Bounds.Width - LogicalToDeviceUnits(48)),
+            LogicalToDeviceUnits(19)
+        );
         TextRenderer.DrawText(
             e.Graphics,
             title,
@@ -115,7 +125,7 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
             ForeColor,
             TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine
         );
-        text.Y += 18;
+        text.Y += LogicalToDeviceUnits(18);
         TextRenderer.DrawText(
             e.Graphics,
             subtitle,

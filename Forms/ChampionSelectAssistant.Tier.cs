@@ -8,11 +8,11 @@ internal sealed partial class ChampionSelectAssistant
         {
             Text = "?",
             AccessibleName = "普通大乱斗平衡调整",
-            Size = new Size(22, 24),
+            Size = Dip(22, 24),
             TextAlign = ContentAlignment.MiddleCenter,
             ForeColor = Color.FromArgb(208, 185, 130),
             Cursor = Cursors.Help,
-            Margin = new Padding(0, 0, 5, 0),
+            Margin = DipPadding(0, 0, 5, 0),
         };
         row.Controls.Add(hint);
         row.Controls.SetChildIndex(hint, 1);
@@ -86,18 +86,18 @@ internal sealed partial class ChampionSelectAssistant
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             WrapContents = false,
-            MaximumSize = new Size(282, 0),
-            Margin = new Padding(0, 2, 0, 2),
+            MaximumSize = new Size(ContentWidth, 0),
+            Margin = DipPadding(0, 2, 0, 2),
         };
         var color = League.Controls.AramMetaView.TierColor(tier);
         var badge = new Label
         {
             Text = tier,
-            Size = new Size(42, 24),
+            Size = Dip(42, 24),
             TextAlign = ContentAlignment.MiddleCenter,
             BackColor = Color.FromArgb(24, color),
             ForeColor = color,
-            Margin = new Padding(0, 0, 7, 0),
+            Margin = DipPadding(0, 0, 7, 0),
             AccessibleName = "英雄梯队 " + tier,
         };
         var bold = new Font(Font, FontStyle.Bold);
@@ -110,9 +110,9 @@ internal sealed partial class ChampionSelectAssistant
             {
                 Text = statistics,
                 AutoSize = true,
-                MaximumSize = new Size(230, 0),
+                MaximumSize = new Size(Dip(230), 0),
                 ForeColor = Color.FromArgb(208, 185, 130),
-                Margin = new Padding(0, 3, 0, 0),
+                Margin = DipPadding(0, 3, 0, 0),
             }
         );
         _body.Controls.Add(row);

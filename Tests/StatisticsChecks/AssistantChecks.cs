@@ -6,8 +6,8 @@ internal static class AssistantChecks
     {
         var type = typeof(League.FormMain).Assembly.GetType("League.ChampionSelectAssistant")!;
         var place = type.GetMethod("Placement", BindingFlags.Static | BindingFlags.NonPublic)!;
-        Rectangle Place(Rectangle client, Rectangle screen, Size size) =>
-            (Rectangle)place.Invoke(null, new object[] { client, screen, size })!;
+        Rectangle Place(Rectangle client, Rectangle screen, Size size, int gap = 6) =>
+            (Rectangle)place.Invoke(null, new object[] { client, screen, size, gap })!;
         var screen = new Rectangle(0, 0, 1920, 1080);
         var right = Place(new Rectangle(100, 100, 1000, 700), screen, new Size(320, 630));
         if (right.Left != 1106 || !screen.Contains(right))
@@ -42,6 +42,25 @@ internal static class AssistantChecks
             throw new Exception(
                 "Assistant must stay on the left inside a smaller secondary monitor when neither side can fit"
             );
+        }
+
+        var tabPlace = type.GetMethod("TabPlacement", BindingFlags.Static | BindingFlags.NonPublic)!;
+        Rectangle Tab(Rectangle client, Rectangle panel) =>
+            (Rectangle)tabPlace.Invoke(null, new object[] { client, screen, panel, new Size(26, 120) })!;
+        var leftClient = new Rectangle(500, 100, 800, 700);
+        var leftPanel = Place(leftClient, screen, new Size(320, 630), 26);
+        var leftTab = Tab(leftClient, leftPanel);
+        if (leftPanel.Right != leftTab.Left || leftTab.Right != leftClient.Left || leftTab.Top != 390)
+        {
+            throw new Exception($"Edge tab must sit between a left panel and the client: {leftPanel} {leftTab}");
+        }
+
+        var rightClient = new Rectangle(100, 100, 1000, 700);
+        var rightPanel = Place(rightClient, screen, new Size(320, 630), 26);
+        var rightTab = Tab(rightClient, rightPanel);
+        if (rightTab.Left != rightClient.Right || rightTab.Right != rightPanel.Left)
+        {
+            throw new Exception($"Edge tab must follow a right-side panel: {rightPanel} {rightTab}");
         }
 
         Console.WriteLine("PASS: assistant prefers left, falls back right, and stays inside monitor bounds.");
@@ -472,7 +491,12 @@ internal static class AssistantChecks
         var laneFilter = (ComboBox)type.GetField("_lane", flags)!.GetValue(assistant)!;
         modeFilter.SelectedIndex = 3;
         Application.DoEvents();
-        if (regionFilter.Visible || tierFilter.Visible || laneFilter.Visible || modeFilter.Parent!.Height != 44)
+        if (
+            regionFilter.Visible
+            || tierFilter.Visible
+            || laneFilter.Visible
+            || modeFilter.Parent!.Height != Dip(type, 44)
+        )
         {
             throw new Exception("Mayhem must hide irrelevant filters and remove their row");
         }
@@ -487,6 +511,54 @@ internal static class AssistantChecks
         if (!regionFilter.Visible || !tierFilter.Visible || !laneFilter.Visible)
         {
             throw new Exception("Ranked filters must reappear when switching back");
+        }
+
+        CheckHideAndFit(assistant, type, flags);
+    }
+
+    private static int Dip(Type type, int value) =>
+        (int)
+            type.GetMethod("Dip", BindingFlags.Static | BindingFlags.NonPublic, new[] { typeof(int) })!
+                .Invoke(null, new object[] { value })!;
+
+    private static void CheckHideAndFit(Form assistant, Type type, BindingFlags flags)
+    {
+        var fold = (Button)type.GetField("_fold", flags)!.GetValue(assistant)!;
+        var toggle = (Form)type.GetField("_toggle", flags)!.GetValue(assistant)!;
+        bool Open() => (bool)type.GetField("_panelOpen", flags)!.GetValue(assistant)!;
+        bool wasVisible = assistant.Visible;
+        fold.PerformClick();
+        if (Open() || assistant.Visible)
+        {
+            throw new Exception("Hide button must close the panel to its edge tab");
+        }
+
+        toggle
+            .GetType()
+            .GetMethod("OnMouseClick", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(toggle, new object[] { new MouseEventArgs(MouseButtons.Left, 1, 0, 0, 0) });
+        if (!Open())
+        {
+            throw new Exception("Edge tab must reopen the panel");
+        }
+
+        var height = type.GetMethod("PanelHeight", flags)!;
+        var body = (FlowLayoutPanel)type.GetField("_body", flags)!.GetValue(assistant)!;
+        int baseline = (int)height.Invoke(assistant, null)!;
+        using var tall = new Panel { Size = new Size(10, Dip(type, 900)) };
+        body.Controls.Add(tall);
+        body.PerformLayout();
+        int grown = (int)height.Invoke(assistant, null)!;
+        body.Controls.Remove(tall);
+        if (grown < baseline + Dip(type, 300))
+        {
+            throw new Exception($"Panel must grow with its content instead of scrolling: {baseline} -> {grown}");
+        }
+
+        // Outside champion select the reopened panel stays hidden; later checks use the shown panel.
+        if (wasVisible)
+        {
+            assistant.Show();
         }
     }
 

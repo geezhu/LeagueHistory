@@ -9,12 +9,23 @@ namespace League;
 
 internal sealed partial class ChampionSelectAssistant : Form
 {
+    // The process is system-DPI aware: sizes below are 96-DPI layout units scaled once for the system DPI.
+    private static readonly int SystemDpi = (int)GetDpiForSystem();
+    private const int LayoutWidth = 320;
+    private const int MinimumLayoutHeight = 590;
+    private const int TabWidth = 26;
+    private const int CompactToolbarHeight = 44;
+    private const int FullToolbarHeight = 74;
+    private static int ContentWidth => Dip(282);
+
     private readonly HashSet<Task> _assistantWork = new();
     private Task _cleanupWork = Task.CompletedTask;
     private bool _closing;
     private Font? _assistantFont;
     private readonly FormMain _owner;
     private readonly AssistantWindowLayer _windowLayer;
+    private readonly Controls.AssistantToggleTab _toggle;
+    private readonly AssistantWindowLayer _toggleLayer;
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 750 };
     private readonly OpggClient _opgg = new();
     private readonly AramMetaClient _am;
@@ -31,16 +42,16 @@ internal sealed partial class ChampionSelectAssistant : Form
     {
         Dock = DockStyle.Fill,
         AutoScroll = true,
-        AutoScrollMargin = new Size(0, 16),
+        AutoScrollMargin = Dip(0, 16),
         FlowDirection = FlowDirection.TopDown,
         WrapContents = false,
-        Padding = new Padding(12, 4, 12, 4),
+        Padding = DipPadding(12, 4, 12, 4),
     };
     private readonly Label _status = new()
     {
         Dock = DockStyle.Top,
-        Height = 26,
-        Padding = new Padding(10, 4, 10, 4),
+        Height = Dip(26),
+        Padding = DipPadding(10, 4, 10, 4),
         Text = "等待选择英雄…",
     };
     private readonly CheckBox _pin = new() { Text = "固定位置", AutoSize = true };
@@ -51,7 +62,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         Enabled = false,
     };
     private readonly Button _fold = new() { Text = "收起", AutoSize = true };
-    private readonly ComboBox _lane = new Controls.DarkFilterComboBox() { Width = 95, Margin = new Padding(2) };
+    private readonly ComboBox _lane = new Controls.DarkFilterComboBox() { Width = Dip(95), Margin = DipPadding(2) };
 
     // The assistant opens without activation so hovering must also work while LOL has focus.
     private readonly ToolTip _tips = new() { ShowAlways = true };
@@ -59,7 +70,6 @@ internal sealed partial class ChampionSelectAssistant : Form
         _poll;
     private bool _busy,
         _selecting,
-        _collapsed,
         _syncing,
         _applying;
     private int _hero,
@@ -70,6 +80,10 @@ internal sealed partial class ChampionSelectAssistant : Form
     private readonly AssistantVisibility _visibility = new();
     private IntPtr _clientWindow;
     private bool _moving;
+    private bool _fitQueued;
+
+    // Each champion select starts open; the edge tab or the hide button closes it until the next one.
+    private bool _panelOpen = true;
     private long _lastSessionRead;
     private OpggRunes? _runes;
     private int _runeChoice;
@@ -90,7 +104,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         BackColor = Color.FromArgb(8, 29, 40);
         ForeColor = Color.FromArgb(215, 225, 226);
         Font = _assistantFont = new Font("Microsoft YaHei UI", 9);
-        ClientSize = new Size(320, 590);
+        ClientSize = Dip(LayoutWidth, MinimumLayoutHeight);
         _status.ForeColor = Color.FromArgb(135, 162, 173);
         var toolbar = CreateAssistantToolbar();
         var (footer, guide, retry) = CreateAssistantFooter();
@@ -101,11 +115,14 @@ internal sealed partial class ChampionSelectAssistant : Form
         Controls.Add(footer);
         StyleAssistantButtons(toolbar, footer);
         BindAssistantFilters();
-        BindAssistantFold(toolbar, statusBar, footer);
+        _toggle = CreateToggleTab();
+        _toggleLayer = new(_toggle);
+        BindAssistantFold();
         BindAssistantActions(guide, retry);
         BindAssistantClosing();
         ResizeBegin += (_, _) => _moving = true;
         ResizeEnd += (_, _) => _moving = false;
+        _body.Layout += (_, _) => QueueFitToContent();
         _timer.Tick += async (_, _) => await TickAsync();
         _timer.Start();
     }
@@ -115,15 +132,15 @@ internal sealed partial class ChampionSelectAssistant : Form
         var toolbar = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 74,
-            Padding = new Padding(10, 6, 10, 4),
+            Height = Dip(FullToolbarHeight),
+            Padding = DipPadding(10, 6, 10, 4),
             BackColor = Color.FromArgb(10, 32, 43),
         };
         _pin.FlatStyle = FlatStyle.Flat;
-        _pin.Margin = new Padding(2, 7, 6, 0);
+        _pin.Margin = DipPadding(2, 7, 6, 0);
         _fold.AutoSize = false;
-        _fold.Size = new Size(66, 28);
-        _fold.Margin = new Padding(2);
+        _fold.Size = Dip(66, 28);
+        _fold.Margin = DipPadding(2);
         toolbar.Controls.AddRange(new Control[] { _pin, _fold, _mode, _region, _tier, _lane });
         toolbar.SetFlowBreak(_mode, true);
         _lane.Items.AddRange(new object[] { "自动分路", "上路", "打野", "中路", "下路", "辅助" });
@@ -136,18 +153,21 @@ internal sealed partial class ChampionSelectAssistant : Form
         var footer = new FlowLayoutPanel
         {
             Dock = DockStyle.Bottom,
-            Height = 44,
-            Padding = new Padding(8),
+            Height = Dip(44),
+            Padding = DipPadding(8),
             WrapContents = false,
         };
-        var guide = new Button { Text = "完整攻略", Size = new Size(64, 28) };
+        var guide = new Button { Text = "完整攻略" };
+        var retry = new Button { Text = "重试" };
         _apply.AutoSize = false;
-        _apply.Size = new Size(90, 28);
-        var retry = new Button { Text = "重试", Size = new Size(44, 28) };
+        FitButton(guide, 28);
+        FitButton(_apply, 28, "应用方案 9");
+        FitButton(retry, 28);
+        FitButton(_voiceButton, 28);
         footer.Controls.AddRange(new Control[] { guide, _apply, retry, _voiceButton });
         foreach (Control button in footer.Controls)
         {
-            button.Margin = new Padding(2, 0, 2, 0);
+            button.Margin = DipPadding(2, 0, 2, 0);
         }
 
         _tips.SetToolTip(_voiceButton, "中文录音后编辑确认，直接发送到选人聊天；也可以手动输入。");
@@ -157,7 +177,7 @@ internal sealed partial class ChampionSelectAssistant : Form
 
     private Panel CreateAssistantStatusBar()
     {
-        var statusBar = new Panel { Dock = DockStyle.Top, Height = 26 };
+        var statusBar = new Panel { Dock = DockStyle.Top, Height = Dip(26) };
         _status.Dock = DockStyle.Fill;
         _status.AutoEllipsis = true;
         _rosterButton.BackColor = Color.FromArgb(16, 45, 57);
@@ -208,25 +228,35 @@ internal sealed partial class ChampionSelectAssistant : Form
         _tips.SetToolTip(_tier, "统计段位；各模式分别保留选择。");
     }
 
-    private void BindAssistantFold(FlowLayoutPanel toolbar, Panel statusBar, FlowLayoutPanel footer)
+    private Controls.AssistantToggleTab CreateToggleTab()
     {
-        _fold.Click += (_, _) =>
-        {
-            _collapsed = !_collapsed;
-            if (_collapsed)
-            {
-                CloseVoiceInput();
-            }
+        var toggle = new Controls.AssistantToggleTab(Font);
+        toggle.Size = toggle.PreferredTabSize(Dip(TabWidth), Dip(10));
+        toggle.Toggled += (_, _) => SetPanelOpen(!_panelOpen);
+        _tips.SetToolTip(toggle, "打开或关闭选人助手；每次进入选人默认打开。");
+        return toggle;
+    }
 
-            _fold.Text = _collapsed ? "展开" : "收起";
-            _body.Visible = !_collapsed;
-            statusBar.Visible = !_collapsed;
-            footer.Visible = !_collapsed;
-            _region.Visible = _tier.Visible = _lane.Visible = !_collapsed;
-            toolbar.Height = _collapsed ? 44 : 74;
-            Height = _collapsed ? 84 : 630;
-            SyncFilters();
-        };
+    private void BindAssistantFold()
+    {
+        _tips.SetToolTip(_fold, "收起到客户端旁的「选人助手」标签，点击标签可重新打开。");
+        _fold.Click += (_, _) => SetPanelOpen(false);
+    }
+
+    private void SetPanelOpen(bool open)
+    {
+        _panelOpen = open;
+        _toggle.Open = open;
+        if (!open)
+        {
+            CloseVoiceInput();
+            if (Visible)
+            {
+                Hide();
+            }
+        }
+
+        PositionWindow();
     }
 
     private void BindAssistantActions(Button guide, Button retry)
@@ -260,22 +290,19 @@ internal sealed partial class ChampionSelectAssistant : Form
             if (e.CloseReason == CloseReason.UserClosing)
             {
                 e.Cancel = true;
-                if (!_collapsed)
-                {
-                    _fold.PerformClick();
-                }
+                SetPanelOpen(false);
             }
         };
     }
 
-    internal static Rectangle Placement(Rectangle client, Rectangle screen, Size size)
+    internal static Rectangle Placement(Rectangle client, Rectangle screen, Size size, int gap)
     {
         int width = Math.Min(size.Width, screen.Width),
             height = Math.Min(size.Height, screen.Height);
-        int x = client.Left - width - 6;
-        if (x < screen.Left && client.Right + 6 + width <= screen.Right)
+        int x = client.Left - width - gap;
+        if (x < screen.Left && client.Right + gap + width <= screen.Right)
         {
-            x = client.Right + 6;
+            x = client.Right + gap;
         }
 
         return new Rectangle(
@@ -284,6 +311,87 @@ internal sealed partial class ChampionSelectAssistant : Form
             width,
             height
         );
+    }
+
+    /// <summary>The tab sits in the gap between the client and the side the panel uses.</summary>
+    internal static Rectangle TabPlacement(Rectangle client, Rectangle screen, Rectangle panel, Size size)
+    {
+        int x = panel.Left >= client.Right ? client.Right : client.Left - size.Width;
+        int y = client.Top + (client.Height - size.Height) / 2;
+        return new Rectangle(
+            Math.Clamp(x, screen.Left, screen.Right - size.Width),
+            Math.Clamp(y, screen.Top, screen.Bottom - size.Height),
+            size.Width,
+            size.Height
+        );
+    }
+
+    internal static int Dip(int value) => (int)Math.Round(value * SystemDpi / 96.0);
+
+    private static Size Dip(int width, int height) => new(Dip(width), Dip(height));
+
+    private static Padding DipPadding(int all) => new(Dip(all));
+
+    private static Padding DipPadding(int left, int top, int right, int bottom) =>
+        new(Dip(left), Dip(top), Dip(right), Dip(bottom));
+
+    // Flat buttons draw Chinese labels with GDI text, which is wider and taller than GDI+ measures;
+    // fixed sizes clipped "完整攻略" and the mastery button, so size from the real text metrics.
+    private void FitButton(Button button, int minimumHeight, string? widestText = null)
+    {
+        var text = TextRenderer.MeasureText(widestText ?? button.Text, Font);
+        button.Size = new Size(text.Width + Dip(18), Math.Max(Dip(minimumHeight), text.Height + Dip(7)));
+    }
+
+    private static int ToolbarHeight(bool compact) => Dip(compact ? CompactToolbarHeight : FullToolbarHeight);
+
+    // The panel grows with its recommendations instead of scrolling; Placement caps it at the screen,
+    // where the body's scrollbar remains only as a last resort.
+    private int PanelHeight()
+    {
+        int chrome = ClientSize.Height - _body.Height;
+        // Preferred size uses each child's own visibility, so it is valid before the panel is shown.
+        int content = _body.GetPreferredSize(new Size(_body.ClientSize.Width, 0)).Height;
+        int clientHeight = Math.Max(Dip(MinimumLayoutHeight), chrome + content);
+        return SizeFromClientSize(new Size(ClientSize.Width, clientHeight)).Height;
+    }
+
+    private void QueueFitToContent()
+    {
+        if (_fitQueued || _closing || !IsHandleCreated)
+        {
+            return;
+        }
+
+        // Layout fires repeatedly while recommendations stream in; resize once after the batch.
+        _fitQueued = true;
+        BeginInvoke(
+            new Action(() =>
+            {
+                _fitQueued = false;
+                if (!_closing && !IsDisposed && Visible && !_moving)
+                {
+                    FitToContent();
+                }
+            })
+        );
+    }
+
+    // Only the height changes here; the follow timer still owns placement and visibility.
+    private void FitToContent()
+    {
+        var screen = Screen.FromControl(this).WorkingArea;
+        int height = Math.Min(PanelHeight(), screen.Height);
+        if (Height == height)
+        {
+            return;
+        }
+
+        Height = height;
+        if (Bottom > screen.Bottom)
+        {
+            Top = Math.Max(screen.Top, screen.Bottom - height);
+        }
     }
 
     private void PositionWindow()
@@ -309,63 +417,88 @@ internal sealed partial class ChampionSelectAssistant : Form
             }
             _clientWindow = handle;
         }
-        var foreground = GetForegroundWindow();
-        GetWindowThreadProcessId(handle, out uint clientProcess);
-        GetWindowThreadProcessId(foreground, out uint foregroundProcess);
-        bool clientFocused = handle != IntPtr.Zero && clientProcess != 0 && clientProcess == foregroundProcess;
-        bool editorFocused = OwnedForms.Any(form => form.ContainsFocus || form.Handle == foreground);
-        bool focused = clientFocused || foreground == Handle || ContainsFocus || editorFocused;
         bool show = _visibility.ShouldShow(
             _selecting,
             handle != IntPtr.Zero && IsIconic(handle),
             handle != IntPtr.Zero,
-            focused,
             _moving,
             Environment.TickCount64
         );
         if (!show)
         {
-            if (Visible)
-            {
-                Hide();
-            }
-
+            HideAttached();
             return;
         }
-        // Grace preserves an existing panel; it must not open one over an unrelated app.
-        if (!Visible && (!focused || handle == IntPtr.Zero))
-        {
-            return;
-        }
-
+        // Grace keeps the current windows while the client handle is briefly unavailable.
         if (
-            handle != IntPtr.Zero
-            && GetWindowRect(handle, out var rect)
-            && rect.Right > rect.Left
-            && rect.Bottom > rect.Top
-            && !_pin.Checked
-            && !_moving
+            handle == IntPtr.Zero
+            || !GetWindowRect(handle, out var rect)
+            || rect.Right <= rect.Left
+            || rect.Bottom <= rect.Top
         )
         {
-            var target = Placement(
-                Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom),
-                Screen.FromHandle(handle).WorkingArea,
-                new Size(Width, _collapsed ? 84 : 630)
-            );
-            if (Bounds != target)
-            {
-                Bounds = target;
-            }
+            return;
         }
-        if (handle != IntPtr.Zero && !_windowLayer.Attach(handle))
+
+        var client = Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom);
+        var screen = Screen.FromHandle(handle).WorkingArea;
+        var panel = Placement(client, screen, new Size(Width, PanelHeight()), _toggle.Width);
+        PlaceToggle(handle, TabPlacement(client, screen, panel, _toggle.Size));
+        if (!_panelOpen)
         {
             return;
         }
 
-        if (!Visible)
+        if (_moving)
         {
-            Show();
-            _windowLayer.Attach(handle);
+            // The user is dragging; keep the window where they put it.
+        }
+        else if (_pin.Checked)
+        {
+            Height = panel.Height;
+        }
+        else if (Bounds != panel)
+        {
+            Bounds = panel;
+        }
+
+        ShowAttached(this, _windowLayer, handle);
+    }
+
+    private void PlaceToggle(IntPtr client, Rectangle bounds)
+    {
+        if (_toggle.Bounds != bounds)
+        {
+            _toggle.Bounds = bounds;
+        }
+
+        ShowAttached(_toggle, _toggleLayer, client);
+    }
+
+    private static void ShowAttached(Form form, AssistantWindowLayer layer, IntPtr client)
+    {
+        if (!layer.Attach(client) || form.Visible)
+        {
+            return;
+        }
+
+        // Stack before and after showing so a background client never gets a panel above other apps.
+        layer.StackAboveClient();
+        form.Show();
+        layer.Attach(client);
+        layer.StackAboveClient();
+    }
+
+    private void HideAttached()
+    {
+        if (Visible)
+        {
+            Hide();
+        }
+
+        if (_toggle.Visible)
+        {
+            _toggle.Hide();
         }
     }
 
@@ -531,12 +664,11 @@ internal sealed partial class ChampionSelectAssistant : Form
         _runes = null;
         _apply.Enabled = false;
         ClearRoster();
-        if (Visible)
-        {
-            Hide();
-        }
-
+        HideAttached();
+        _panelOpen = true;
+        _toggle.Open = true;
         _windowLayer.Detach();
+        _toggleLayer.Detach();
     }
 
     private void ClearBody()
@@ -557,8 +689,8 @@ internal sealed partial class ChampionSelectAssistant : Form
             {
                 Text = text,
                 AutoSize = true,
-                MaximumSize = new Size(282, 0),
-                Margin = new Padding(0, 2, 0, 2),
+                MaximumSize = new Size(ContentWidth, 0),
+                Margin = DipPadding(0, 2, 0, 2),
                 ForeColor = heading ? Color.FromArgb(208, 185, 130) : Color.FromArgb(195, 213, 219),
             }
         );
@@ -692,7 +824,8 @@ internal sealed partial class ChampionSelectAssistant : Form
     {
         token.ThrowIfCancellationRequested();
         var container = parent ?? _body;
-        int contentWidth = parent?.MaximumSize.Width > 0 ? parent.MaximumSize.Width - parent.Padding.Horizontal : 282;
+        int contentWidth =
+            parent?.MaximumSize.Width > 0 ? parent.MaximumSize.Width - parent.Padding.Horizontal : ContentWidth;
         var row = new FlowLayoutPanel
         {
             AutoSize = true,
@@ -725,21 +858,22 @@ internal sealed partial class ChampionSelectAssistant : Form
                     {
                         Text = info.name,
                         AutoSize = true,
-                        MaximumSize = new Size(Math.Min(260, contentWidth - 6), 0),
+                        MaximumSize = new Size(Math.Min(Dip(260), contentWidth - Dip(6)), 0),
                     }
                 );
                 continue;
             }
-            int size =
+            int size = Dip(
                 kind == "champion" ? 52
                 : kind == "rune" ? 26
-                : 32;
+                : 32
+            );
             var icon = new PictureBox
             {
                 Image = info.image,
                 Size = new Size(size, size),
                 SizeMode = PictureBoxSizeMode.Zoom,
-                Margin = new Padding(2),
+                Margin = DipPadding(2),
             };
             icon.Disposed += (_, _) => icon.Image?.Dispose();
             _tips.SetToolTip(icon, League.Controls.TooltipText.Format(info.name, info.description));
@@ -963,6 +1097,8 @@ internal sealed partial class ChampionSelectAssistant : Form
             ClearBody();
             ClearRoster();
             _windowLayer.Dispose();
+            _toggleLayer.Dispose();
+            _toggle.Dispose();
             var pending = PendingAssistantWork();
             _cleanupWork = Task.Run(() => CleanupAssistantResourcesAsync(pending), CancellationToken.None);
             _tips.Dispose();
@@ -984,6 +1120,9 @@ internal sealed partial class ChampionSelectAssistant : Form
     private static extern bool GetWindowRect(IntPtr window, out RECT rectangle);
 
     [DllImport("user32.dll")]
+    private static extern uint GetDpiForSystem();
+
+    [DllImport("user32.dll")]
     private static extern bool IsWindowVisible(IntPtr window);
 
     [DllImport("user32.dll")]
@@ -991,10 +1130,4 @@ internal sealed partial class ChampionSelectAssistant : Form
 
     [DllImport("user32.dll")]
     private static extern bool IsIconic(IntPtr window);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
-
-    [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
 }

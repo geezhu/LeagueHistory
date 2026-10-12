@@ -48,7 +48,7 @@ internal sealed partial class ChampionSelectAssistant
                 }
             }
         }
-        var minimumSize = minimum ?? new Size(530, 460);
+        var minimumSize = minimum ?? Dip(530, 460);
         editor.MinimumSize = new Size(
             Math.Min(minimumSize.Width, work.Width),
             Math.Min(minimumSize.Height, work.Height)
@@ -81,14 +81,14 @@ internal sealed partial class ChampionSelectAssistant
         {
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            MaximumSize = new Size(282, 0),
+            MaximumSize = new Size(ContentWidth, 0),
             Margin = Padding.Empty,
         };
-        var select = new Controls.EquipmentComboBox(cores, token) { Width = 190, Margin = new Padding(0, 0, 4, 0) };
+        var select = new Controls.EquipmentComboBox(cores, token) { Width = Dip(190), Margin = DipPadding(0, 0, 4, 0) };
         var configure = new Button
         {
             Text = "配置出装",
-            Width = 82,
+            Width = Dip(82),
             Height = select.Height,
             FlatStyle = FlatStyle.Flat,
             Margin = Padding.Empty,

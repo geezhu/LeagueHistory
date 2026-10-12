@@ -22,6 +22,29 @@ internal static class MayhemAssistantChecks
         Console.WriteLine("PASS: mayhem tabs, pagination, recommendations, and message-only action label.");
     }
 
+    private static void CheckAugmentRow(Control body)
+    {
+        static IEnumerable<Control> All(Control parent) =>
+            parent.Controls.Cast<Control>().SelectMany(c => All(c).Prepend(c));
+        var row = All(body)
+            .OfType<PictureBox>()
+            .Where(p => (string?)p.Tag == "mayhem-augment")
+            .GroupBy(p => p.Parent!)
+            .First();
+        var tiles = row.ToArray();
+        var rates = tiles.Select(t => double.Parse(t.Controls[0].Text.Replace("%", "").Trim())).ToArray();
+        if (
+            tiles.Length != 6
+            || !rates.SequenceEqual(rates.OrderByDescending(rate => rate))
+            || tiles[^1].Right > row.Key.MaximumSize.Width
+        )
+        {
+            throw new Exception(
+                $"Mayhem augments must fill the row by win rate: count={tiles.Length}, rates={string.Join(",", rates)}"
+            );
+        }
+    }
+
     private static AramMetaPage CreatePage()
     {
         var augments = new JArray(
@@ -146,6 +169,8 @@ internal static class MayhemAssistantChecks
         {
             throw new Exception("Mayhem overview exposes the equipment editor action");
         }
+
+        CheckAugmentRow(body);
 
         using (var overview = new Bitmap(assistant.Width, assistant.Height))
         {

@@ -64,6 +64,28 @@ internal static class AssistantWindowChecks
         editor.Show(assistant);
         Check(Above(editor.Handle, assistant.Handle), "Equipment and roster dialogs remain above the assistant");
         editor.Hide();
+        OpenBehindCoveringApplication(client, assistant, layer, other);
+    }
+
+    private static void OpenBehindCoveringApplication(
+        QuietForm client,
+        QuietForm assistant,
+        AssistantWindowLayer layer,
+        QuietForm other
+    )
+    {
+        // Champion select can start while another application covers the background client.
+        assistant.Hide();
+        Raise(other.Handle);
+        Check(layer.Attach(client.Handle), "Hidden assistant stays attached to the background client");
+        layer.StackAboveClient();
+        assistant.Show();
+        layer.StackAboveClient();
+        Application.DoEvents();
+        Check(
+            Above(other.Handle, assistant.Handle) && Above(assistant.Handle, client.Handle),
+            "Opening for a background client stacks between the client and the covering application"
+        );
     }
 
     private static void MinimizeAndRecreate(QuietForm client, QuietForm assistant, AssistantWindowLayer layer)

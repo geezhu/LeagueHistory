@@ -4,6 +4,8 @@ namespace League;
 
 internal sealed partial class ChampionSelectAssistant
 {
+    private const int MayhemAugmentTile = 44;
+
     private void AddMayhemRecommendations(AramMetaPage page, int hero, CancellationToken token)
     {
         var champion =
@@ -22,13 +24,13 @@ internal sealed partial class ChampionSelectAssistant
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            MaximumSize = new Size(282, 0),
+            MaximumSize = new Size(ContentWidth, 0),
             Margin = Padding.Empty,
         };
         _body.Controls.Add(host);
-        AddMayhemAugmentRows(page, hero, token, host);
+        var augments = AddMayhemAugmentRows(page, hero, token, host);
         var (items, spells) = CreateMayhemDetailPanels(page, hero, token, host);
-        TrackAssistantWork(LoadMayhemDetailsAsync(new(page, hero, token, items, spells)));
+        TrackAssistantWork(LoadMayhemDetailsAsync(new(page, hero, token, items, spells, augments)));
     }
 
     private sealed class MayhemOverviewState(
@@ -36,7 +38,8 @@ internal sealed partial class ChampionSelectAssistant
         int hero,
         CancellationToken token,
         FlowLayoutPanel items,
-        FlowLayoutPanel spells
+        FlowLayoutPanel spells,
+        (string Key, FlowLayoutPanel Row)[] augments
     )
     {
         public AramMetaPage Page { get; set; } = page;
@@ -44,10 +47,17 @@ internal sealed partial class ChampionSelectAssistant
         public CancellationToken Token { get; } = token;
         public FlowLayoutPanel Items { get; } = items;
         public FlowLayoutPanel Spells { get; } = spells;
+        public (string Key, FlowLayoutPanel Row)[] Augments { get; } = augments;
     }
 
-    private void AddMayhemAugmentRows(AramMetaPage page, int hero, CancellationToken token, FlowLayoutPanel host)
+    private (string Key, FlowLayoutPanel Row)[] AddMayhemAugmentRows(
+        AramMetaPage page,
+        int hero,
+        CancellationToken token,
+        FlowLayoutPanel host
+    )
     {
+        var rows = new List<(string Key, FlowLayoutPanel Row)>();
         foreach (
             var (key, title, index) in new[]
             {
@@ -64,19 +74,48 @@ internal sealed partial class ChampionSelectAssistant
             {
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                MaximumSize = new Size(282, 0),
+                MaximumSize = new Size(ContentWidth, 0),
                 Margin = Padding.Empty,
             };
             host.Controls.Add(row);
-            foreach (var entry in AramMetaRecommendation.Read(page, hero, key).Take(5))
-            {
-                TrackAssistantWork(AddMayhemAugmentTileAsync(row, entry, token));
-            }
+            FillMayhemAugmentRow(row, page, hero, key, token);
+            rows.Add((key, row));
+        }
 
-            if (row.Controls.Count == 0)
-            {
-                row.Controls.Add(new Label { Text = "暂无推荐", AutoSize = true });
-            }
+        return rows.ToArray();
+    }
+
+    // The overview starts with the site's three picks; the hero detail pool refills each row later.
+    private void FillMayhemAugmentRow(
+        FlowLayoutPanel row,
+        AramMetaPage page,
+        int hero,
+        string key,
+        CancellationToken token
+    )
+    {
+        foreach (Control child in row.Controls.Cast<Control>().ToArray())
+        {
+            child.Dispose();
+        }
+
+        int tile = Dip(MayhemAugmentTile),
+            minimumGap = Dip(3),
+            count = Math.Max(1, (ContentWidth + minimumGap) / (tile + minimumGap)),
+            gap = count > 1 ? (ContentWidth - count * tile) / (count - 1) : 0;
+        var entries = AramMetaRecommendation
+            .Sort(AramMetaRecommendation.Read(page, hero, key), 1)
+            .Take(count)
+            .ToArray();
+        for (int i = 0; i < entries.Length; i++)
+        {
+            int spacing = i < entries.Length - 1 ? gap : 0;
+            TrackAssistantWork(AddMayhemAugmentTileAsync(row, entries[i], spacing, token));
+        }
+
+        if (row.Controls.Count == 0)
+        {
+            row.Controls.Add(new Label { Text = "暂无推荐", AutoSize = true });
         }
     }
 
@@ -94,7 +133,7 @@ internal sealed partial class ChampionSelectAssistant
         {
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            MaximumSize = new Size(282, 0),
+            MaximumSize = new Size(ContentWidth, 0),
             Margin = Padding.Empty,
         };
         host.Controls.Add(items);
@@ -103,14 +142,14 @@ internal sealed partial class ChampionSelectAssistant
             Text = "召唤师技能 · 点击配置",
             AutoSize = true,
             ForeColor = Color.FromArgb(208, 185, 130),
-            Margin = new Padding(0, 2, 0, 2),
+            Margin = DipPadding(0, 2, 0, 2),
         };
         host.Controls.Add(spellsHeader);
         var spells = new FlowLayoutPanel
         {
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            MaximumSize = new Size(282, 0),
+            MaximumSize = new Size(ContentWidth, 0),
             Margin = Padding.Empty,
         };
         host.Controls.Add(spells);
@@ -126,8 +165,8 @@ internal sealed partial class ChampionSelectAssistant
             var cores = equipment.Select(r => r.ToOption()).ToArray();
             var select = new Controls.EquipmentComboBox(cores, state.Token)
             {
-                Width = 190,
-                Margin = new Padding(0, 0, 4, 0),
+                Width = Dip(190),
+                Margin = DipPadding(0, 0, 4, 0),
             };
             var configure = MayhemLink("配置出装", 82);
             configure.Height = select.Height;
@@ -182,17 +221,17 @@ internal sealed partial class ChampionSelectAssistant
     {
         var card = new Panel
         {
-            Size = new Size(136, 58),
+            Size = Dip(136, 58),
             BackColor = Color.FromArgb(16, 45, 57),
-            Margin = new Padding(0, 0, 4, 0),
+            Margin = DipPadding(0, 0, 4, 0),
         };
         state.Spells.Controls.Add(card);
         card.Controls.Add(
             new Label
             {
                 Text = title,
-                Location = new Point(4, 1),
-                Size = new Size(128, 18),
+                Location = new Point(Dip(4), Dip(1)),
+                Size = Dip(128, 18),
                 ForeColor = Color.FromArgb(208, 185, 130),
             }
         );
@@ -202,7 +241,7 @@ internal sealed partial class ChampionSelectAssistant
                 new Label
                 {
                     Text = "暂无数据",
-                    Location = new Point(4, 25),
+                    Location = new Point(Dip(4), Dip(25)),
                     AutoSize = true,
                 }
             );
@@ -212,8 +251,8 @@ internal sealed partial class ChampionSelectAssistant
             new Label
             {
                 Text = title == "使用率最高" ? $"{entry.PickRate:P1}" : $"{entry.WinRate:P1}",
-                Location = new Point(65, 27),
-                Size = new Size(69, 22),
+                Location = new Point(Dip(65), Dip(27)),
+                Size = Dip(69, 22),
                 TextAlign = ContentAlignment.MiddleCenter,
                 ForeColor = Color.FromArgb(61, 188, 193),
             }
@@ -233,8 +272,8 @@ internal sealed partial class ChampionSelectAssistant
         {
             var picture = new PictureBox
             {
-                Size = new Size(26, 26),
-                Location = new Point(4 + i * 30, 25),
+                Size = Dip(26, 26),
+                Location = new Point(Dip(4 + i * 30), Dip(25)),
                 SizeMode = PictureBoxSizeMode.Zoom,
             };
             card.Controls.Add(picture);
@@ -252,19 +291,19 @@ internal sealed partial class ChampionSelectAssistant
         new()
         {
             Text = text,
-            Width = width,
-            Height = 21,
+            Width = Dip(width),
+            Height = Dip(21),
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(16, 45, 57),
             ForeColor = Color.FromArgb(208, 185, 130),
-            Margin = new Padding(0, 1, 0, 1),
+            Margin = DipPadding(0, 1, 0, 1),
         };
 
     private static Label MayhemHeading(string text) =>
         new()
         {
             Text = text + "  ›",
-            Size = new Size(276, 18),
+            Size = new Size(ContentWidth - Dip(6), Dip(18)),
             TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = Color.FromArgb(208, 185, 130),
             Margin = Padding.Empty,
@@ -281,7 +320,7 @@ internal sealed partial class ChampionSelectAssistant
         using var dialog = new Form
         {
             Text = "arammeta · 推荐比较",
-            ClientSize = new Size(304, 460),
+            ClientSize = Dip(304, 460),
             StartPosition = FormStartPosition.Manual,
             BackColor = BackColor,
             ForeColor = ForeColor,
@@ -294,14 +333,14 @@ internal sealed partial class ChampionSelectAssistant
             AutoScroll = true,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            Padding = new Padding(10),
+            Padding = DipPadding(10),
         };
         dialog.Controls.Add(content);
         var lifetime = CancellationTokenSource.CreateLinkedTokenSource(token);
         AddMayhemBrowser(page, hero, lifetime.Token, content, tab, rarity);
         dialog.Shown += (_, _) =>
         {
-            PositionEquipmentEditor(dialog, new Size(304, 400));
+            PositionEquipmentEditor(dialog, Dip(304, 400));
         };
         using var watcher = new System.Windows.Forms.Timer { Interval = 250 };
         watcher.Tick += (_, _) =>
@@ -327,6 +366,7 @@ internal sealed partial class ChampionSelectAssistant
     private async Task AddMayhemAugmentTileAsync(
         FlowLayoutPanel parent,
         AramMetaRecommendation recommendation,
+        int spacing,
         CancellationToken token
     )
     {
@@ -335,10 +375,10 @@ internal sealed partial class ChampionSelectAssistant
         {
             Tag = "mayhem-augment",
             AccessibleName = name,
-            Size = new Size(44, 44),
+            Size = Dip(MayhemAugmentTile, MayhemAugmentTile),
             SizeMode = PictureBoxSizeMode.Zoom,
             BackColor = Color.FromArgb(16, 45, 57),
-            Margin = new Padding(0, 0, 10, 3),
+            Margin = new Padding(0, 0, spacing, Dip(3)),
         };
         parent.Controls.Add(card);
         card.Disposed += (_, _) => card.Image?.Dispose();
@@ -346,7 +386,7 @@ internal sealed partial class ChampionSelectAssistant
         {
             Text = recommendation.WinRate.HasValue ? $"{recommendation.WinRate:P1}" : "—",
             Dock = DockStyle.Bottom,
-            Height = 17,
+            Height = Dip(17),
             TextAlign = ContentAlignment.MiddleCenter,
             BackColor = Color.Transparent,
             ForeColor = Color.FromArgb(130, 237, 231),
@@ -419,6 +459,14 @@ internal sealed partial class ChampionSelectAssistant
                 foreach (Control child in panel.Controls.Cast<Control>().ToArray())
                 {
                     child.Dispose();
+                }
+            }
+
+            foreach (var (key, row) in state.Augments)
+            {
+                if (!row.IsDisposed)
+                {
+                    FillMayhemAugmentRow(row, state.Page, state.Hero, key, state.Token);
                 }
             }
 
