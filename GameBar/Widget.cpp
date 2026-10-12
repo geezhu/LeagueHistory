@@ -101,16 +101,19 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     };
     Grid root;
     Grid list;
+    Grid rosterPanel;
     ScrollViewer rosterScroll;
     TextBlock status = MakeText(L"等待 League 主程序连接…", 12, 0x91acbb);
     TextBlock hint = MakeText(L"Win＋G 打开或关闭此小组件，固定后可保留在游戏上方。", 12, 0xdbc47f);
     TextBlock details = MakeText(L"点击玩家卡片查看已缓存的战绩。", 13);
     std::array<TextBlock, 2> teams{MakeText(L"我方", 16, 0x45c7ce), MakeText(L"对方", 16, 0xf3b37e)};
+    TextBlock rosterGuide = MakeText(L"ⓘ", 12, 0x91acbb);
     std::array<Card, 10> cards;
     XboxGameBarWidget widget{nullptr};
     DispatcherTimer timer;
     bool busy = false, stopped = false, enabled = false, active = false;
     int populatedCards = 0;
+    bool rosterMarked = false;
     int selectedCard = -1;
     hstring readError;
     hstring revision, command, session, error;
@@ -182,18 +185,12 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     {
         for (int col = 0; col < 2; ++col)
             list.ColumnDefinitions().Append(ColumnDefinition());
-        for (int row = 0; row < 6; ++row)
+        for (int row = 0; row < 5; ++row)
         {
             RowDefinition def;
-            def.Height({row == 0 ? 30.0 : 1.0, row == 0 ? GridUnitType::Pixel : GridUnitType::Star});
-            if (row > 0)
-                def.MinHeight(64);
+            def.Height({1, GridUnitType::Star});
+            def.MinHeight(64);
             list.RowDefinitions().Append(def);
-        }
-        for (int i = 0; i < 2; ++i)
-        {
-            Grid::SetColumn(teams[i], i);
-            list.Children().Append(teams[i]);
         }
         for (int i = 0; i < 10; ++i)
         {
@@ -202,8 +199,15 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         rosterScroll.Content(list);
         rosterScroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
         rosterScroll.VerticalScrollBarVisibility(ScrollBarVisibility::Auto);
-        Grid::SetRow(rosterScroll, 2);
-        root.Children().Append(rosterScroll);
+        RowDefinition headerRow;
+        headerRow.Height({1, GridUnitType::Auto});
+        rosterPanel.RowDefinitions().Append(headerRow);
+        rosterPanel.RowDefinitions().Append(RowDefinition());
+        rosterPanel.Children().Append(CreateRosterHeader());
+        Grid::SetRow(rosterScroll, 1);
+        rosterPanel.Children().Append(rosterScroll);
+        Grid::SetRow(rosterPanel, 2);
+        root.Children().Append(rosterPanel);
         details.TextWrapping(TextWrapping::Wrap);
         details.Margin({0, 6, 0, 0});
         details.MinHeight(40);
@@ -238,9 +242,40 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         body.Children().Append(labels);
         card.button.Content(body);
         card.button.Click([this, i](auto &&, auto &&) { OpenDetails(i); });
-        Grid::SetRow(card.button, i % 5 + 1);
+        Grid::SetRow(card.button, i % 5);
         Grid::SetColumn(card.button, i / 5);
         list.Children().Append(card.button);
+    }
+    Grid CreateRosterHeader()
+    {
+        Grid header;
+        header.Margin({0, 0, 0, 6});
+        for (int col = 0; col < 2; ++col)
+            header.ColumnDefinitions().Append(ColumnDefinition());
+        for (int i = 0; i < 2; ++i)
+        {
+            teams[i].VerticalAlignment(VerticalAlignment::Center);
+            Grid::SetColumn(teams[i], i);
+            header.Children().Append(teams[i]);
+        }
+        rosterGuide.HorizontalAlignment(HorizontalAlignment::Right);
+        rosterGuide.VerticalAlignment(VerticalAlignment::Center);
+        rosterGuide.Visibility(Visibility::Collapsed);
+        Grid::SetColumn(rosterGuide, 1);
+        header.Children().Append(rosterGuide);
+        return header;
+    }
+    // Usage notes move into the header once players load, leaving the height to the ten cards.
+    void UpdateRosterGuide()
+    {
+        bool ready = populatedCards > 0;
+        rosterGuide.Text(rosterMarked ? L"同色 = 疑似组队  ⓘ" : L"操作说明  ⓘ");
+        ToolTipService::SetToolTip(
+            rosterGuide,
+            box_value(hstring(L"点击英雄卡片查看技能、出装与模式推荐；详情胜率属于英雄统计。") +
+                      (rosterMarked ? L"\n同色与人数标记：根据近期共同战绩推测的疑似组队。" : L"")));
+        rosterGuide.Visibility(ready ? Visibility::Visible : Visibility::Collapsed);
+        details.Visibility(ready || selectedCard >= 0 ? Visibility::Collapsed : Visibility::Visible);
     }
     Grid CreateCardHeading(Card &card)
     {
@@ -393,6 +428,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     {
         if (stopped)
             return;
+        hint.Visibility(Visibility::Visible);
         if (!widget)
         {
             hint.Text(L"桌面预览 · 游戏中请按 Win＋G，打开并固定「League 对局速览」。");
@@ -406,7 +442,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         if (!widget.Pinned())
             hint.Text(L"尚未固定 · 在 Win＋G 中查看；点击右上角图钉可保留在游戏上方。");
         else
-            hint.Text(L"已固定 · Win＋G 管理显示或关闭 · 点击卡片查看英雄详情。");
+            hint.Visibility(Visibility::Collapsed);
     }
     fire_and_forget SetVisible(bool visible)
     {
@@ -459,6 +495,8 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     }
     void Clear()
     {
+        populatedCards = 0;
+        rosterMarked = false;
         CloseDetails(false);
         CloseVoice();
         ResetChat();
@@ -486,6 +524,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             card.button.BorderThickness({0});
         }
         details.Text(L"等待当前对局数据。");
+        UpdateRosterGuide();
     }
     IAsyncOperation<JsonObject> ReadSnapshotFileAsync()
     {
@@ -562,11 +601,10 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             }
             marked = marked || cards[i].partyColor != 0;
         }
+        rosterMarked = marked;
         if (selectedCard >= 0)
             RefreshDetailHeader();
-        else if (populatedCards > 0)
-            details.Text(L"点击英雄卡片查看技能、出装与模式推荐；详情胜率属于英雄统计。" +
-                         hstring(marked ? L"\n同色与人数标记：根据近期共同战绩推测的疑似组队。" : L""));
+        UpdateRosterGuide();
         if (fixturePreview && !fixtureOpened && populatedCards > 0)
         {
             fixtureOpened = true;
