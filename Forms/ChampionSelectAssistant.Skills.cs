@@ -73,7 +73,9 @@ internal sealed partial class ChampionSelectAssistant
             if (!section.IsDisposed && !token.IsCancellationRequested)
             {
                 description.Visible = true;
-                description.Text = "技能资料暂不可用，点击底部“重试”重新加载。";
+                description.Text = "技能资料暂不可用 · 点击重试";
+                description.Cursor = Cursors.Hand;
+                description.Click += (_, _) => _ = LoadHeroAsync();
             }
         }
     }

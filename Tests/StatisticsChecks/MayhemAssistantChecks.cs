@@ -45,6 +45,26 @@ internal static class MayhemAssistantChecks
         }
     }
 
+    private static void CheckAugmentPlaceholder(Form assistant, Type type, BindingFlags flags, AramMetaPage page)
+    {
+        // Without the hero detail, rows wait at full height instead of showing the overview's three picks.
+        // Calls the row builder directly so no arammeta request starts.
+        using var host = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false };
+        var overview = page with { Detail = null };
+        type.GetMethod("AddMayhemAugmentRows", flags)!
+            .Invoke(assistant, new object[] { overview, 103, CancellationToken.None, host });
+        var rows = host.Controls.OfType<FlowLayoutPanel>().ToArray();
+        if (
+            rows.Length != 3
+            || rows.Any(row =>
+                row.Controls.OfType<PictureBox>().Any() || row.Controls.OfType<Label>().SingleOrDefault()?.Height < 44
+            )
+        )
+        {
+            throw new Exception("Augment rows show a full-height placeholder until the hero pool loads");
+        }
+    }
+
     private static AramMetaPage CreatePage()
     {
         var augments = new JArray(
@@ -171,6 +191,7 @@ internal static class MayhemAssistantChecks
         }
 
         CheckAugmentRow(body);
+        CheckAugmentPlaceholder(assistant, type, flags, page);
 
         using (var overview = new Bitmap(assistant.Width, assistant.Height))
         {

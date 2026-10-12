@@ -61,7 +61,6 @@ internal sealed partial class ChampionSelectAssistant : Form
         AutoSize = true,
         Enabled = false,
     };
-    private readonly Button _fold = new() { Text = "收起", AutoSize = true };
     private readonly ComboBox _lane = new Controls.DarkFilterComboBox() { Width = Dip(95), Margin = DipPadding(2) };
 
     // The assistant opens without activation so hovering must also work while LOL has focus.
@@ -81,6 +80,8 @@ internal sealed partial class ChampionSelectAssistant : Form
     private IntPtr _clientWindow;
     private bool _moving;
     private bool _fitQueued;
+    private string? _failureText;
+    private long _nextClientSearch;
 
     // Each champion select starts open; the edge tab or the hide button closes it until the next one.
     private bool _panelOpen = true;
@@ -107,18 +108,19 @@ internal sealed partial class ChampionSelectAssistant : Form
         ClientSize = Dip(LayoutWidth, MinimumLayoutHeight);
         _status.ForeColor = Color.FromArgb(135, 162, 173);
         var toolbar = CreateAssistantToolbar();
-        var (footer, guide, retry) = CreateAssistantFooter();
+        var (footer, guide) = CreateAssistantFooter();
         var statusBar = CreateAssistantStatusBar();
         Controls.Add(_body);
         Controls.Add(statusBar);
         Controls.Add(toolbar);
         Controls.Add(footer);
-        StyleAssistantButtons(toolbar, footer);
+        StyleAssistantButtons(footer);
+        _apply.BackColor = League.Controls.AccentColors.Fill;
         BindAssistantFilters();
         _toggle = CreateToggleTab();
         _toggleLayer = new(_toggle);
-        BindAssistantFold();
-        BindAssistantActions(guide, retry);
+        BindAssistantActions(guide);
+        BindLoadFailureRetry();
         BindAssistantClosing();
         ResizeBegin += (_, _) => _moving = true;
         ResizeEnd += (_, _) => _moving = false;
@@ -127,28 +129,39 @@ internal sealed partial class ChampionSelectAssistant : Form
         _timer.Start();
     }
 
-    private FlowLayoutPanel CreateAssistantToolbar()
+    // Filters wrap on the left; the window action stays at the top right, away from the filters.
+    // Hiding the panel uses the title bar close button or the edge tab.
+    private Panel CreateAssistantToolbar()
     {
-        var toolbar = new FlowLayoutPanel
+        var toolbar = new Panel
         {
             Dock = DockStyle.Top,
             Height = Dip(FullToolbarHeight),
             Padding = DipPadding(10, 6, 10, 4),
             BackColor = Color.FromArgb(10, 32, 43),
         };
+        var filters = new FlowLayoutPanel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        filters.Controls.AddRange(new Control[] { _mode, _region, _tier, _lane });
+        var actions = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.TopDown,
+            Margin = Padding.Empty,
+        };
         _pin.FlatStyle = FlatStyle.Flat;
-        _pin.Margin = DipPadding(2, 7, 6, 0);
-        _fold.AutoSize = false;
-        _fold.Size = Dip(66, 28);
-        _fold.Margin = DipPadding(2);
-        toolbar.Controls.AddRange(new Control[] { _pin, _fold, _mode, _region, _tier, _lane });
-        toolbar.SetFlowBreak(_mode, true);
+        _pin.Margin = DipPadding(4, 6, 0, 0);
+        _tips.SetToolTip(_pin, "固定后不再自动贴靠客户端，可拖动到任意位置。");
+        actions.Controls.Add(_pin);
+        toolbar.Controls.Add(filters);
+        toolbar.Controls.Add(actions);
         _lane.Items.AddRange(new object[] { "自动分路", "上路", "打野", "中路", "下路", "辅助" });
         _lane.SelectedIndex = 0;
         return toolbar;
     }
 
-    private (FlowLayoutPanel Footer, Button Guide, Button Retry) CreateAssistantFooter()
+    private (FlowLayoutPanel Footer, Button Guide) CreateAssistantFooter()
     {
         var footer = new FlowLayoutPanel
         {
@@ -158,13 +171,11 @@ internal sealed partial class ChampionSelectAssistant : Form
             WrapContents = false,
         };
         var guide = new Button { Text = "完整攻略" };
-        var retry = new Button { Text = "重试" };
         _apply.AutoSize = false;
         FitButton(guide, 28);
         FitButton(_apply, 28, "应用方案 9");
-        FitButton(retry, 28);
         FitButton(_voiceButton, 28);
-        footer.Controls.AddRange(new Control[] { guide, _apply, retry, _voiceButton });
+        footer.Controls.AddRange(new Control[] { guide, _apply, _voiceButton });
         foreach (Control button in footer.Controls)
         {
             button.Margin = DipPadding(2, 0, 2, 0);
@@ -172,7 +183,7 @@ internal sealed partial class ChampionSelectAssistant : Form
 
         _tips.SetToolTip(_voiceButton, "中文录音后编辑确认，直接发送到选人聊天；也可以手动输入。");
         _voiceButton.Click += async (_, _) => await TrackAssistantWork(ShowVoiceInputAsync());
-        return (footer, guide, retry);
+        return (footer, guide);
     }
 
     private Panel CreateAssistantStatusBar()
@@ -191,16 +202,15 @@ internal sealed partial class ChampionSelectAssistant : Form
         return statusBar;
     }
 
-    private void StyleAssistantButtons(FlowLayoutPanel toolbar, FlowLayoutPanel footer)
+    private static void StyleAssistantButtons(FlowLayoutPanel footer)
     {
-        foreach (var button in toolbar.Controls.OfType<Button>().Concat(footer.Controls.OfType<Button>()))
+        foreach (var button in footer.Controls.OfType<Button>())
         {
             button.FlatStyle = FlatStyle.Flat;
             button.FlatAppearance.BorderColor = Color.FromArgb(49, 83, 95);
             button.BackColor = Color.FromArgb(16, 45, 57);
             button.ForeColor = Color.FromArgb(220, 230, 226);
         }
-        _apply.BackColor = Color.FromArgb(0, 126, 139);
     }
 
     private void BindAssistantFilters()
@@ -237,12 +247,6 @@ internal sealed partial class ChampionSelectAssistant : Form
         return toggle;
     }
 
-    private void BindAssistantFold()
-    {
-        _tips.SetToolTip(_fold, "收起到客户端旁的「选人助手」标签，点击标签可重新打开。");
-        _fold.Click += (_, _) => SetPanelOpen(false);
-    }
-
     private void SetPanelOpen(bool open)
     {
         _panelOpen = open;
@@ -259,7 +263,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         PositionWindow();
     }
 
-    private void BindAssistantActions(Button guide, Button retry)
+    private void BindAssistantActions(Button guide)
     {
         guide.Click += (_, _) =>
         {
@@ -273,15 +277,56 @@ internal sealed partial class ChampionSelectAssistant : Form
                 );
             }
         };
-        retry.Click += (_, _) =>
+        _apply.Click += async (_, _) => await TrackAssistantWork(ApplyAsync());
+    }
+
+    // Retry lives in the status bar and is clickable only while it shows the latest load failure.
+    private void BindLoadFailureRetry()
+    {
+        _status.Click += (_, _) =>
         {
-            if (_hero > 0)
+            if (_failureText != null && _hero > 0)
             {
                 _ = LoadHeroAsync();
             }
         };
-        _apply.Click += async (_, _) => await TrackAssistantWork(ApplyAsync());
+        _status.TextChanged += (_, _) =>
+        {
+            if (_failureText != null && _status.Text != _failureText)
+            {
+                ClearLoadFailure();
+            }
+        };
     }
+
+    private void ShowLoadFailure(Exception error)
+    {
+        AssistantDiagnostics.Shared.Report("recommendations", error);
+        _failureText = LoadFailureReason(error) + " · 点击重试";
+        _status.Text = _failureText;
+        _status.ForeColor = Color.FromArgb(208, 185, 130);
+        _status.Cursor = Cursors.Hand;
+        _tips.SetToolTip(_status, "点击重新加载推荐；详细原因已写入日志：" + AssistantDiagnostics.Shared.LogPath);
+    }
+
+    private void ClearLoadFailure()
+    {
+        _failureText = null;
+        _status.ForeColor = Color.FromArgb(135, 162, 173);
+        _status.Cursor = Cursors.Default;
+        _tips.SetToolTip(_status, null);
+    }
+
+    internal static string LoadFailureReason(Exception error) =>
+        error switch
+        {
+            InvalidDataException => error.Message,
+            HttpRequestException { StatusCode: not null } => "推荐站点暂时无法访问",
+            HttpRequestException => "网络连接失败，请检查网络",
+            TimeoutException or OperationCanceledException => "推荐加载超时",
+            Newtonsoft.Json.JsonException => "推荐数据格式变化，暂时无法读取",
+            _ => "推荐暂时无法加载",
+        };
 
     private void BindAssistantClosing()
     {
@@ -396,27 +441,7 @@ internal sealed partial class ChampionSelectAssistant : Form
 
     private void PositionWindow()
     {
-        IntPtr handle = _clientWindow;
-        if (handle == IntPtr.Zero || !IsWindow(handle) || !IsWindowVisible(handle))
-        {
-            handle = IntPtr.Zero;
-            foreach (var process in Process.GetProcessesByName("LeagueClientUx"))
-            {
-                using (process)
-                {
-                    try
-                    {
-                        var candidate = process.MainWindowHandle;
-                        if (handle == IntPtr.Zero && candidate != IntPtr.Zero && IsWindowVisible(candidate))
-                        {
-                            handle = candidate;
-                        }
-                    }
-                    catch { }
-                }
-            }
-            _clientWindow = handle;
-        }
+        IntPtr handle = _selecting ? FindClientWindow() : IntPtr.Zero;
         bool show = _visibility.ShouldShow(
             _selecting,
             handle != IntPtr.Zero && IsIconic(handle),
@@ -463,6 +488,45 @@ internal sealed partial class ChampionSelectAssistant : Form
         }
 
         ShowAttached(this, _windowLayer, handle);
+    }
+
+    // Process enumeration runs on the UI thread, so a missing client is searched at most every 2 s
+    // and never outside champion select.
+    private IntPtr FindClientWindow()
+    {
+        if (_clientWindow != IntPtr.Zero && IsWindow(_clientWindow) && IsWindowVisible(_clientWindow))
+        {
+            return _clientWindow;
+        }
+
+        _clientWindow = IntPtr.Zero;
+        long now = Environment.TickCount64;
+        if (now < _nextClientSearch)
+        {
+            return IntPtr.Zero;
+        }
+
+        foreach (var process in Process.GetProcessesByName("LeagueClientUx"))
+        {
+            using (process)
+            {
+                try
+                {
+                    var candidate = process.MainWindowHandle;
+                    if (_clientWindow == IntPtr.Zero && candidate != IntPtr.Zero && IsWindowVisible(candidate))
+                    {
+                        _clientWindow = candidate;
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // The process exited during enumeration; keep looking at the others.
+                }
+            }
+        }
+
+        _nextClientSearch = _clientWindow == IntPtr.Zero ? now + 2000 : 0;
+        return _clientWindow;
     }
 
     private void PlaceToggle(IntPtr client, Rectangle bounds)
@@ -740,7 +804,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         {
             if (!token.IsCancellationRequested && !IsDisposed)
             {
-                _status.Text = "加载失败：" + ex.Message;
+                ShowLoadFailure(ex);
             }
         }
     }

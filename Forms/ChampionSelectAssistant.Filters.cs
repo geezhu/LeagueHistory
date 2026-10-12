@@ -92,9 +92,10 @@ internal sealed partial class ChampionSelectAssistant
             _tier.Visible = mode is not ("arena" or "mayhem");
             _lane.Visible = mode == "ranked";
             _apply.Visible = true;
-            if (_mode.Parent is FlowLayoutPanel toolbar)
+            // Mode and region fit one row; tier or lane needs the second filter row.
+            if (_mode.Parent?.Parent is Panel toolbar)
             {
-                toolbar.Height = ToolbarHeight(mode == "mayhem");
+                toolbar.Height = ToolbarHeight(!(_tier.Enabled || mode == "ranked"));
             }
         }
         finally
