@@ -41,8 +41,13 @@ internal class DarkSelectionComboBox : ComboBox
         graphics.DrawRectangle(border, 0, 0, Width - 1, Height - 1);
         using var arrow = new Pen(Enabled ? Color.FromArgb(147, 181, 190) : Color.FromArgb(76, 103, 113), 1.5f);
         int x = Width - arrowWidth / 2 - 1,
-            y = Height / 2;
-        graphics.DrawLines(arrow, new[] { new Point(x - 4, y - 2), new Point(x, y + 2), new Point(x + 4, y - 2) });
+            y = Height / 2,
+            half = LogicalToDeviceUnits(4),
+            rise = LogicalToDeviceUnits(2);
+        graphics.DrawLines(
+            arrow,
+            new[] { new Point(x - half, y - rise), new Point(x, y + rise), new Point(x + half, y - rise) }
+        );
     }
 
     protected override void OnGotFocus(EventArgs e)

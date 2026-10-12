@@ -32,8 +32,8 @@ internal sealed partial class ChampionSelectAssistant
         {
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            MaximumSize = new Size(282, 0),
-            Margin = new Padding(0, 0, 0, 12),
+            MaximumSize = new Size(ContentWidth, 0),
+            Margin = DipPadding(0, 0, 0, 12),
         };
         _body.Controls.Add(columns);
         foreach (
@@ -51,10 +51,10 @@ internal sealed partial class ChampionSelectAssistant
                 WrapContents = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                MinimumSize = new Size(134, 0),
-                MaximumSize = new Size(134, 0),
-                Padding = new Padding(5, 5, 5, 8),
-                Margin = new Padding(0, 0, 5, 0),
+                MinimumSize = new Size(Dip(134), 0),
+                MaximumSize = new Size(Dip(134), 0),
+                Padding = DipPadding(5, 5, 5, 8),
+                Margin = DipPadding(0, 0, 5, 0),
                 BackColor = Color.FromArgb(13, 38, 50),
             };
             columns.Controls.Add(card);
@@ -64,7 +64,7 @@ internal sealed partial class ChampionSelectAssistant
                     Text = title,
                     AutoSize = true,
                     ForeColor = Color.FromArgb(208, 185, 130),
-                    Margin = new Padding(0, 0, 0, 4),
+                    Margin = DipPadding(0, 0, 0, 4),
                 }
             );
             if (option == null)
@@ -81,7 +81,7 @@ internal sealed partial class ChampionSelectAssistant
                 Text = (pick ? "使用率 " : "胜率 ") + $"{rate:P2}",
                 AutoSize = true,
                 ForeColor = Color.FromArgb(195, 213, 219),
-                Margin = new Padding(0, 3, 0, 0),
+                Margin = DipPadding(0, 3, 0, 0),
             };
             card.Controls.Add(label);
             _tips.SetToolTip(
@@ -104,7 +104,7 @@ internal sealed partial class ChampionSelectAssistant
         }
         // FlowLayoutPanel can exclude trailing padding/margins from its scroll extent.
         // A real final control keeps the last rate clear of the fixed action bar.
-        _body.Controls.Add(new Panel { Size = new Size(1, 8), Margin = Padding.Empty });
+        _body.Controls.Add(new Panel { Size = new Size(1, Dip(8)), Margin = Padding.Empty });
     }
 
     private bool _applyingSpells;

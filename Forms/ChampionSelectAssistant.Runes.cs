@@ -85,12 +85,12 @@ internal sealed partial class ChampionSelectAssistant
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            MaximumSize = new Size(282, 0),
+            MaximumSize = new Size(ContentWidth, 0),
             Margin = Padding.Empty,
         };
         var select = new Controls.RuneSchemeComboBox(schemes, scheme => RuneHighlights(scheme, schemes), token)
         {
-            Width = 276,
+            Width = ContentWidth - Dip(6),
         };
         PopulateRuneChoices(select, schemes);
         select.SelectedIndex = 0;
@@ -98,14 +98,14 @@ internal sealed partial class ChampionSelectAssistant
         {
             AutoSize = true,
             ForeColor = Color.FromArgb(170, 195, 204),
-            MaximumSize = new Size(278, 0),
-            Margin = new Padding(0, 2, 0, 2),
+            MaximumSize = new Size(ContentWidth - Dip(4), 0),
+            Margin = DipPadding(0, 2, 0, 2),
         };
         var icons = new FlowLayoutPanel
         {
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            MaximumSize = new Size(282, 0),
+            MaximumSize = new Size(ContentWidth, 0),
             Margin = Padding.Empty,
         };
         section.Controls.AddRange(new Control[] { select, stats, icons });

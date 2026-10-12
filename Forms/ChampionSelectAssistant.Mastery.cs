@@ -25,7 +25,7 @@ internal sealed partial class ChampionSelectAssistant
         }
 
         _mastery = null;
-        _masteryRow = new Panel { Size = new Size(282, 22), Margin = Padding.Empty };
+        _masteryRow = new Panel { Size = new Size(ContentWidth, Dip(22)), Margin = Padding.Empty };
         _masteryLabel = new Label
         {
             Text = "成就读取中…",
@@ -38,7 +38,6 @@ internal sealed partial class ChampionSelectAssistant
         {
             Text = "发送熟练度",
             Dock = DockStyle.Right,
-            Width = 84,
             Enabled = false,
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(16, 45, 57),
@@ -46,6 +45,8 @@ internal sealed partial class ChampionSelectAssistant
             Padding = Padding.Empty,
         };
         _sendMastery.FlatAppearance.BorderColor = Color.FromArgb(49, 83, 95);
+        FitButton(_sendMastery, 22);
+        _masteryRow.Height = _sendMastery.Height;
         _sendMastery.Click += async (_, _) => await TrackAssistantWork(SendMasteryAsync());
         _tips.SetToolTip(
             _sendMastery,

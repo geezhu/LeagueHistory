@@ -7,7 +7,7 @@ internal sealed class DarkFilterComboBox : DarkSelectionComboBox
         DropDownStyle = ComboBoxStyle.DropDownList;
         DrawMode = DrawMode.OwnerDrawFixed;
         FlatStyle = FlatStyle.Flat;
-        ItemHeight = 22;
+        ItemHeight = LogicalToDeviceUnits(22);
         BackColor = Color.FromArgb(16, 45, 57);
         ForeColor = Color.FromArgb(215, 225, 226);
     }
@@ -21,7 +21,7 @@ internal sealed class DarkFilterComboBox : DarkSelectionComboBox
         );
         e.Graphics.FillRectangle(background, e.Bounds);
         string text = e.Index >= 0 && e.Index < Items.Count ? GetItemText(Items[e.Index]) : Text;
-        var bounds = Rectangle.Inflate(e.Bounds, -5, 0);
+        var bounds = Rectangle.Inflate(e.Bounds, -LogicalToDeviceUnits(5), 0);
         TextRenderer.DrawText(
             e.Graphics,
             text,

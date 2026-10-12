@@ -9,7 +9,7 @@ internal sealed partial class ChampionSelectAssistant
     {
         Text = "可选英雄",
         Dock = DockStyle.Right,
-        Width = 112,
+        Width = Dip(112),
         FlatStyle = FlatStyle.Flat,
         Enabled = false,
     };
@@ -98,7 +98,7 @@ internal sealed partial class ChampionSelectAssistant
         _rosterWindow = window;
         _rosterChanged = window.UpdateRoster;
         window.WorkRetired += work => TrackAssistantWork(work);
-        window.Shown += (_, _) => PositionEquipmentEditor(window, new Size(340, 360));
+        window.Shown += (_, _) => PositionEquipmentEditor(window, Dip(340, 360));
         window.FormClosed += (_, _) =>
         {
             if (ReferenceEquals(_rosterWindow, window))

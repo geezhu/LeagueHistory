@@ -8,7 +8,6 @@ internal sealed partial class ChampionSelectAssistant
     {
         Name = "assistantVoiceInput",
         Text = "语音输入",
-        Size = new Size(64, 28),
         Enabled = false,
     };
     private VoiceInputDialog? _voiceDialog;

@@ -100,6 +100,33 @@ public sealed class AssistantWindowLayer : IDisposable
         return false;
     }
 
+    /// <summary>
+    /// Place the window directly above the client and its owned popups. A window opened while the
+    /// client is in the background must stay beneath the application that currently covers it.
+    /// </summary>
+    public void StackAboveClient()
+    {
+        if (_disposed || _form.IsDisposed || !_form.IsHandleCreated || _client == IntPtr.Zero || !IsWindow(_client))
+        {
+            return;
+        }
+
+        IntPtr window = _form.Handle,
+            after = IntPtr.Zero; // HWND_TOP when nothing covers the client
+        for (IntPtr above = GetWindow(_client, 3); above != IntPtr.Zero; above = GetWindow(above, 3)) // GW_HWNDPREV
+        {
+            bool topmost = (GetWindowLong(above, -20) & 8) != 0; // WS_EX_TOPMOST
+            if (above != window && !topmost && GetWindow(above, 4) != _client && IsWindowVisible(above))
+            {
+                after = above;
+                break;
+            }
+        }
+
+        // NOMOVE | NOSIZE | NOACTIVATE | NOOWNERZORDER
+        SetWindowPos(window, after, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 | 0x0200);
+    }
+
     public void Detach()
     {
         if (_client == IntPtr.Zero)
@@ -133,6 +160,23 @@ public sealed class AssistantWindowLayer : IDisposable
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetWindow(IntPtr window, uint command);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr window);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
+    private static extern int GetWindowLong(IntPtr window, int index);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(
+        IntPtr window,
+        IntPtr after,
+        int x,
+        int y,
+        int width,
+        int height,
+        uint flags
+    );
 
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
     private static extern IntPtr SetWindowLongPtr(IntPtr window, int index, IntPtr value);

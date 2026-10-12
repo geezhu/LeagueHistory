@@ -20,11 +20,11 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
         DropDownStyle = ComboBoxStyle.DropDownList;
         FlatStyle = FlatStyle.Flat;
         DrawMode = DrawMode.OwnerDrawFixed;
-        ItemHeight = 34;
-        DropDownWidth = 440;
+        ItemHeight = LogicalToDeviceUnits(34);
+        DropDownWidth = LogicalToDeviceUnits(440);
         MaxDropDownItems = 8;
         IntegralHeight = false;
-        DropDownHeight = 280;
+        DropDownHeight = LogicalToDeviceUnits(280);
         BackColor = Color.FromArgb(16, 45, 57);
         ForeColor = Color.FromArgb(215, 225, 226);
         Items.AddRange(
@@ -103,12 +103,12 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
             return;
         }
         var option = _options[e.Index];
-        int x = e.Bounds.Left + 4,
-            y = e.Bounds.Top + 4;
+        int x = e.Bounds.Left + LogicalToDeviceUnits(4),
+            y = e.Bounds.Top + LogicalToDeviceUnits(4);
         var ids = OpggItemSetService.Ids(option);
-        int iconSize = 26,
-            space = 29,
-            maxIcons = Math.Max(1, (e.Bounds.Width - 65) / space);
+        int iconSize = LogicalToDeviceUnits(26),
+            space = LogicalToDeviceUnits(29),
+            maxIcons = Math.Max(1, (e.Bounds.Width - LogicalToDeviceUnits(65)) / space);
         foreach (int id in ids.Take(maxIcons))
         {
             var rect = new Rectangle(x, y, iconSize, iconSize);
@@ -133,17 +133,28 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
         }
         if (ids.Length > maxIcons)
         {
-            TextRenderer.DrawText(e.Graphics, "+", Font, new Point(x - 5, y + 6), ForeColor);
+            TextRenderer.DrawText(
+                e.Graphics,
+                "+",
+                Font,
+                new Point(x - LogicalToDeviceUnits(5), y + LogicalToDeviceUnits(6)),
+                ForeColor
+            );
         }
         double? win = OpggBuild.Ratio(option["win"], option["play"]),
             pick = (double?)option["pick_rate"];
-        var text = new Rectangle(x + 4, e.Bounds.Top + 1, Math.Max(0, e.Bounds.Right - x - 6), e.Bounds.Height - 2);
+        var text = new Rectangle(
+            x + LogicalToDeviceUnits(4),
+            e.Bounds.Top + 1,
+            Math.Max(0, e.Bounds.Right - x - LogicalToDeviceUnits(6)),
+            e.Bounds.Height - 2
+        );
         string rates =
             $"胜 {(win.HasValue ? win.Value.ToString("P1") : "—")}\n选 {(pick.HasValue ? pick.Value.ToString("P1") : "—")}";
-        if (e.Bounds.Width > 300)
+        if (e.Bounds.Width > LogicalToDeviceUnits(300))
         {
-            text.X = Math.Max(x + 12, e.Bounds.Right - 255);
-            text.Width = e.Bounds.Right - text.X - 8;
+            text.X = Math.Max(x + LogicalToDeviceUnits(12), e.Bounds.Right - LogicalToDeviceUnits(255));
+            text.Width = e.Bounds.Right - text.X - LogicalToDeviceUnits(8);
             rates =
                 $"胜率 {(win.HasValue ? win.Value.ToString("P1") : "—")}  ·  选取率 {(pick.HasValue ? pick.Value.ToString("P1") : "—")}\n{((long?)option["play"])?.ToString("N0") ?? "—"} 场";
         }
