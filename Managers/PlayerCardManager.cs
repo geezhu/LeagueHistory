@@ -14,15 +14,16 @@ namespace League.Managers
         private readonly FormMain _form;
         private readonly MatchQueryProcessor _matchQueryProcessor;
 
-        // 新拆分出的服务
         public readonly PlayerCardUIManager _uiManager;
         private readonly PlayerCardCache _cache;
         public readonly PlayerCardFactory _factory;
         private readonly PlayerCardValidator _validator;
 
-        private DateTime _lastFillTime = DateTime.MinValue;
+        // 分队节流：我方 / 敌方互不影响
+        private DateTime _lastFillMyTeamTime = DateTime.MinValue;
+        private DateTime _lastFillEnemyTeamTime = DateTime.MinValue;
+        private const int FillThrottleMs = 1200;
 
-        // 添加到 PlayerCardManager 类中
         public SemaphoreSlim UiLock => _uiManager._uiLock;
 
         public PlayerCardManager(FormMain form, MatchQueryProcessor matchQueryProcessor)
@@ -53,106 +54,37 @@ namespace League.Managers
             await _uiManager.CreateBasicCardsOnly(team, isMyTeam, row, _factory, _cache);
         }
 
-
-        //public async Task FillPlayerMatchInfoAsync(JArray team, bool isMyTeam, int row)
-        //{
-        //    if (team == null || team.Count == 0) return;
-
-        //    if ((DateTime.Now - _lastFillTime).TotalMilliseconds < 1200)
-        //        return;
-
-        //    _lastFillTime = DateTime.Now;
-
-        //    await _uiManager._uiLock.WaitAsync();
-        //    try
-        //    {
-        //        // 并行查询（保持原逻辑）
-        //        var fetchedInfos = await RunWithLimitedConcurrency(
-        //            team,
-        //            async p =>
-        //            {
-        //                long sid = p["summonerId"]?.Value<long>() ?? 0;
-        //                return sid == 0
-        //                    ? _factory.CreateHiddenPlayerInfo(0, p["championId"]?.Value<int>() ?? 0)
-        //                    : await _matchQueryProcessor.SafeFetchPlayerMatchInfoAsync(p);
-        //            },
-        //            maxConcurrency: 3);
-
-        //        // 缓存正常玩家
-        //        foreach (var info in fetchedInfos)
-        //        {
-        //            if (info?.Player?.SummonerId > 0)
-        //                _cache.AddOrUpdateCache(info.Player.SummonerId, info);
-        //        }
-
-        //        // 【关键修复】UI 更新循环 - 按原始 team 顺序处理
-        //        for (int col = 0; col < team.Count; col++)
-        //        {
-        //            var info = fetchedInfos[col];           // 对应位置的数据
-        //            var playerData = team[col];             // 原始 JSON 数据（永远可用）
-
-        //            if (info == null || info.Player == null)
-        //            {
-        //                // 🔥 从原始 team JSON 中取出 id
-        //                long sid = playerData["summonerId"]?.Value<long>() ?? 0;
-        //                int cid = playerData["championId"]?.Value<int>() ?? 0;
-        //                string puuidFromData = playerData["puuid"]?.ToString() ?? "";
-
-        //                var fallback = _factory.CreateFailedPlayerInfo(sid, cid, puuidFromData);
-        //                _uiManager.CreateLoadingPlayerMatch(fallback, isMyTeam, row, col, "");
-        //                Debug.WriteLine($"[Fill] 强制失败兜底: sid={sid}, cid={cid}");
-        //                continue;
-        //            }
-
-        //            if (info.Player?.SummonerId == 0)  // 隐藏玩家
-        //            {
-        //                _uiManager.CreateLoadingPlayerMatch(info, isMyTeam, row, col, "");
-        //                continue;
-        //            }
-
-        //            // 正常玩家
-        //            string puuid = info.Player.Puuid ?? "";
-        //            _uiManager.CreateLoadingPlayerMatch(info, isMyTeam, row, col, puuid);
-        //        }
-
-        //        // 组队检测 & 名字颜色
-        //        var detector = new PartyDetector();
-        //        //detector.Detect(fetchedInfos.Where(f => f != null).ToList());
-        //        // 组队检测，过滤puuid为空的玩家，如隐藏玩家不做判断
-        //        detector.Detect(
-        //            fetchedInfos
-        //                .Where(f => f?.Player != null && !string.IsNullOrEmpty(f.Player.Puuid))
-        //                .ToList()
-        //        );
-
-        //        foreach (var info in fetchedInfos)
-        //        {
-        //            if (info?.Player?.SummonerId == 0) continue; // 跳过隐藏玩家
-        //            if (info?.Player != null)
-        //                _uiManager.UpdatePlayerNameColor(info.Player.SummonerId, info.Player.NameColor, _cache);
-        //        }
-        //    }
-        //    finally
-        //    {
-        //        _uiManager._uiLock.Release();
-        //    }
-        //}
-
-        public async Task FillPlayerMatchInfoAsync(JArray team, bool isMyTeam, int row)
+        /// <summary>
+        /// 填充队伍战绩卡片。
+        /// forceFill=true 时跳过节流（进游戏补敌方、重连补全等必须成功的路径）。
+        /// CreateBasicCardsOnly + ApplyOneCardUiAsync 优先更新已有占位卡，不会重复叠卡。
+        /// </summary>
+        public async Task FillPlayerMatchInfoAsync(JArray team, bool isMyTeam, int row, bool forceFill = false)
         {
             if (team == null || team.Count == 0) return;
 
-            // 防止短时间重复填充（选人快照抖动）
-            if ((DateTime.Now - _lastFillTime).TotalMilliseconds < 1200)
-                return;
-
-            _lastFillTime = DateTime.Now;
+            if (!forceFill)
+            {
+                DateTime lastFill = isMyTeam ? _lastFillMyTeamTime : _lastFillEnemyTeamTime;
+                if ((DateTime.Now - lastFill).TotalMilliseconds < FillThrottleMs)
+                {
+                    Debug.WriteLine($"[Fill] 节流跳过 isMyTeam={isMyTeam}（距上次 {(DateTime.Now - lastFill).TotalMilliseconds:F0}ms）");
+                    return;
+                }
+                if (isMyTeam) _lastFillMyTeamTime = DateTime.Now;
+                else _lastFillEnemyTeamTime = DateTime.Now;
+            }
+            else
+            {
+                if (isMyTeam) _lastFillMyTeamTime = DateTime.Now;
+                else _lastFillEnemyTeamTime = DateTime.Now;
+                Debug.WriteLine($"[Fill] forceFill 绕过节流 isMyTeam={isMyTeam}");
+            }
 
             var teamList = team.ToList();
             int count = teamList.Count;
             var fetchedInfos = new PlayerMatchInfo[count];
 
-            // 与原来一致的有限并发（SGP 侧还有全局限流）
             var semaphore = new SemaphoreSlim(3);
             var tasks = new List<Task>(count);
 
@@ -173,17 +105,16 @@ namespace League.Managers
 
                         PlayerMatchInfo info;
 
-                        // 无有效 id 的占位/隐藏
                         if (sid == 0 && string.IsNullOrEmpty(puuidFromData))
                         {
                             info = _factory.CreateHiddenPlayerInfo(0, cid);
                         }
                         else
                         {
-                            info = await _matchQueryProcessor.SafeFetchPlayerMatchInfoAsync(playerData);
+                            int retries = forceFill ? 3 : 2;
+                            info = await _matchQueryProcessor.SafeFetchPlayerMatchInfoAsync(playerData, retries);
                         }
 
-                        // 兜底：保证这一列一定有可画的数据
                         if (info == null || info.Player == null)
                         {
                             info = _factory.CreateFailedPlayerInfo(sid, cid, puuidFromData);
@@ -195,7 +126,6 @@ namespace League.Managers
                         if (info.Player?.SummonerId > 0)
                             _cache.AddOrUpdateCache(info.Player.SummonerId, info);
 
-                        // ★ 查到一个就立刻更新对应列 UI（不再等整队）
                         await ApplyOneCardUiAsync(info, isMyTeam, row, col, puuidFromData);
                     }
                     catch (Exception ex)
@@ -210,7 +140,7 @@ namespace League.Managers
                             fetchedInfos[col] = fallback;
                             await ApplyOneCardUiAsync(fallback, isMyTeam, row, col, puuidFromData);
                         }
-                        catch { /* 忽略二次兜底失败 */ }
+                        catch { }
                     }
                     finally
                     {
@@ -221,7 +151,6 @@ namespace League.Managers
 
             await Task.WhenAll(tasks);
 
-            // ★ 组队检测：全部跑完再统一更新名字颜色（按你的要求）
             try
             {
                 var detector = new PartyDetector();
@@ -245,8 +174,31 @@ namespace League.Managers
         }
 
         /// <summary>
-        /// 单卡 UI 更新：优先更新已有占位卡，没有再重建（减少空白/闪烁）
+        /// 统计某行已存在的有效卡片数量
         /// </summary>
+        public int CountCardsInRow(int row, int expectedCols = 5)
+        {
+            int count = 0;
+            try
+            {
+                FormUiStateManager.SafeInvokeSync(_form.tableLayoutPanel1, () =>
+                {
+                    for (int col = 0; col < expectedCols; col++)
+                    {
+                        var panel = _form.tableLayoutPanel1.GetControlFromPosition(col, row) as BorderPanel;
+                        var card = panel?.Controls.OfType<PlayerCardControl>().FirstOrDefault();
+                        if (card != null && !card.IsDisposed)
+                            count++;
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[CountCardsInRow] row={row} 异常: {ex.Message}");
+            }
+            return count;
+        }
+
         private async Task ApplyOneCardUiAsync(
             PlayerMatchInfo info,
             bool isMyTeam,
@@ -270,14 +222,12 @@ namespace League.Managers
 
                 if (existing != null && !existing.IsDisposed)
                 {
-                    // 占位卡已在 → 只刷新内容（选人/中途打开都更稳）
                     _uiManager.UpdateCardUI(existing, info);
                     if (info.Player.SummonerId > 0)
                         _cache.RegisterCard(info.Player.SummonerId, existing);
                 }
                 else
                 {
-                    // 格子空了才重建（兼容极端时序）
                     _uiManager.CreateLoadingPlayerMatch(info, isMyTeam, row, col, puuid);
                 }
             }
@@ -291,18 +241,11 @@ namespace League.Managers
             }
         }
 
-        /// <summary>
-        /// 验证并补全所有卡片（优化版）
-        /// - 自动检测缺陷并重试获取队伍数据
-        /// - 补全过程中保存详细日志到 Debug_teams 目录（文件名使用 yyyyMMdd_HHmmssfff）
-        /// - 只有需要补全时才创建日志文件
-        /// </summary>
         public async Task ValidateAndCompleteAllCards(JArray? teamOne = null, JArray? teamTwo = null)
         {
-            const int MaxRetry = 2;
+            const int MaxRetry = 3;
             int retryCount = 0;
 
-            // ==================== 队伍数据检查与重试刷新 ====================
             while ((teamOne == null || teamTwo == null || teamOne.Count != 5 || teamTwo.Count != 5) && retryCount <= MaxRetry)
             {
                 if (retryCount > 0)
@@ -315,7 +258,7 @@ namespace League.Managers
                     break;
 
                 retryCount++;
-                await Task.Delay(600); // 重试间隔
+                await Task.Delay(600);
             }
 
             if (teamOne == null || teamTwo == null || teamOne.Count != 5 || teamTwo.Count != 5)
@@ -324,7 +267,6 @@ namespace League.Managers
                 return;
             }
 
-            // ==================== 卡片补全逻辑 ====================
             await _uiManager._uiLock.WaitAsync();
             try
             {
@@ -340,10 +282,8 @@ namespace League.Managers
 
                 foreach (var cardInfo in cardsNeedFix)
                 {
-                    string logMsg = $"[补全尝试] Col={cardInfo.Column} Name={cardInfo.CurrentName} SID={cardInfo.SummonerId} PUUID={cardInfo.Puuid ?? "空"}";
-                    Debug.WriteLine(logMsg);
+                    Debug.WriteLine($"[补全尝试] Col={cardInfo.Column} Name={cardInfo.CurrentName} SID={cardInfo.SummonerId} PUUID={cardInfo.Puuid ?? "空"}");
 
-                    // 隐藏玩家直接修复
                     if (cardInfo.SummonerId == 0 ||
                         string.IsNullOrEmpty(cardInfo.Puuid) ||
                         cardInfo.CurrentName?.Contains("隐藏") == true)
@@ -352,38 +292,31 @@ namespace League.Managers
                         continue;
                     }
 
-                    // 使用当前队伍数据查找
                     JToken? playerData = FindPlayerDataByPuuid(teamOne, teamTwo, cardInfo.Puuid)
                                       ?? FindPlayerDataInSession(teamOne, teamTwo, cardInfo.SummonerId);
 
                     if (playerData == null)
                     {
-                        string failLog = $"[补全失败] 找不到玩家数据 Puuid={cardInfo.Puuid}";
-                        Debug.WriteLine(failLog);
+                        Debug.WriteLine($"[补全失败] 找不到玩家数据 Puuid={cardInfo.Puuid}");
                         continue;
                     }
 
-                    // 重试查询战绩
-                    var matchInfo = await _matchQueryProcessor.SafeFetchPlayerMatchInfoAsync(playerData);
+                    var matchInfo = await _matchQueryProcessor.SafeFetchPlayerMatchInfoAsync(playerData, retryTimes: 3);
 
                     if (matchInfo?.Player != null && matchInfo.MatchItems?.Count > 0)
                     {
                         _uiManager.UpdateCardUI(cardInfo.Card, matchInfo);
                         _cache.AddOrUpdateCache(matchInfo.Player.SummonerId, matchInfo);
-
-                        string successLog = $"[补全成功] {matchInfo.Player.GameName} 战绩项:{matchInfo.MatchItems.Count}";
-                        Debug.WriteLine(successLog);
+                        Debug.WriteLine($"[补全成功] {matchInfo.Player.GameName} 战绩项:{matchInfo.MatchItems.Count}");
                     }
                     else
                     {
                         var failedInfo = _factory.CreateFailedPlayerInfo(cardInfo.SummonerId, cardInfo.ChampionId);
                         _uiManager.UpdateCardUI(cardInfo.Card, failedInfo);
-
-                        string failLog = $"[补全失败] {cardInfo.CurrentName}";
-                        Debug.WriteLine(failLog);
+                        Debug.WriteLine($"[补全失败] {cardInfo.CurrentName}");
                     }
 
-                    await Task.Delay(250); // 补全间隔，防限流
+                    await Task.Delay(250);
                 }
             }
             catch (Exception ex)
@@ -396,10 +329,6 @@ namespace League.Managers
             }
         }
 
-        /// <summary>
-        /// 统一重新获取双方最新队伍数据
-        /// 我方优先用 ChampSelect，整体用 GameSession 补全（兼容 Quick Play）
-        /// </summary>
         public async Task<(JArray? myTeam, JArray? enemyTeam)> TryGetLatestFullTeamsAsync()
         {
             JArray? myTeam = null;
@@ -407,7 +336,6 @@ namespace League.Managers
 
             try
             {
-                // === 我方：优先使用 ChampSelect（和 ShowMyTeamCards 一致）===
                 var champSession = await Globals.lcuClient.GetChampSelectSession();
                 if (champSession != null)
                 {
@@ -419,7 +347,6 @@ namespace League.Managers
                     }
                 }
 
-                // === 双方/敌方：使用 GameSession（和 ShowEnemyTeamCardsAsync 一致）===
                 var sessionData = await Globals.lcuClient.GetGameSession();
                 if (sessionData != null)
                 {
@@ -464,28 +391,22 @@ namespace League.Managers
             return (myTeam, enemyTeam);
         }
 
-        /// <summary>
-        /// 确保 teamOne 和 teamTwo 包含所有10个 puuid（使用 playerChampionSelections 补全）
-        /// </summary>
         public (JArray teamOne, JArray teamTwo) EnsureAllPlayersPresent(
             JArray? teamOne, JArray? teamTwo, JArray selections)
         {
             var finalTeamOne = teamOne?.DeepClone() as JArray ?? new JArray();
             var finalTeamTwo = teamTwo?.DeepClone() as JArray ?? new JArray();
 
-            // 收集当前已有的 puuid
             var existingPuuids = new HashSet<string>();
             foreach (var p in finalTeamOne) existingPuuids.Add(p["puuid"]?.ToString() ?? "");
             foreach (var p in finalTeamTwo) existingPuuids.Add(p["puuid"]?.ToString() ?? "");
 
-            // 补充缺失的玩家
             foreach (var sel in selections)
             {
                 string? puuid = sel["puuid"]?.ToString();
                 if (string.IsNullOrEmpty(puuid) || existingPuuids.Contains(puuid))
                     continue;
 
-                // 创建缺失玩家对象
                 var missingPlayer = new JObject
                 {
                     ["puuid"] = puuid,
@@ -496,7 +417,6 @@ namespace League.Managers
                     ["selectedPosition"] = "NONE"
                 };
 
-                // 优先补到人数少的队伍
                 if (finalTeamOne.Count < 5)
                     finalTeamOne.Add(missingPlayer);
                 else if (finalTeamTwo.Count < 5)
@@ -523,9 +443,6 @@ namespace League.Managers
         public void ClearAllCaches() => _cache.ClearAll();
         public void ClearGameState() => _cache.ClearGameState();
 
-        /// <summary>
-        /// 限制并发数的任务执行
-        /// </summary>
         public async Task<List<TResult>> RunWithLimitedConcurrency<TInput, TResult>(
             IEnumerable<TInput> inputs,
             Func<TInput, Task<TResult>> taskFunc,
