@@ -247,7 +247,6 @@ public sealed class OverlayChampionDetailService : IDisposable
                     title,
                     AramMetaRecommendation
                         .Read(page, hero, key)
-                        .Take(8)
                         .Select(r =>
                         {
                             var icon = Icon("augment", r.Ids[0]);

@@ -17,6 +17,7 @@ internal static class OverlayChampionDetailChecks
         RequestIsolation();
         OpggRecommendations();
         MayhemRecommendations();
+        CompleteMayhemAugments();
         Task.Run(CheckBridge).GetAwaiter().GetResult();
         Console.WriteLine(
             "PASS: hero-detail request isolation, both teams, mode-specific recommendations, spell highlights, later equipment and response channel."
@@ -195,6 +196,79 @@ internal static class OverlayChampionDetailChecks
         );
     }
 
+    private static void CompleteMayhemAugments()
+    {
+        var fixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "AramMeta");
+        var fixture = JObject.Parse(File.ReadAllText(Path.Combine(fixturePath, "103-augments.json")));
+        var index = AramMetaIndex.Parse(JObject.Parse(File.ReadAllText(Path.Combine(fixturePath, "index.json"))));
+        index = index with { Augments = (JObject)fixture["augs"]! };
+        var detail = (JObject)fixture["detail"]!;
+        var page = new AramMetaPage(index, detail, true, DateTime.UtcNow);
+        var categories = new[] { "kPrismatic", "kGold", "kSilver" };
+        var pool = (JArray)detail["poolAugments"]!;
+        var sections = ((JArray)OverlayChampionDetailService.FromAramMeta(page, 103)["sections"]!).ToArray();
+        int count = 0;
+        for (int i = 0; i < categories.Length; i++)
+        {
+            string category = categories[i];
+            var expected = pool.Where(row =>
+                    (string?)index.Augments[((int)row["id"]!).ToString()]?["rarity"] == category
+                )
+                .ToArray();
+            var actual = AramMetaRecommendation.Read(page, 103, category);
+            Check(
+                actual.Length > 8
+                    && actual.Select(row => row.Ids[0]).SequenceEqual(expected.Select(row => (int)row["id"]!)),
+                "Complete hero pool is grouped by rarity without truncation or reordering"
+            );
+            Check(
+                sections[i]["rows"]!
+                    .Select(row => (int)row["icons"]![0]!["id"]!)
+                    .SequenceEqual(actual.Select(row => row.Ids[0])),
+                "Game Bar exposes every hero-specific statistical row, including rows after the eighth"
+            );
+            for (int n = 0; n < actual.Length; n++)
+            {
+                Check(
+                    actual[n].WinRate == (double?)expected[n]["wr"]
+                        && actual[n].PickRate == (double?)expected[n]["pick"],
+                    "Full-pool rates are the hero's rates, not global augment rates"
+                );
+            }
+            count += actual.Length;
+        }
+        Check(count == pool.Count && count == 129, "Captured hero's 129 augment statistics are all retained");
+        var topOnly = page with { Detail = new JObject { ["top"] = detail["top"]!.DeepClone() } };
+        foreach (string category in categories)
+        {
+            Check(
+                AramMetaRecommendation.Read(topOnly, 103, category).Length == detail["top"]![category]!.Count(),
+                "Legacy detail recommendations take precedence over the three-entry overview"
+            );
+            Check(
+                AramMetaRecommendation.Read(page with { Detail = null }, 103, category).Length == 3,
+                "Overview recommendations remain available before detail load or during offline fallback"
+            );
+        }
+        pool.Add(pool[0].DeepClone());
+        pool.Add(new JObject { ["id"] = 0, ["wr"] = 1 });
+        pool.Add(new JObject { ["id"] = int.MaxValue, ["wr"] = 1 });
+        pool.Add(JValue.CreateNull());
+        Check(
+            categories.Sum(category => AramMetaRecommendation.Read(page, 103, category).Length) == count,
+            "Duplicate and unclassified pool entries cannot create additional cards"
+        );
+        Check(
+            AramMetaRecommendation.Read(page, int.MaxValue, categories[0]).Length == 0,
+            "A missing hero never inherits another hero's pool statistics"
+        );
+        pool.Clear();
+        Check(
+            AramMetaRecommendation.Read(page, 103, categories[0]).Length == 16,
+            "An unavailable pool falls back to detailed recommendations"
+        );
+    }
+
     private static async Task CheckBridge()
     {
         string folder = Path.Combine(Path.GetTempPath(), "League-detail-" + Guid.NewGuid().ToString("N"));
@@ -227,13 +301,32 @@ internal static class OverlayChampionDetailChecks
             await File.WriteAllTextAsync(Path.Combine(folder, "detail-request.json"), request.ToString());
             var read = await bridge.ReadDetailRequestAsync();
             Check(read != null, "Current selection reaches main process");
-            bridge.PublishDetail(read!, new JObject { ["state"] = "ready", ["sections"] = new JArray() });
+            var fixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "AramMeta");
+            var fixture = JObject.Parse(await File.ReadAllTextAsync(Path.Combine(fixturePath, "103-augments.json")));
+            var index = AramMetaIndex.Parse(
+                JObject.Parse(await File.ReadAllTextAsync(Path.Combine(fixturePath, "index.json")))
+            );
+            index = index with { Augments = (JObject)fixture["augs"]! };
+            var payload = OverlayChampionDetailService.FromAramMeta(
+                new(index, (JObject)fixture["detail"]!, true, DateTime.UtcNow),
+                103
+            );
+            payload["state"] = "ready";
+            bridge.PublishDetail(read!, payload);
             bridge.Dispose();
             await bridge.Completion;
             var result = JObject.Parse(await File.ReadAllTextAsync(Path.Combine(folder, "detail.json")));
             Check(
                 (string?)result["requestId"] == read!.Id && (int?)result["championId"] == 103,
                 "Reply identifies the requested hero, not a later slot occupant"
+            );
+            Check(
+                ((JArray)result["sections"]!).Sum(section => section["rows"]!.Count()) == 129,
+                "All hero augment statistics survive the main-process to Game Bar reply channel"
+            );
+            Check(
+                new FileInfo(Path.Combine(folder, "detail.json")).Length < 4000000,
+                "Full statistical payload fits within the existing widget reply size limit"
             );
             Check(!result.ToString().Contains("private-"), "Private roster keys are absent from detail responses");
             Check(

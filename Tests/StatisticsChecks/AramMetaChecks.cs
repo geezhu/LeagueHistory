@@ -96,6 +96,11 @@ internal static class AramMetaChecks
 
     private static async Task CheckMemoryCacheAsync()
     {
+        var fixture = Fixture("103-augments");
+        var index = Fixture("index");
+        index["augs"] = fixture["augs"]!.DeepClone();
+        var detail = Fixture("103");
+        detail["poolAugments"] = fixture["detail"]!["poolAugments"]!.DeepClone();
         int calls = 0;
         bool fail = false;
         using var client = new AramMetaClient(
@@ -109,7 +114,7 @@ internal static class AramMetaChecks
                     }
 
                     return Task.FromResult(
-                        Json(Fixture(r.RequestUri!.AbsolutePath.EndsWith("tier-list.json") ? "index" : "103"))
+                        Json(r.RequestUri!.AbsolutePath.EndsWith("tier-list.json") ? index : detail)
                     );
                 }
             )
@@ -122,6 +127,13 @@ internal static class AramMetaChecks
         fail = true;
         var fallback = await client.GetAsync(103, true, default);
         Check(fallback.Cached && fallback.Detail!.HasValues, "Offline refresh preserves complete cached data");
+        Check(
+            new[] { "kPrismatic", "kGold", "kSilver" }.Sum(category =>
+                AramMetaRecommendation.Read(fallback, 103, category).Length
+            ) == 129
+                && calls == 4,
+            "Complete augment statistics survive offline refresh without a separate augment request"
+        );
     }
 
     private static async Task CheckCancellationAsync()
