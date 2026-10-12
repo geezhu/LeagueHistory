@@ -190,6 +190,7 @@ void OpenDetails(int index)
     if (!supportsDetails)
     {
         details.Text(L"当前主程序尚不支持英雄详情，请启动新版 League.exe。");
+        details.Visibility(Visibility::Visible);
         return;
     }
     selectedCard = index;
@@ -203,7 +204,7 @@ void OpenDetails(int index)
         detailTab = L"augments";
     else if (detailQueue != 2400 && detailQueue != 3270 && detailTab == L"augments")
         detailTab = L"skills";
-    rosterScroll.Visibility(Visibility::Collapsed);
+    rosterPanel.Visibility(Visibility::Collapsed);
     details.Visibility(Visibility::Collapsed);
     detailRoot.Visibility(Visibility::Visible);
     RefreshDetailHeader();
@@ -221,8 +222,8 @@ void CloseDetails(bool notify)
     detailArtwork.Source(nullptr);
     detailBody.Children().Clear();
     detailRoot.Visibility(Visibility::Collapsed);
-    rosterScroll.Visibility(Visibility::Visible);
-    details.Visibility(Visibility::Visible);
+    rosterPanel.Visibility(Visibility::Visible);
+    UpdateRosterGuide();
     if (notify && supportsDetails)
         QueueDetailRequest(-1, 0, NewDetailId());
     UpdateChatButtons();
