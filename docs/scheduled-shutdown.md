@@ -31,3 +31,11 @@ dotnet run --project Tests/StatisticsChecks/StatisticsChecks.csproj -c Release -
 ```
 
 上述检查使用模拟任务存储或只读状态；覆盖创建即启用、原任务迁移、替换时间、运行中取消、删除失败与重建。脚本测试以 `-LibraryOnly` 加载，调用纯判断函数，均不关机。`--shutdown-validate` 使用 Windows 的 `TASK_VALIDATE_ONLY` 校验 XML 并运行一次只读探测，不注册、启用或启动任务。用户在设置页点击「创建计划」后，实际任务才会生效。
+
+## 状态文件兼容与故障诊断
+
+Windows 任务使用 PowerShell 5.1。替换已有 `status.json` 必须给 `File.Replace` 传表示空引用的字符串值 `NullString.Value`；直接传 `$null` 会被转换为空路径，第二次状态写入抛出 `ArgumentException`，随后退出等待循环。因此不能只测试游戏状态判断，回归还要实际连续写入隔离状态文件，覆盖等待、结算、倒计时和就绪；CI 固定在 Windows PowerShell 5.1 执行此检查。
+
+脚本异常会记录底层异常类型并返回非零退出码；状态文件写入失败时尝试把失败信息直接追加到日志。日志不包含 LCU 密钥。正常退出和主动取消保持原有行为。
+
+已保存的任务执行 `%LOCALAPPDATA%` 内的脚本副本。仅启动新版 EXE 不会更新该副本；使用新版在设置中按原时间重新“创建计划”即可更新，下次计划才执行。无需启动任务进行验证。
