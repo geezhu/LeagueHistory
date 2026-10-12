@@ -78,16 +78,24 @@ namespace LeagueShutdown {
 }
 
 function New-ShutdownGate {
-    return @{ SafeSince=$null; CountdownSince=$null; LastProtected=$null }
+    return @{ SafeSince=$null; CountdownSince=$null; LastProtected=$null; SafeAfterProtected=$false }
 }
 function Get-ShutdownDecision($Gate, $Observation, [datetime]$Now, [int]$CountdownSeconds) {
     if ($Observation.State -eq 'Protected') {
-        $Gate.LastProtected=$Now; $Gate.SafeSince=$null; $Gate.CountdownSince=$null
+        $Gate.LastProtected=$Now; $Gate.SafeSince=$null; $Gate.CountdownSince=$null; $Gate.SafeAfterProtected=$false
         return [pscustomobject]@{ State='WaitingGame'; Message=$Observation.Reason; Remaining=0 }
     }
-    if ($Observation.State -ne 'Safe' -or ($Observation.Absent -and $null -ne $Gate.LastProtected -and ($Now-$Gate.LastProtected).TotalSeconds -lt 120)) {
+    # 120-second reconnect buffer only applies when game disappears WITHOUT reaching Safe state after protection.
+    # Once we've reached Safe after protection with client still present (settlement or lobby), future client exit proceeds to countdown.
+    $needReconnectBuffer = $Observation.Absent -and $null -ne $Gate.LastProtected -and -not $Gate.SafeAfterProtected -and ($Now-$Gate.LastProtected).TotalSeconds -lt 120
+    if ($Observation.State -ne 'Safe' -or $needReconnectBuffer) {
         $Gate.SafeSince=$null; $Gate.CountdownSince=$null
         return [pscustomobject]@{ State='WaitingState'; Message='正在确认对局是否结束；断连或异常退出不会立即关机'; Remaining=0 }
+    }
+    # Mark that we've seen Safe state after being Protected, but only when the client is still present (not Absent).
+    # This prevents the reconnect buffer from triggering on future client exits after settlement.
+    if ($Observation.State -eq 'Safe' -and -not $Observation.Absent -and $null -ne $Gate.LastProtected) {
+        $Gate.SafeAfterProtected=$true
     }
     if ($null -eq $Gate.SafeSince) { $Gate.SafeSince=$Now }
     if (($Now-$Gate.SafeSince).TotalSeconds -lt 10) {
