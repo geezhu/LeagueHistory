@@ -26,6 +26,13 @@ Assert ((Get-ShutdownDecision $gate $absent $clock.AddSeconds(42) 30).State -eq 
 Assert ((Get-ShutdownDecision $gate $absent $clock.AddSeconds(160) 30).State -eq 'WaitingState') 'Reconnect grace remains active'
 Assert ((Get-ShutdownDecision $gate $ended $clock.AddSeconds(161) 30).State -eq 'Confirming') 'Actual end begins a new stable check'
 Assert ((Get-ShutdownDecision $gate $ended $clock.AddSeconds(171) 30).Remaining -eq 30) 'New countdown uses the full duration'
+# Test the fix: after reaching Safe state (settlement), client exit should proceed to countdown, not stay in WaitingState.
+$gate2=New-ShutdownGate
+Assert ((Get-ShutdownDecision $gate2 $playing $clock 30).State -eq 'WaitingGame') 'Game in progress is protected'
+Assert ((Get-ShutdownDecision $gate2 $ended $clock.AddSeconds(5) 30).State -eq 'Confirming') 'Settlement detected, entering confirmation'
+Assert ((Get-ShutdownDecision $gate2 $ended $clock.AddSeconds(15) 30).Remaining -eq 30) 'Countdown starts after confirmation'
+Assert ((Get-ShutdownDecision $gate2 $absent $clock.AddSeconds(20) 30).Remaining -gt 0) 'Client exit after settlement proceeds to countdown, not stuck in WaitingState'
+Assert ((Get-ShutdownDecision $gate2 $absent $clock.AddSeconds(50) 30).State -eq 'Ready') 'Countdown completes successfully after client exit'
 $unknown=Resolve-GameObservation '' $false $true
 Assert ((Get-ShutdownDecision $gate $unknown $clock.AddSeconds(180) 30).State -eq 'WaitingState') 'Uncertain state cancels countdown'
 Assert ((Get-ShutdownDecision $gate $ended $clock.AddSeconds(181) 0).State -eq 'Confirming') 'Zero delay still checks safe state'
