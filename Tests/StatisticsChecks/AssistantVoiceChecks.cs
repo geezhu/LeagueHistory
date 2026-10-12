@@ -246,6 +246,7 @@ internal static class AssistantVoiceChecks
         RecordAndDraft(draft, record, send, status, sessions, () => sends);
         ConfirmAndClose(dialog, draft, record, send, status, sessions, sending, () => sends, () => sent);
         ImmediateFinalPreview(factory, sessions);
+        StartWhenShownAndEnterToSend(factory, sessions);
     }
 
     private static void RecordAndDraft(
@@ -260,7 +261,10 @@ internal static class AssistantVoiceChecks
         record.PerformClick();
         Check(sessions.Count == 1 && draft.ReadOnly && !send.Enabled, "Recording locks confirmation and editing");
         var first = sessions[0];
-        Check(!record.Enabled && record.Text.Contains("准备"), "Recording is not offered before microphone readiness");
+        Check(
+            !record.Enabled && record.AccessibleName.Contains("准备"),
+            "Recording is not offered before microphone readiness"
+        );
         first.Emit(new("", false, Stage: "preparing", Message: "模型内部加载过程"));
         Application.DoEvents();
         Check(
@@ -329,6 +333,44 @@ internal static class AssistantVoiceChecks
             second.Cancelled && sendCount() == 1,
             "Closing cancels recording, releases resources and ignores late callbacks"
         );
+    }
+
+    private static void StartWhenShownAndEnterToSend(Func<IDesktopVoiceSession> factory, List<FakeSession> sessions)
+    {
+        var type = typeof(League.FormMain).Assembly.GetType("League.VoiceInputDialog")!;
+        int sends = 0;
+        using var dialog = (Form)
+            Activator.CreateInstance(
+                type,
+                new object[]
+                {
+                    (Func<string, CancellationToken, Task>)(
+                        (_, _) =>
+                        {
+                            sends++;
+                            return Task.CompletedTask;
+                        }
+                    ),
+                    (Func<bool>)(() => true),
+                    factory,
+                }
+            )!;
+        int before = sessions.Count;
+        type.GetMethod("StartRecordingWhenShown")!.Invoke(dialog, null);
+        dialog.Show();
+        Application.DoEvents();
+        SynchronizationContext.SetSynchronizationContext(_ui);
+        Check(sessions.Count == before + 1, "The assistant microphone button starts recording when the dialog opens");
+        var session = sessions[^1];
+        session.Emit(new("先打龙", true, Stage: "done"));
+        session.Stop();
+        var draft = (TextBox)dialog.Controls.Find("voiceDraft", true).Single();
+        Pump(() => !draft.ReadOnly && draft.Text == "先打龙");
+        typeof(Control)
+            .GetMethod("OnKeyDown", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(draft, new object[] { new KeyEventArgs(Keys.Enter) });
+        Pump(() => sends == 1);
+        Check(sends == 1 && !draft.Text.Contains('\n'), "Enter confirms the draft once without inserting a line break");
     }
 
     private static void ImmediateFinalPreview(Func<IDesktopVoiceSession> factory, List<FakeSession> sessions)

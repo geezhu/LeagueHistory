@@ -116,6 +116,8 @@ internal sealed partial class ChampionSelectAssistant
                 _voiceDialog = null;
             }
         };
+        // The user pressed the microphone, so recording starts right away; sending still needs confirmation.
+        dialog.StartRecordingWhenShown();
         dialog.Show(this);
     }
 

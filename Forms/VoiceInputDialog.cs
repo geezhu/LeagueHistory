@@ -6,33 +6,42 @@ namespace League;
 
 internal sealed class VoiceInputDialog : Form
 {
+    // Multiline keeps pasted line breaks visible to validation; one row without wrapping keeps it a chat line.
     private readonly TextBox _draft = new()
     {
         Name = "voiceDraft",
         Multiline = true,
-        WordWrap = true,
+        WordWrap = false,
         MaxLength = 180,
         Dock = DockStyle.Fill,
-        ScrollBars = ScrollBars.Vertical,
-        PlaceholderText = "录音后检查文字，或直接输入",
+        ScrollBars = ScrollBars.None,
+        PlaceholderText = "说话或直接输入，Enter 发送",
     };
-    private readonly Label _status = new() { Name = "voiceStatus", Dock = DockStyle.Fill };
+    private readonly Label _status = new()
+    {
+        Name = "voiceStatus",
+        Dock = DockStyle.Fill,
+        AutoEllipsis = true,
+    };
     private readonly Label _count = new()
     {
         AutoSize = true,
         Text = "0 / 180",
         Dock = DockStyle.Right,
     };
-    private readonly Button _record = ActionButton("开始录音", "voiceRecord", 94),
-        _send = ActionButton("确认发送", "voiceSend", 90),
-        _clear = ActionButton("清空", "voiceClear", 56),
-        _close = ActionButton("关闭", "voiceClose", 56);
+
+    // One row: a microphone toggle, the chat line and send. Clearing is plain editing; closing is the title bar or Esc.
+    private readonly Button _record = ActionButton("", "voiceRecord", 34),
+        _send = ActionButton("发送", "voiceSend", 60);
+    private readonly ToolTip _tips = new();
+    private bool _recordWhenShown;
     private readonly Func<string, CancellationToken, Task> _sendMessage;
     private readonly Func<bool> _current;
     private readonly Func<IDesktopVoiceSession> _factory;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly Font _dialogFont = new("Microsoft YaHei UI", 9);
     private readonly Font _draftFont = new("Microsoft YaHei UI", 10);
+    private readonly Font _iconFont = new("Segoe MDL2 Assets", 11);
     private Task _recordWork = Task.CompletedTask;
     private Task _sendWork = Task.CompletedTask;
     private Task _cleanupWork = Task.CompletedTask;
@@ -73,7 +82,7 @@ internal sealed class VoiceInputDialog : Form
 
     private void ConfigureSurface()
     {
-        Text = "选人语音输入";
+        Text = "语音输入 · 选人聊天";
         Name = "VoiceInputDialog";
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
@@ -81,45 +90,48 @@ internal sealed class VoiceInputDialog : Form
         BackColor = Color.FromArgb(8, 29, 40);
         ForeColor = Color.FromArgb(215, 225, 226);
         Font = _dialogFont;
-        ClientSize = new Size(380, 234);
+        ClientSize = new Size(380, 76);
+        KeyPreview = true;
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(12),
-            ColumnCount = 1,
-            RowCount = 4,
+            Padding = new Padding(10, 10, 10, 4),
+            ColumnCount = 3,
+            RowCount = 2,
         };
-        foreach (int height in new[] { 26, 0, 48, 38 })
-        {
-            layout.RowStyles.Add(
-                new RowStyle(height == 0 ? SizeType.Percent : SizeType.Absolute, height == 0 ? 100 : height)
-            );
-        }
-
-        var heading = new Panel { Dock = DockStyle.Fill };
-        heading.Controls.Add(new Label { Text = "聊天文字", AutoSize = true });
-        heading.Controls.Add(_count);
-        layout.Controls.Add(heading, 0, 0);
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        _record.Font = _iconFont;
+        _record.Margin = new Padding(0, 2, 6, 2);
         _draft.BackColor = Color.FromArgb(12, 39, 51);
         _draft.ForeColor = ForeColor;
         _draft.BorderStyle = BorderStyle.FixedSingle;
         _draft.Font = _draftFont;
+        _draft.Margin = new Padding(0, 2, 0, 2);
         ConfigureDraftInput();
-        layout.Controls.Add(_draft, 0, 1);
-        _status.Padding = new Padding(0, 6, 0, 0);
-        _status.ForeColor = Color.FromArgb(145, 172, 187);
-        layout.Controls.Add(_status, 0, 2);
-        var actions = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            WrapContents = false,
-            Padding = new Padding(0, 4, 0, 0),
-        };
-        actions.Controls.AddRange(new Control[] { _record, _send, _clear, _close });
+        _send.Margin = new Padding(6, 2, 0, 2);
         _send.BackColor = League.Controls.AccentColors.Fill;
-        layout.Controls.Add(actions, 0, 3);
+        layout.Controls.Add(_record, 0, 0);
+        layout.Controls.Add(_draft, 1, 0);
+        layout.Controls.Add(_send, 2, 0);
+        // Status and length share one small line under the chat text.
+        var footer = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        _status.ForeColor = _count.ForeColor = Color.FromArgb(145, 172, 187);
+        footer.Controls.Add(_status);
+        footer.Controls.Add(_count);
+        layout.Controls.Add(footer, 1, 1);
+        layout.SetColumnSpan(footer, 2);
         Controls.Add(layout);
     }
+
+    /// <summary>
+    /// Starts recording once the dialog is shown, for the assistant's microphone button. Checks and previews
+    /// construct the dialog without it, so showing a dialog alone never opens a microphone.
+    /// </summary>
+    public void StartRecordingWhenShown() => _recordWhenShown = true;
 
     private void ConfigureDraftInput()
     {
@@ -138,7 +150,12 @@ internal sealed class VoiceInputDialog : Form
         {
             if (e.KeyCode == Keys.Enter)
             {
+                // Enter is the explicit confirmation; it never inserts a line break.
                 e.SuppressKeyPress = true;
+                if (_send.Enabled)
+                {
+                    _send.PerformClick();
+                }
             }
         };
     }
@@ -162,9 +179,21 @@ internal sealed class VoiceInputDialog : Form
             _sendWork = SendAsync();
             await _sendWork;
         };
-        _clear.Click += (_, _) => _draft.Clear();
-        _close.Click += (_, _) => Close();
-        Shown += (_, _) => UpdateActions();
+        KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Escape)
+            {
+                Close();
+            }
+        };
+        Shown += (_, _) =>
+        {
+            UpdateActions();
+            if (_recordWhenShown && _record.Enabled && !IsRecording)
+            {
+                _record.PerformClick();
+            }
+        };
         UpdateActions();
     }
 
@@ -192,7 +221,7 @@ internal sealed class VoiceInputDialog : Form
         }
         bool current = !_lifetime.IsCancellationRequested && _current();
         _draft.ReadOnly = IsRecording || IsSending;
-        _record.Text = _state switch
+        string recordState = _state switch
         {
             DialogState.Decoding => "识别中…",
             DialogState.Stopping => "停止中…",
@@ -200,9 +229,19 @@ internal sealed class VoiceInputDialog : Form
             DialogState.Preparing => "准备中…",
             _ => _draft.TextLength == 0 ? "开始录音" : "重新录音",
         };
+        // Microphone, stop square, or an ellipsis while the recognizer prepares or decodes.
+        _record.Text =
+            _state == DialogState.Recording ? "\uE71A"
+            : IsRecording ? "\uE712"
+            : "\uE720";
+        _record.AccessibleName = recordState;
+        _record.BackColor = _state == DialogState.Recording ? Color.FromArgb(120, 44, 44) : Color.FromArgb(16, 45, 57);
+        if (_tips.GetToolTip(_record) != recordState)
+        {
+            _tips.SetToolTip(_record, recordState);
+        }
         _record.Enabled = current && (_state is DialogState.Idle or DialogState.Recording);
         _send.Enabled = current && _state == DialogState.Idle && OverlayVoiceChatText.TryNormalize(_draft.Text, out _);
-        _clear.Enabled = _state == DialogState.Idle && _draft.TextLength > 0;
         _count.Text = $"{_draft.TextLength} / 180";
     }
 
@@ -476,6 +515,8 @@ internal sealed class VoiceInputDialog : Form
         {
             _dialogFont.Dispose();
             _draftFont.Dispose();
+            _iconFont.Dispose();
+            _tips.Dispose();
         }
     }
 }
