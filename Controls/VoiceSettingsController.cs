@@ -15,7 +15,7 @@ internal sealed class VoiceSettingsController : IDisposable
     {
         Name = "VoiceMicrophone",
         DropDownStyle = ComboBoxStyle.DropDownList,
-        Width = 480,
+        Width = 300,
         Enabled = false,
     };
     private readonly Button _refresh = new() { Name = "VoiceMicrophoneRefresh", Text = "刷新麦克风" };
@@ -43,20 +43,24 @@ internal sealed class VoiceSettingsController : IDisposable
         _prepare.Click += async (_, _) => await PrepareAsync();
     }
 
-    public Control[] Content =>
-        [
-            _status,
-            _prepare,
-            new Label { Text = "录音麦克风" },
-            _microphone,
-            _refresh,
-            _microphoneStatus,
-            new Label
-            {
-                Text =
-                    "最长录音 20 秒，提示“可以说话了”后开口，说完点击停止。\n麦克风和中文模型并行准备，模型加载时也能录音。\n首次下载需要联网，之后在本机识别；不上传或保存录音。\n发送前检查文字并确认。",
-            },
-        ];
+    // Two setting rows: the model with its prepare action, and the input with its refresh action.
+    public Control[] Content
+    {
+        get
+        {
+            var model = new SettingRow("中文语音模型", null, _prepare);
+            model.AddNote(_status);
+            var microphone = new SettingRow("录音麦克风", null, _refresh);
+            microphone.AddNote(_microphone);
+            microphone.AddNote(_microphoneStatus);
+            return
+            [
+                model,
+                microphone,
+                new Label { Text = "最长录音 20 秒，首次下载后在本机识别，不上传或保存录音；发送前需确认文字。" },
+            ];
+        }
+    }
 
     public void Attach()
     {

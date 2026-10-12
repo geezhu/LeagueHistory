@@ -146,6 +146,18 @@ internal static class SettingsChecks
         backend.SelectedIndex = selected;
     }
 
+    // Scrolls the settings page so the card holding the control is at the top.
+    private static void ScrollTo(Control control)
+    {
+        Control card = control;
+        while (card.Parent is not FlowLayoutPanel { AutoScroll: true })
+        {
+            card = card.Parent!;
+        }
+
+        ((FlowLayoutPanel)card.Parent).AutoScrollPosition = new Point(0, Math.Max(0, card.Top - 16));
+    }
+
     private static void Select(TabControl tabs, string title) =>
         tabs.SelectedTab = tabs.TabPages.Cast<TabPage>().Single(p => p.Text == title);
 
@@ -178,10 +190,7 @@ internal static class SettingsChecks
         Application.DoEvents();
         Save(preview, "settings-general");
         var shutdown = All(tabs).Single(c => c.Name == "ShutdownPlanSummary");
-        ((FlowLayoutPanel)shutdown.Parent!.Parent!).AutoScrollPosition = new Point(
-            0,
-            Math.Max(0, shutdown.Parent.Top - 16)
-        );
+        ScrollTo(shutdown);
         Application.DoEvents();
         Save(preview, "settings-shutdown");
         preview.ClientSize = new Size(650, 720);
@@ -196,7 +205,7 @@ internal static class SettingsChecks
         Application.DoEvents();
         Save(preview, "settings-messages");
         var voice = All(tabs).Single(c => c.Name == "VoiceMicrophone");
-        ((FlowLayoutPanel)voice.Parent!.Parent!).AutoScrollPosition = new Point(0, Math.Max(0, voice.Parent.Top - 16));
+        ScrollTo(voice);
         var microphoneDeadline = DateTime.UtcNow.AddSeconds(3);
         while (!voice.Enabled && DateTime.UtcNow < microphoneDeadline)
         {

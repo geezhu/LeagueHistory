@@ -24,8 +24,21 @@ internal sealed class ShutdownSettingsController : IDisposable
     private readonly ScheduledShutdownService _service;
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 5000 };
     private readonly Label _summary = new() { Name = "ShutdownPlanSummary", Text = "正在读取每日关机计划…" };
-    private readonly Label _nextRun = new() { Name = "ShutdownNextRun", Text = "" };
-    private readonly Label _status = new() { Name = "ShutdownStatus", Text = "" };
+
+    // The next run joins the one-line summary; this label keeps the value for diagnostics and checks.
+    private readonly Label _nextRun = new()
+    {
+        Name = "ShutdownNextRun",
+        Text = "",
+        Visible = false,
+    };
+    private readonly Label _status = new()
+    {
+        Name = "ShutdownStatus",
+        Text = "",
+        Visible = false,
+    };
+    private readonly ToolTip _tips = new();
     private readonly Label _result = new()
     {
         Name = "ShutdownResult",
@@ -88,23 +101,14 @@ internal sealed class ShutdownSettingsController : IDisposable
         _create.Click += async (_, _) => await CreateAsync();
         _delete.Click += async (_, _) => await DeleteAsync();
         _log.Click += (_, _) => ShowLog();
+        _tips.SetToolTip(
+            _create,
+            "创建后立即启用每日计划；重复创建会替换原计划。到点仍在游戏则等待本局结束，退出联盟视界后仍有效。"
+        );
         UpdateEnabledControls();
     }
 
-    public Control[] Content =>
-        [
-            _summary,
-            _nextRun,
-            _status,
-            _clockRow,
-            _actions,
-            _result,
-            new Label
-            {
-                Text =
-                    "创建后立即启用每日计划；重复创建会替换原计划。到点仍在游戏则等待本局结束，退出联盟视界后仍有效。",
-            },
-        ];
+    public Control[] Content => [_summary, _nextRun, _status, _clockRow, _actions, _result];
 
     public void Attach()
     {
@@ -166,6 +170,7 @@ internal sealed class ShutdownSettingsController : IDisposable
                 _summary.ForeColor = Color.FromArgb(176, 70, 70);
                 _nextRun.Text = "";
                 _status.Text = "读取计划失败：" + error.Message;
+                _status.Visible = true;
             }
         }
         finally
@@ -184,12 +189,16 @@ internal sealed class ShutdownSettingsController : IDisposable
         _schedulerState = SchedulerState.Available;
         _summary.Text = view.Exists
             ? $"{(view.Plan.Enabled ? "已启用" : "已停用")} · 每天 {view.Plan.Time} · 倒计时 {view.Plan.CountdownSeconds} 秒"
+                + (view.NextRun is { } upcoming ? $" · 下次 {upcoming:MM-dd HH:mm}" : "")
             : "尚未创建每日关机计划";
         _summary.ForeColor = view.Plan.Enabled ? Color.FromArgb(0, 145, 155) : Color.FromArgb(70, 92, 112);
         _nextRun.Text = view.NextRun is { } next
             ? $"下次执行：{next:yyyy-MM-dd HH:mm}（到点后检查对局状态）"
             : "下次执行：—";
         _status.Text = view.Message;
+        // Routine status stays in the tooltip; only states that need the user's attention are shown.
+        _status.Visible = view.Exists && (!view.Managed || view.Message.Contains("正在执行"));
+        _tips.SetToolTip(_summary, view.Message);
         if (populate)
         {
             _updatingInputs = true;
@@ -363,6 +372,7 @@ internal sealed class ShutdownSettingsController : IDisposable
         }
         _disposed = true;
         _timer.Dispose();
+        _tips.Dispose();
         _summaryFont.Dispose();
     }
 }
