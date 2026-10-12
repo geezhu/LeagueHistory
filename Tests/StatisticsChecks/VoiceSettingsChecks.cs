@@ -28,6 +28,12 @@ internal static class VoiceSettingsChecks
         Func<IReadOnlyList<VoiceMicrophoneChoice>> choices
     ) => Activator.CreateInstance(ControllerType, (Func<string>)(() => selected), save, store, choices)!;
 
+    // Controller content nests labels inside setting rows.
+    private static IEnumerable<Label> Labels(Control root) => Descendants(root).OfType<Label>();
+
+    private static IEnumerable<Control> Descendants(Control root) =>
+        root.Controls.Cast<Control>().SelectMany(c => Descendants(c).Prepend(c));
+
     private static Control[] Content(object controller) =>
         (Control[])ControllerType.GetProperty("Content")!.GetValue(controller)!;
 
@@ -52,7 +58,7 @@ internal static class VoiceSettingsChecks
         using var controller = (IDisposable)Controller("removed-device", saved.Add, new VoiceModelStore(root), Choices);
         using var flow = new FlowLayoutPanel();
         flow.Controls.AddRange(Content(controller));
-        var input = flow.Controls.OfType<ComboBox>().Single();
+        var input = flow.Controls.Find("VoiceMicrophone", true).OfType<ComboBox>().Single();
         Complete(Run(controller, "LoadMicrophonesAsync"));
         Check(
             input.Enabled && ((VoiceMicrophoneChoice)input.SelectedItem!).Id == "removed-device" && saved.Count == 0,
@@ -63,7 +69,7 @@ internal static class VoiceSettingsChecks
         fail = true;
         Complete(Run(controller, "LoadMicrophonesAsync"));
         Check(
-            !input.Enabled && flow.Controls.OfType<Label>().Any(label => label.Text.Contains("读取失败")),
+            !input.Enabled && Labels(flow).Any(label => label.Text.Contains("读取失败")),
             "Listing failure disables the invalid choice without starting recording."
         );
         fail = false;
@@ -129,7 +135,7 @@ internal static class VoiceSettingsChecks
             Complete(Run(controller, "PrepareAsync")); // A repeated prepare action requests cancellation.
             Complete(prepare);
             Check(
-                flow.Controls.OfType<Label>().Any(label => label.Text.Contains("下载已取消")),
+                Labels(flow).Any(label => label.Text.Contains("下载已取消")),
                 "Cancelled preparation keeps the card available for retry."
             );
             Check(!File.Exists(Path.Combine(root, file.Name)), "Cancellation cannot publish a partial model file.");

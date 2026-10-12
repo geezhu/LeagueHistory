@@ -1,9 +1,16 @@
+using League.Controls;
+
 namespace League;
 
 public partial class FormMain
 {
+    // Readable line length for the settings list; wider cards only add empty space on the right.
+    private const int SettingsMaxWidth = 680;
+    private readonly ToolTip _settingsTips = new();
+
     private void ConfigureSettingsLayout()
     {
+        Disposed += (_, _) => _settingsTips.Dispose();
         ConfigureSettingsTabs();
         ConfigureGeneralSettings();
         ConfigureOverlayPage();
@@ -27,12 +34,12 @@ public partial class FormMain
                 tabControl1.TabPages[e.Index].Text,
                 tabControl1.Font,
                 e.Bounds,
-                selected ? League.Controls.AccentColors.Accent : Color.FromArgb(95, 113, 130),
+                selected ? AccentColors.Accent : Color.FromArgb(95, 113, 130),
                 TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter
             );
             if (selected)
             {
-                using var line = new SolidBrush(League.Controls.AccentColors.Accent);
+                using var line = new SolidBrush(AccentColors.Accent);
                 e.Graphics.FillRectangle(line, e.Bounds.X + 18, e.Bounds.Bottom - 3, e.Bounds.Width - 36, 3);
             }
         };
@@ -40,11 +47,7 @@ public partial class FormMain
 
     private void ConfigureGeneralSettings()
     {
-        var general = SettingsPage(
-            tabPage4,
-            "功能辅助",
-            "配置对局流程、英雄预选和客户端维护。多数选项自动保存，定时关机计划单独管理。"
-        );
+        var general = SettingsPage(tabPage4, "功能辅助");
         ConfigureHistorySettings(general);
         ConfigureAutomationSettings(general);
         ConfigureShutdownSettings(general);
@@ -58,7 +61,7 @@ public partial class FormMain
         {
             Name = "CardMatchHistoryCount",
             DropDownStyle = ComboBoxStyle.DropDownList,
-            Width = 180,
+            Width = 100,
         };
         historyCount.Items.AddRange(new object[] { 10, 20, 30, 50 });
         int count = _appConfig?.CardMatchHistoryCount ?? 20;
@@ -75,18 +78,26 @@ public partial class FormMain
             _matchQueryProcessor?.SetMatchHistoryCount(_appConfig.CardMatchHistoryCount);
             SaveAppConfig();
         };
-        checkBoxFilterMode.Text = "按当前模式查询近期战绩，其他模式查询全模式战绩。";
-        SettingsCard(general, "选人战绩", checkBoxFilterMode, new Label { Text = "每位玩家查询场数" }, historyCount);
+        // The designer's checkBoxFilterMode is an explanatory label, not a switch; its text becomes the note.
+        checkBoxFilterMode.Dispose();
+        SettingsCard(
+            general,
+            "选人战绩",
+            new SettingRow(
+                "每位玩家查询场数",
+                "排位、匹配和大乱斗类模式查询对应模式，其他模式查询全部模式",
+                historyCount
+            )
+        );
     }
 
     private void ConfigureAutomationSettings(FlowLayoutPanel general)
     {
-        chkAutoAccept.Text = "自动接受对局";
         var acceptDelay = new ComboBox
         {
             Name = "AutoAcceptDelaySeconds",
             DropDownStyle = ComboBoxStyle.DropDownList,
-            Width = 180,
+            Width = 110,
         };
         acceptDelay.Items.AddRange(new object[] { "立即接受", "延迟 5 秒", "延迟 10 秒" });
         acceptDelay.SelectedIndex = _appConfig?.AutoAcceptDelaySeconds switch
@@ -95,8 +106,10 @@ public partial class FormMain
             10 => 2,
             _ => 0,
         };
-        acceptDelay.Enabled = chkAutoAccept.Checked;
-        chkAutoAccept.CheckedChanged += (_, _) => acceptDelay.Enabled = chkAutoAccept.Checked;
+        // The delay only matters while auto accept is on, so it appears beside the switch then.
+        void ShowDelay() => acceptDelay.Visible = acceptDelay.Enabled = chkAutoAccept.Checked;
+        ShowDelay();
+        chkAutoAccept.CheckedChanged += (_, _) => ShowDelay();
         acceptDelay.SelectedIndexChanged += (_, _) =>
         {
             if (_appConfig == null)
@@ -112,14 +125,33 @@ public partial class FormMain
             };
             SaveAppConfig();
         };
-        SettingsCard(general, "对局自动化", chkAutoAccept, acceptDelay, chkSkipHonor, chkSkipEndOfGameStats);
+        foreach (
+            var (check, name) in new[]
+            {
+                (chkAutoAccept, "自动接受对局"),
+                (chkSkipHonor, "自动跳过点赞界面"),
+                (chkSkipEndOfGameStats, "自动跳过结算统计界面"),
+            }
+        )
+        {
+            check.Text = "";
+            check.AccessibleName = name;
+        }
+
+        SettingsCard(
+            general,
+            "对局自动化",
+            new SettingRow("自动接受对局", null, acceptDelay, chkAutoAccept),
+            new SettingRow("自动跳过点赞界面", null, chkSkipHonor),
+            new SettingRow("自动跳过结算统计界面", null, chkSkipEndOfGameStats)
+        );
     }
 
     private void ConfigureAssistantSetting(FlowLayoutPanel general)
     {
         var assistant = new CheckBox
         {
-            Text = "选人时自动显示侧边助手",
+            AccessibleName = "选人时显示选人助手",
             Checked = _appConfig?.EnableChampionSelectAssistant ?? true,
         };
         assistant.CheckedChanged += (_, _) =>
@@ -133,12 +165,11 @@ public partial class FormMain
         SettingsCard(
             general,
             "选人助手",
-            assistant,
-            new Label
-            {
-                Text =
-                    "默认贴靠客户端左侧显示英雄推荐，空间不足时自动调整；可固定位置或收起，离开选人后自动隐藏。符文仅在点击“应用符文”时修改。",
-            }
+            new SettingRow(
+                "选人时显示选人助手",
+                "贴靠客户端显示英雄推荐，可从客户端旁的标签开关；符文仅在点击「应用方案」时修改。",
+                assistant
+            )
         );
     }
 
@@ -146,7 +177,7 @@ public partial class FormMain
     {
         var page = new TabPage("对局速览");
         tabControl1.TabPages.Insert(tabControl1.TabPages.IndexOf(tabPage4) + 1, page);
-        var layout = SettingsPage(page, "对局速览", "在加载界面和游戏中查看十位玩家的段位、战绩和英雄推荐。");
+        var layout = SettingsPage(page, "对局速览");
         ConfigureOverlaySettings(layout);
     }
 
@@ -154,13 +185,13 @@ public partial class FormMain
     {
         var overlay = new CheckBox
         {
-            Text = "启用加载界面 / 游戏内十人速览",
+            AccessibleName = "启用对局速览",
             Checked = _appConfig?.EnableLoadingOverlay ?? true,
         };
         var overlayAuto = new CheckBox
         {
             Name = "AutoShowLoadingOverlay",
-            Text = "进入加载界面后自动展示",
+            AccessibleName = "进入加载界面后自动展示",
             Checked = _appConfig?.AutoShowLoadingOverlay ?? true,
             Enabled = overlay.Checked,
         };
@@ -175,17 +206,17 @@ public partial class FormMain
         {
             Name = "LoadingOverlayBackend",
             DropDownStyle = ComboBoxStyle.DropDownList,
-            Width = 240,
+            Width = 220,
         };
         overlayBackend.Items.AddRange(new object[] { "桌面窗口（窗口 / 无边框）", "Game Bar（全屏验证版）" });
         overlayBackend.SelectedIndex = _appConfig?.LoadingOverlayBackend == "GameBar" ? 1 : 0;
-        var gameBarStatus = new Label
-        {
-            Text = _loadingOverlay?.GameBarStatus ?? "",
-            Visible = overlayBackend.SelectedIndex == 1,
-        };
+        var gameBarStatus = new Label { Text = _loadingOverlay?.GameBarStatus ?? "" };
         TrackGameBarSettingsStatus(gameBarStatus);
-        var (gameBarHelp, desktopHelp) = BindOverlayBackendHelp(overlayBackend, overlayPreview, gameBarStatus);
+        var enableRow = new SettingRow("启用对局速览", "在加载界面和游戏中查看十位玩家的段位、战绩和英雄推荐", overlay);
+        var backendRow = new SettingRow("显示方式", null, overlayBackend);
+        var autoRow = new SettingRow("进入加载界面后自动展示", null, overlayAuto);
+        var previewRow = new SettingRow("测试显示", "不需要进入对局，检查桌面窗口是否正常", overlayPreview);
+        BindOverlayBackendHelp(overlayBackend, backendRow, previewRow, gameBarStatus);
         void SaveOverlay()
         {
             if (_appConfig == null)
@@ -196,44 +227,44 @@ public partial class FormMain
             _appConfig.EnableLoadingOverlay = overlay.Checked;
             _appConfig.AutoShowLoadingOverlay = overlayAuto.Checked;
             _appConfig.LoadingOverlayBackend = overlayBackend.SelectedIndex == 1 ? "GameBar" : "Desktop";
-            overlayBackend.Enabled = overlay.Checked;
             SaveAppConfig();
             _loadingOverlay?.RefreshDisplaySettings();
-            overlayAuto.Enabled = overlayPreview.Enabled = overlay.Checked;
+        }
+
+        // Options under a disabled overlay are hidden rather than greyed out.
+        void ShowEnabledOptions()
+        {
+            overlayBackend.Enabled = overlayAuto.Enabled = overlayPreview.Enabled = overlay.Checked;
+            backendRow.Visible = autoRow.Visible = overlay.Checked;
+            previewRow.Visible = overlay.Checked && overlayBackend.SelectedIndex == 0;
         }
         overlay.CheckedChanged += (_, _) => SaveOverlay();
+        overlay.CheckedChanged += (_, _) => ShowEnabledOptions();
         overlayAuto.CheckedChanged += (_, _) => SaveOverlay();
         overlayBackend.SelectedIndexChanged += (_, _) => SaveOverlay();
-        overlayBackend.Enabled = overlay.Checked;
-        SettingsCard(
-            general,
-            "显示设置",
-            overlay,
-            overlayBackend,
-            overlayAuto,
-            overlayPreview,
-            gameBarStatus,
-            gameBarHelp,
-            desktopHelp
-        );
+        overlayBackend.SelectedIndexChanged += (_, _) => ShowEnabledOptions();
+        ShowEnabledOptions();
+        SettingsCard(general, "显示设置", enableRow, backendRow, autoRow, previewRow);
     }
 
-    // Only the selected backend's instructions, status and preview are shown.
-    private static (Label GameBar, Label Desktop) BindOverlayBackendHelp(
+    // Only the selected backend's instructions and status are shown under the display choice.
+    private static void BindOverlayBackendHelp(
         ComboBox backend,
-        Button preview,
+        SettingRow backendRow,
+        SettingRow previewRow,
         Label gameBarStatus
     )
     {
         var gameBarHelp = new Label
         {
             Text =
-                "按 Win＋G，从小组件列表打开「League 对局速览」。需要保留在游戏上方时，点击组件右上角图钉；关闭后可从 Win＋G 重新打开。保持 League 主程序运行以同步对局数据。",
+                "按 Win＋G，从小组件列表打开「League 对局速览」；点击组件右上角图钉可保留在游戏上方。保持 League 主程序运行以同步对局数据。",
         };
-        var desktopHelp = new Label
-        {
-            Text = "支持窗口 / 无边框模式，检测到独占全屏时暂停弹窗。「测试桌面显示」仅检查桌面窗口。",
-        };
+        var desktopHelp = new Label { Text = "支持窗口 / 无边框模式，检测到独占全屏时暂停弹窗。" };
+        backendRow.AddNote(desktopHelp);
+        backendRow.AddNote(gameBarHelp);
+        backendRow.AddNote(gameBarStatus);
+        var preview = previewRow.Controls.OfType<FlowLayoutPanel>().Last().Controls[0];
         void Show()
         {
             bool gameBar = backend.SelectedIndex == 1;
@@ -242,7 +273,6 @@ public partial class FormMain
         }
         backend.SelectedIndexChanged += (_, _) => Show();
         Show();
-        return (gameBarHelp, desktopHelp);
     }
 
     private void TrackGameBarSettingsStatus(Label gameBarStatus)
@@ -261,21 +291,38 @@ public partial class FormMain
 
     private void ConfigureClientMaintenanceSettings(FlowLayoutPanel general)
     {
-        lkbPreliminary.Text = "配置预选英雄 →";
+        lkbPreliminary.Text = "配置预选英雄 ›";
+        foreach (
+            var (check, name) in new[]
+            {
+                (chkNormal, "匹配"),
+                (chkRanked, "排位"),
+                (chkAram, "大乱斗"),
+                (chkNexus, "海克斯"),
+            }
+        )
+        {
+            check.Text = name;
+        }
+
         SettingsCard(
             general,
             "英雄预选",
-            new Label { Text = "分路信息来自英雄联盟攻略中心，可按模式分别启用。" },
-            lkbPreliminary,
-            chkNormal,
-            chkRanked,
-            chkAram,
-            chkNexus
+            new SettingRow("预选英雄", "分路信息来自英雄联盟攻略中心", lkbPreliminary),
+            new SettingRow("按模式启用", null, chkNormal, chkRanked, chkAram, chkNexus)
         );
-        label6.Text = "大厅、选人或读秒界面卡顿时，可尝试重启客户端界面。";
-        label7.Text = "退出游戏后，清理仍占用资源的客户端进程。";
-        SettingsCard(general, "客户端维护", label6, btnRestartUx, label7, btnCloseClients);
-        SettingsCard(general, "关于与交流", label4, lk_QQGroup, label5, lk_GitPro);
+        SettingsCard(
+            general,
+            "客户端维护",
+            new SettingRow("重启客户端界面", "大厅、选人或读秒界面卡顿时使用，无需重新登录", btnRestartUx),
+            new SettingRow("退出残留客户端", "退出游戏后清理仍占用资源的客户端进程", btnCloseClients)
+        );
+        SettingsCard(
+            general,
+            "关于与交流",
+            new SettingRow(label4.Text, null, lk_QQGroup),
+            new SettingRow(label5.Text, null, lk_GitPro)
+        );
         groupBox1.Dispose();
         groupBox2.Dispose();
         groupBox3.Dispose();
@@ -283,10 +330,10 @@ public partial class FormMain
 
     private void ConfigureMessageSettings()
     {
-        var messages = SettingsPage(tabPage5, "消息发送", "选择发送内容，并配置显示方式。实际发送仍由快捷键触发。");
+        var messages = SettingsPage(tabPage5, "消息发送");
         label2.Text = "⚠ 游戏内快捷键需要以管理员身份运行本程序，否则游戏不会响应。";
         label3.Text =
-            "自定义内容每行一条，使用相同快捷键发送。大乱斗梯队消息发到当前游戏聊天频道。\n游戏内发送前请关闭聊天输入框和游戏菜单，按快捷键后松开 Ctrl，并保持游戏在前台。";
+            "自定义内容每行一条，使用相同快捷键发送。游戏内发送前请关闭聊天输入框和游戏菜单，按快捷键后松开 Ctrl。";
         SettingsCard(
             messages,
             "发送内容",
@@ -300,7 +347,16 @@ public partial class FormMain
         // SettingsCard applies the muted note color; the admin requirement must stand out.
         label2.ForeColor = Color.FromArgb(178, 92, 20);
         label2.Font = new Font(tabControl1.Font, FontStyle.Bold);
-        SettingsCard(messages, "战绩显示", chkHideSelf, chkUseChampionName);
+        chkHideSelf.Text = "";
+        chkHideSelf.AccessibleName = "发送战绩时隐藏自己";
+        chkUseChampionName.Text = "";
+        chkUseChampionName.AccessibleName = "发送时使用英雄名称";
+        SettingsCard(
+            messages,
+            "战绩显示",
+            new SettingRow("发送战绩时隐藏自己", null, chkHideSelf),
+            new SettingRow("发送时使用英雄名称", "可避免玩家名称被屏蔽", chkUseChampionName)
+        );
         ConfigureVoiceSettings(messages);
         ConfigureMessageDiagnostics(messages);
     }
@@ -354,7 +410,7 @@ public partial class FormMain
 
     private void ConfigureMessageDiagnostics(FlowLayoutPanel messages)
     {
-        var logButton = new Button { Text = "打开快捷发送日志", AutoSize = true };
+        var logButton = new Button { Text = "打开日志" };
         logButton.Click += (_, _) =>
         {
             try
@@ -374,17 +430,12 @@ public partial class FormMain
                 Services.ChatSendDiagnostics.Shared.Report("log-error", "无法打开日志文件，请检查本地文件权限。");
             }
         };
-        SettingsCard(
-            messages,
-            "快捷发送状态",
-            new Controls.ChatSendStatusLabel(),
+        var row = new SettingRow("最近一次发送", null, logButton);
+        row.AddNote(new ChatSendStatusLabel());
+        SettingsCard(messages, "快捷发送状态", row);
+        _settingsTips.SetToolTip(
             logButton,
-            new Label
-            {
-                Text =
-                    "日志记录触发、数据读取和输入结果，不记录聊天正文。路径："
-                    + Services.ChatSendDiagnostics.Shared.LogPath,
-            }
+            "记录触发、数据读取和输入结果，不记录聊天正文。\n" + Services.ChatSendDiagnostics.Shared.LogPath
         );
     }
 
@@ -402,7 +453,7 @@ public partial class FormMain
                 var group = page.Controls.OfType<GroupBox>().First();
                 var launcher = group.Controls[0];
                 group.Controls.Remove(launcher);
-                var layout = SettingsPage(page, "客户端目录", "管理英雄联盟安装路径，用于启动客户端和检测连接。");
+                var layout = SettingsPage(page, "客户端目录");
                 launcher.Dock = DockStyle.None;
                 SettingsCard(layout, "英雄联盟安装目录", launcher);
                 group.Dispose();
@@ -416,7 +467,7 @@ public partial class FormMain
                     original.Controls.Remove(child);
                 }
 
-                var layout = SettingsPage(page, "数据缓存", "复用本地统计数据，减少重复请求与加载等待。");
+                var layout = SettingsPage(page, "数据缓存");
                 SettingsCard(layout, "arammeta · 海克斯大乱斗", children.Take(3).ToArray());
                 SettingsCard(layout, "aramonly · 普通大乱斗平衡", children.Skip(3).Take(3).ToArray());
                 SettingsCard(layout, "CommunityDragon · 阵容分析", children.Skip(6).Take(3).ToArray());
@@ -426,7 +477,7 @@ public partial class FormMain
         }
     }
 
-    private FlowLayoutPanel SettingsPage(TabPage page, string title, string description)
+    private FlowLayoutPanel SettingsPage(TabPage page, string title)
     {
         page.Controls.Clear();
         page.Padding = Padding.Empty;
@@ -441,22 +492,14 @@ public partial class FormMain
             Padding = new Padding(24, 20, 24, 20),
         };
         page.Controls.Add(flow);
-        var heading = new Label
-        {
-            Text = title,
-            AutoSize = true,
-            Font = new Font(tabControl1.Font.FontFamily, 17, FontStyle.Bold),
-            ForeColor = Color.FromArgb(35, 58, 76),
-            Margin = new Padding(0, 0, 0, 8),
-        };
-        flow.Controls.Add(heading);
         flow.Controls.Add(
             new Label
             {
-                Text = description,
+                Text = title,
                 AutoSize = true,
-                ForeColor = Color.FromArgb(112, 129, 145),
-                Margin = new Padding(0, 0, 0, 22),
+                Font = new Font(tabControl1.Font.FontFamily, 17, FontStyle.Bold),
+                ForeColor = Color.FromArgb(35, 58, 76),
+                Margin = new Padding(0, 0, 0, 18),
             }
         );
         flow.SizeChanged += (_, _) => ResizeSettings(flow);
@@ -465,12 +508,13 @@ public partial class FormMain
 
     private void SettingsCard(FlowLayoutPanel parent, string title, params Control[] controls)
     {
+        bool rows = controls.Length > 0 && controls.All(control => control is SettingRow);
         var card = new FlowLayoutPanel
         {
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             AutoSize = true,
-            Padding = new Padding(20, 16, 20, 16),
+            Padding = new Padding(20, 16, 20, rows ? 8 : 16),
             BackColor = Color.White,
             Margin = new Padding(0, 0, 0, 14),
         };
@@ -481,51 +525,23 @@ public partial class FormMain
                 AutoSize = true,
                 Font = new Font(tabControl1.Font, FontStyle.Bold),
                 ForeColor = Color.FromArgb(39, 62, 79),
-                Margin = new Padding(0, 0, 0, 14),
+                Margin = new Padding(0, 0, 0, rows ? 4 : 14),
             }
         );
         foreach (var control in controls)
         {
-            control.Dock = DockStyle.None;
-            control.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            control.Margin = new Padding(0, 0, 0, 10);
-            control.ForeColor = Color.FromArgb(59, 81, 99);
-            if (control is CheckBox check)
+            if (control is not SettingRow)
             {
-                check.AutoSize = true;
-            }
-
-            if (control is RadioButton radio)
-            {
-                radio.AutoSize = true;
-            }
-
-            if (control is Label label)
-            {
-                label.AutoSize = true;
-                if (label is not LinkLabel)
+                SettingRow.Style(control);
+                control.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+                control.Margin = new Padding(0, 0, 0, 10);
+                if (control is TextBox box && box.Multiline)
                 {
-                    label.ForeColor = Color.FromArgb(105, 122, 137);
+                    box.Height = 132;
+                    box.BorderStyle = BorderStyle.FixedSingle;
                 }
             }
-            if (control is LinkLabel link)
-            {
-                link.LinkColor = League.Controls.AccentColors.Accent;
-                link.LinkBehavior = LinkBehavior.HoverUnderline;
-            }
-            if (control is Button button)
-            {
-                button.AutoSize = false;
-                button.Size = new Size(136, 34);
-                button.FlatStyle = FlatStyle.Flat;
-                button.FlatAppearance.BorderColor = Color.FromArgb(207, 220, 230);
-                button.BackColor = Color.FromArgb(247, 250, 252);
-            }
-            if (control is TextBox box && box.Multiline)
-            {
-                box.Height = 132;
-                box.BorderStyle = BorderStyle.FixedSingle;
-            }
+
             card.Controls.Add(control);
         }
         parent.Controls.Add(card);
@@ -534,7 +550,7 @@ public partial class FormMain
 
     private void ResizeSettings(FlowLayoutPanel flow)
     {
-        int width = Math.Max(300, Math.Min(940, flow.ClientSize.Width - 64));
+        int width = Math.Max(300, Math.Min(SettingsMaxWidth, flow.ClientSize.Width - 64));
         foreach (var label in flow.Controls.OfType<Label>())
         {
             label.MaximumSize = new Size(width, 0);
@@ -547,11 +563,15 @@ public partial class FormMain
             card.Width = width;
             foreach (Control control in card.Controls)
             {
-                if (control is Label or CheckBox or RadioButton)
+                if (control is SettingRow row)
+                {
+                    row.FitWidth(width - 40);
+                }
+                else if (control is Label or CheckBox or RadioButton)
                 {
                     control.MaximumSize = new Size(width - 40, 0);
                 }
-                else if (control is TextBox || control is League.Controls.LolLauncherPanel)
+                else if (control is TextBox || control is LolLauncherPanel)
                 {
                     control.Width = width - 40;
                 }
