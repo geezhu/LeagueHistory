@@ -384,7 +384,7 @@ internal static class AssistantVoiceChecks
         var footer = assistant.Controls.OfType<FlowLayoutPanel>().Single(p => p.Dock == DockStyle.Bottom);
         footer.PerformLayout();
         Check(
-            footer.Controls.Count == 4
+            footer.Controls.Count == 3
                 && footer
                     .Controls.Cast<Control>()
                     .All(c =>
@@ -392,7 +392,7 @@ internal static class AssistantVoiceChecks
                         && c.Bottom <= footer.ClientSize.Height
                         && c.Right <= footer.ClientSize.Width - footer.Padding.Right
                     ),
-            "All four footer buttons fit on one row"
+            "Guide, rune and voice buttons fit on one row; retry lives in the status bar"
         );
         using var image = new Bitmap(assistant.Width, assistant.Height);
         assistant.DrawToBitmap(image, new Rectangle(Point.Empty, image.Size));

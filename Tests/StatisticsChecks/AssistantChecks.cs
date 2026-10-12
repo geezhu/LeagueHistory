@@ -77,6 +77,7 @@ internal static class AssistantChecks
         using var assistant = (Form)Activator.CreateInstance(type, new object[] { owner })!;
         CheckFilters(assistant, type, flags);
         CheckNotices(assistant, type, flags);
+        CheckLoadFailure(assistant, type, flags);
         var schemes = CreateSchemes();
         CheckRuneHighlights(type, schemes);
         CheckRuneSelection(assistant, type, flags, schemes);
@@ -495,7 +496,7 @@ internal static class AssistantChecks
             regionFilter.Visible
             || tierFilter.Visible
             || laneFilter.Visible
-            || modeFilter.Parent!.Height != Dip(type, 44)
+            || modeFilter.Parent!.Parent!.Height != Dip(type, 44)
         )
         {
             throw new Exception("Mayhem must hide irrelevant filters and remove their row");
@@ -521,16 +522,40 @@ internal static class AssistantChecks
             type.GetMethod("Dip", BindingFlags.Static | BindingFlags.NonPublic, new[] { typeof(int) })!
                 .Invoke(null, new object[] { value })!;
 
+    private static void CheckLoadFailure(Form assistant, Type type, BindingFlags flags)
+    {
+        var reason = type.GetMethod("LoadFailureReason", BindingFlags.Static | BindingFlags.NonPublic)!;
+        string Reason(Exception error) => (string)reason.Invoke(null, new object[] { error })!;
+        if (
+            Reason(new HttpRequestException("No such host is known. (api.op.gg:443)")).Contains("api.op.gg")
+            || Reason(new NullReferenceException()) != "推荐暂时无法加载"
+            || Reason(new InvalidDataException("该英雄暂无海克斯推荐。")) != "该英雄暂无海克斯推荐。"
+        )
+        {
+            throw new Exception("Load failures show readable Chinese reasons instead of raw exception text");
+        }
+
+        // The log write in ShowLoadFailure is skipped here so checks never touch the user's log file.
+        var status = (Label)type.GetField("_status", flags)!.GetValue(assistant)!;
+        var failure = type.GetField("_failureText", flags)!;
+        status.Text = "推荐加载超时 · 点击重试";
+        failure.SetValue(assistant, status.Text);
+        status.Text = "正在加载推荐…";
+        if (failure.GetValue(assistant) != null || status.Cursor == Cursors.Hand)
+        {
+            throw new Exception("A newer status message retires the status-bar retry link");
+        }
+    }
+
     private static void CheckHideAndFit(Form assistant, Type type, BindingFlags flags)
     {
-        var fold = (Button)type.GetField("_fold", flags)!.GetValue(assistant)!;
         var toggle = (Form)type.GetField("_toggle", flags)!.GetValue(assistant)!;
         bool Open() => (bool)type.GetField("_panelOpen", flags)!.GetValue(assistant)!;
         bool wasVisible = assistant.Visible;
-        fold.PerformClick();
-        if (Open() || assistant.Visible)
+        assistant.Close();
+        if (Open() || assistant.Visible || assistant.IsDisposed)
         {
-            throw new Exception("Hide button must close the panel to its edge tab");
+            throw new Exception("Title bar close must hide the panel to its edge tab");
         }
 
         toggle

@@ -78,14 +78,38 @@ internal sealed partial class ChampionSelectAssistant
                 Margin = Padding.Empty,
             };
             host.Controls.Add(row);
-            FillMayhemAugmentRow(row, page, hero, key, token);
+            if (page.Detail == null)
+            {
+                ShowMayhemAugmentPlaceholder(row);
+            }
+            else
+            {
+                FillMayhemAugmentRow(row, page, hero, key, token);
+            }
+
             rows.Add((key, row));
         }
 
         return rows.ToArray();
     }
 
-    // The overview starts with the site's three picks; the hero detail pool refills each row later.
+    // A tile-high placeholder keeps the row height stable until the full hero pool arrives,
+    // instead of drawing the overview's three picks and then jumping to a full row.
+    private void ShowMayhemAugmentPlaceholder(FlowLayoutPanel row)
+    {
+        row.Controls.Add(
+            new Label
+            {
+                Text = "正在读取完整海克斯…",
+                AutoSize = false,
+                Size = new Size(ContentWidth, Dip(MayhemAugmentTile + 3)),
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = Color.FromArgb(135, 162, 173),
+                Margin = Padding.Empty,
+            }
+        );
+    }
+
     private void FillMayhemAugmentRow(
         FlowLayoutPanel row,
         AramMetaPage page,
@@ -489,6 +513,15 @@ internal sealed partial class ChampionSelectAssistant
                 foreach (Control child in panel.Controls.Cast<Control>().ToArray())
                 {
                     child.Dispose();
+                }
+            }
+
+            // Without the hero pool, fall back to the overview's own picks rather than empty rows.
+            foreach (var (key, row) in state.Augments)
+            {
+                if (!row.IsDisposed)
+                {
+                    FillMayhemAugmentRow(row, state.Page, state.Hero, key, state.Token);
                 }
             }
 
