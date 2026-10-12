@@ -41,6 +41,9 @@ jobs:
             dotnet $checks $flag
             if ($LASTEXITCODE -ne 0) { throw "Voice check failed: $flag" }
           }
+      - name: Verify shutdown state transitions on Windows PowerShell 5.1
+        shell: powershell
+        run: ./Tests/ShutdownScriptChecks.ps1
       - name: Save analysis reports
         if: always()
         uses: actions/upload-artifact@v4

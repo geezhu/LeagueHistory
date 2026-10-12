@@ -48,4 +48,42 @@ $helper=[regex]::Match([IO.File]::ReadAllText($ScriptPath),"(?s)Add-Type -TypeDe
 Assert ($helper.Length -gt 0) 'Loopback probe helper is present'
 Add-Type -TypeDefinition $helper
 Assert ([LeagueShutdown.Loopback]::Phase(0,'unused') -eq '') 'Loopback probe compiles and rejects an invalid port without requests'
-'PASS: PowerShell phase classification, new-game interruption, reconnect grace, countdown, zero delay, midnight and invalid plans. No shutdown executed.'
+$stateRoot=Join-Path ([IO.Path]::GetTempPath()) ('League-shutdown-state-'+[guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $stateRoot | Out-Null
+try {
+    $statePath=Join-Path $stateRoot 'status.json'
+    $script:occurrenceKey='2026-09-17T23:00:00'
+    $script:lastLogged=''
+    $samples=@(
+        @{ Observation=$playing; Now=$clock; Expected='WaitingGame' },
+        @{ Observation=$playing; Now=$clock.AddSeconds(5); Expected='WaitingGame' },
+        @{ Observation=$ended; Now=$clock.AddSeconds(15); Expected='Confirming' },
+        @{ Observation=$ended; Now=$clock.AddSeconds(25); Expected='Countdown' },
+        @{ Observation=$ended; Now=$clock.AddSeconds(55); Expected='Ready' }
+    )
+    $fileGate=New-ShutdownGate
+    foreach ($sample in $samples) {
+        $decision=Get-ShutdownDecision $fileGate $sample.Observation $sample.Now 30
+        Assert ($decision.State -eq $sample.Expected) ('Simulated worker reaches '+$sample.Expected)
+        Write-ShutdownState $decision.State $decision.Message $stateRoot
+        $saved=Read-LocalJson $statePath
+        Assert ($saved.State -eq $sample.Expected) ('Status file advances to '+$sample.Expected)
+        Assert ($saved.Occurrence -eq $script:occurrenceKey) 'The active occurrence is retained on repeated replacement'
+        Assert (-not (Test-Path -LiteralPath ($statePath+'.tmp'))) 'Atomic replacement consumes the temporary file'
+    }
+    $lines=@(Get-Content -LiteralPath (Join-Path $stateRoot 'shutdown.log') -Encoding UTF8)
+    Assert ($lines.Count -eq 4) 'Repeated waiting samples refresh the status without duplicating transition logs'
+    Assert ($lines[-1] -like '*[[]Ready]*') 'The final simulated shutdown decision is recorded'
+    Remove-Item -LiteralPath $statePath -Force
+    New-Item -ItemType Directory -Path $statePath | Out-Null
+    Write-ShutdownFailure ([IO.IOException]::new('fixture failure')) $stateRoot
+    $lastLine=Get-Content -LiteralPath (Join-Path $stateRoot 'shutdown.log') -Tail 1 -Encoding UTF8
+    Assert ($lastLine -like '*[[]Failed]*IOException') 'A failed status replacement still records the underlying exception in the fallback log'
+} finally {
+    foreach ($name in @('status.json','status.json.tmp','shutdown.log')) {
+        $path=Join-Path $stateRoot $name
+        if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
+    }
+    Remove-Item -LiteralPath $stateRoot -Force
+}
+'PASS: PowerShell phase classification, atomic repeated status writes, new-game interruption, reconnect grace, countdown, zero delay, midnight and invalid plans. No shutdown executed.'

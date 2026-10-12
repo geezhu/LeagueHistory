@@ -127,16 +127,35 @@ function Read-LocalJson([string]$Path) {
     if ((Get-Item -LiteralPath $Path).Length -gt 16384) { throw 'Invalid configuration size' }
     return Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
 }
-function Write-ShutdownState([string]$State,[string]$Message) {
+function Replace-ShutdownStateFile([string]$Temporary,[string]$Path) {
+    if (Test-Path -LiteralPath $Path) {
+        # Windows PowerShell 5.1 converts $null to an empty backup path; use an explicit null string.
+        [IO.File]::Replace($Temporary,$Path,[System.Management.Automation.Language.NullString]::Value)
+    }
+    else {
+        [IO.File]::Move($Temporary,$Path)
+    }
+}
+function Write-ShutdownState([string]$State,[string]$Message,[string]$Directory=$PSScriptRoot) {
     $data=@{ State=$State; Message=$Message; Occurrence=$script:occurrenceKey; UpdatedAt=[datetimeoffset]::UtcNow.ToString('o') }
-    $path=Join-Path $PSScriptRoot 'status.json'; $temporary=$path+'.tmp'
+    $path=Join-Path $Directory 'status.json'; $temporary=$path+'.tmp'
     [IO.File]::WriteAllText($temporary,($data | ConvertTo-Json -Compress),[Text.UTF8Encoding]::new($false))
-    if (Test-Path -LiteralPath $path) { [IO.File]::Replace($temporary,$path,$null) }
-    else { [IO.File]::Move($temporary,$path) }
+    Replace-ShutdownStateFile $temporary $path
     if ($script:lastLogged -ne $State) {
-        Add-Content -LiteralPath (Join-Path $PSScriptRoot 'shutdown.log') -Encoding UTF8 -Value ((Get-Date -Format 'yyyy-MM-dd HH:mm:ss')+" [$State] $Message")
+        Add-Content -LiteralPath (Join-Path $Directory 'shutdown.log') -Encoding UTF8 -Value ((Get-Date -Format 'yyyy-MM-dd HH:mm:ss')+" [$State] $Message")
         $script:lastLogged=$State
     }
+}
+function Write-ShutdownFailure([Exception]$Failure,[string]$Directory=$PSScriptRoot) {
+    $message='状态检测或文件操作失败，已停止本次关机：'+$Failure.GetBaseException().GetType().Name
+    try { Write-ShutdownState 'Failed' $message $Directory }
+    catch {
+        # A broken state file must not hide the failure from the durable log or Task Scheduler.
+        try {
+            Add-Content -LiteralPath (Join-Path $Directory 'shutdown.log') -Encoding UTF8 -Value ((Get-Date -Format 'yyyy-MM-dd HH:mm:ss')+' [Failed] '+$message)
+        } catch { } # Stderr and a nonzero exit code remain if even the log directory is unavailable.
+    }
+    [Console]::Error.WriteLine($message)
 }
 function Test-RunCancelled($Initial) {
     if ($script:notificationCancelled) { return $true }
@@ -208,7 +227,8 @@ try {
     }
 } catch {
     # No exception path requests shutdown, and no API credentials are included in diagnostics.
-    try { Write-ShutdownState 'Failed' ('状态检测或文件操作失败，已停止本次关机：'+$_.Exception.GetType().Name) } catch { }
+    Write-ShutdownFailure $_.Exception
+    exit 1
 } finally {
     if ($null -ne $script:notice) { $script:notice.Visible=$false; $script:notice.Dispose() }
     if ($ownsMutex) { $mutex.ReleaseMutex() }
