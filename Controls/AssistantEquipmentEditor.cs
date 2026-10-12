@@ -123,10 +123,10 @@ internal sealed class AssistantEquipmentEditor : Form
             Text = "应用出装",
             Dock = DockStyle.Right,
             Width = 110,
-            BackColor = Color.FromArgb(0, 126, 139),
+            BackColor = AccentColors.Fill,
             FlatStyle = FlatStyle.Flat,
         };
-        _save.FlatAppearance.BorderColor = Color.FromArgb(0, 126, 139);
+        _save.FlatAppearance.BorderColor = AccentColors.Fill;
         _save.FlatAppearance.MouseOverBackColor = Color.FromArgb(0, 145, 158);
         _save.FlatAppearance.MouseDownBackColor = Color.FromArgb(0, 105, 118);
         _feedback = new Label

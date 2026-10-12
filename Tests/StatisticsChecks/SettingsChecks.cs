@@ -104,11 +104,50 @@ internal static class SettingsChecks
             throw new Exception("Automatic loading overlay defaults on");
         }
 
-        if (!All(tabs).OfType<Button>().Single(c => c.Name == "PreviewLoadingOverlay").Enabled)
+        var preview = All(tabs).OfType<Button>().Single(c => c.Name == "PreviewLoadingOverlay");
+        if (!preview.Enabled)
         {
             throw new Exception("Desktop overlay preview is available without a match");
         }
+
+        var page = tabs.TabPages.Cast<TabPage>().Single(p => p.Text == "对局速览");
+        var general = tabs.TabPages.Cast<TabPage>().Single(p => p.Text == "功能辅助");
+        if (!All(page).Contains(preview) || All(general).Any(c => c.Name == "LoadingOverlayBackend"))
+        {
+            throw new Exception("Loading overlay settings live on their own page");
+        }
+
+        if (
+            All(tabs).OfType<TableLayoutPanel>().SingleOrDefault(c => c.Name == "ShortcutTable") is not { } table
+            || table.RowCount != 6
+        )
+        {
+            throw new Exception("Message shortcuts are listed in a table");
+        }
     }
+
+    private static void CheckOverlayHelp(TabPage page)
+    {
+        var backend = All(page).OfType<ComboBox>().Single(c => c.Name == "LoadingOverlayBackend");
+        var gameBarHelp = All(page).OfType<Label>().Single(c => c.Text.StartsWith("按 Win＋G"));
+        var preview = All(page).OfType<Button>().Single(c => c.Name == "PreviewLoadingOverlay");
+        int selected = backend.SelectedIndex;
+        foreach (int index in new[] { 0, 1 })
+        {
+            backend.SelectedIndex = index;
+            Application.DoEvents();
+            bool gameBar = index == 1;
+            if (gameBarHelp.Visible != gameBar || preview.Visible == gameBar)
+            {
+                throw new Exception("Overlay instructions and desktop preview follow the selected backend");
+            }
+        }
+
+        backend.SelectedIndex = selected;
+    }
+
+    private static void Select(TabControl tabs, string title) =>
+        tabs.SelectedTab = tabs.TabPages.Cast<TabPage>().Single(p => p.Text == title);
 
     private static void AutoAcceptControls(TabControl tabs, Control original)
     {
@@ -149,7 +188,11 @@ internal static class SettingsChecks
         Application.DoEvents();
         Save(preview, "settings-shutdown-narrow");
         preview.ClientSize = new Size(1050, 800);
-        tabs.SelectedIndex = 1;
+        Select(tabs, "对局速览");
+        Application.DoEvents();
+        CheckOverlayHelp(tabs.SelectedTab!);
+        Save(preview, "settings-overlay");
+        Select(tabs, "消息发送");
         Application.DoEvents();
         Save(preview, "settings-messages");
         var voice = All(tabs).Single(c => c.Name == "VoiceMicrophone");
@@ -165,11 +208,11 @@ internal static class SettingsChecks
         Application.DoEvents();
         Save(preview, "settings-voice-narrow");
         preview.ClientSize = new Size(1050, 800);
-        tabs.SelectedIndex = 2;
+        Select(tabs, "客户端目录");
         Application.DoEvents();
         Save(preview, "settings-launcher");
         preview.ClientSize = new Size(650, 720);
-        tabs.SelectedIndex = 3;
+        Select(tabs, "数据缓存");
         Application.DoEvents();
         Save(preview, "settings-cache-narrow");
         WaitForShutdownRead(shutdown);
