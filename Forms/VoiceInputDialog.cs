@@ -116,7 +116,7 @@ internal sealed class VoiceInputDialog : Form
             Padding = new Padding(0, 4, 0, 0),
         };
         actions.Controls.AddRange(new Control[] { _record, _send, _clear, _close });
-        _send.BackColor = Color.FromArgb(0, 126, 139);
+        _send.BackColor = League.Controls.AccentColors.Fill;
         layout.Controls.Add(actions, 0, 3);
         Controls.Add(layout);
     }

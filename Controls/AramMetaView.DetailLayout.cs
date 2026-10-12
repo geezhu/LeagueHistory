@@ -174,7 +174,7 @@ internal sealed partial class AramMetaView
     {
         for (int i = 0; i < tabs.Controls.Count; i++)
         {
-            tabs.Controls[i].BackColor = i == _detailTab ? Color.FromArgb(0, 153, 163) : Color.White;
+            tabs.Controls[i].BackColor = i == _detailTab ? AccentColors.Fill : Color.White;
             tabs.Controls[i].ForeColor = i == _detailTab ? Color.White : Color.FromArgb(60, 82, 99);
         }
     }

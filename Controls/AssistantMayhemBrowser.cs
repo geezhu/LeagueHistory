@@ -433,7 +433,7 @@ internal sealed class AssistantMayhemBrowser : IDisposable
         _count.Text = "加载中…";
         for (int i = 0; i < 3; i++)
         {
-            _tabButtons[i].BackColor = i == (int)_tab ? Color.FromArgb(0, 126, 139) : Color.FromArgb(16, 45, 57);
+            _tabButtons[i].BackColor = i == (int)_tab ? AccentColors.Fill : Color.FromArgb(16, 45, 57);
         }
 
         try

@@ -6,6 +6,7 @@ public partial class FormMain
     {
         ConfigureSettingsTabs();
         ConfigureGeneralSettings();
+        ConfigureOverlayPage();
         ConfigureMessageSettings();
         MoveAdditionalSettings();
     }
@@ -26,12 +27,12 @@ public partial class FormMain
                 tabControl1.TabPages[e.Index].Text,
                 tabControl1.Font,
                 e.Bounds,
-                selected ? Color.FromArgb(0, 143, 153) : Color.FromArgb(95, 113, 130),
+                selected ? League.Controls.AccentColors.Accent : Color.FromArgb(95, 113, 130),
                 TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter
             );
             if (selected)
             {
-                using var line = new SolidBrush(Color.FromArgb(0, 153, 163));
+                using var line = new SolidBrush(League.Controls.AccentColors.Accent);
                 e.Graphics.FillRectangle(line, e.Bounds.X + 18, e.Bounds.Bottom - 3, e.Bounds.Width - 36, 3);
             }
         };
@@ -48,7 +49,6 @@ public partial class FormMain
         ConfigureAutomationSettings(general);
         ConfigureShutdownSettings(general);
         ConfigureAssistantSetting(general);
-        ConfigureOverlaySettings(general);
         ConfigureClientMaintenanceSettings(general);
     }
 
@@ -142,6 +142,14 @@ public partial class FormMain
         );
     }
 
+    private void ConfigureOverlayPage()
+    {
+        var page = new TabPage("对局速览");
+        tabControl1.TabPages.Insert(tabControl1.TabPages.IndexOf(tabPage4) + 1, page);
+        var layout = SettingsPage(page, "对局速览", "在加载界面和游戏中查看十位玩家的段位、战绩和英雄推荐。");
+        ConfigureOverlaySettings(layout);
+    }
+
     private void ConfigureOverlaySettings(FlowLayoutPanel general)
     {
         var overlay = new CheckBox
@@ -177,6 +185,7 @@ public partial class FormMain
             Visible = overlayBackend.SelectedIndex == 1,
         };
         TrackGameBarSettingsStatus(gameBarStatus);
+        var (gameBarHelp, desktopHelp) = BindOverlayBackendHelp(overlayBackend, overlayPreview, gameBarStatus);
         void SaveOverlay()
         {
             if (_appConfig == null)
@@ -187,7 +196,6 @@ public partial class FormMain
             _appConfig.EnableLoadingOverlay = overlay.Checked;
             _appConfig.AutoShowLoadingOverlay = overlayAuto.Checked;
             _appConfig.LoadingOverlayBackend = overlayBackend.SelectedIndex == 1 ? "GameBar" : "Desktop";
-            gameBarStatus.Visible = overlayBackend.SelectedIndex == 1;
             overlayBackend.Enabled = overlay.Checked;
             SaveAppConfig();
             _loadingOverlay?.RefreshDisplaySettings();
@@ -199,18 +207,42 @@ public partial class FormMain
         overlayBackend.Enabled = overlay.Checked;
         SettingsCard(
             general,
-            "对局速览",
+            "显示设置",
             overlay,
             overlayBackend,
             overlayAuto,
             overlayPreview,
             gameBarStatus,
-            new Label
-            {
-                Text =
-                    "Game Bar：按 Win＋G，从小组件列表打开「League 对局速览」。需要保留在游戏上方时，点击组件右上角图钉；关闭后可从 Win＋G 重新打开。保持 League 主程序运行以同步对局数据。\n桌面窗口：支持窗口 / 无边框模式，检测到独占全屏时暂停弹窗。测试桌面显示仅检查桌面窗口。",
-            }
+            gameBarHelp,
+            desktopHelp
         );
+    }
+
+    // Only the selected backend's instructions, status and preview are shown.
+    private static (Label GameBar, Label Desktop) BindOverlayBackendHelp(
+        ComboBox backend,
+        Button preview,
+        Label gameBarStatus
+    )
+    {
+        var gameBarHelp = new Label
+        {
+            Text =
+                "按 Win＋G，从小组件列表打开「League 对局速览」。需要保留在游戏上方时，点击组件右上角图钉；关闭后可从 Win＋G 重新打开。保持 League 主程序运行以同步对局数据。",
+        };
+        var desktopHelp = new Label
+        {
+            Text = "支持窗口 / 无边框模式，检测到独占全屏时暂停弹窗。「测试桌面显示」仅检查桌面窗口。",
+        };
+        void Show()
+        {
+            bool gameBar = backend.SelectedIndex == 1;
+            gameBarStatus.Visible = gameBarHelp.Visible = gameBar;
+            desktopHelp.Visible = preview.Visible = !gameBar;
+        }
+        backend.SelectedIndexChanged += (_, _) => Show();
+        Show();
+        return (gameBarHelp, desktopHelp);
     }
 
     private void TrackGameBarSettingsStatus(Label gameBarStatus)
@@ -252,14 +284,72 @@ public partial class FormMain
     private void ConfigureMessageSettings()
     {
         var messages = SettingsPage(tabPage5, "消息发送", "选择发送内容，并配置显示方式。实际发送仍由快捷键触发。");
-        label2.Text =
-            "【游戏内快捷键需要管理员权限】请以管理员身份运行本程序。\n选人窗口：Ctrl + F7 发送我方战绩。游戏内：F9 发送我方战绩，F11 发送双方战绩。\n大乱斗 / 海克斯大乱斗：Ctrl + F9 发送我方梯队与胜率，Ctrl + F11 发送对方梯队与胜率（发到当前游戏聊天频道）。";
+        label2.Text = "⚠ 游戏内快捷键需要以管理员身份运行本程序，否则游戏不会响应。";
         label3.Text =
-            "自定义内容每行一条，使用相同快捷键发送。\n游戏内发送前请关闭聊天输入框和游戏菜单，按快捷键后松开 Ctrl，并保持游戏在前台。程序启动时需要允许管理员权限。";
-        SettingsCard(messages, "发送内容", rbModeMatch, rbModeCustom, label2, label3, txtCustomContent);
+            "自定义内容每行一条，使用相同快捷键发送。大乱斗梯队消息发到当前游戏聊天频道。\n游戏内发送前请关闭聊天输入框和游戏菜单，按快捷键后松开 Ctrl，并保持游戏在前台。";
+        SettingsCard(
+            messages,
+            "发送内容",
+            label2,
+            rbModeMatch,
+            rbModeCustom,
+            CreateShortcutTable(),
+            label3,
+            txtCustomContent
+        );
+        // SettingsCard applies the muted note color; the admin requirement must stand out.
+        label2.ForeColor = Color.FromArgb(178, 92, 20);
+        label2.Font = new Font(tabControl1.Font, FontStyle.Bold);
         SettingsCard(messages, "战绩显示", chkHideSelf, chkUseChampionName);
         ConfigureVoiceSettings(messages);
         ConfigureMessageDiagnostics(messages);
+    }
+
+    private TableLayoutPanel CreateShortcutTable()
+    {
+        var rows = new (string Key, string Scene, string Content)[]
+        {
+            ("快捷键", "场景", "发送内容"),
+            ("Ctrl + F7", "选人界面", "我方战绩"),
+            ("F9", "游戏内", "我方战绩"),
+            ("F11", "游戏内", "双方战绩"),
+            ("Ctrl + F9", "大乱斗 / 海克斯大乱斗", "我方梯队与胜率"),
+            ("Ctrl + F11", "大乱斗 / 海克斯大乱斗", "对方梯队与胜率"),
+        };
+        var table = new TableLayoutPanel
+        {
+            Name = "ShortcutTable",
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 3,
+            RowCount = rows.Length,
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.Single,
+            BackColor = Color.FromArgb(247, 250, 252),
+        };
+        var header = new Font(tabControl1.Font, FontStyle.Bold);
+        table.Disposed += (_, _) => header.Dispose();
+        for (int row = 0; row < rows.Length; row++)
+        {
+            string[] cells = { rows[row].Key, rows[row].Scene, rows[row].Content };
+            for (int column = 0; column < cells.Length; column++)
+            {
+                var cell = new Label
+                {
+                    Text = cells[column],
+                    AutoSize = true,
+                    Margin = new Padding(10, 6, 16, 6),
+                    ForeColor = Color.FromArgb(59, 81, 99),
+                };
+                if (row == 0 || column == 0)
+                {
+                    cell.Font = header;
+                }
+
+                table.Controls.Add(cell, column, row);
+            }
+        }
+
+        return table;
     }
 
     private void ConfigureMessageDiagnostics(FlowLayoutPanel messages)
@@ -420,7 +510,7 @@ public partial class FormMain
             }
             if (control is LinkLabel link)
             {
-                link.LinkColor = Color.FromArgb(0, 143, 153);
+                link.LinkColor = League.Controls.AccentColors.Accent;
                 link.LinkBehavior = LinkBehavior.HoverUnderline;
             }
             if (control is Button button)
