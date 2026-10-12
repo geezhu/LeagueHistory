@@ -12,11 +12,15 @@ internal sealed partial class ChampionSelectAssistant : Form
     // The process is system-DPI aware: sizes below are 96-DPI layout units scaled once for the system DPI.
     private static readonly int SystemDpi = (int)GetDpiForSystem();
     private const int LayoutWidth = 320;
-    private const int MinimumLayoutHeight = 590;
+    private const int MinimumLayoutHeight = 460;
     private const int TabWidth = 26;
-    private const int CompactToolbarHeight = 44;
-    private const int FullToolbarHeight = 74;
+    private const int ToolbarHeaderHeight = 28;
     private static int ContentWidth => Dip(282);
+
+    // Gold marks only the tier result; teal marks what can be clicked; headings stay muted.
+    private static readonly Color MutedHeading = Color.FromArgb(150, 172, 182);
+    private static readonly Color ActionText = Color.FromArgb(86, 200, 206);
+    private static readonly Color KeyResult = Color.FromArgb(208, 185, 130);
 
     private readonly HashSet<Task> _assistantWork = new();
     private Task _cleanupWork = Task.CompletedTask;
@@ -115,8 +119,10 @@ internal sealed partial class ChampionSelectAssistant : Form
         Controls.Add(toolbar);
         Controls.Add(footer);
         StyleAssistantButtons(footer);
+        StyleFooterHierarchy(guide);
         _apply.BackColor = League.Controls.AccentColors.Fill;
         BindAssistantFilters();
+        SyncFilters();
         _toggle = CreateToggleTab();
         _toggleLayer = new(_toggle);
         BindAssistantActions(guide);
@@ -129,33 +135,44 @@ internal sealed partial class ChampionSelectAssistant : Form
         _timer.Start();
     }
 
-    // Filters wrap on the left; the window action stays at the top right, away from the filters.
-    // Hiding the panel uses the title bar close button or the edge tab.
+    // Most players keep the same filters, so the toolbar is one summary line that expands into the
+    // dropdowns on click. The window action stays at the top right; hiding uses the title bar or edge tab.
     private Panel CreateAssistantToolbar()
     {
         var toolbar = new Panel
         {
             Dock = DockStyle.Top,
-            Height = Dip(FullToolbarHeight),
-            Padding = DipPadding(10, 6, 10, 4),
+            Padding = DipPadding(10, 6, 10, 6),
             BackColor = Color.FromArgb(10, 32, 43),
         };
-        var filters = new FlowLayoutPanel { Dock = DockStyle.Fill, Margin = Padding.Empty };
-        filters.Controls.AddRange(new Control[] { _mode, _region, _tier, _lane });
-        var actions = new FlowLayoutPanel
+        var header = new Panel { Dock = DockStyle.Top, Height = Dip(ToolbarHeaderHeight) };
+        _filterSummary.Dock = DockStyle.Fill;
+        _filterSummary.FlatStyle = FlatStyle.Flat;
+        _filterSummary.FlatAppearance.BorderSize = 0;
+        _filterSummary.FlatAppearance.MouseOverBackColor = Color.FromArgb(16, 45, 57);
+        _filterSummary.TextAlign = ContentAlignment.MiddleLeft;
+        _filterSummary.ForeColor = Color.FromArgb(215, 225, 226);
+        _filterSummary.Cursor = Cursors.Hand;
+        _filterSummary.Click += (_, _) =>
         {
-            Dock = DockStyle.Right,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            FlowDirection = FlowDirection.TopDown,
-            Margin = Padding.Empty,
+            _filtersExpanded = !_filtersExpanded;
+            SyncFilters();
         };
+        _tips.SetToolTip(_filterSummary, "攻略模式、统计地区、段位和分路；点击展开修改。默认跟随选人模式。");
         _pin.FlatStyle = FlatStyle.Flat;
-        _pin.Margin = DipPadding(4, 6, 0, 0);
+        _pin.Dock = DockStyle.Right;
+        _pin.Margin = Padding.Empty;
         _tips.SetToolTip(_pin, "固定后不再自动贴靠客户端，可拖动到任意位置。");
-        actions.Controls.Add(_pin);
-        toolbar.Controls.Add(filters);
-        toolbar.Controls.Add(actions);
+        header.Controls.Add(_filterSummary);
+        header.Controls.Add(_pin);
+        _filterPanel.Dock = DockStyle.Fill;
+        _filterPanel.Margin = Padding.Empty;
+        _filterPanel.Padding = DipPadding(0, 4, 0, 0);
+        _filterPanel.Visible = false;
+        _filterPanel.Controls.AddRange(new Control[] { _mode, _region, _tier, _lane });
+        toolbar.Controls.Add(_filterPanel);
+        toolbar.Controls.Add(header);
+        toolbar.Height = header.Height + toolbar.Padding.Vertical;
         _lane.Items.AddRange(new object[] { "自动分路", "上路", "打野", "中路", "下路", "辅助" });
         _lane.SelectedIndex = 0;
         return toolbar;
@@ -170,18 +187,18 @@ internal sealed partial class ChampionSelectAssistant : Form
             Padding = DipPadding(8),
             WrapContents = false,
         };
-        var guide = new Button { Text = "完整攻略" };
+        var guide = new Button { Text = "完整攻略 ›" };
         _apply.AutoSize = false;
         FitButton(guide, 28);
         FitButton(_apply, 28, "应用方案 9");
-        FitButton(_voiceButton, 28);
+        _voiceButton.Size = Dip(34, 28);
         footer.Controls.AddRange(new Control[] { guide, _apply, _voiceButton });
         foreach (Control button in footer.Controls)
         {
             button.Margin = DipPadding(2, 0, 2, 0);
         }
 
-        _tips.SetToolTip(_voiceButton, "中文录音后编辑确认，直接发送到选人聊天；也可以手动输入。");
+        _tips.SetToolTip(_voiceButton, "语音输入：中文录音后编辑确认，再发送到选人聊天；也可以手动输入。");
         _voiceButton.Click += async (_, _) => await TrackAssistantWork(ShowVoiceInputAsync());
         return (footer, guide);
     }
@@ -192,7 +209,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         _status.Dock = DockStyle.Fill;
         _status.AutoEllipsis = true;
         _rosterButton.BackColor = Color.FromArgb(16, 45, 57);
-        _rosterButton.ForeColor = Color.FromArgb(208, 185, 130);
+        _rosterButton.ForeColor = ActionText;
         _rosterButton.FlatAppearance.BorderColor = Color.FromArgb(49, 113, 126);
         _rosterButton.FlatAppearance.BorderSize = 1;
         _tips.SetToolTip(_rosterButton, "等待客户端提供大乱斗选人数据");
@@ -211,6 +228,20 @@ internal sealed partial class ChampionSelectAssistant : Form
             button.BackColor = Color.FromArgb(16, 45, 57);
             button.ForeColor = Color.FromArgb(220, 230, 226);
         }
+    }
+
+    // Only the rune action is a filled button; the guide reads as a link and voice as an icon.
+    private void StyleFooterHierarchy(Button guide)
+    {
+        guide.FlatAppearance.BorderSize = 0;
+        guide.BackColor = BackColor;
+        guide.ForeColor = ActionText;
+        guide.FlatAppearance.MouseOverBackColor = Color.FromArgb(16, 45, 57);
+        var icon = new Font("Segoe MDL2 Assets", 11);
+        _voiceButton.Font = icon;
+        _voiceButton.Disposed += (_, _) => icon.Dispose();
+        _voiceButton.Text = "\uE720"; // Microphone glyph
+        _voiceButton.AccessibleName = "语音输入";
     }
 
     private void BindAssistantFilters()
@@ -304,7 +335,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         AssistantDiagnostics.Shared.Report("recommendations", error);
         _failureText = LoadFailureReason(error) + " · 点击重试";
         _status.Text = _failureText;
-        _status.ForeColor = Color.FromArgb(208, 185, 130);
+        _status.ForeColor = ActionText;
         _status.Cursor = Cursors.Hand;
         _tips.SetToolTip(_status, "点击重新加载推荐；详细原因已写入日志：" + AssistantDiagnostics.Shared.LogPath);
     }
@@ -387,8 +418,6 @@ internal sealed partial class ChampionSelectAssistant : Form
         var text = TextRenderer.MeasureText(widestText ?? button.Text, Font);
         button.Size = new Size(text.Width + Dip(18), Math.Max(Dip(minimumHeight), text.Height + Dip(7)));
     }
-
-    private static int ToolbarHeight(bool compact) => Dip(compact ? CompactToolbarHeight : FullToolbarHeight);
 
     // The panel grows with its recommendations instead of scrolling; Placement caps it at the screen,
     // where the body's scrollbar remains only as a last resort.
@@ -739,6 +768,8 @@ internal sealed partial class ChampionSelectAssistant : Form
     {
         _masteryLabel = null;
         _masteryRow = null;
+        _banner = null;
+        _heroInfo = null;
         _sendMastery = null;
         _mastery = null;
         foreach (Control control in _body.Controls.Cast<Control>().ToArray())
@@ -755,7 +786,7 @@ internal sealed partial class ChampionSelectAssistant : Form
                 AutoSize = true,
                 MaximumSize = new Size(ContentWidth, 0),
                 Margin = DipPadding(0, 2, 0, 2),
-                ForeColor = heading ? Color.FromArgb(208, 185, 130) : Color.FromArgb(195, 213, 219),
+                ForeColor = heading ? MutedHeading : Color.FromArgb(195, 213, 219),
             }
         );
 

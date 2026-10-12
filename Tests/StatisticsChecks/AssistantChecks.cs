@@ -78,6 +78,7 @@ internal static class AssistantChecks
         CheckFilters(assistant, type, flags);
         CheckNotices(assistant, type, flags);
         CheckLoadFailure(assistant, type, flags);
+        CheckBanner(assistant, type, flags);
         var schemes = CreateSchemes();
         CheckRuneHighlights(type, schemes);
         CheckRuneSelection(assistant, type, flags, schemes);
@@ -490,16 +491,32 @@ internal static class AssistantChecks
         var regionFilter = (ComboBox)type.GetField("_region", flags)!.GetValue(assistant)!;
         var tierFilter = (ComboBox)type.GetField("_tier", flags)!.GetValue(assistant)!;
         var laneFilter = (ComboBox)type.GetField("_lane", flags)!.GetValue(assistant)!;
+        var summary = (Button)type.GetField("_filterSummary", flags)!.GetValue(assistant)!;
+        var filters = modeFilter.Parent!;
+        var toolbar = filters.Parent!;
+        int collapsed = toolbar.Height;
+        if (filters.Visible || !summary.Text.Contains("峡谷") || collapsed > Dip(type, 44))
+        {
+            throw new Exception("Filters start as one summary line instead of dropdown rows");
+        }
+
+        summary.PerformClick();
+        Application.DoEvents();
+        if (!modeFilter.Visible || toolbar.Height <= collapsed)
+        {
+            throw new Exception("Clicking the summary expands the filter dropdowns");
+        }
+
         modeFilter.SelectedIndex = 3;
         Application.DoEvents();
         if (
             regionFilter.Visible
             || tierFilter.Visible
             || laneFilter.Visible
-            || modeFilter.Parent!.Parent!.Height != Dip(type, 44)
+            || !summary.Text.StartsWith("海克斯大乱斗")
         )
         {
-            throw new Exception("Mayhem must hide irrelevant filters and remove their row");
+            throw new Exception("Mayhem hides irrelevant filters and names the mode in the summary");
         }
 
         using (var mayhemPreview = new Bitmap(assistant.Width, assistant.Height))
@@ -514,6 +531,13 @@ internal static class AssistantChecks
             throw new Exception("Ranked filters must reappear when switching back");
         }
 
+        summary.PerformClick();
+        Application.DoEvents();
+        if (filters.Visible || toolbar.Height != collapsed)
+        {
+            throw new Exception("Clicking the summary again collapses the filters");
+        }
+
         CheckHideAndFit(assistant, type, flags);
     }
 
@@ -521,6 +545,47 @@ internal static class AssistantChecks
         (int)
             type.GetMethod("Dip", BindingFlags.Static | BindingFlags.NonPublic, new[] { typeof(int) })!
                 .Invoke(null, new object[] { value })!;
+
+    private static void CheckBanner(Form assistant, Type type, BindingFlags flags)
+    {
+        object? Call(string name, params object[] values) => type.GetMethod(name, flags)!.Invoke(assistant, values);
+        var body = (FlowLayoutPanel)type.GetField("_body", flags)!.GetValue(assistant)!;
+        type.GetField("_hero", flags)!.SetValue(assistant, 103);
+        Call("ClearBody");
+        Call("CreateSkillSection", 103);
+        var banner = (Control)type.GetField("_banner", flags)!.GetValue(assistant)!;
+        int bannerHeight = banner.Height;
+        var tier = (Control)Call("AddTierSummary", "T1", "胜率 50.0% · 中路")!;
+        Call("AddMasterySummary");
+        var mastery = (Control)type.GetField("_masteryRow", flags)!.GetValue(assistant)!;
+        if (
+            body.Controls.Count != 1
+            || !banner.Contains(tier)
+            || mastery.Parent != banner
+            || banner.Height != bannerHeight + mastery.Height
+        )
+        {
+            throw new Exception("Tier and mastery join the champion banner instead of separate rows");
+        }
+
+        type.GetField("_hero", flags)!.SetValue(assistant, 0);
+        Call("ClearBody");
+        var same = type.GetMethod("SameSpells", BindingFlags.Static | BindingFlags.NonPublic)!;
+        bool Same(string first, string second) =>
+            (bool)
+                same.Invoke(
+                    null,
+                    new object[]
+                    {
+                        Newtonsoft.Json.Linq.JObject.Parse(first),
+                        Newtonsoft.Json.Linq.JObject.Parse(second),
+                    }
+                )!;
+        if (!Same("{\"ids\":[4,14]}", "{\"ids\":[14,4]}") || Same("{\"ids\":[4,14]}", "{\"ids\":[4,12]}"))
+        {
+            throw new Exception("Identical summoner spell pairs collapse into one card regardless of slot order");
+        }
+    }
 
     private static void CheckLoadFailure(Form assistant, Type type, BindingFlags flags)
     {

@@ -55,6 +55,9 @@ internal sealed partial class ChampionSelectAssistant
         "王者|challenger"
     );
     private string _filterMode = "ranked";
+    private readonly Button _filterSummary = new() { Name = "assistantFilterSummary" };
+    private readonly FlowLayoutPanel _filterPanel = new();
+    private bool _filtersExpanded;
     private readonly Dictionary<string, string> _selectedTiers = new();
 
     private static string FilterValue(ComboBox box) => ((FilterChoice)box.SelectedItem!).Value;
@@ -71,6 +74,38 @@ internal sealed partial class ChampionSelectAssistant
             new string?[] { null, "top", "jungle", "mid", "adc", "support" }[_lane.SelectedIndex] ?? _position ?? "mid",
             _hero
         ).Normalize();
+
+    private string FilterSummary(string mode)
+    {
+        var parts = new List<string>
+        {
+            mode switch
+            {
+                "ranked" => "峡谷",
+                "aram" => "大乱斗",
+                "mayhem" => "海克斯大乱斗",
+                "arena" => "斗魂竞技场",
+                "urf" => "无限火力",
+                _ => "极限闪击",
+            },
+        };
+        if (mode != "mayhem")
+        {
+            parts.Add(_region.Text);
+        }
+
+        if (mode is not ("arena" or "mayhem"))
+        {
+            parts.Add(_tier.Text.Replace("及以上", "+").Replace("及以下", "-"));
+        }
+
+        if (mode == "ranked")
+        {
+            parts.Add(_lane.SelectedIndex == 0 ? "自动分路" : _lane.Text);
+        }
+
+        return string.Join(" · ", parts);
+    }
 
     private void SyncFilters()
     {
@@ -92,10 +127,14 @@ internal sealed partial class ChampionSelectAssistant
             _tier.Visible = mode is not ("arena" or "mayhem");
             _lane.Visible = mode == "ranked";
             _apply.Visible = true;
-            // Mode and region fit one row; tier or lane needs the second filter row.
-            if (_mode.Parent?.Parent is Panel toolbar)
+            _filterSummary.Text = FilterSummary(mode) + (_filtersExpanded ? "  ▴" : "  ▾");
+            _filterPanel.Visible = _filtersExpanded;
+            if (_filterPanel.Parent is Panel toolbar)
             {
-                toolbar.Height = ToolbarHeight(!(_tier.Enabled || mode == "ranked"));
+                // Preferred size follows each filter's own visibility, so it is valid while hidden.
+                int width = Dip(LayoutWidth) - toolbar.Padding.Horizontal;
+                int filters = _filtersExpanded ? _filterPanel.GetPreferredSize(new Size(width, 0)).Height : 0;
+                toolbar.Height = Dip(ToolbarHeaderHeight) + filters + toolbar.Padding.Vertical;
             }
         }
         finally

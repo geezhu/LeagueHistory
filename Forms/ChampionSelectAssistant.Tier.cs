@@ -10,7 +10,7 @@ internal sealed partial class ChampionSelectAssistant
             AccessibleName = "普通大乱斗平衡调整",
             Size = Dip(22, 24),
             TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Color.FromArgb(208, 185, 130),
+            ForeColor = ActionText,
             Cursor = Cursors.Help,
             Margin = DipPadding(0, 0, 5, 0),
         };
@@ -79,21 +79,24 @@ internal sealed partial class ChampionSelectAssistant
         }
     }
 
+    // With a skill banner the tier sits beside the champion name; otherwise it is its own row.
     private FlowLayoutPanel AddTierSummary(string tier, string statistics)
     {
+        bool inBanner = _heroInfo is { IsDisposed: false };
         var row = new FlowLayoutPanel
         {
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             WrapContents = false,
             MaximumSize = new Size(ContentWidth, 0),
-            Margin = DipPadding(0, 2, 0, 2),
+            Margin = inBanner ? DipPadding(6, 2, 0, 0) : DipPadding(0, 2, 0, 2),
+            BackColor = inBanner ? Color.Transparent : BackColor,
         };
         var color = League.Controls.AramMetaView.TierColor(tier);
         var badge = new Label
         {
             Text = tier,
-            Size = Dip(42, 24),
+            Size = inBanner ? Dip(34, 22) : Dip(42, 24),
             TextAlign = ContentAlignment.MiddleCenter,
             BackColor = Color.FromArgb(24, color),
             ForeColor = color,
@@ -111,12 +114,19 @@ internal sealed partial class ChampionSelectAssistant
                 Text = statistics,
                 AutoSize = true,
                 MaximumSize = new Size(Dip(230), 0),
-                ForeColor = Color.FromArgb(208, 185, 130),
+                ForeColor = KeyResult,
+                BackColor = Color.Transparent,
                 Margin = DipPadding(0, 3, 0, 0),
             }
         );
+        if (inBanner)
+        {
+            _heroInfo!.Controls.Add(row);
+            return row;
+        }
+
         _body.Controls.Add(row);
-        if (_masteryRow is { IsDisposed: false })
+        if (_masteryRow is { IsDisposed: false } && _masteryRow.Parent == _body)
         {
             _body.Controls.SetChildIndex(_masteryRow, _body.Controls.GetChildIndex(row) + 1);
         }

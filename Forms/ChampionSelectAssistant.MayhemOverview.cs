@@ -67,7 +67,8 @@ internal sealed partial class ChampionSelectAssistant
             }
         )
         {
-            var heading = MayhemHeading(title + " · 点击查看全部");
+            var heading = MayhemHeading(title);
+            _tips.SetToolTip(heading, "查看全部" + title);
             host.Controls.Add(heading);
             heading.Click += (_, _) => BrowseMayhem(page, hero, token, 0, index);
             var row = new FlowLayoutPanel
@@ -163,11 +164,12 @@ internal sealed partial class ChampionSelectAssistant
         host.Controls.Add(items);
         var spellsHeader = new Label
         {
-            Text = "召唤师技能 · 点击配置",
+            Text = "召唤师技能",
             AutoSize = true,
-            ForeColor = Color.FromArgb(208, 185, 130),
+            ForeColor = MutedHeading,
             Margin = DipPadding(0, 2, 0, 2),
         };
+        _tips.SetToolTip(spellsHeader, "点击下方技能卡片即可配置");
         host.Controls.Add(spellsHeader);
         var spells = new FlowLayoutPanel
         {
@@ -235,7 +237,19 @@ internal sealed partial class ChampionSelectAssistant
     private void AddMayhemSpells(MayhemOverviewState state)
     {
         var options = AramMetaRecommendation.Read(state.Page, state.Hero, "spells");
-        foreach (var (title, entry) in AramMetaRecommendation.SpellHighlights(options))
+        var highlights = AramMetaRecommendation.SpellHighlights(options);
+        if (
+            highlights.Length == 2
+            && highlights[0].Entry is { } popular
+            && highlights[1].Entry is { } winning
+            && popular.Ids.OrderBy(id => id).SequenceEqual(winning.Ids.OrderBy(id => id))
+        )
+        {
+            AddMayhemSpellCard(state, "使用率 · 胜率最高", popular);
+            return;
+        }
+
+        foreach (var (title, entry) in highlights)
         {
             AddMayhemSpellCard(state, title, entry);
         }
@@ -256,7 +270,7 @@ internal sealed partial class ChampionSelectAssistant
                 Text = title,
                 Location = new Point(Dip(4), Dip(1)),
                 Size = Dip(128, 18),
-                ForeColor = Color.FromArgb(208, 185, 130),
+                ForeColor = MutedHeading,
             }
         );
         if (entry == null)
@@ -319,7 +333,7 @@ internal sealed partial class ChampionSelectAssistant
             Height = Dip(21),
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(16, 45, 57),
-            ForeColor = Color.FromArgb(208, 185, 130),
+            ForeColor = ActionText,
             Margin = DipPadding(0, 1, 0, 1),
         };
 
@@ -329,7 +343,7 @@ internal sealed partial class ChampionSelectAssistant
             Text = text + "  ›",
             Size = new Size(ContentWidth - Dip(6), Dip(18)),
             TextAlign = ContentAlignment.MiddleLeft,
-            ForeColor = Color.FromArgb(208, 185, 130),
+            ForeColor = MutedHeading,
             Margin = Padding.Empty,
             Cursor = Cursors.Hand,
         };

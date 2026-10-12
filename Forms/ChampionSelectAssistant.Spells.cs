@@ -36,49 +36,25 @@ internal sealed partial class ChampionSelectAssistant
             Margin = DipPadding(0, 0, 0, 12),
         };
         _body.Controls.Add(columns);
-        foreach (
-            var (title, option, pick) in new[]
-            {
-                ("使用率最高", selected.Popular, true),
-                ("胜率最高", selected.Winning, false),
-            }
-        )
+        // One card when the most used pair is also the best winning pair.
+        bool same = SameSpells(selected.Popular, selected.Winning);
+        var cards = same
+            ? new[] { ("使用率 · 胜率最高", selected.Popular, (bool?)null) }
+            : new[] { ("使用率最高", selected.Popular, (bool?)true), ("胜率最高", selected.Winning, (bool?)false) };
+        foreach (var (title, option, pick) in cards)
         {
             token.ThrowIfCancellationRequested();
-            var card = new FlowLayoutPanel
-            {
-                FlowDirection = FlowDirection.TopDown,
-                WrapContents = false,
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                MinimumSize = new Size(Dip(134), 0),
-                MaximumSize = new Size(Dip(134), 0),
-                Padding = DipPadding(5, 5, 5, 8),
-                Margin = DipPadding(0, 0, 5, 0),
-                BackColor = Color.FromArgb(13, 38, 50),
-            };
+            var card = CreateSpellCard(title, same ? ContentWidth - Dip(5) : Dip(134));
             columns.Controls.Add(card);
-            card.Controls.Add(
-                new Label
-                {
-                    Text = title,
-                    AutoSize = true,
-                    ForeColor = Color.FromArgb(208, 185, 130),
-                    Margin = DipPadding(0, 0, 0, 4),
-                }
-            );
             if (option == null)
             {
                 card.Controls.Add(new Label { Text = "暂无数据", AutoSize = true });
                 continue;
             }
             await IconRow(((JArray)option["ids"]!).Values<int>(), "spell", token, card);
-            double? rate = pick
-                ? AramMetaIndex.Rate(option["pick_rate"])
-                : AramMetaIndex.Rate(option["win_rate"]) ?? OpggBuild.Ratio(option["win"], option["play"]);
             var label = new Label
             {
-                Text = (pick ? "使用率 " : "胜率 ") + $"{rate:P2}",
+                Text = SpellRates(option, pick),
                 AutoSize = true,
                 ForeColor = Color.FromArgb(195, 213, 219),
                 Margin = DipPadding(0, 3, 0, 0),
@@ -106,6 +82,53 @@ internal sealed partial class ChampionSelectAssistant
         // A real final control keeps the last rate clear of the fixed action bar.
         _body.Controls.Add(new Panel { Size = new Size(1, Dip(8)), Margin = Padding.Empty });
     }
+
+    private FlowLayoutPanel CreateSpellCard(string title, int width)
+    {
+        var card = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            MinimumSize = new Size(width, 0),
+            MaximumSize = new Size(width, 0),
+            Padding = DipPadding(5, 5, 5, 8),
+            Margin = DipPadding(0, 0, 5, 0),
+            BackColor = Color.FromArgb(13, 38, 50),
+        };
+        card.Controls.Add(
+            new Label
+            {
+                Text = title,
+                AutoSize = true,
+                ForeColor = MutedHeading,
+                Margin = DipPadding(0, 0, 0, 4),
+            }
+        );
+        return card;
+    }
+
+    // pick: true shows usage, false shows wins, null (one shared card) shows both.
+    private static string SpellRates(JObject option, bool? pick)
+    {
+        double? pickRate = AramMetaIndex.Rate(option["pick_rate"]),
+            winRate = AramMetaIndex.Rate(option["win_rate"]) ?? OpggBuild.Ratio(option["win"], option["play"]);
+        return pick switch
+        {
+            true => $"使用率 {pickRate:P2}",
+            false => $"胜率 {winRate:P2}",
+            null => $"使用率 {pickRate:P2} · 胜率 {winRate:P2}",
+        };
+    }
+
+    internal static bool SameSpells(JObject? first, JObject? second) =>
+        first != null
+        && second != null
+        && ((JArray)first["ids"]!)
+            .Values<int>()
+            .OrderBy(id => id)
+            .SequenceEqual(((JArray)second["ids"]!).Values<int>().OrderBy(id => id));
 
     private bool _applyingSpells;
 

@@ -37,7 +37,7 @@ internal sealed partial class ChampionSelectAssistant
         {
             return;
         }
-        var (section, select, stats, icons) = CreateRuneChoices(schemes, token);
+        var (section, select, icons) = CreateRuneChoices(schemes, token);
         CancellationTokenSource? images = null;
         Task imageWork = Task.CompletedTask;
         void RetireImages()
@@ -65,16 +65,17 @@ internal sealed partial class ChampionSelectAssistant
             }
             _runeChoice = select.SelectedIndex;
             _runes = schemes[_runeChoice];
-            UpdateRuneChoiceText(select, stats, _runes, schemes);
+            UpdateRuneChoiceText(select, _runes, schemes);
             _apply.Enabled = !_applying;
             _apply.Text = $"应用方案 {_runeChoice + 1}";
-            imageWork = LoadRuneIconsAsync(_runes, icons, stats, images.Token);
+            imageWork = LoadRuneIconsAsync(_runes, icons, images.Token);
         }
         select.SelectedIndexChanged += (_, _) => RefreshChoice();
         RefreshChoice();
     }
 
-    private (FlowLayoutPanel Section, ComboBox Select, Label Stats, FlowLayoutPanel Icons) CreateRuneChoices(
+    // The selector already shows each scheme's rates, so no separate statistics line is added.
+    private (FlowLayoutPanel Section, ComboBox Select, FlowLayoutPanel Icons) CreateRuneChoices(
         OpggRunes[] schemes,
         CancellationToken token
     )
@@ -94,13 +95,6 @@ internal sealed partial class ChampionSelectAssistant
         };
         PopulateRuneChoices(select, schemes);
         select.SelectedIndex = 0;
-        var stats = new Label
-        {
-            AutoSize = true,
-            ForeColor = Color.FromArgb(170, 195, 204),
-            MaximumSize = new Size(ContentWidth - Dip(4), 0),
-            Margin = DipPadding(0, 2, 0, 2),
-        };
         var icons = new FlowLayoutPanel
         {
             AutoSize = true,
@@ -108,9 +102,10 @@ internal sealed partial class ChampionSelectAssistant
             MaximumSize = new Size(ContentWidth, 0),
             Margin = Padding.Empty,
         };
-        section.Controls.AddRange(new Control[] { select, stats, icons });
+        icons.Margin = DipPadding(0, 4, 0, 2);
+        section.Controls.AddRange(new Control[] { select, icons });
         _body.Controls.Add(section);
-        return (section, select, stats, icons);
+        return (section, select, icons);
     }
 
     private static void PopulateRuneChoices(ComboBox select, OpggRunes[] schemes)
@@ -128,10 +123,8 @@ internal sealed partial class ChampionSelectAssistant
         }
     }
 
-    private void UpdateRuneChoiceText(ComboBox select, Label stats, OpggRunes scheme, OpggRunes[] schemes)
+    private void UpdateRuneChoiceText(ComboBox select, OpggRunes scheme, OpggRunes[] schemes)
     {
-        static string Rate(double? value) => value.HasValue ? $"{value:P2}" : "—";
-        stats.Text = $"胜率 {Rate(scheme.WinRate)} · 使用率 {Rate(scheme.PickRate)}";
         var highlights = RuneHighlights(scheme, schemes);
         var recommendation = string.Join(
             "\n",
@@ -149,11 +142,12 @@ internal sealed partial class ChampionSelectAssistant
         );
     }
 
-    private async Task LoadRuneIconsAsync(OpggRunes scheme, FlowLayoutPanel icons, Label stats, CancellationToken token)
+    private async Task LoadRuneIconsAsync(OpggRunes scheme, FlowLayoutPanel icons, CancellationToken token)
     {
         try
         {
-            await IconRow(scheme.Perks, "rune", token, icons);
+            // Keystone, primary and secondary runes; the three stat shards add noise without a choice.
+            await IconRow(scheme.Perks.Take(6), "rune", token, icons);
         }
         catch (OperationCanceledException)
         {
@@ -161,11 +155,8 @@ internal sealed partial class ChampionSelectAssistant
         }
         catch (Exception error)
         {
+            // Missing optional icons leave the selector and apply action usable.
             System.Diagnostics.Debug.WriteLine($"Rune icons: {error}");
-            if (!icons.IsDisposed && !token.IsCancellationRequested)
-            {
-                stats.Text += " · 部分图标暂不可用";
-            }
         }
     }
 
