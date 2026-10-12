@@ -53,6 +53,8 @@ public interface IShutdownTaskStore
 
 public sealed class ScheduledShutdownService
 {
+    // Windows already asks about unsaved work when shutting down, so a short countdown is enough.
+    public const int DefaultCountdownSeconds = 5;
     public const string TaskName = "ShutdownAfterLoL_2300"; // Adopt the existing task instead of creating a second schedule.
     public const string Marker = "LeagueHistory.ScheduledShutdown.v1";
     private static readonly XNamespace Ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
@@ -87,7 +89,14 @@ public sealed class ScheduledShutdownService
         var task = _tasks.Read();
         if (task == null)
         {
-            return new(new(false, "23:00", 30), false, false, false, "设置时间后点击“创建计划”即可生效。", null);
+            return new(
+                new(false, "23:00", DefaultCountdownSeconds),
+                false,
+                false,
+                false,
+                "设置时间后点击“创建计划”即可生效。",
+                null
+            );
         }
 
         var xml = XDocument.Parse(task.Xml);
@@ -96,7 +105,9 @@ public sealed class ScheduledShutdownService
             ? start.ToString("HH:mm")
             : "23:00";
         var config = ReadJson(Path.Combine(_directory, "plan.json"));
-        int delay = managed ? Math.Clamp((int?)config?["CountdownSeconds"] ?? 30, 0, 300) : 30;
+        int delay = managed
+            ? Math.Clamp((int?)config?["CountdownSeconds"] ?? DefaultCountdownSeconds, 0, 300)
+            : DefaultCountdownSeconds;
         string message = managed ? "到点后自动检查对局状态。" : "已发现原有脚本，点击“创建计划”可替换并启用。";
         string? occurrence = null;
         var status = managed ? ReadJson(Path.Combine(_directory, "status.json")) : null;
