@@ -46,8 +46,8 @@ internal sealed class ShutdownSettingsController : IDisposable
         Name = "ShutdownCountdown",
         Minimum = 0,
         Maximum = 300,
-        Increment = 15,
-        Value = 30,
+        Increment = 5,
+        Value = ScheduledShutdownService.DefaultCountdownSeconds,
         Width = 100,
     };
     private readonly Button _create = new()
