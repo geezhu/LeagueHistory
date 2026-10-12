@@ -1,9 +1,10 @@
 // Included inside WidgetView. Recognition runs in the main process with the local Chinese engine.
-Button voiceButton, voiceRecord, voiceSend, voiceClear, voiceClose;
+Button voiceButton, voiceRecord, voiceSend, voiceClose;
+hstring voiceRecordLabel;
 Border voicePanel;
 TextBox voiceEditor;
 TextBlock voiceHint = MakeText(L"", 12, 0x91acbb);
-TextBlock voiceCount = MakeText(L"0 / 180", 12, 0x91acbb);
+TextBlock voiceCount = MakeText(L"0 / 180", 11, 0x91acbb);
 bool supportsVoiceChat = false, supportsVoiceRecording = false, voiceRunning = false, voiceReady = false,
      voiceStopRequested = false;
 bool voiceReading = false, voiceWriting = false, voiceCleanup = false, voiceDecoding = false;
@@ -56,45 +57,40 @@ static bool ConfirmedVoiceText(hstring const &value, hstring &result)
 }
 void InitializeVoice()
 {
-    voiceButton = DetailButton(L"语音输入");
+    voiceButton = DetailButton(L"");
+    voiceButton.Content(SymbolIcon(Symbol::Microphone));
+    Windows::UI::Xaml::Automation::AutomationProperties::SetName(voiceButton, L"语音输入");
     voiceButton.Margin({0, 0, 6, 0});
     voiceButton.Click([this](auto &&, auto &&) { OpenVoice(); });
-    ToolTipService::SetToolTip(voiceButton,
-                               box_value(L"说话后编辑文字，确认发送，再按 Win＋G 返回游戏。也可以直接输入文字。"));
+    ToolTipService::SetToolTip(
+        voiceButton, box_value(L"语音输入：说话后编辑文字，确认发送，再按 Win＋G 返回游戏。也可以直接输入文字。"));
     voicePanel.Background(MakeBrush(0x102f3c));
     voicePanel.BorderBrush(MakeBrush(0x315662));
     voicePanel.BorderThickness({1});
     voicePanel.CornerRadius({4});
-    voicePanel.Padding({10, 8, 10, 8});
-    voicePanel.Margin({0, 6, 0, 0});
+    voicePanel.Padding({6, 6, 6, 4});
+    voicePanel.Margin({0, 0, 0, 0});
     voicePanel.Visibility(Visibility::Collapsed);
-    StackPanel body;
-    body.Children().Append(CreateVoiceHeader());
-    ConfigureVoiceEditor();
-    body.Children().Append(voiceEditor);
-    body.Children().Append(CreateVoiceFooter());
-    voiceHint.TextWrapping(TextWrapping::Wrap);
-    voiceHint.Margin({0, 5, 0, 0});
-    voiceHint.Visibility(Visibility::Collapsed);
-    body.Children().Append(voiceHint);
-    voicePanel.Child(body);
+    voicePanel.Child(CreateVoiceRow());
 }
-Grid CreateVoiceHeader()
+// One row like a chat box: microphone toggle, the single chat line, send and close.
+// Clearing is plain editing; Esc closes; the status and length share one small line below.
+Grid CreateVoiceRow()
 {
-    Grid header;
-    header.ColumnDefinitions().Append(ColumnDefinition());
-    ColumnDefinition buttons;
-    buttons.Width({1, GridUnitType::Auto});
-    header.ColumnDefinitions().Append(buttons);
-    auto title = MakeText(L"语音输入", 14, 0x65d6d6);
-    title.VerticalAlignment(VerticalAlignment::Center);
-    header.Children().Append(title);
-    StackPanel actions;
-    actions.Orientation(Orientation::Horizontal);
-    Grid::SetColumn(actions, 1);
-    voiceRecord = DetailButton(L"开始录音");
-    voiceRecord.Padding({10, 4, 10, 4});
-    voiceRecord.Margin({0, 0, 6, 0});
+    Grid row;
+    for (auto width : {GridLength{1, GridUnitType::Auto},
+                       GridLength{1, GridUnitType::Star},
+                       GridLength{1, GridUnitType::Auto},
+                       GridLength{1, GridUnitType::Auto}})
+    {
+        ColumnDefinition column;
+        column.Width(width);
+        row.ColumnDefinitions().Append(column);
+    }
+    row.RowDefinitions().Append(RowDefinition());
+    row.RowDefinitions().Append(RowDefinition());
+    voiceRecord = DetailButton(L"");
+    voiceRecord.Padding({8, 4, 8, 4});
     voiceRecord.Click(
         [this](auto &&, auto &&)
         {
@@ -103,58 +99,69 @@ Grid CreateVoiceHeader()
             else
                 RecognizeVoice();
         });
-    actions.Children().Append(voiceRecord);
-    voiceClose = DetailButton(L"关闭");
-    voiceClose.Padding({10, 4, 10, 4});
+    row.Children().Append(voiceRecord);
+    ConfigureVoiceEditor();
+    Grid::SetColumn(voiceEditor, 1);
+    row.Children().Append(voiceEditor);
+    voiceSend = DetailButton(L"发送");
+    voiceSend.Padding({14, 4, 14, 4});
+    voiceSend.Background(MakeBrush(0x007f8f));
+    voiceSend.Click([this](auto &&, auto &&) { ConfirmVoice(); });
+    Grid::SetColumn(voiceSend, 2);
+    row.Children().Append(voiceSend);
+    voiceClose = DetailButton(L"");
+    voiceClose.Content(SymbolIcon(Symbol::Cancel));
+    voiceClose.Padding({8, 4, 8, 4});
+    voiceClose.Margin({6, 0, 0, 0});
     voiceClose.Click([this](auto &&, auto &&) { CloseVoice(); });
-    actions.Children().Append(voiceClose);
-    header.Children().Append(actions);
-    return header;
+    ToolTipService::SetToolTip(voiceClose, box_value(L"关闭语音输入（Esc）"));
+    Windows::UI::Xaml::Automation::AutomationProperties::SetName(voiceClose, L"关闭语音输入");
+    Grid::SetColumn(voiceClose, 3);
+    row.Children().Append(voiceClose);
+    voiceHint.TextWrapping(TextWrapping::NoWrap);
+    voiceHint.Margin({2, 3, 0, 0});
+    voiceHint.Visibility(Visibility::Collapsed);
+    Grid::SetRow(voiceHint, 1);
+    Grid::SetColumnSpan(voiceHint, 2);
+    row.Children().Append(voiceHint);
+    voiceCount.FontSize(11);
+    voiceCount.HorizontalAlignment(HorizontalAlignment::Right);
+    voiceCount.Margin({0, 3, 2, 0});
+    Grid::SetRow(voiceCount, 1);
+    Grid::SetColumn(voiceCount, 1);
+    Grid::SetColumnSpan(voiceCount, 3);
+    row.Children().Append(voiceCount);
+    return row;
 }
 void ConfigureVoiceEditor()
 {
     voiceEditor.MaxLength(180);
     voiceEditor.AcceptsReturn(false);
-    voiceEditor.TextWrapping(TextWrapping::Wrap);
-    voiceEditor.MinHeight(58);
-    voiceEditor.MaxHeight(80);
-    voiceEditor.PlaceholderText(L"录音后检查文字，或直接输入…");
+    voiceEditor.TextWrapping(TextWrapping::NoWrap);
+    voiceEditor.PlaceholderText(L"说话或直接输入，Enter 发送");
     voiceEditor.FontSize(14);
-    voiceEditor.Margin({0, 6, 0, 6});
+    voiceEditor.Margin({6, 0, 6, 0});
+    voiceEditor.VerticalAlignment(VerticalAlignment::Center);
     voiceEditor.Background(MakeBrush(0x071e29));
     voiceEditor.Foreground(MakeBrush(0xe2eef3));
     voiceEditor.BorderBrush(MakeBrush(0x315662));
     voiceEditor.TextChanged([this](auto &&, auto &&) { UpdateVoiceButtons(); });
-}
-Grid CreateVoiceFooter()
-{
-    Grid footer;
-    footer.ColumnDefinitions().Append(ColumnDefinition());
-    ColumnDefinition sendColumn;
-    sendColumn.Width({1, GridUnitType::Auto});
-    footer.ColumnDefinitions().Append(sendColumn);
-    voiceCount.VerticalAlignment(VerticalAlignment::Center);
-    footer.Children().Append(voiceCount);
-    StackPanel controls;
-    controls.Orientation(Orientation::Horizontal);
-    Grid::SetColumn(controls, 1);
-    voiceClear = DetailButton(L"清空");
-    voiceClear.Padding({10, 4, 10, 4});
-    voiceClear.Margin({0, 0, 6, 0});
-    voiceClear.Click(
-        [this](auto &&, auto &&)
+    voiceEditor.KeyDown(
+        [this](auto &&, Windows::UI::Xaml::Input::KeyRoutedEventArgs const &e)
         {
-            voiceEditor.Text(L"");
-            SetVoiceHint(L"");
+            // Enter is the explicit confirmation; Esc closes like the close button.
+            if (e.Key() == Windows::System::VirtualKey::Enter)
+            {
+                e.Handled(true);
+                if (voiceSend.IsEnabled())
+                    ConfirmVoice();
+            }
+            else if (e.Key() == Windows::System::VirtualKey::Escape && voiceClose.IsEnabled())
+            {
+                e.Handled(true);
+                CloseVoice();
+            }
         });
-    controls.Children().Append(voiceClear);
-    voiceSend = DetailButton(L"确认发送");
-    voiceSend.Padding({12, 4, 12, 4});
-    voiceSend.Background(MakeBrush(0x007f8f));
-    voiceSend.Click([this](auto &&, auto &&) { ConfirmVoice(); });
-    controls.Children().Append(voiceSend);
-    footer.Children().Append(controls);
-    return footer;
 }
 bool VoiceAvailable() const
 {
@@ -172,14 +179,20 @@ void UpdateVoiceButtons()
     voiceEditor.IsReadOnly(voiceRunning || chatPending || chatCleanup);
     voiceRecord.IsEnabled(available && supportsVoiceRecording &&
                           (!voiceRunning || (voiceReady && !voiceStopRequested)));
+    // Microphone to start, a stop square while listening, an ellipsis while preparing or decoding.
     hstring recordLabel = VoiceRecordLabel();
-    auto label = voiceRecord.Content().try_as<TextBlock>();
-    if (label && label.Text() != recordLabel)
-        label.Text(recordLabel);
+    bool listening = voiceRunning && voiceReady && !voiceStopRequested && !voiceDecoding;
+    if (voiceRecordLabel != recordLabel)
+    {
+        voiceRecordLabel = recordLabel;
+        voiceRecord.Content(SymbolIcon(listening ? Symbol::Stop : voiceRunning ? Symbol::More : Symbol::Microphone));
+        ToolTipService::SetToolTip(voiceRecord, box_value(recordLabel));
+        Windows::UI::Xaml::Automation::AutomationProperties::SetName(voiceRecord, recordLabel);
+    }
+    voiceRecord.Background(MakeBrush(listening ? 0x7a2c2c : 0x143542));
     voiceSend.IsEnabled(available && !voiceRunning && ConfirmedVoiceText(voiceEditor.Text(), text));
-    voiceClear.IsEnabled(!voiceRunning && !chatPending && !chatCleanup && !voiceEditor.Text().empty());
     voiceClose.IsEnabled(!chatPending && !chatCleanup);
-    voiceCount.Text(to_hstring(voiceEditor.Text().size()) + L" / 180");
+    voiceCount.Text(to_hstring(voiceEditor.Text().size()) + L"/180");
 }
 hstring VoiceRecordLabel() const
 {
@@ -197,8 +210,18 @@ void OpenVoice()
     if (!supportsVoiceRecording)
         SetVoiceHint(L"请启动新版 League 主程序以使用本机语音识别；仍可直接输入文字。");
     voicePanel.Visibility(Visibility::Visible);
+    ShowSendActions(false);
     UpdateVoiceButtons();
     voiceEditor.Focus(FocusState::Programmatic);
+    // The user pressed the microphone, so listening starts now; sending still needs Enter or the send button.
+    if (supportsVoiceRecording)
+        RecognizeVoice();
+}
+// The voice row stands in for the send menu; cancel stays available for a pending send.
+void ShowSendActions(bool visible)
+{
+    sendMenu.Visibility(visible ? Visibility::Visible : Visibility::Collapsed);
+    voiceButton.Visibility(visible ? Visibility::Visible : Visibility::Collapsed);
 }
 void CloseVoice()
 {
@@ -214,6 +237,7 @@ void CloseVoice()
     voiceDecoding = false;
     voiceStopRequested = true;
     voicePanel.Visibility(Visibility::Collapsed);
+    ShowSendActions(true);
     voiceEditor.Text(L"");
     SetVoiceHint(L"");
     if (!stopped)
@@ -439,6 +463,7 @@ fire_and_forget ConfigureVoicePreview()
 {
     auto lifetime = shared_from_this();
     voicePanel.Visibility(Visibility::Visible);
+    ShowSendActions(false);
     try
     {
         // Exercise the production result handler with a fixture. No request, audio or chat is produced.

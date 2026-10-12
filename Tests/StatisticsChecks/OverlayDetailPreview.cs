@@ -175,6 +175,8 @@ internal static class OverlayDetailPreview
                     );
             row["deathStreak"] = streak.Text;
             row["deathStreakDetails"] = streak.Rule;
+            row["currentDeathStreak"] = streak.Current;
+            row["maxDeathStreak"] = streak.Highest;
             var party = new OverlayPartyMarker(
                 slot < 5 ? 5
                     : slot < 7 ? 2

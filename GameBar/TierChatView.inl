@@ -1,9 +1,12 @@
 // Included inside WidgetView. Statistics and confirmed voice text share the send gate.
 StackPanel chatFooter;
-Button sendTier, sendMastery, sendDeathStreak, cancelChat;
+// One send menu: pick the content, then the target team or the selected hero.
+Button sendMenu, cancelChat;
+MenuFlyoutSubItem tierMenu, masteryMenu, deathStreakMenu;
+static constexpr wchar_t const *ChatIdleText =
+    L"发送到游戏聊天 · 需以管理员身份运行 League · 点击后按 Win＋G 返回游戏。";
 std::array<MenuFlyoutItem, 3> tierTargets, masteryTargets, deathStreakTargets;
-TextBlock chatStatus =
-    MakeText(L"发送到游戏聊天 · 需以管理员身份运行 League · 点击后按 Win＋G 返回游戏。", 12, 0x91acbb);
+TextBlock chatStatus = MakeText(ChatIdleText, 12, 0x91acbb);
 bool supportsChat = false, supportsMasteryChat = false, supportsDeathStreakChat = false, chatTeams = false,
      chatPending = false, chatWriting = false, chatReading = false, chatDismissed = false, chatCancelled = false,
      chatCleanup = false;
@@ -15,33 +18,34 @@ void InitializeChat()
 {
     StackPanel actions;
     actions.Orientation(Orientation::Horizontal);
-    sendTier = DetailButton(L"发送 Tier ▾");
-    sendMastery = DetailButton(L"发送熟练度 ▾");
-    sendDeathStreak = DetailButton(L"发送连死 ▾");
+    sendMenu = DetailButton(L"发送 ▾");
     cancelChat = DetailButton(L"取消发送");
-    for (auto b : {sendTier, sendMastery, sendDeathStreak, cancelChat})
+    for (auto b : {sendMenu, cancelChat})
     {
         b.Margin({0, 0, 6, 0});
         actions.Children().Append(b);
     }
     InitializeVoice();
     actions.Children().Append(voiceButton);
-    auto menu = [this](Button button, std::array<MenuFlyoutItem, 3> &items, hstring kind)
+    MenuFlyout flyout;
+    auto submenu =
+        [this, &flyout](MenuFlyoutSubItem &sub, hstring title, std::array<MenuFlyoutItem, 3> &items, hstring kind)
     {
-        MenuFlyout flyout;
         std::array<hstring, 3> names{L"我方全部英雄", L"敌方全部英雄", L"当前选中的英雄"};
         std::array<hstring, 3> targets{L"own", L"enemy", L"single"};
+        sub.Text(title);
         for (int i = 0; i < 3; ++i)
         {
             items[i].Text(names[i]);
             items[i].Click([this, kind, target = targets[i]](auto &&, auto &&) { QueueChat(target, kind); });
-            flyout.Items().Append(items[i]);
+            sub.Items().Append(items[i]);
         }
-        button.Flyout(flyout);
+        flyout.Items().Append(sub);
     };
-    menu(sendTier, tierTargets, L"tier");
-    menu(sendMastery, masteryTargets, L"mastery");
-    menu(sendDeathStreak, deathStreakTargets, L"deathStreak");
+    submenu(tierMenu, L"梯队与胜率", tierTargets, L"tier");
+    submenu(masteryMenu, L"英雄成就", masteryTargets, L"mastery");
+    submenu(deathStreakMenu, L"连死", deathStreakTargets, L"deathStreak");
+    sendMenu.Flyout(flyout);
     cancelChat.Click(
         [this](auto &&, auto &&)
         {
@@ -58,30 +62,33 @@ void InitializeChat()
     chatFooter.Children().Append(voicePanel);
     chatStatus.TextWrapping(TextWrapping::Wrap);
     chatStatus.Margin({0, 5, 0, 0});
+    // The idle hint lives in the send button tooltip; the line appears only while a send is in progress.
+    chatStatus.Visibility(Visibility::Collapsed);
+    chatStatus.RegisterPropertyChangedCallback(
+        TextBlock::TextProperty(),
+        [this](auto &&, auto &&)
+        { chatStatus.Visibility(chatStatus.Text() == ChatIdleText ? Visibility::Collapsed : Visibility::Visible); });
     chatFooter.Children().Append(chatStatus);
     Grid::SetRow(chatFooter, 4);
     root.Children().Append(chatFooter);
     UpdateChatButtons();
-    ToolTipService::SetToolTip(sendTier, box_value(L"选择我方、敌方或当前选中英雄，发送梯队、胜率和选用率。"));
     ToolTipService::SetToolTip(
-        sendDeathStreak,
-        box_value(
-            L"发送当前连死和本局最高次数。死亡加一，击杀清零，助攻不清零；不完整历史标注已记录，无法匹配的玩家显示未知。"));
-    ToolTipService::SetToolTip(
-        sendMastery,
-        box_value(
-            L"选择我方、敌方或当前选中英雄，发送该玩家的英雄成就等级和点数。发送到当前游戏聊天频道；缓存和不可用数据会标注。"));
+        sendMenu,
+        box_value(L"发送梯队与胜率、英雄成就或连死到游戏聊天，可选我方、敌方或当前选中英雄。\n"
+                  L"需以管理员身份运行 League；点击后按 Win＋G 返回游戏。连死：死亡加一，击杀清零，助攻不清零。"));
 }
 void UpdateChatButtons()
 {
     bool available = widget && !fixturePreview && supportsChat && enabled && active && !chatPending && !chatCleanup &&
                      !voiceRunning && !voiceCleanup && Now() - lastGood <= 15000;
     bool single = selectedCard >= 0 && cards[selectedCard].hero > 0;
-    sendTier.IsEnabled(available && (chatTeams || single));
-    sendMastery.IsEnabled(available && supportsMasteryChat && (chatTeams || single));
-    sendMastery.Visibility(supportsMasteryChat ? Visibility::Visible : Visibility::Collapsed);
-    sendDeathStreak.IsEnabled(available && supportsDeathStreakChat && (chatTeams || single));
-    sendDeathStreak.Visibility(supportsDeathStreakChat ? Visibility::Visible : Visibility::Collapsed);
+    bool targets = chatTeams || single;
+    sendMenu.IsEnabled(available && targets);
+    tierMenu.IsEnabled(available && targets);
+    masteryMenu.IsEnabled(available && supportsMasteryChat && targets);
+    masteryMenu.Visibility(supportsMasteryChat ? Visibility::Visible : Visibility::Collapsed);
+    deathStreakMenu.IsEnabled(available && supportsDeathStreakChat && targets);
+    deathStreakMenu.Visibility(supportsDeathStreakChat ? Visibility::Visible : Visibility::Collapsed);
     for (int i = 0; i < 3; ++i)
     {
         bool scope = i == 2 ? single : chatTeams;
@@ -101,7 +108,7 @@ void ResetChat()
     chatId = L"";
     chatText = L"";
     pendingChatWrite = L"";
-    chatStatus.Text(L"发送到游戏聊天 · 需以管理员身份运行 League · 点击后按 Win＋G 返回游戏。");
+    chatStatus.Text(ChatIdleText);
     UpdateChatButtons();
 }
 bool CanQueueChat(hstring const &target, hstring const &kind) const

@@ -10,8 +10,10 @@
 #include <winrt/Windows.Storage.Streams.h>
 #include <winrt/Windows.System.h>
 #include <winrt/Windows.UI.Core.h>
+#include <winrt/Windows.UI.Xaml.Automation.h>
 #include <winrt/Windows.UI.Xaml.Controls.h>
 #include <winrt/Windows.UI.Xaml.Controls.Primitives.h>
+#include <winrt/Windows.UI.Xaml.Input.h>
 #include <winrt/Windows.UI.Xaml.Media.h>
 #include <winrt/Windows.UI.Xaml.Media.Imaging.h>
 #include <winrt/Microsoft.Gaming.XboxGameBar.h>
@@ -95,7 +97,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         Image icon;
         TextBlock champion, player, tier, stats, mastery, deathStreak, party;
         Border partyBadge;
-        hstring imageData, details, masteryDetails, deathStreakDetails, partyLabel, partyDetails;
+        hstring imageData, details, masteryDetails, deathStreakText, deathStreakDetails, partyLabel, partyDetails;
         int hero = 0;
         uint32_t partyColor = 0;
     };
@@ -237,7 +239,8 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         Grid::SetColumn(labels, 1);
         labels.Children().Append(CreateCardHeading(card));
         labels.Children().Append(CreateCardAccount(card));
-        card.stats = MakeText(L"胜率 —    选用率 —", 12, 0x45c7ce);
+        // Secondary statistics stay small and muted so champion, tier and player lead the card.
+        card.stats = MakeText(L"胜率 —    选用率 —", 11, 0x6aa3ab);
         labels.Children().Append(card.stats);
         body.Children().Append(labels);
         card.button.Content(body);
@@ -321,7 +324,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         card.player = MakeText(L"空缺位置", 12, 0x91acbb);
         Grid::SetColumn(card.player, 1);
         account.Children().Append(card.player);
-        card.mastery = MakeText(L"", 12, 0xdbc47f);
+        card.mastery = MakeText(L"", 11, 0x7f98a4);
         card.mastery.Margin({8, 0, 0, 0});
         Grid::SetColumn(card.mastery, 2);
         account.Children().Append(card.mastery);
@@ -514,6 +517,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             card.mastery.Text(L"");
             card.masteryDetails = L"";
             card.deathStreak.Text(L"");
+            card.deathStreakText = L"";
             card.deathStreakDetails = L"";
             card.party.Text(L"");
             card.partyLabel = L"";
@@ -650,9 +654,18 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         card.mastery.Text(row.GetNamedString(L"mastery", L""));
         card.masteryDetails = row.GetNamedString(L"masteryDetails", L"");
         ToolTipService::SetToolTip(card.mastery, box_value(card.masteryDetails));
-        card.deathStreak.Text(row.GetNamedString(L"deathStreak", L""));
+        card.deathStreakText = row.GetNamedString(L"deathStreak", L"");
         card.deathStreakDetails = row.GetNamedString(L"deathStreakDetails", L"");
+        // Only a run of deaths is worth a glance on the card; the full record stays in the tooltip and detail.
+        auto current = row.TryLookup(L"currentDeathStreak");
+        int streak =
+            current && current.ValueType() == JsonValueType::Number ? static_cast<int>(current.GetNumber()) : 0;
+        card.deathStreak.Text(streak >= 2 ? L"连死 " + to_hstring(streak) : L"");
         ToolTipService::SetToolTip(card.deathStreak, box_value(card.deathStreakDetails));
+        ToolTipService::SetToolTip(
+            card.stats,
+            box_value(card.deathStreakText +
+                      (card.deathStreakDetails.empty() ? L"" : L"\n" + card.deathStreakDetails)));
         card.details = row.GetNamedString(L"details", L"等待当前对局数据。");
         card.button.IsEnabled(row.HasKey(L"name"));
         // Image decoding must never block the other nine players or the connection heartbeat.

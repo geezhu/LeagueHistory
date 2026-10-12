@@ -185,9 +185,9 @@ void RefreshDetailHeader()
     if (selectedCard < 0)
         return;
     detailTitle.Text(cards[selectedCard].champion.Text() + L"  " + cards[selectedCard].tier.Text());
-    detailStats.Text(cards[selectedCard].stats.Text() + (cards[selectedCard].deathStreak.Text().empty()
+    detailStats.Text(cards[selectedCard].stats.Text() + (cards[selectedCard].deathStreakText.empty()
                                                              ? L""
-                                                             : L" · " + cards[selectedCard].deathStreak.Text()));
+                                                             : L" · " + cards[selectedCard].deathStreakText));
     detailMastery.Text(cards[selectedCard].player.Text() + L" · " + cards[selectedCard].mastery.Text() +
                        (cards[selectedCard].partyLabel.empty() ? L"" : L" · " + cards[selectedCard].partyLabel));
     detailMastery.Foreground(MakeBrush(cards[selectedCard].partyColor ? cards[selectedCard].partyColor : 0xdbc47f));
