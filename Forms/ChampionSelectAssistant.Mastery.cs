@@ -25,7 +25,13 @@ internal sealed partial class ChampionSelectAssistant
         }
 
         _mastery = null;
-        _masteryRow = new Panel { Size = new Size(ContentWidth, Dip(22)), Margin = Padding.Empty };
+        bool inBanner = _banner is { IsDisposed: false };
+        _masteryRow = new Panel
+        {
+            Size = new Size(ContentWidth, Dip(22)),
+            Margin = Padding.Empty,
+            BackColor = inBanner ? Color.Transparent : BackColor,
+        };
         _masteryLabel = new Label
         {
             Text = "成就读取中…",
@@ -33,18 +39,22 @@ internal sealed partial class ChampionSelectAssistant
             AutoEllipsis = true,
             TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = Color.FromArgb(164, 188, 199),
+            BackColor = Color.Transparent,
         };
+        // A borderless text action keeps the mastery line light; it still names what it sends.
         _sendMastery = new Button
         {
             Text = "发送熟练度",
             Dock = DockStyle.Right,
             Enabled = false,
             FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(16, 45, 57),
-            ForeColor = Color.FromArgb(208, 185, 130),
+            BackColor = Color.Transparent,
+            ForeColor = ActionText,
             Padding = Padding.Empty,
+            Cursor = Cursors.Hand,
         };
-        _sendMastery.FlatAppearance.BorderColor = Color.FromArgb(49, 83, 95);
+        _sendMastery.FlatAppearance.BorderSize = 0;
+        _sendMastery.FlatAppearance.MouseOverBackColor = Color.FromArgb(16, 45, 57);
         FitButton(_sendMastery, 22);
         _masteryRow.Height = _sendMastery.Height;
         _sendMastery.Click += async (_, _) => await TrackAssistantWork(SendMasteryAsync());
@@ -54,7 +64,18 @@ internal sealed partial class ChampionSelectAssistant
         );
         _masteryRow.Controls.Add(_masteryLabel);
         _masteryRow.Controls.Add(_sendMastery);
-        _body.Controls.Add(_masteryRow);
+        if (inBanner)
+        {
+            // Front of the z-order docks last, so the row sits under the champion name.
+            _masteryRow.Dock = DockStyle.Top;
+            _banner!.Controls.Add(_masteryRow);
+            _banner.Controls.SetChildIndex(_masteryRow, 0);
+            _banner.Height += _masteryRow.Height;
+        }
+        else
+        {
+            _body.Controls.Add(_masteryRow);
+        }
         _masteryNextCheck = 0;
         TrackAssistantWork(RefreshMastery());
     }

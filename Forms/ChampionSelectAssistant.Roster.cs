@@ -12,6 +12,7 @@ internal sealed partial class ChampionSelectAssistant
         Width = Dip(112),
         FlatStyle = FlatStyle.Flat,
         Enabled = false,
+        Visible = false,
     };
     private ChampionSelectRoster? _roster;
     private int _rosterQueue;
@@ -31,13 +32,13 @@ internal sealed partial class ChampionSelectAssistant
         if (!supported)
         {
             ClearRoster();
-            _tips.SetToolTip(_rosterButton, "当前模式没有大乱斗英雄总览");
             return;
         }
         var next = ChampionSelectRoster.Parse(session);
         bool changed = next.Signature != _roster?.Signature;
         _roster = next;
         _rosterButton.Enabled = true;
+        _rosterButton.Visible = true;
         _tips.SetToolTip(_rosterButton, "查看我方阵容与交换池的英雄梯队");
         _rosterButton.Text = $"可选英雄 · {next.Team.Count(t => t.ChampionId > 0) + next.Bench.Length}";
         if (changed)
@@ -49,7 +50,9 @@ internal sealed partial class ChampionSelectAssistant
     private void ClearRoster()
     {
         _roster = null;
+        // Only ARAM-style queues have a bench; elsewhere the button would only be a disabled placeholder.
         _rosterButton.Enabled = false;
+        _rosterButton.Visible = false;
         _rosterButton.Text = "可选英雄";
         _tips.SetToolTip(_rosterButton, "等待客户端提供大乱斗选人数据");
         _rosterWindow?.Close();

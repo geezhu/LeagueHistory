@@ -8,6 +8,10 @@ internal sealed partial class ChampionSelectAssistant
 {
     private readonly Dictionary<int, JObject> _skillCache = new();
 
+    // The banner carries the champion name, tier, win rate and mastery above the skill icons.
+    private ProfileBackgroundPanel? _banner;
+    private FlowLayoutPanel? _heroInfo;
+
     internal sealed record Skill(string Key, string Name, string Description, string Icon);
 
     internal static Skill[] ParseSkills(JObject champion)
@@ -106,14 +110,23 @@ internal sealed partial class ChampionSelectAssistant
         var title = new Label
         {
             Text = FormMain.Globals.resLoading?.GetChampionById(hero)?.Name ?? $"英雄 {hero}",
-            Dock = DockStyle.Top,
-            Height = Dip(28),
+            AutoSize = true,
+            Margin = Padding.Empty,
             ForeColor = Color.WhiteSmoke,
             BackColor = Color.Transparent,
         };
         var titleFont = new Font(Font.FontFamily, 12, FontStyle.Bold);
         title.Font = titleFont;
         title.Disposed += (_, _) => titleFont.Dispose();
+        var info = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = Dip(28),
+            WrapContents = false,
+            Margin = Padding.Empty,
+            BackColor = Color.Transparent,
+        };
+        info.Controls.Add(title);
         var icons = new FlowLayoutPanel
         {
             Dock = DockStyle.Bottom,
@@ -122,7 +135,9 @@ internal sealed partial class ChampionSelectAssistant
             BackColor = Color.Transparent,
         };
         artwork.Controls.Add(icons);
-        artwork.Controls.Add(title);
+        artwork.Controls.Add(info);
+        _banner = artwork;
+        _heroInfo = info;
         var description = new Label
         {
             Text = "正在加载技能…",

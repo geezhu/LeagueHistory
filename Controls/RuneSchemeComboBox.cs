@@ -100,17 +100,12 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
         var rune = FormMain.Globals.resLoading.GetRuneById(id);
         string name = rune?.name ?? rune?.Name ?? "推荐符文";
         string[] highlights = _highlights(scheme);
-        string title = $"{name} · {e.Index + 1}";
-        string subtitle = highlights.Length > 0 ? string.Join(" / ", highlights) : "可选方案";
-        if (e.Bounds.Width > LogicalToDeviceUnits(300))
-        {
-            string Rate(double? n) => n.HasValue ? n.Value.ToString("P1") : "—";
-            subtitle = $"胜率 {Rate(scheme.WinRate)} · 使用率 {Rate(scheme.PickRate)}";
-            if (highlights.Length > 0)
-            {
-                title += " · " + string.Join(" / ", highlights);
-            }
-        }
+        // Highlights join the title and rates fill the subtitle at every width, so the closed
+        // selector carries the scheme's statistics without a separate line below it.
+        string Rate(double? n) => n.HasValue ? n.Value.ToString("P1") : "—";
+        string title =
+            $"{name} · {e.Index + 1}" + (highlights.Length > 0 ? " · " + string.Join(" / ", highlights) : "");
+        string subtitle = $"胜率 {Rate(scheme.WinRate)} · 使用率 {Rate(scheme.PickRate)}";
         var text = new Rectangle(
             e.Bounds.Left + LogicalToDeviceUnits(44),
             e.Bounds.Top + 1,
