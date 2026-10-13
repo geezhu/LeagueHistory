@@ -36,7 +36,7 @@ void ConfigureDetailPreview(hstring const &argument)
         return;
     auto tab = text.substr(prefix.size());
     if (tab != L"skills" && tab != L"builds" && tab != L"runes" && tab != L"augments" && tab != L"live" &&
-        tab != L"roster" && tab != L"voice" && tab != L"waves")
+        tab != L"roster" && tab != L"voice" && tab != L"waves" && tab != L"marks")
         return;
     fixturePreview = true;
     fixtureOpened = false;
@@ -182,6 +182,7 @@ void RefreshDetailHeader()
                                    box_value(teams[i / 5].Text() + L" · " + cards[i].champion.Text() +
                                              (cards[i].partyLabel.empty() ? L"" : L" · " + cards[i].partyLabel)));
     }
+    RefreshMarkButton();
     if (selectedCard < 0)
         return;
     detailTitle.Text(cards[selectedCard].champion.Text() + L"  " + cards[selectedCard].tier.Text());

@@ -11,6 +11,8 @@ internal sealed partial class LoadingOverlayManager
     private readonly Dictionary<string, LiveBuildOption[]> _liveBuilds = new();
     private readonly HashSet<string> _unknownStructures = new(StringComparer.Ordinal);
     private readonly HashSet<string> _deadPlayers = new(StringComparer.Ordinal);
+    private readonly RespawnMarkSounds _respawnSounds = new();
+    private bool _readingMarks;
     private int _respawnChecks;
     private OverlayLiveState? _liveState;
     private JArray _liveSections = new();
@@ -35,6 +37,7 @@ internal sealed partial class LoadingOverlayManager
         _unknownStructures.Clear();
         _deadPlayers.Clear();
         _respawnChecks = 0;
+        _respawnSounds.Reset();
     }
 
     private static int ItemValue(LiveMatchItem item) =>
@@ -58,8 +61,45 @@ internal sealed partial class LoadingOverlayManager
         var waves = MinionWaveForecaster.Calculate(snapshot, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         ReportUnknownStructures(waves);
         CheckRespawnFormula(snapshot);
+        _ = UpdateRespawnSoundsAsync(roster, snapshot, _generation);
         _liveState = new(insight, _liveSections, _liveRevision) { Waves = waves };
         _ = RefreshLivePanelAsync(roster, snapshot, insight, _generation);
+    }
+
+    // Marks live in the Game Bar; the chimes play here because Windows mutes the widget's audio in the background.
+    private async Task UpdateRespawnSoundsAsync(LoadingRoster roster, LiveMatchSnapshot snapshot, int generation)
+    {
+        if (_readingMarks || _disposed || !UseGameBar)
+        {
+            return;
+        }
+
+        _readingMarks = true;
+        try
+        {
+            var marks = await _gameBar.ReadRespawnMarksAsync();
+            if (_disposed || generation != _generation)
+            {
+                return;
+            }
+
+            var slots = GameBarBridge.Slots(roster);
+            var states = (marks?.Slots ?? [])
+                .Select(slot => slots[slot])
+                .OfType<LoadingPlayer>()
+                .Select(player =>
+                    snapshot.Find(player) is { } live
+                        ? new RespawnMarkState(player.Key, live.IsDead && live.RespawnTimer > 0, live.RespawnTimer)
+                        : null
+                )
+                .OfType<RespawnMarkState>()
+                .ToArray();
+            _respawnSounds.Update(states, marks?.Sound ?? false, marks?.Test ?? -1);
+        }
+        finally
+        {
+            _readingMarks = false;
+        }
     }
 
     // The death timer table is unverified in game; each new death logs the formula beside the 2999 timer.

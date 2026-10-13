@@ -101,8 +101,8 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         hstring streakBadge, championStats;
         int hero = 0;
         uint32_t partyColor = 0;
-        int64_t respawnUntil = 0;
-        bool self = false;
+        int64_t respawnUntil = 0, revivedAt = 0;
+        bool self = false, marked = false, wasDead = false;
     };
     Grid root;
     Grid list;
@@ -133,6 +133,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
 #include "TierChatView.inl"
 #include "VoiceChatView.inl"
 #include "WaveView.inl"
+#include "RespawnMarkView.inl"
 
     fire_and_forget CapturePreview()
     {
@@ -173,6 +174,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         InitializeDetails();
         InitializeWaves();
         InitializeChat();
+        InitializeMarks();
     }
     void InitializeRoot()
     {
@@ -538,6 +540,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         populatedCards = 0;
         rosterMarked = false;
         CloseWaves();
+        ClearMarks();
         CloseDetails(false);
         CloseVoice();
         ResetChat();
@@ -670,6 +673,11 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                 ConfigureVoicePreview();
             else if (detailTab == L"waves")
                 OpenWaves();
+            else if (detailTab == L"marks")
+            {
+                ToggleMark(6);
+                ToggleMark(8);
+            }
             else if (detailTab != L"roster")
                 OpenDetails(0);
         }
@@ -681,6 +689,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         int hero = static_cast<int>(row.GetNamedNumber(L"championId", 0));
         if (selectedCard == static_cast<int>(i) && card.hero != hero)
             CloseDetails(false);
+        ForgetMarkIfReplaced(card, hero);
         card.hero = hero;
         auto playerName = row.GetNamedString(L"name", L"空缺位置");
         card.player.Text(playerName.empty() ? L"玩家名称尚未提供" : playerName);
@@ -788,6 +797,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                     std::to_wstring(allies) + L" 人";
         liveAlert.Text(text);
         liveAlert.Visibility(text.empty() ? Visibility::Collapsed : Visibility::Visible);
+        UpdateMarks();
     }
     void ApplyVisibilityCommand(JsonObject const &data, bool previouslyActive)
     {
@@ -839,7 +849,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     {
         if (capturePending && root.ActualWidth() > 0 && root.ActualHeight() > 0 && populatedCards > 0 &&
             (!fixturePreview || detailTab == L"roster" || detailTab == L"voice" || detailTab == L"waves" ||
-             (!detailRevision.empty() && pendingDetailImages == 0)))
+             detailTab == L"marks" || (!detailRevision.empty() && pendingDetailImages == 0)))
         {
             capturePending = false;
             CapturePreview();

@@ -765,6 +765,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
         _window?.Dispose();
         _tiers.Dispose();
         _live.Dispose();
+        _respawnSounds.Dispose();
         foreach (var image in _icons.Values)
         {
             image.Dispose();

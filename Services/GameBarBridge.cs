@@ -58,24 +58,18 @@ public sealed partial class GameBarBridge : IDisposable
             _lastCommand = identity;
             _command = Guid.NewGuid().ToString("N");
         }
-        int own = roster?.Players.FirstOrDefault(p => p.Self)?.Team ?? 100;
-        int[] teams = own == 200 ? [200, 100] : [100, 200];
+        int[] teams = Teams(roster);
         var rows = new JArray();
-        foreach (int team in teams)
+        foreach (var p in enabled && active ? Slots(roster) : new LoadingPlayer?[10])
         {
-            var players = enabled && active ? roster?.Players.Where(p => p.Team == team).Take(5).ToArray() ?? [] : [];
-            for (int i = 0; i < 5; i++)
+            if (p == null)
             {
-                var p = players.ElementAtOrDefault(i);
-                if (p == null)
-                {
-                    rows.Add(new JObject());
-                    continue;
-                }
-                var row = PlayerRow(p, ranks, icons, champion, details, masteries, deathStreaks, parties);
-                AddLiveFields(row, p, live);
-                rows.Add(row);
+                rows.Add(new JObject());
+                continue;
             }
+            var row = PlayerRow(p, ranks, icons, champion, details, masteries, deathStreaks, parties);
+            AddLiveFields(row, p, live);
+            rows.Add(row);
         }
         _detailScope = new(
             enabled && active ? _instance + ":" + session : "",
@@ -117,6 +111,19 @@ public sealed partial class GameBarBridge : IDisposable
             }
         );
     }
+
+    private static int[] Teams(LoadingRoster? roster) =>
+        roster?.Players.FirstOrDefault(p => p.Self)?.Team == 200 ? [200, 100] : [100, 200];
+
+    /// <summary>The widget's ten slots: own team first, five per side; empty seats are null.</summary>
+    public static LoadingPlayer?[] Slots(LoadingRoster? roster) =>
+        Teams(roster)
+            .SelectMany(team =>
+            {
+                var players = roster?.Players.Where(p => p.Team == team).Take(5).ToArray() ?? [];
+                return Enumerable.Range(0, 5).Select(i => players.ElementAtOrDefault(i));
+            })
+            .ToArray();
 
     // Own team first, matching the roster columns.
     private static string[] TeamSummaries(LiveMatchInsight insight) =>

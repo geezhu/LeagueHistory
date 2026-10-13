@@ -19,6 +19,7 @@ internal static class DefaultStatisticsSuite
         LiveChampionChecks.Run();
         LiveDeathStreakChecks.Run();
         MinionWaveChecks.Run();
+        RespawnMarkChecks.Run();
         RoomPlayerChecks.Run();
         Task.Run(ChatSendDiagnosticsChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(OpggChecks.RunAsync).GetAwaiter().GetResult();
