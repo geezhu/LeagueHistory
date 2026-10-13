@@ -204,7 +204,7 @@ internal static class OverlayDetailPreview
         {
             row["self"] = slot == 0;
             row["respawn"] = slot is 6 or 8 ? 9 + slot * 2 : 0;
-            row["liveStats"] = $"{slot % 6}/{slot % 3}/{slot + 2} · 参团 {40 + slot * 5}% · {5.2 + slot * 0.4:0.0}k";
+            row["liveStats"] = $"参团 {40 + slot * 5}% · 装备 {5.2 + slot * 0.4:0.0}k";
             slot++;
         }
 
