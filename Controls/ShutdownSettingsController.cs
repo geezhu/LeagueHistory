@@ -25,6 +25,14 @@ internal sealed class ShutdownSettingsController : IDisposable
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 5000 };
     private readonly Label _summary = new() { Name = "ShutdownPlanSummary", Text = "正在读取每日关机计划…" };
 
+    // The tooltip on the button was the only place that explained the behavior; it stays visible now.
+    private readonly Label _purpose = new()
+    {
+        Name = "ShutdownPurpose",
+        Text =
+            "每天到点自动关机，防止熬夜。到点时正在对局会等本局结束再关；关机前倒计时可在托盘取消本次。关闭联盟视界后计划仍然有效。",
+    };
+
     // The next run joins the one-line summary; this label keeps the value for diagnostics and checks.
     private readonly Label _nextRun = new()
     {
@@ -101,14 +109,11 @@ internal sealed class ShutdownSettingsController : IDisposable
         _create.Click += async (_, _) => await CreateAsync();
         _delete.Click += async (_, _) => await DeleteAsync();
         _log.Click += (_, _) => ShowLog();
-        _tips.SetToolTip(
-            _create,
-            "创建后立即启用每日计划；重复创建会替换原计划。到点仍在游戏则等待本局结束，退出联盟视界后仍有效。"
-        );
+        _tips.SetToolTip(_create, "保存后立即按新的时间与倒计时启用，替换原计划。");
         UpdateEnabledControls();
     }
 
-    public Control[] Content => [_summary, _nextRun, _status, _clockRow, _actions, _result];
+    public Control[] Content => [_purpose, _summary, _nextRun, _status, _clockRow, _actions, _result];
 
     public void Attach()
     {
@@ -199,6 +204,7 @@ internal sealed class ShutdownSettingsController : IDisposable
         // Routine status stays in the tooltip; only states that need the user's attention are shown.
         _status.Visible = view.Exists && (!view.Managed || view.Message.Contains("正在执行"));
         _tips.SetToolTip(_summary, view.Message);
+        _create.Text = view.Exists ? "保存计划" : "创建计划";
         if (populate)
         {
             _updatingInputs = true;
@@ -229,7 +235,7 @@ internal sealed class ShutdownSettingsController : IDisposable
         if (_view != null && !_updatingInputs)
         {
             _dirty = true;
-            _result.Text = "点击“创建计划”应用当前时间与倒计时。";
+            _result.Text = $"点击“{_create.Text}”应用当前时间与倒计时。";
         }
     }
 
@@ -237,7 +243,8 @@ internal sealed class ShutdownSettingsController : IDisposable
     {
         string time = _time.Value.ToString("HH:mm");
         int seconds = (int)_countdown.Value;
-        return OperateAsync(() => _service.CreateAsync(time, seconds), "每日关机计划已创建并启用。");
+        string success = _view is { Exists: true } ? "每日关机计划已更新并启用。" : "每日关机计划已创建并启用。";
+        return OperateAsync(() => _service.CreateAsync(time, seconds), success);
     }
 
     private async Task DeleteAsync()

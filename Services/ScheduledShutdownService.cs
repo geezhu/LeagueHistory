@@ -108,7 +108,7 @@ public sealed class ScheduledShutdownService
         int delay = managed
             ? Math.Clamp((int?)config?["CountdownSeconds"] ?? DefaultCountdownSeconds, 0, 300)
             : DefaultCountdownSeconds;
-        string message = managed ? "到点后自动检查对局状态。" : "已发现原有脚本，点击“创建计划”可替换并启用。";
+        string message = managed ? "到点后自动检查对局状态。" : "已发现原有脚本，点击“保存计划”可替换并启用。";
         string? occurrence = null;
         var status = managed ? ReadJson(Path.Combine(_directory, "status.json")) : null;
         if (task.Running)

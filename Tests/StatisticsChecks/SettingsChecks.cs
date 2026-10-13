@@ -85,6 +85,36 @@ internal static class SettingsChecks
         {
             throw new Exception("Shutdown settings only expose create, delete and logs");
         }
+
+        if (
+            All(shutdownCard).Single(c => c.Name == "ShutdownPurpose").Text is not { Length: > 0 } purpose
+            || !purpose.Contains("本局结束")
+        )
+        {
+            throw new Exception("The shutdown card explains that a running match finishes first");
+        }
+
+        var general = tabs.TabPages.Cast<TabPage>().Single(p => p.Text == "功能辅助");
+        var titles = All(general)
+            .OfType<FlowLayoutPanel>()
+            .Where(card => card.Parent is FlowLayoutPanel { AutoScroll: true })
+            .Select(card => card.Controls[0].Text);
+        string[] order =
+        {
+            "选人战绩",
+            "选人助手",
+            "英雄预选",
+            "对局自动化",
+            "客户端维护",
+            "到点关机 · 防熬夜",
+            "关于与交流",
+        };
+        if (!titles.SequenceEqual(order))
+        {
+            throw new Exception(
+                "General settings follow champion select, match, computer: " + string.Join(", ", titles)
+            );
+        }
     }
 
     private static void OverlayControls(TabControl tabs)
