@@ -23,7 +23,7 @@ public sealed class ChatSendDiagnostics
     public string LogPath { get; }
     public string? LogError { get; private set; }
     public ChatSendStatus Current { get; private set; } =
-        new(DateTime.Now, "ready", "等待快捷键：Ctrl + F9 我方，Ctrl + F11 对方。");
+        new(DateTime.Now, "ready", "等待发送：游戏内 F9 / F11，或 Game Bar 的「发送」。");
     public event Action? Changed;
 
     public ChatSendDiagnostics(string path) => LogPath = path;

@@ -31,7 +31,7 @@ internal static class DefaultStatisticsSuite
         AssistantVisibilityChecks.Run();
         OverlayPartyChecks.Run();
         AssistantWindowChecks.Run();
-        TierHotkeyChecks.Run();
+        GameHotkeyChecks.Run();
         CompositionViewChecks.Run();
         OpggChecks.Render();
         AramMetaChecks.Render();

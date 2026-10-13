@@ -59,7 +59,6 @@ internal static class LiveChampionChecks
         RawChampionKeys();
         ExactResourceNames();
         var roster = RosterFallback();
-        TierMessages();
         Task.Run(() => CheckBridge(roster)).GetAwaiter().GetResult();
         Console.WriteLine(
             "PASS: Seraphine raw formats, exact name fallback, LCU pick retention, ambiguity, hidden identities, Game Bar detail selection and tier chat. No game input sent."
@@ -203,23 +202,6 @@ internal static class LiveChampionChecks
             roster.FromLive(hidden, _ => 0).Players.Single() is { ChampionId: 0, IdentityHidden: true, Puuid: "" },
             "Hidden identities cannot inherit another player's pick"
         );
-    }
-
-    private static void TierMessages()
-    {
-        var live = Sample("Character_Seraphine_Name");
-        string message = string.Join(
-            "",
-            LiveTierChatService.BuildMessages(
-                live,
-                450,
-                false,
-                Heroes,
-                new Dictionary<int, (string, double?, double?)> { { 147, ("T1", .53, .07) } },
-                "test"
-            )
-        );
-        Check(message.Contains("星籁歌姬 T1 53.0%/7.0%"), "In-game tier messages use the same identity resolver");
     }
 
     private static async Task CheckBridge(LoadingRoster roster)

@@ -369,8 +369,6 @@ public partial class FormMain
             ("Ctrl + F7", "选人界面", "我方战绩"),
             ("F9", "游戏内", "我方战绩"),
             ("F11", "游戏内", "双方战绩"),
-            ("Ctrl + F9", "大乱斗 / 海克斯大乱斗", "我方梯队与胜率"),
-            ("Ctrl + F11", "大乱斗 / 海克斯大乱斗", "对方梯队与胜率"),
         };
         var table = new TableLayoutPanel
         {

@@ -6,19 +6,17 @@ namespace League.Managers
     public class HotkeyManager : IDisposable
     {
         private readonly FormMain _mainForm;
-        private readonly TierHotkeyWindow _hotkeyWindow;
+        private readonly GameHotkeyWindow _hotkeyWindow;
         private bool _disposed;
 
         public event Action? OnMyTeamHotkey;
         public event Action? OnFullTeamHotkey;
         public event Action? OnChampSelectF7;
-        public event Action? OnMyTierHotkey;
-        public event Action? OnEnemyTierHotkey;
 
         public HotkeyManager(FormMain mainForm)
         {
             _mainForm = mainForm ?? throw new ArgumentNullException(nameof(mainForm));
-            _hotkeyWindow = new TierHotkeyWindow(QueueHotkey);
+            _hotkeyWindow = new GameHotkeyWindow(QueueHotkey);
             Services.ChatSendDiagnostics.Shared.Report("permission", Services.GameInputService.HasInputPermission()
                 ? "管理员权限已就绪。快捷键使用 Windows 事件接收，无键盘钩子或按键轮询。发送前请关闭聊天输入框。"
                 : "当前没有管理员权限，请以管理员身份重新启动程序。");
@@ -43,10 +41,7 @@ namespace League.Managers
         {
             try
             {
-                bool tierKey=isCtrlDown && key is Keys.F9 or Keys.F11;
-                if(tierKey)Services.ChatSendDiagnostics.Shared.Report("trigger",key==Keys.F9?"已收到 Ctrl + F9，准备发送我方梯队。":"已收到 Ctrl + F11，准备发送对方梯队。");
                 string phase = await GetGameflowPhaseSafe();
-                if(tierKey && phase!="InProgress")Services.ChatSendDiagnostics.Shared.Report("phase",$"未发送：当前游戏阶段为 {phase}，需要进入游戏。");
 
                 if (_champSelect.Matches(key, isCtrlDown))
                 {
@@ -64,9 +59,7 @@ namespace League.Managers
 
                 if (phase == "InProgress")
                 {
-                    if (isCtrlDown && key == Keys.F9)OnMyTierHotkey?.Invoke();
-                    else if (isCtrlDown && key == Keys.F11)OnEnemyTierHotkey?.Invoke();
-                    else if (key == Keys.F9)
+                    if (key == Keys.F9)
                     {
                         Debug.WriteLine("[HotkeyManager] 我方热键 → 发送我方队伍");
                         OnMyTeamHotkey?.Invoke();
@@ -80,7 +73,6 @@ namespace League.Managers
             }
             catch (Exception ex)
             {
-                if(isCtrlDown && key is Keys.F9 or Keys.F11)Services.ChatSendDiagnostics.Shared.Report("trigger-error","快捷键处理失败："+ex.GetType().Name);
                 Debug.WriteLine($"[HotkeyManager] 处理热键异常: {ex.Message}");
             }
         }
@@ -106,8 +98,6 @@ namespace League.Managers
             OnMyTeamHotkey = null;
             OnFullTeamHotkey = null;
             OnChampSelectF7 = null;
-            OnMyTierHotkey = null;
-            OnEnemyTierHotkey = null;
         }
 
         private readonly struct HotkeySpec

@@ -4,7 +4,7 @@ using League.Services;
 namespace League.Managers;
 
 /// <summary>Receives exact shortcuts without intercepting unrelated game input.</summary>
-internal sealed class TierHotkeyWindow : NativeWindow, IDisposable
+internal sealed class GameHotkeyWindow : NativeWindow, IDisposable
 {
     private readonly Action<Keys> _pressed;
     private readonly Dictionary<int, Keys> _registered = new();
@@ -15,13 +15,13 @@ internal sealed class TierHotkeyWindow : NativeWindow, IDisposable
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool UnregisterHotKey(IntPtr window, int id);
 
-    public TierHotkeyWindow(Action<Keys> pressed, params Keys[] keys)
+    public GameHotkeyWindow(Action<Keys> pressed, params Keys[] keys)
     {
         _pressed = pressed;
-        CreateHandle(new CreateParams { Caption = "League tier hotkeys", Parent = new IntPtr(-3) });
+        CreateHandle(new CreateParams { Caption = "League game hotkeys", Parent = new IntPtr(-3) });
         if (keys.Length == 0)
         {
-            keys = new[] { Keys.F9, Keys.F11, Keys.Control | Keys.F7, Keys.Control | Keys.F9, Keys.Control | Keys.F11 };
+            keys = new[] { Keys.F9, Keys.F11, Keys.Control | Keys.F7 };
         }
 
         foreach (var (key, index) in keys.Select((key, index) => (key, index)))
