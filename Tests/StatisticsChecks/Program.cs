@@ -160,6 +160,7 @@ internal static class Program
             });
         checks["--overlay-party-checks"] = () => Ui(OverlayPartyChecks.Run);
         checks["--minion-wave-checks"] = MinionWaveChecks.Run;
+        checks["--respawn-mark-checks"] = RespawnMarkChecks.Run;
         checks["--tier-chat-checks"] = () =>
         {
             ChampionTierChatChecks.Run();

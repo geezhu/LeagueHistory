@@ -193,6 +193,7 @@ internal static class LiveInsightChecks
                     && ((JArray)snapshot["liveSections"]!).Count == live.Sections.Count,
                 "Team summaries and the live panel are published"
             );
+            await CheckRespawnMarksAsync(bridge, folder, snapshot);
         }
         finally
         {
@@ -200,6 +201,26 @@ internal static class LiveInsightChecks
             await bridge.Completion;
             Directory.Delete(folder, true);
         }
+    }
+
+    // The widget marks slots; the bridge keeps only those still showing the marked champion.
+    private static async Task CheckRespawnMarksAsync(GameBarBridge bridge, string folder, JObject snapshot)
+    {
+        var players = (JArray)snapshot["players"]!;
+        int slot = players.Select((p, i) => (p, i)).Single(row => (int?)row.p["championId"] == 4).i;
+        var marks = new JObject
+        {
+            ["protocol"] = 1,
+            ["session"] = snapshot["session"],
+            ["slots"] = new JArray(slot, 0),
+            ["heroes"] = new JArray(4, 999),
+            ["sound"] = true,
+            ["test"] = 0,
+        };
+        await File.WriteAllTextAsync(Path.Combine(folder, "respawn-marks.json"), marks.ToString());
+        var read = await bridge.ReadRespawnMarksAsync();
+        Check(read != null && read.Slots.SequenceEqual([slot]), "A slot whose champion changed is not marked");
+        Check(GameBarBridge.Slots(null).Length == 10, "The widget always has ten slots");
     }
 
     private static JObject Sample() =>
