@@ -98,8 +98,11 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         TextBlock champion, player, tier, stats, mastery, deathStreak, party;
         Border partyBadge;
         hstring imageData, details, masteryDetails, deathStreakText, deathStreakDetails, partyLabel, partyDetails;
+        hstring streakBadge, championStats;
         int hero = 0;
         uint32_t partyColor = 0;
+        int64_t respawnUntil = 0;
+        bool self = false;
     };
     Grid root;
     Grid list;
@@ -109,6 +112,10 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     TextBlock hint = MakeText(L"Win＋G 打开或关闭此小组件，固定后可保留在游戏上方。", 12, 0xdbc47f);
     TextBlock details = MakeText(L"点击玩家卡片查看已缓存的战绩。", 13);
     std::array<TextBlock, 2> teams{MakeText(L"我方", 16, 0x45c7ce), MakeText(L"对方", 16, 0xf3b37e)};
+    std::array<TextBlock, 2> teamSummaries{MakeText(L"", 12, 0x91acbb), MakeText(L"", 12, 0x91acbb)};
+    TextBlock liveAlert = MakeText(L"", 13, 0xff8a7a);
+    JsonArray liveSections;
+    hstring liveRevision;
     TextBlock rosterGuide = MakeText(L"ⓘ", 12, 0x91acbb);
     std::array<Card, 10> cards;
     XboxGameBarWidget widget{nullptr};
@@ -204,9 +211,16 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         RowDefinition headerRow;
         headerRow.Height({1, GridUnitType::Auto});
         rosterPanel.RowDefinitions().Append(headerRow);
+        RowDefinition alertRow;
+        alertRow.Height({1, GridUnitType::Auto});
+        rosterPanel.RowDefinitions().Append(alertRow);
         rosterPanel.RowDefinitions().Append(RowDefinition());
         rosterPanel.Children().Append(CreateRosterHeader());
-        Grid::SetRow(rosterScroll, 1);
+        liveAlert.Margin({0, 0, 0, 6});
+        liveAlert.Visibility(Visibility::Collapsed);
+        Grid::SetRow(liveAlert, 1);
+        rosterPanel.Children().Append(liveAlert);
+        Grid::SetRow(rosterScroll, 2);
         rosterPanel.Children().Append(rosterScroll);
         Grid::SetRow(rosterPanel, 2);
         root.Children().Append(rosterPanel);
@@ -255,16 +269,26 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         header.Margin({0, 0, 0, 6});
         for (int col = 0; col < 2; ++col)
             header.ColumnDefinitions().Append(ColumnDefinition());
+        ColumnDefinition guideColumn;
+        guideColumn.Width({1, GridUnitType::Auto});
+        header.ColumnDefinitions().Append(guideColumn);
         for (int i = 0; i < 2; ++i)
         {
+            StackPanel team;
+            team.Orientation(Orientation::Horizontal);
             teams[i].VerticalAlignment(VerticalAlignment::Center);
-            Grid::SetColumn(teams[i], i);
-            header.Children().Append(teams[i]);
+            team.Children().Append(teams[i]);
+            // Kills, item value and the gold lead from 2999; empty before the game starts.
+            teamSummaries[i].VerticalAlignment(VerticalAlignment::Center);
+            teamSummaries[i].Margin({8, 2, 0, 0});
+            team.Children().Append(teamSummaries[i]);
+            Grid::SetColumn(team, i);
+            header.Children().Append(team);
         }
         rosterGuide.HorizontalAlignment(HorizontalAlignment::Right);
         rosterGuide.VerticalAlignment(VerticalAlignment::Center);
         rosterGuide.Visibility(Visibility::Collapsed);
-        Grid::SetColumn(rosterGuide, 1);
+        Grid::SetColumn(rosterGuide, 2);
         header.Children().Append(rosterGuide);
         return header;
     }
@@ -347,6 +371,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                     self->ReadDetails();
                     self->ReadChatStatus();
                     self->ReadVoiceStatus();
+                    self->UpdateRespawns();
                 }
             });
         timer.Start();
@@ -526,7 +551,17 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             card.partyBadge.Visibility(Visibility::Collapsed);
             card.player.Foreground(MakeBrush(0x91acbb));
             card.button.BorderThickness({0});
+            card.streakBadge = L"";
+            card.championStats = L"";
+            card.respawnUntil = 0;
+            card.self = false;
+            card.icon.Opacity(1);
         }
+        for (auto &summary : teamSummaries)
+            summary.Text(L"");
+        liveSections = JsonArray();
+        liveRevision = L"";
+        liveAlert.Visibility(Visibility::Collapsed);
         details.Text(L"等待当前对局数据。");
         UpdateRosterGuide();
     }
@@ -593,6 +628,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         auto teamNames = data.GetNamedArray(L"teams", JsonArray());
         for (uint32_t i = 0; i < 2 && i < teamNames.Size(); ++i)
             teams[i].Text(teamNames.GetStringAt(i));
+        ApplyLive(data);
         auto rows = data.GetNamedArray(L"players", JsonArray());
         populatedCards = 0;
         bool marked = false;
@@ -606,6 +642,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             marked = marked || cards[i].partyColor != 0;
         }
         rosterMarked = marked;
+        UpdateRespawns();
         if (selectedCard >= 0)
             RefreshDetailHeader();
         UpdateRosterGuide();
@@ -650,7 +687,6 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         ToolTipService::SetToolTip(
             card.player, box_value(playerName + (card.partyDetails.empty() ? L"" : L"\n" + card.partyDetails)));
         card.tier.Foreground(MakeBrush(static_cast<uint32_t>(row.GetNamedNumber(L"color", 0x91acbb))));
-        card.stats.Text(row.GetNamedString(L"stats", L"胜率 —    选用率 —"));
         card.mastery.Text(row.GetNamedString(L"mastery", L""));
         card.masteryDetails = row.GetNamedString(L"masteryDetails", L"");
         ToolTipService::SetToolTip(card.mastery, box_value(card.masteryDetails));
@@ -660,18 +696,80 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         auto current = row.TryLookup(L"currentDeathStreak");
         int streak =
             current && current.ValueType() == JsonValueType::Number ? static_cast<int>(current.GetNumber()) : 0;
-        card.deathStreak.Text(streak >= 2 ? L"连死 " + to_hstring(streak) : L"");
+        card.streakBadge = streak >= 2 ? L"连死 " + to_hstring(streak) : L"";
         ToolTipService::SetToolTip(card.deathStreak, box_value(card.deathStreakDetails));
+        // In game the scoreboard line replaces the loading statistics, which move into the tooltip.
+        card.championStats = row.GetNamedString(L"stats", L"胜率 —    选用率 —");
+        auto liveStats = row.GetNamedString(L"liveStats", L"");
+        card.stats.Text(liveStats.empty() ? card.championStats : liveStats);
         ToolTipService::SetToolTip(
             card.stats,
-            box_value(card.deathStreakText +
+            box_value((liveStats.empty() ? L"" : card.championStats + L"\n") + card.deathStreakText +
                       (card.deathStreakDetails.empty() ? L"" : L"\n" + card.deathStreakDetails)));
+        card.self = row.GetNamedBoolean(L"self", false);
+        double respawn = row.GetNamedNumber(L"respawn", 0);
+        card.respawnUntil = respawn > 0 ? lastGood + static_cast<int64_t>(respawn * 1000) : 0;
+        RenderRespawn(card);
         card.details = row.GetNamedString(L"details", L"等待当前对局数据。");
         card.button.IsEnabled(row.HasKey(L"name"));
         // Image decoding must never block the other nine players or the connection heartbeat.
         auto image = row.GetNamedString(L"icon", L"");
         if (card.imageData != image)
             SetImage(i, image);
+    }
+    void ApplyLive(JsonObject const &data)
+    {
+        auto summaries = data.GetNamedArray(L"teamSummaries", JsonArray());
+        for (uint32_t i = 0; i < 2; ++i)
+            teamSummaries[i].Text(i < summaries.Size() ? summaries.GetStringAt(i) : L"");
+        auto next = data.GetNamedString(L"liveRevision", L"");
+        liveSections = data.GetNamedArray(L"liveSections", JsonArray());
+        if (next == liveRevision)
+            return;
+        liveRevision = next;
+        if (selectedCard >= 0)
+        {
+            RefreshDetailHeader();
+            if (detailTab == L"live")
+                RenderDetails(false);
+        }
+    }
+    static int RespawnSeconds(Card const &card)
+    {
+        auto left = card.respawnUntil - Now();
+        return left > 0 ? static_cast<int>((left + 999) / 1000) : 0;
+    }
+    // A dead player's icon dims and the heading counts down; the death-streak badge returns on respawn.
+    static void RenderRespawn(Card &card)
+    {
+        int seconds = RespawnSeconds(card);
+        card.icon.Opacity(seconds > 0 ? .35 : 1);
+        card.deathStreak.Text(seconds > 0 ? L"复活 " + to_hstring(seconds) : card.streakBadge);
+        card.deathStreak.Foreground(MakeBrush(seconds > 0 ? 0xff8a7a : 0xf3b37e));
+    }
+    void UpdateRespawns()
+    {
+        if (stopped)
+            return;
+        std::wstring enemies;
+        int allies = 0;
+        for (int i = 0; i < 10; ++i)
+        {
+            RenderRespawn(cards[i]);
+            int seconds = cards[i].hero > 0 ? RespawnSeconds(cards[i]) : 0;
+            if (seconds <= 0)
+                continue;
+            if (i < 5)
+                ++allies;
+            else
+                enemies += L" · " + std::wstring(cards[i].champion.Text()) + L" " + std::to_wstring(seconds) + L" 秒";
+        }
+        std::wstring text = enemies.empty() ? L"" : std::wstring(teams[1].Text()) + L"阵亡" + enemies;
+        if (allies > 0)
+            text += (text.empty() ? L"" : L"    ") + std::wstring(teams[0].Text()) + L"阵亡 " +
+                    std::to_wstring(allies) + L" 人";
+        liveAlert.Text(text);
+        liveAlert.Visibility(text.empty() ? Visibility::Collapsed : Visibility::Visible);
     }
     void ApplyVisibilityCommand(JsonObject const &data, bool previouslyActive)
     {

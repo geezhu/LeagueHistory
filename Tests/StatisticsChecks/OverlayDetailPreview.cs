@@ -15,6 +15,8 @@ internal static class OverlayDetailPreview
         var heroIcon = Encode(Path.Combine(assetDirectory, "champion", "九尾妖狐.png"));
         var roster = CreateRoster(heroIcon);
         AddPlayerAnnotations(roster);
+        AddLivePreview(roster);
+        PopulateIcons(roster, assetDirectory);
         File.WriteAllText(Path.Combine(destination, "detail-preview-content.json"), content.ToString());
         File.WriteAllText(Path.Combine(destination, "detail-preview-snapshot.json"), roster.ToString());
         Console.WriteLine("Detail preview fixture exported to " + destination);
@@ -192,6 +194,43 @@ internal static class OverlayDetailPreview
             row["partyDetails"] = party.Description;
             slot++;
         }
+    }
+
+    // Scoreboard facts as 2999 would report them mid-game: two enemies dead, and the active player's panel.
+    private static void AddLivePreview(JObject roster)
+    {
+        int slot = 0;
+        foreach (var row in ((JArray)roster["players"]!).OfType<JObject>())
+        {
+            row["self"] = slot == 0;
+            row["respawn"] = slot is 6 or 8 ? 9 + slot * 2 : 0;
+            row["liveStats"] = $"{slot % 6}/{slot % 3}/{slot + 2} · 参团 {40 + slot * 5}% · {5.2 + slot * 0.4:0.0}k";
+            slot++;
+        }
+
+        var insight = new LiveMatchInsight(
+            612,
+            new(18, 41200, 1, 3, 3),
+            new(14, 38900, 0, 1, 2),
+            new Dictionary<string, LivePlayerInsight>(),
+            [new(301, 3, 1), new(455, 1, 3), new(588, 4, 2)],
+            ""
+        );
+        var stats = new LiveChampionStats(2380, 96, 58, 25, 12, 0.18, 0, 0);
+        var self = new LivePlayerInsight(5200, 5, 2, 9, 0.78, 0);
+        var input = new LivePanelInput(
+            insight,
+            self,
+            stats,
+            LiveDefenseAdvice.Calculate(stats, 0.64),
+            new(new([3071, 3053, 3742], 0.543, 0.12, 1800), 1, 3053),
+            [3071],
+            [8010, 9111, 9104, 8299, 8473, 8242, 5005, 5008, 5011],
+            "布局样例 · 不代表当前对局"
+        );
+        roster["teamSummaries"] = new JArray("18 杀 · 41.2k · 领先 2.3k", "14 杀 · 38.9k");
+        roster["liveRevision"] = "fixture-live-1";
+        roster["liveSections"] = LivePanelSections.Build(input, id => $"布局装备 {id}");
     }
 
     private static string Encode(string path, int width = 48, int height = 48)

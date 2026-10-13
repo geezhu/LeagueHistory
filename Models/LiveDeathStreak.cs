@@ -1,6 +1,18 @@
 namespace League.Models;
 
-public sealed record LiveMatchEvent(long? Id, string Name, double Time, string Killer, string Victim);
+public sealed record LiveMatchEvent(long? Id, string Name, double Time, string Killer, string Victim)
+{
+    public string[] Assisters { get; init; } = [];
+
+    /// <summary>Multikill size; zero for other events.</summary>
+    public int Streak { get; init; }
+
+    /// <summary>Ace: the team that cleared the opponents, as ORDER or CHAOS.</summary>
+    public string Team { get; init; } = "";
+
+    /// <summary>GameEnd: Win or Lose from the active player's point of view.</summary>
+    public string Result { get; init; } = "";
+}
 
 public sealed record LiveDeathStreak(int? Current, int? Highest, bool Complete, string Description)
 {
@@ -28,20 +40,9 @@ public static class LiveDeathStreakAnalysis
                     return LiveDeathStreak.Unavailable("玩家身份隐藏，不能唯一匹配死亡事件。");
                 }
 
-                var matches =
-                    snapshot
-                        ?.Players.Where(l =>
-                            l.Name == p.Name
-                            && (
-                                l.Team == "ORDER" ? 100
-                                : l.Team == "CHAOS" ? 200
-                                : 0
-                            ) == p.Team
-                        )
-                        .ToArray()
-                    ?? [];
-                return matches.Length == 1
-                    ? snapshot!.DeathStreaks.GetValueOrDefault(matches[0].Key) ?? LiveDeathStreak.Unavailable()
+                var match = snapshot?.Find(p);
+                return match != null
+                    ? snapshot!.DeathStreaks.GetValueOrDefault(match.Key) ?? LiveDeathStreak.Unavailable()
                     : LiveDeathStreak.Unavailable("等待游戏事件与玩家名单匹配。");
             }
         );
@@ -55,13 +56,7 @@ public static class LiveDeathStreakAnalysis
             return results;
         }
 
-        var aliases = snapshot
-            .Players.Where(p => p.Name.Trim() != "#")
-            .SelectMany(p => p.EventAliases.Distinct().Select(name => (name, p.Key)))
-            .Where(p => !string.IsNullOrWhiteSpace(p.name) && p.name.Trim() != "#")
-            .GroupBy(p => p.name, StringComparer.Ordinal)
-            .Where(g => g.Select(p => p.Key).Distinct().Count() == 1)
-            .ToDictionary(g => g.Key, g => g.First().Key, StringComparer.Ordinal);
+        var aliases = snapshot.EventAliasMap();
         var counts = snapshot.Players.ToDictionary(p => p.Key, _ => (Current: 0, Highest: 0, Deaths: 0, Kills: 0));
         var events = snapshot
             .Events.Where(e => e.Time <= snapshot.Time + 1)

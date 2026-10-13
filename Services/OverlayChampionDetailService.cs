@@ -490,20 +490,9 @@ public sealed class OverlayChampionDetailService : IDisposable
         {
             return await ReadAramMetaRecommendationsAsync(hero, data, token, preview);
         }
-        else if (OpggQuery.ModeForQueue(queue) is string mode)
+        else if (await ReadOpggBuildAsync(hero, queue, position, token) is { } build)
         {
-            if (mode == "ranked" && !new[] { "top", "jungle", "mid", "adc", "support" }.Contains(position))
-            {
-                var tiers = await _opgg.GetTiersAsync(new("global", mode, "all", "mid", 0), false, token);
-                position = OpggQuery.PositionForChampion(tiers.Rows, hero, null) ?? "mid";
-            }
-            recommendations = FromOpgg(
-                await _opgg.GetBuildAsync(
-                    new("global", mode, "all", mode == "ranked" ? position : "none", hero),
-                    false,
-                    token
-                )
-            );
+            recommendations = FromOpgg(build);
         }
         else
         {
@@ -515,6 +504,70 @@ public sealed class OverlayChampionDetailService : IDisposable
         }
 
         return (recommendations, false);
+    }
+
+    private async Task<OpggBuild?> ReadOpggBuildAsync(int hero, int queue, string position, CancellationToken token)
+    {
+        if (OpggQuery.ModeForQueue(queue) is not string mode)
+        {
+            return null;
+        }
+
+        if (mode == "ranked" && !new[] { "top", "jungle", "mid", "adc", "support" }.Contains(position))
+        {
+            var tiers = await _opgg.GetTiersAsync(new("global", mode, "all", "mid", 0), false, token);
+            position = OpggQuery.PositionForChampion(tiers.Rows, hero, null) ?? "mid";
+        }
+        return await _opgg.GetBuildAsync(
+            new("global", mode, "all", mode == "ranked" ? position : "none", hero),
+            false,
+            token
+        );
+    }
+
+    /// <summary>Recommended item builds in source order, from the same sources as the detail page.</summary>
+    public async Task<LiveBuildOption[]> LoadBuildOptionsAsync(
+        int hero,
+        int queue,
+        string position,
+        CancellationToken token
+    )
+    {
+        if (queue is 2400 or 3270)
+        {
+            var page = await _am.GetAsync(hero, false, token);
+            return AramMetaRecommendation
+                .Read(page, hero, "items")
+                .Select(r => new LiveBuildOption(r.Ids, r.WinRate, r.PickRate, r.Games))
+                .ToArray();
+        }
+
+        var build = await ReadOpggBuildAsync(hero, queue, position, token);
+        return build == null
+            ? []
+            : OpggItemSetService
+                .Options(build.Data, "core_items")
+                .Select(row => new LiveBuildOption(
+                    OpggItemSetService.Ids(row),
+                    (double?)row["win_rate"] ?? OpggBuild.Ratio(row["win"], row["play"]),
+                    (double?)row["pick_rate"],
+                    (long?)row["play"]
+                ))
+                .ToArray();
+    }
+
+    public async Task<AramMetaIndex> LoadAramMetaIndexAsync(CancellationToken token) =>
+        (await _am.GetAsync(0, false, token)).Index;
+
+    /// <summary>Fills names, descriptions and images for icons built outside a detail page.</summary>
+    public async Task DescribeIconsAsync(JObject data, CancellationToken token)
+    {
+        Decorate(data);
+        foreach (var chunk in data.Descendants().OfType<JObject>().Where(o => o["kind"] != null).ToArray().Chunk(4))
+        {
+            token.ThrowIfCancellationRequested();
+            await Task.WhenAll(chunk.Select(async icon => icon["image"] = await LoadImage(icon, token)));
+        }
     }
 
     private async Task<(JObject Data, bool Failed)> ReadAramMetaRecommendationsAsync(

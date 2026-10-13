@@ -234,6 +234,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
         _masteries.Clear();
         _deathStreaks = new Dictionary<string, LiveDeathStreak>();
         _lastDeathStreakRead = 0;
+        ResetLive();
         _identitySummary = "";
         _championIssue = "";
         if (_roster != null || _match.Length > 0)
@@ -448,9 +449,11 @@ internal sealed partial class LoadingOverlayManager : IDisposable
             _rankRequests.Clear();
             _rankRetry.Clear();
             _masteries.Clear();
+            ResetLive();
             _match = match;
         }
         _roster = roster;
+        UpdateLive(roster, liveSnapshot);
         _deathStreaks = LiveDeathStreakAnalysis.ForRoster(roster, liveSnapshot);
         _lastDeathStreakRead = liveSnapshot != null ? Environment.TickCount64 : 0;
     }
@@ -593,7 +596,8 @@ internal sealed partial class LoadingOverlayManager : IDisposable
             OverlayPartyAnalysis.ForRoster(
                 _roster,
                 _owner._playerCardManager?.GetAllCachedPlayerInfos().Values.AsEnumerable() ?? []
-            )
+            ),
+            _liveState
         );
 
     private void PaintSnapshot()

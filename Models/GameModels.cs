@@ -21,6 +21,7 @@
         public string IconFileName { get; set; }
         public string Description { get; set; }
         public Image Icon { get; set; }
+        public int PriceTotal { get; set; }
     }
 
     //召唤师技能
