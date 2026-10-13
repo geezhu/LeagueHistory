@@ -33,7 +33,31 @@ public static class MinionWaveForecaster
         return new(rules.Name, snapshot.Time, clock, spawns, Notes(rules, snapshot.Time), Value(rules, spawns), lanes)
         {
             UnknownStructures = structures.Unknown.Distinct().ToArray(),
+            Deaths = DeathCosts(snapshot, own),
+            DeathFactor = (DeathTimeRules.For(snapshot.Mode, snapshot.Map)?.Factor(snapshot.Time) ?? 0) * 100,
         };
+    }
+
+    /// <summary>Own team first, then by level; empty for modes whose death timer table is unknown.</summary>
+    public static DeathCost[] DeathCosts(LiveMatchSnapshot snapshot, int own)
+    {
+        if (DeathTimeRules.For(snapshot.Mode, snapshot.Map) is not { } rules)
+        {
+            return [];
+        }
+
+        return snapshot
+            .Players.Where(p => p.Level > 0)
+            .Select(p => new DeathCost(
+                LiveMatchSnapshot.TeamId(p.Team) == own,
+                p.ChampionName,
+                p.Level,
+                rules.Seconds(p.Level, snapshot.Time),
+                p.Self
+            ))
+            .OrderByDescending(d => d.Ally)
+            .ThenByDescending(d => d.Level)
+            .ToArray();
     }
 
     // The client's first-wave event corrects small offsets; a value far from the rule is ignored.

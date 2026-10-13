@@ -14,7 +14,10 @@ internal static class MinionWaveChecks
         CheckStructures();
         CheckArrivals();
         CheckSnapshot();
-        Console.WriteLine("PASS: minion wave schedule, cannon phases, bounty growth, structure names and arrivals.");
+        CheckDeathTimes();
+        Console.WriteLine(
+            "PASS: minion wave schedule, cannon phases, bounty growth, structure names, arrivals and death timers."
+        );
     }
 
     private static double[] Times(MinionWaveRules rules, double from, int count) =>
@@ -168,5 +171,24 @@ internal static class MinionWaveChecks
         var top = ((JArray)json["lanes"]!).Single(l => (string?)l["name"] == "上路");
         Check((string?)top["ally"]?["target"] == "敌方二塔", "Destroyed turrets move the target");
         Check(((JArray)json["spawns"]!).Count == 4, "Several spawns survive a missed poll");
+    }
+
+    private static void CheckDeathTimes()
+    {
+        var rift = DeathTimeRules.SummonersRift;
+        Check(rift.Factor(599) == 0 && Math.Abs(rift.Factor(900) - 0.05) < 1e-9, "Rift factor reaches 5% at 15:00");
+        Check(Math.Abs(rift.Factor(1800) - 0.1775) < 1e-9, "Rift factor reaches 17.75% at 30:00");
+        Check(Math.Abs(rift.Seconds(18, 1800) - 52.5 * 1.1775) < 1e-9, "Level 18 at 30:00");
+        Check(rift.Seconds(18, 3600) == 52.5 * 1.5 && rift.Seconds(30, 0) == 52.5, "Cap and level clamp");
+        var abyss = DeathTimeRules.HowlingAbyss;
+        Check(abyss.Seconds(18, 1200) == 40 && abyss.Seconds(1, 0) == 9, "Howling Abyss levels before 24:00");
+        Check(Math.Abs(abyss.Seconds(18, 1740) - 45) < 1e-9 && abyss.Seconds(18, 2400) == 50, "2.5% a minute, 25% cap");
+        Check(DeathTimeRules.For("KIWI", 12) == abyss && DeathTimeRules.For("CHERRY", 30) == null, "Mode tables");
+        var swift = DeathTimeRules.Swiftplay;
+        Check(swift.Factor(1500) == 0 && Math.Abs(swift.Factor(1530) - 0.1) < 1e-9, "Swiftplay grows after 25:00");
+
+        var deaths = MinionWaveForecaster.Calculate(OverlayDetailPreview.SampleWaves(), 0)!.Deaths;
+        Check(deaths.Length == 10 && deaths.Take(5).All(d => d.Ally) && deaths.Count(d => d.Self) == 1, "Own first");
+        Check(deaths[0].Level == 13 && deaths[0].Seconds == rift.Seconds(13, 846), "Highest level first");
     }
 }

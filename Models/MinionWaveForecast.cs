@@ -12,6 +12,9 @@ public sealed record WaveArrival(string Target, double From, double To);
 
 public sealed record LaneWaveForecast(string Name, WaveArrival Ally, WaveArrival Enemy, string Structures);
 
+/// <summary>How long a champion would stay dead if it died now, from its level and the game time.</summary>
+public sealed record DeathCost(bool Ally, string Champion, int Level, double Seconds, bool Self);
+
 /// <summary>
 /// Time-based wave estimate for the Game Bar. Times are game seconds; <see cref="Clock"/> is the wall clock
 /// (Unix milliseconds) at <see cref="GameTime"/>, so the widget counts down without recalculating rules.
@@ -27,6 +30,11 @@ public sealed record MinionWaveForecast(
 )
 {
     public string[] UnknownStructures { get; init; } = [];
+
+    public DeathCost[] Deaths { get; init; } = [];
+
+    /// <summary>The time factor in percent, shown beside the death costs.</summary>
+    public double DeathFactor { get; init; }
 
     public JObject ToJson() =>
         new()
@@ -53,6 +61,17 @@ public sealed record MinionWaveForecast(
                     ["ally"] = Arrival(l.Ally),
                     ["enemy"] = Arrival(l.Enemy),
                     ["structures"] = l.Structures,
+                })
+            ),
+            ["deathFactor"] = Math.Round(DeathFactor, 1),
+            ["deaths"] = new JArray(
+                Deaths.Select(d => new JObject
+                {
+                    ["ally"] = d.Ally,
+                    ["champion"] = d.Champion,
+                    ["level"] = d.Level,
+                    ["seconds"] = Math.Round(d.Seconds, 1),
+                    ["self"] = d.Self,
                 })
             ),
         };

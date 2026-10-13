@@ -243,7 +243,19 @@ internal static class OverlayDetailPreview
             "CLASSIC",
             11,
             846,
-            [new("self|0", "测试玩家 1", "Ahri", "样例英雄", "ORDER", true, 11, null)]
+            Enumerable
+                .Range(0, 10)
+                .Select(i => new LiveMatchPlayer(
+                    $"p|{i}",
+                    $"测试玩家 {i + 1}",
+                    "Ahri",
+                    $"样例英雄 {i + 1}",
+                    i < 5 ? "ORDER" : "CHAOS",
+                    i == 0,
+                    9 + i % 5,
+                    null
+                ))
+                .ToArray()
         )
         {
             Events =

@@ -10,6 +10,8 @@ internal sealed partial class LoadingOverlayManager
 {
     private readonly Dictionary<string, LiveBuildOption[]> _liveBuilds = new();
     private readonly HashSet<string> _unknownStructures = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _deadPlayers = new(StringComparer.Ordinal);
+    private int _respawnChecks;
     private OverlayLiveState? _liveState;
     private JArray _liveSections = new();
     private string _liveRevision = "";
@@ -31,6 +33,8 @@ internal sealed partial class LoadingOverlayManager
         _liveRetry = 0;
         _buildRetry = 0;
         _unknownStructures.Clear();
+        _deadPlayers.Clear();
+        _respawnChecks = 0;
     }
 
     private static int ItemValue(LiveMatchItem item) =>
@@ -53,8 +57,36 @@ internal sealed partial class LoadingOverlayManager
 
         var waves = MinionWaveForecaster.Calculate(snapshot, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         ReportUnknownStructures(waves);
+        CheckRespawnFormula(snapshot);
         _liveState = new(insight, _liveSections, _liveRevision) { Waves = waves };
         _ = RefreshLivePanelAsync(roster, snapshot, insight, _generation);
+    }
+
+    // The death timer table is unverified in game; each new death logs the formula beside the 2999 timer.
+    private void CheckRespawnFormula(LiveMatchSnapshot snapshot)
+    {
+        var rules = DeathTimeRules.For(snapshot.Mode, snapshot.Map);
+        foreach (var player in snapshot.Players)
+        {
+            if (!player.IsDead || player.RespawnTimer <= 0)
+            {
+                _deadPlayers.Remove(player.Key);
+                continue;
+            }
+
+            if (!_deadPlayers.Add(player.Key) || rules == null || _respawnChecks >= 20)
+            {
+                continue;
+            }
+
+            _respawnChecks++;
+            double predicted = rules.Seconds(player.Level, snapshot.Time);
+            ChatSendDiagnostics.Shared.Report(
+                "respawn-check",
+                $"复活时间核对 {snapshot.Mode} {MinionWaveForecaster.Clock(snapshot.Time)} {player.ChampionName} "
+                    + $"{player.Level} 级：公式 {predicted:0.0} 秒，游戏剩余 {player.RespawnTimer:0.0} 秒"
+            );
+        }
     }
 
     // Structure names are parsed from two observed formats; a new format is logged once so the parser can follow.
