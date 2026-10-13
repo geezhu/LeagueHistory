@@ -112,7 +112,9 @@ internal sealed partial class ChampionSelectAssistant : Form
         var toolbar = CreateAssistantToolbar();
         var (footer, guide) = CreateAssistantFooter();
         var statusBar = CreateAssistantStatusBar();
+        var analysisBar = CreateTeamAnalysisBar();
         Controls.Add(_body);
+        Controls.Add(analysisBar);
         Controls.Add(statusBar);
         Controls.Add(toolbar);
         Controls.Add(footer);
