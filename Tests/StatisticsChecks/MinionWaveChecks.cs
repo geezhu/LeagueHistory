@@ -16,8 +16,9 @@ internal static class MinionWaveChecks
         CheckSnapshot();
         CheckDeathTimes();
         CheckChat();
+        CheckProgress();
         Console.WriteLine(
-            "PASS: minion wave schedule, cannon phases, bounty growth, structure names, arrivals, death timers and team chat lines."
+            "PASS: minion wave schedule, cannon phases, bounty growth, structure names, arrivals, death timers, team chat lines and lane progress."
         );
     }
 
@@ -248,5 +249,43 @@ internal static class MinionWaveChecks
         Check(parsed is { Kind: "waves", Target: "deaths", IsRosterFree: true }, "Wave requests parse");
         Check(OverlayChatRequest.Parse(Request("waves", "own"), "s", new int[10], now) == null, "Wave targets only");
         Check(OverlayChatRequest.Parse(Request("tier", "spawn"), "s", new int[10], now) == null, "Tier targets only");
+    }
+
+    private static void CheckProgress()
+    {
+        var sample = MinionWaveForecaster.Calculate(OverlayDetailPreview.SampleWaves(), 0)!;
+        Check(sample.Current is { Number: 28, Time: 840 }, "The latest spawned wave is the current one");
+        var mid = sample.Lanes.Single(l => l.Name == "中路").Progress!;
+        Check(
+            mid.Markers.Length == 8 && mid.Speed == 375 && mid.Bonus == 0,
+            "Mid lane has eight structures, 375 speed"
+        );
+        var ownOuter = mid.Markers.Single(m => m.Label == "我方一塔");
+        Check(
+            !ownOuter.Alive && Math.Abs(ownOuter.At - 4113 / 11904.0) < 1e-4,
+            "Own outer turret fallen, own side left"
+        );
+        Check(mid.Markers.First().Label == "我方水晶" && mid.Markers.Last().Label == "敌方水晶", "Own inhibitor at 0");
+        Check(mid.Hint.Contains("我方半场"), "Losing a turret suggests the lane sits on the own half");
+        Check(sample.Lanes.Single(l => l.Name == "下路").Progress!.Hint.Contains("敌方高地"), "Fallen enemy inhibitor");
+        Check(sample.Lanes.Single(l => l.Name == "上路").Progress!.Hint.Contains("无法"), "No structures, no guess");
+
+        var red = MinionWaveForecaster.Calculate(Game("CLASSIC", 11, 75, "CHAOS"), 0)!;
+        var redMid = red.Lanes.Single(l => l.Name == "中路").Progress!;
+        Check(
+            redMid.Markers.First().Label == "我方水晶" && Math.Abs(redMid.Markers[1].At - 651 / 11904.0) < 1e-4,
+            "Red sees its own base on the left"
+        );
+        Check(red.Lanes.Single(l => l.Name == "上路").Progress!.Bonus > 0, "Early side-lane waves carry their bonus");
+        var json = (JObject)sample.ToJson()["lanes"]![1]!["progress"]!;
+        Check(
+            ((JArray)json["markers"]!).Count == 8 && (string?)json["hint"] == mid.Hint,
+            "Progress travels to the widget"
+        );
+        Check((int?)sample.ToJson()["current"]?["wave"] == 28, "The current wave travels to the widget");
+        Check(
+            MinionWaveForecaster.Calculate(Game("ARAM", 12, 10, "ORDER"), 0)!.Current == null,
+            "Before the first wave"
+        );
     }
 }

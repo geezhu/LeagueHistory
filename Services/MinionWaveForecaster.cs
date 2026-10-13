@@ -11,10 +11,6 @@ public static class MinionWaveForecaster
     private const int UpcomingWaves = 4;
     private const double NoteWindow = 120;
 
-    // The side-lane bonus fades in four stages over 25 seconds; this is the distance it adds per bonus point.
-    private const double SideLaneBonusDistance = 6.25 * (1 + 0.75 + 0.5 + 0.25);
-    private const double SideLaneBonusEnd = 840;
-
     public static MinionWaveForecast? Calculate(LiveMatchSnapshot snapshot, long clock)
     {
         if (MinionWaveRules.For(snapshot.Mode, snapshot.Map) is not { } rules)
@@ -24,15 +20,22 @@ public static class MinionWaveForecaster
 
         var events = snapshot.Events ?? [];
         double first = FirstWave(rules, events);
+        var current = Spawns(rules, first).TakeWhile(s => s.Time <= snapshot.Time).LastOrDefault();
         var spawns = Spawns(rules, first).SkipWhile(s => s.Time <= snapshot.Time).Take(UpcomingWaves).ToArray();
         var structures = LaneStructureState.From(events, rules.Lanes.Lanes.Length == 1);
         int own = LiveMatchSnapshot.TeamId(snapshot.Players.FirstOrDefault(p => p.Self)?.Team ?? "") is 200 ? 200 : 100;
         var lanes = rules
-            .Lanes.Lanes.Select(lane => ForecastLane(rules, lane, structures, spawns[0], own, snapshot.Time))
+            .Lanes.Lanes.Select(lane =>
+                ForecastLane(rules, lane, structures, spawns[0], own, snapshot.Time) with
+                {
+                    Progress = LaneProgressEstimator.Build(rules, lane, structures, current, own),
+                }
+            )
             .ToArray();
         return new(rules.Name, snapshot.Time, clock, spawns, Notes(rules, snapshot.Time), Value(rules, spawns), lanes)
         {
             UnknownStructures = structures.Unknown.Distinct().ToArray(),
+            Current = current,
             Deaths = DeathCosts(snapshot, own),
             DeathFactor = (DeathTimeRules.For(snapshot.Mode, snapshot.Map)?.Factor(snapshot.Time) ?? 0) * 100,
         };
@@ -127,11 +130,7 @@ public static class MinionWaveForecaster
     )
     {
         var next = NextStructure(lane, structures, target);
-        double distance = lane.Distance(team, next);
-        if (rules.SideLaneBonus && lane.Key != "mid" && spawn.Number >= 2 && spawn.Time < SideLaneBonusEnd)
-        {
-            distance -= Math.Max(0, 111 - 4.5 * (spawn.Number - 2)) * SideLaneBonusDistance;
-        }
+        double distance = lane.Distance(team, next) - LaneProgressEstimator.SideLaneBonus(rules, lane, spawn);
 
         double travel = Math.Max(0, distance) / rules.Speed.At(spawn.Time);
         string label =

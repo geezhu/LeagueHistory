@@ -208,7 +208,7 @@ hstring WaveArrivalText(hstring const &side, JsonObject const &arrival, double n
 }
 void RenderWaveLanes(double now)
 {
-    AddWaveHeading(L"下一波到达防御塔（无人干扰时约）");
+    AddWaveHeading(L"各路兵线 · 当前进度与下一波到塔时间");
     for (auto const &value : waves.GetNamedArray(L"lanes", JsonArray()))
     {
         auto lane = value.GetObject();
@@ -217,6 +217,9 @@ void RenderWaveLanes(double now)
         card.Padding({10, 6, 10, 6});
         card.Margin({0, 0, 0, 6});
         card.Children().Append(MakeText(lane.GetNamedString(L"name", L""), 14, 0xe9d8a6));
+        auto progress = lane.TryLookup(L"progress");
+        if (progress && progress.ValueType() == JsonValueType::Object)
+            RenderLaneProgress(card, progress.GetObject(), now);
         auto ally =
             MakeText(WaveArrivalText(L"我方兵线", lane.GetNamedObject(L"ally", JsonObject()), now), 13, 0x45c7ce);
         auto enemy =
@@ -232,6 +235,72 @@ void RenderWaveLanes(double now)
         }
         waveBody.Children().Append(card);
     }
+}
+// A child placed at a fraction of the bar with star columns, so it follows resizes without a Canvas.
+static Grid AtFraction(UIElement const &child, double at)
+{
+    at = std::clamp(at, 0.0, 1.0);
+    Grid layer;
+    ColumnDefinition left, middle, right;
+    left.Width({at, GridUnitType::Star});
+    middle.Width({1, GridUnitType::Auto});
+    right.Width({1 - at, GridUnitType::Star});
+    layer.ColumnDefinitions().Append(left);
+    layer.ColumnDefinitions().Append(middle);
+    layer.ColumnDefinitions().Append(right);
+    Grid::SetColumn(child.as<FrameworkElement>(), 1);
+    layer.Children().Append(child);
+    return layer;
+}
+// Own inhibitor on the left, enemy on the right; both latest waves walk toward the middle in game time.
+void RenderLaneProgress(StackPanel const &card, JsonObject const &progress, double now)
+{
+    Grid bar;
+    bar.Height(22);
+    bar.Margin({0, 4, 0, 2});
+    Border track;
+    track.Height(4);
+    track.Background(MakeBrush(0x1d4c57));
+    track.VerticalAlignment(VerticalAlignment::Center);
+    bar.Children().Append(track);
+    for (auto const &value : progress.GetNamedArray(L"markers", JsonArray()))
+    {
+        auto marker = value.GetObject();
+        bool ally = marker.GetNamedBoolean(L"ally", false), alive = marker.GetNamedBoolean(L"alive", true);
+        auto text = MakeText(L"▮", 13, !alive ? 0x4a5a63 : ally ? 0x45c7ce : 0xf3b37e);
+        text.VerticalAlignment(VerticalAlignment::Center);
+        ToolTipService::SetToolTip(text,
+                                   box_value(marker.GetNamedString(L"label", L"") + (alive ? L"" : L"（已被摧毁）")));
+        bar.Children().Append(AtFraction(text, marker.GetNamedNumber(L"at", 0)));
+    }
+    auto current = waves.TryLookup(L"current");
+    double length = progress.GetNamedNumber(L"length", 1), speed = progress.GetNamedNumber(L"speed", 1);
+    double bonus = progress.GetNamedNumber(L"bonus", 0), half = length / 2;
+    std::wstring line = L"首波尚未出发";
+    if (current && current.ValueType() == JsonValueType::Object && length > 0 && speed > 0)
+    {
+        auto wave = current.GetObject();
+        double start = wave.GetNamedNumber(L"time", 0), elapsed = now - start;
+        double walked = elapsed > 0 ? (std::min)(half, speed * elapsed + bonus) : 0;
+        double meet = start + (std::max)(0.0, half - bonus) / speed;
+        int number = static_cast<int>(wave.GetNamedNumber(L"wave", 0));
+        for (bool ally : {true, false})
+        {
+            auto dot = MakeText(L"●", 22, ally ? 0x45c7ce : 0xf3b37e);
+            dot.VerticalAlignment(VerticalAlignment::Center);
+            bar.Children().Append(AtFraction(dot, ally ? walked / length : 1 - walked / length));
+        }
+        line = walked < half
+                   ? L"第 " + std::to_wstring(number) + L" 波已出发 " + std::to_wstring(static_cast<int>(elapsed)) +
+                         L" 秒 · 约 " + std::wstring(WaveClock(meet)) + L" 在路中间相遇"
+                   : L"第 " + std::to_wstring(number) + L" 波约 " + std::wstring(WaveClock(meet)) +
+                         L" 在路中间相遇，交战中";
+    }
+    card.Children().Append(bar);
+    card.Children().Append(MakeText(hstring(line) + L"（无人干扰时的理论位置）", 12, 0xa4bcc7));
+    auto hint = MakeText(progress.GetNamedString(L"hint", L""), 12, 0xdbc47f);
+    hint.TextWrapping(TextWrapping::Wrap);
+    card.Children().Append(hint);
 }
 // Death timers from level and game time: the cost of dying now, own team on the left.
 void RenderDeathCosts()

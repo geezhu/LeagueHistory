@@ -10,7 +10,19 @@ public sealed record WaveSpawn(int Number, double Time, int Melee, int Caster, i
 /// <summary>When the first and last minion of a wave reach a structure if nothing stops them.</summary>
 public sealed record WaveArrival(string Target, double From, double To);
 
-public sealed record LaneWaveForecast(string Name, WaveArrival Ally, WaveArrival Enemy, string Structures);
+public sealed record LaneWaveForecast(string Name, WaveArrival Ally, WaveArrival Enemy, string Structures)
+{
+    public LaneProgress? Progress { get; init; }
+}
+
+/// <summary>A structure on the lane bar: 0 is the own inhibitor, 1 the enemy inhibitor.</summary>
+public sealed record LaneMarker(double At, string Label, bool Ally, bool Alive);
+
+/// <summary>
+/// What the widget needs to move the latest waves along the lane: both teams spawn together at opposite
+/// inhibitors, so without interference they meet halfway. <see cref="Hint"/> reads the lane from structures.
+/// </summary>
+public sealed record LaneProgress(double Length, double Speed, double Bonus, LaneMarker[] Markers, string Hint);
 
 /// <summary>How long a champion would stay dead if it died now, from its level and the game time.</summary>
 public sealed record DeathCost(bool Ally, string Champion, int Level, double Seconds, bool Self);
@@ -32,6 +44,9 @@ public sealed record MinionWaveForecast(
     public string[] UnknownStructures { get; init; } = [];
 
     public DeathCost[] Deaths { get; init; } = [];
+
+    /// <summary>The latest wave already spawned; null before the first wave.</summary>
+    public WaveSpawn? Current { get; init; }
 
     /// <summary>The time factor in percent, shown beside the death costs.</summary>
     public double DeathFactor { get; init; }
@@ -61,8 +76,13 @@ public sealed record MinionWaveForecast(
                     ["ally"] = Arrival(l.Ally),
                     ["enemy"] = Arrival(l.Enemy),
                     ["structures"] = l.Structures,
+                    ["progress"] = Progress(l.Progress),
                 })
             ),
+            ["current"] =
+                Current == null
+                    ? null
+                    : new JObject { ["wave"] = Current.Number, ["time"] = Math.Round(Current.Time, 2) },
             ["deathFactor"] = Math.Round(DeathFactor, 1),
             ["deaths"] = new JArray(
                 Deaths.Select(d => new JObject
@@ -75,6 +95,26 @@ public sealed record MinionWaveForecast(
                 })
             ),
         };
+
+    private static JObject? Progress(LaneProgress? progress) =>
+        progress == null
+            ? null
+            : new JObject
+            {
+                ["length"] = Math.Round(progress.Length),
+                ["speed"] = progress.Speed,
+                ["bonus"] = Math.Round(progress.Bonus),
+                ["hint"] = progress.Hint,
+                ["markers"] = new JArray(
+                    progress.Markers.Select(m => new JObject
+                    {
+                        ["at"] = Math.Round(m.At, 4),
+                        ["label"] = m.Label,
+                        ["ally"] = m.Ally,
+                        ["alive"] = m.Alive,
+                    })
+                ),
+            };
 
     private static JObject Arrival(WaveArrival arrival) =>
         new()
