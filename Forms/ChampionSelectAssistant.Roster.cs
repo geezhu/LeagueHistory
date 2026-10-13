@@ -45,6 +45,8 @@ internal sealed partial class ChampionSelectAssistant
         {
             _rosterChanged?.Invoke();
         }
+
+        RefreshTeamAnalysis();
     }
 
     private void ClearRoster()
@@ -56,6 +58,7 @@ internal sealed partial class ChampionSelectAssistant
         _rosterButton.Text = "可选英雄";
         _tips.SetToolTip(_rosterButton, "等待客户端提供大乱斗选人数据");
         _rosterWindow?.Close();
+        HideTeamAnalysis();
     }
 
     private void ShowRoster()

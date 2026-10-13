@@ -3,10 +3,56 @@ using League.Models;
 
 namespace League.Services;
 
+/// <summary>The team analysis for a roster: evaluation, best swap, the chat line and a one-line summary.</summary>
+public sealed record TeamAnalysis(AramTeamEvaluation Evaluation, AramTeamSwap? Best, string Message, string Brief);
+
 /// <summary>One champion select chat line summarizing the team analysis, within the 180-character limit.</summary>
 public static class TeamAnalysisChatMessage
 {
     private const int Limit = 180;
+
+    /// <summary>Evaluates the picked champions; the best swap replaces the user's pick from the bench.</summary>
+    public static TeamAnalysis Analyze(
+        AramMetaIndex index,
+        ChampionSelectRoster roster,
+        bool mayhem,
+        Func<int, string> name
+    )
+    {
+        int[] team = roster.Team.Where(entry => entry.ChampionId > 0).Select(entry => entry.ChampionId).ToArray();
+        var evaluation = AramTeamScore.Evaluate(index, team);
+        var self = roster.Team.FirstOrDefault(entry => entry.IsSelf);
+        var best =
+            self is { ChampionId: > 0 } && roster.Bench.Length > 0
+                ? AramTeamScore.Swaps(index, evaluation, self.ChampionId, roster.Bench, mayhem).FirstOrDefault()
+                : null;
+        return new(
+            evaluation,
+            best,
+            Build(evaluation, best, mayhem, index.Patch, name),
+            Brief(evaluation, best, mayhem, name)
+        );
+    }
+
+    /// <summary>The conclusion for one assistant line: win rate (Mayhem), gaps, damage mix and a helpful swap.</summary>
+    public static string Brief(AramTeamEvaluation evaluation, AramTeamSwap? best, bool mayhem, Func<int, string> name)
+    {
+        var parts = new List<string>();
+        if (mayhem)
+        {
+            parts.Add("胜率 " + Percent(evaluation.EstimatedWinRate));
+        }
+
+        var lacks = evaluation.Lacks;
+        parts.Add("短板 " + (lacks.Length > 0 ? string.Join("、", lacks.Select(lack => lack.Name)) : "无"));
+        parts.Add($"物理 {(evaluation.AdShare * 100).ToString("0", CultureInfo.InvariantCulture)}%");
+        if (Recommended(best, mayhem) is { } swap)
+        {
+            parts.Add($"可换 {Clean(name(swap.ChampionId))}" + (mayhem ? " " + Signed(swap.Delta) : ""));
+        }
+
+        return "阵容 " + string.Join(" · ", parts);
+    }
 
     public static string Build(
         AramTeamEvaluation evaluation,

@@ -48,6 +48,7 @@ internal static class CompositionViewChecks
         );
         mayhem.Parent!.Dispose();
         ChatSummary(index, ids, Name);
+        AnalysisSummary(index, roster, Name, message);
 
         var aram = Render(roster, _ => Task.FromResult(index), false, Name, "composition-view-aram");
         Check(
@@ -58,6 +59,12 @@ internal static class CompositionViewChecks
         Check(
             aram.ChatMessage!.StartsWith("【大乱斗·阵容分析】") && !aram.ChatMessage.Contains("估计胜率"),
             "The normal ARAM chat summary leaves out the Mayhem-trained estimate"
+        );
+        Check(
+            League.Services.TeamAnalysisChatMessage.Analyze(index, roster, false, Name) is var plain
+                && plain.Message == aram.ChatMessage
+                && !plain.Brief.Contains("胜率"),
+            "The normal ARAM assistant line leaves out the estimate"
         );
         aram.Parent!.Dispose();
 
@@ -88,6 +95,66 @@ internal static class CompositionViewChecks
             withSwap.Contains("可换 " + name(ids[5]) + " +1.2%") && !withoutSwap.Contains("可换"),
             "Only a swap that raises the estimate without new gaps is announced"
         );
+    }
+
+    // The assistant line sends what the roster window sends, plus a brief that names the estimate first.
+    private static void AnalysisSummary(
+        AramMetaIndex index,
+        ChampionSelectRoster roster,
+        Func<int, string> name,
+        string message
+    )
+    {
+        var analysis = League.Services.TeamAnalysisChatMessage.Analyze(index, roster, true, name);
+        Check(analysis.Message == message, "The assistant line sends the same summary as the roster window");
+        Check(
+            analysis.Brief.StartsWith("阵容 胜率 ")
+                && analysis.Brief.Contains("短板")
+                && analysis.Brief.Contains("物理"),
+            "The assistant line leads with the estimate, gaps and damage mix: " + analysis.Brief
+        );
+        var unpicked = roster with { Team = roster.Team.Select(entry => entry with { IsSelf = false }).ToArray() };
+        Check(
+            League.Services.TeamAnalysisChatMessage.Analyze(index, unpicked, true, name).Best == null,
+            "No swap is suggested before the user's own pick is known"
+        );
+        AssistantLine(index, roster, analysis.Brief);
+    }
+
+    // The main panel line: the assistant shows the brief and enables sending once statistics and a pick exist.
+    private static void AssistantLine(AramMetaIndex index, ChampionSelectRoster roster, string brief)
+    {
+        const System.Reflection.BindingFlags Flags =
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var type = typeof(League.FormMain).Assembly.GetType("League.ChampionSelectAssistant")!;
+        using var owner = new League.FormMain();
+        using var assistant = (Form)Activator.CreateInstance(type, owner)!;
+        T Field<T>(string name) => (T)type.GetField(name, Flags)!.GetValue(assistant)!;
+        void Set(string name, object value) => type.GetField(name, Flags)!.SetValue(assistant, value);
+        Field<System.Windows.Forms.Timer>("_timer").Stop();
+        Set("_queue", 2400);
+        Set("_selecting", true);
+        Set("_roster", roster);
+        Set("_analysisIndex", index);
+        assistant.StartPosition = FormStartPosition.Manual;
+        assistant.Location = new Point(-2000, 0);
+        assistant.Show();
+        type.GetMethod("RefreshTeamAnalysis", Flags)!.Invoke(assistant, null);
+        Application.DoEvents();
+        var text = Field<Label>("_analysisText");
+        // Champion names come from game resources in the app; the part before the swap does not depend on them.
+        string conclusion = brief.Split(" · 可换")[0];
+        Check(
+            Field<Panel>("_analysisBar").Visible && text.Text.StartsWith(conclusion),
+            $"The assistant shows the team conclusion: {text.Text}"
+        );
+        Check(Field<Button>("_sendAnalysis").Enabled, "Sending is offered during champion select");
+        using var bitmap = new Bitmap(assistant.Width, assistant.Height);
+        assistant.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+        bitmap.Save(Path.Combine(AppContext.BaseDirectory, "assistant-team-analysis.png"));
+        Set("_selecting", false);
+        type.GetMethod("ClearRoster", Flags)!.Invoke(assistant, null);
+        Check(!Field<Panel>("_analysisBar").Visible, "Leaving champion select hides the line");
     }
 
     private static League.Controls.ChampionCompositionView Render(
