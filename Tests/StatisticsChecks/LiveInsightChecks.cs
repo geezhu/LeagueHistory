@@ -183,8 +183,8 @@ internal static class LiveInsightChecks
             var self = players.OfType<JObject>().Single(p => (int?)p["championId"] == 1);
             var dead = players.OfType<JObject>().Single(p => (int?)p["championId"] == 4);
             Check(
-                (bool)self["self"]! && ((string)self["liveStats"]!).Contains("参团 75%"),
-                "Cards carry the score line and the self flag"
+                (bool)self["self"]! && (string)self["liveStats"]! == "参团 75% · 装备 3.0k",
+                "Cards carry participation and item value, not the KDA the scoreboard shows"
             );
             Check((double)dead["respawn"]! == 17.5, "Dead players carry the respawn time for the widget countdown");
             Check(

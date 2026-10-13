@@ -133,10 +133,10 @@ public sealed partial class GameBarBridge : IDisposable
         }
 
         row["respawn"] = Math.Round(insight.Respawn, 1);
+        // The Tab scoreboard already shows KDA; the card adds what it does not: participation and item value.
         row["liveStats"] =
-            (insight.Score.Length > 0 ? insight.Score : "—")
-            + (insight.KillParticipation is double kp ? " · 参团 " + LivePanelSections.Percent(kp) : "")
-            + " · "
+            (insight.KillParticipation is double kp ? "参团 " + LivePanelSections.Percent(kp) + " · " : "")
+            + "装备 "
             + LivePanelSections.Gold(insight.ItemGold);
     }
 
