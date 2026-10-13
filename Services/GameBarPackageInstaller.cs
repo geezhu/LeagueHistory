@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Security.Cryptography.X509Certificates;
@@ -36,21 +35,19 @@ public sealed record GameBarPackageStatus(Version? Bundled, Version? Installed)
 }
 
 /// <summary>
-/// Installs the signed Game Bar MSIX shipped beside League.exe. The package is signed with the
-/// project's own certificate, so Windows needs that certificate in the machine's Trusted People
-/// store once (one administrator prompt); the package itself installs for the current user.
+/// Installs the unsigned Game Bar MSIX shipped beside League.exe. A copy is signed on this computer
+/// with its own certificate (see LocalSigningCertificate), which Windows trusts after one
+/// administrator prompt; the package itself installs for the current user.
 /// </summary>
 public sealed class GameBarPackageInstaller
 {
     public const string PackageName = "LeagueHistory.GameBar";
-    private const int UserCancelled = 1223;
     private readonly string _directory;
 
     public GameBarPackageInstaller(string? directory = null) =>
         _directory = directory ?? Path.Combine(AppContext.BaseDirectory, "GameBar");
 
     public string PackagePath => Path.Combine(_directory, PackageName + ".msix");
-    public string CertificatePath => Path.Combine(_directory, PackageName + ".cer");
 
     public async Task<GameBarPackageStatus> ReadStatusAsync(CancellationToken token)
     {
@@ -63,25 +60,52 @@ public sealed class GameBarPackageInstaller
 
     public async Task InstallAsync(CancellationToken token)
     {
-        if (!File.Exists(PackagePath) || !File.Exists(CertificatePath))
+        if (!File.Exists(PackagePath))
         {
             throw new InvalidOperationException("找不到附带的 Game Bar 组件安装包，请使用完整发布包。");
         }
 
-        if (!IsCertificateTrusted())
+        using var certificate = await EnsureCertificateAsync(token).ConfigureAwait(false);
+        if (!LocalSigningCertificate.IsTrusted(certificate))
         {
-            await TrustCertificateAsync(token).ConfigureAwait(false);
+            await LocalSigningCertificate.TrustAsync(certificate, token).ConfigureAwait(false);
         }
 
-        var result = await RunPowerShellAsync(
-                $"Add-AppxPackage -Path '{Quote(PackagePath)}' -ForceApplicationShutdown -ErrorAction Stop",
-                token
-            )
-            .ConfigureAwait(false);
-        if (result.ExitCode != 0)
+        // Sign a temporary copy; the bundled package stays unsigned so every computer can sign its own.
+        string signed = Path.Combine(Path.GetTempPath(), $"{PackageName}-{Guid.NewGuid():N}.msix");
+        try
         {
-            throw new InvalidOperationException(DescribeFailure(result.Error));
+            File.Copy(PackagePath, signed);
+            await Task.Run(() => MsixSigner.Sign(signed, certificate), token).ConfigureAwait(false);
+            var result = await RunPowerShellAsync(
+                    $"Add-AppxPackage -Path '{Quote(signed)}' -ForceApplicationShutdown -ErrorAction Stop",
+                    token
+                )
+                .ConfigureAwait(false);
+            if (result.ExitCode != 0)
+            {
+                throw new InvalidOperationException(DescribeFailure(result.Error));
+            }
         }
+        finally
+        {
+            File.Delete(signed);
+        }
+    }
+
+    private static async Task<X509Certificate2> EnsureCertificateAsync(CancellationToken token)
+    {
+        var certificate = LocalSigningCertificate.Find();
+        if (certificate != null)
+        {
+            return certificate;
+        }
+
+        var result = await RunPowerShellAsync(LocalSigningCertificate.CreateScript, token).ConfigureAwait(false);
+        return LocalSigningCertificate.Find()
+            ?? throw new InvalidOperationException(
+                "无法创建本机签名证书：" + (result.Error.Trim().Length > 0 ? result.Error.Trim() : "未知错误")
+            );
     }
 
     public Version? ReadBundledVersion()
@@ -107,22 +131,6 @@ public sealed class GameBarPackageInstaller
         }
     }
 
-    public bool IsCertificateTrusted()
-    {
-        using var certificate = new X509Certificate2(CertificatePath);
-        foreach (var name in new[] { StoreName.TrustedPeople, StoreName.Root })
-        {
-            using var store = new X509Store(name, StoreLocation.LocalMachine);
-            store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
-            if (store.Certificates.Find(X509FindType.FindByThumbprint, certificate.Thumbprint, false).Count > 0)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     /// <summary>Known deployment errors in plain words; anything else keeps the first line Windows gave.</summary>
     public static string DescribeFailure(string error)
     {
@@ -133,45 +141,12 @@ public sealed class GameBarPackageInstaller
         return code switch
         {
             "0x80073CF3" => "缺少 Game Bar 运行库（Microsoft.VCLibs）。请先在微软商店更新 Xbox Game Bar，再重试。",
-            "0x800B0109" or "0x800B010A" => "组件签名证书未被信任，请重新安装并在管理员授权中选择“是”。",
+            "0x800B0109" or "0x800B010A" => "本机签名证书未被信任，请重新安装并在管理员授权中选择“是”。",
             "0x80073CFB" => "已安装同版本的开发版组件。请先在“设置 → 应用”中卸载 League 对局速览，再重试。",
             "0x80073D06" => "已安装更新版本的组件，无需重新安装。",
             _ => "组件安装失败："
                 + (error.Split('\n').Select(line => line.Trim()).FirstOrDefault(line => line.Length > 0) ?? "未知错误"),
         };
-    }
-
-    private async Task TrustCertificateAsync(CancellationToken token)
-    {
-        var start = new ProcessStartInfo("certutil.exe", $"-addstore TrustedPeople \"{CertificatePath}\"")
-        {
-            UseShellExecute = true,
-            Verb = "runas",
-            WindowStyle = ProcessWindowStyle.Hidden,
-        };
-        Process? process;
-        try
-        {
-            process = Process.Start(start);
-        }
-        catch (Win32Exception e) when (e.NativeErrorCode == UserCancelled)
-        {
-            throw new InvalidOperationException("已取消管理员授权，组件未安装。", e);
-        }
-
-        using (process)
-        {
-            if (process == null)
-            {
-                throw new InvalidOperationException("无法启动证书安装。");
-            }
-
-            await process.WaitForExitAsync(token).ConfigureAwait(false);
-            if (process.ExitCode != 0 || !IsCertificateTrusted())
-            {
-                throw new InvalidOperationException("组件签名证书安装失败，组件未安装。");
-            }
-        }
     }
 
     private static string Quote(string path) => path.Replace("'", "''");
