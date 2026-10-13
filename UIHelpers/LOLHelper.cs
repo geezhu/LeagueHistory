@@ -70,7 +70,11 @@ public class LOLHelper
         var temporary = _configPath + ".tmp";
         File.WriteAllText(temporary, json.ToString());
         File.Move(temporary, _configPath, true);
-        lock (_detectionLock) { _detection = Task.FromResult<LolInstallation?>(installation); _detectedAt = DateTime.UtcNow; }
+        lock (_detectionLock)
+        {
+            _detection = Task.FromResult<LolInstallation?>(installation);
+            _detectedAt = DateTime.UtcNow;
+        }
         return installation;
     }
 

@@ -21,12 +21,14 @@ namespace League.Parsers
         private PlayerInfoFactory _factory;
 
         private PlayerCardManager _playerCardManager;
-        private int _matchHistoryCount=20;
+        private int _matchHistoryCount = 20;
+
         public void SetMatchHistoryCount(int count)
         {
-            int valid=count is 10 or 20 or 30 or 50?count:20;
-            if(_matchHistoryCount==valid)return;
-            _matchHistoryCount=valid;ClearPlayerMatchCache();
+            int valid = count is 10 or 20 or 30 or 50 ? count : 20;
+            if (_matchHistoryCount == valid) return;
+            _matchHistoryCount = valid;
+            ClearPlayerMatchCache();
         }
 
         public MatchQueryProcessor()

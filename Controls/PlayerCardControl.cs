@@ -6,7 +6,16 @@ namespace League.Controls
         // 用来精准判断“这个卡片到底属于谁、选了什么英雄”
         public long CurrentSummonerId { get; set; } = 0;
         private int _currentChampionId;
-        public int CurrentChampionId { get=>_currentChampionId; set {if(_currentChampionId==value)return;_currentChampionId=value;if(_championBar.Parent!=null)_=RefreshChampionAsync();} }
+        public int CurrentChampionId
+        {
+            get => _currentChampionId;
+            set
+            {
+                if (_currentChampionId == value) return;
+                _currentChampionId = value;
+                if (_championBar.Parent != null) _ = RefreshChampionAsync();
+            }
+        }
         public string CurrentPuuId { get; set; } ="";
         public int RetryCount { get; set; } = 0;
 

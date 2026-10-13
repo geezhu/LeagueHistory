@@ -25,7 +25,8 @@ public sealed class PlayerCardUIManager
     // Also accepts an ordinary Form for isolated WinForms regression tests.
     public PlayerCardUIManager(Form form, TableLayoutPanel table)
     {
-        _form = form; _table = table;
+        _form = form;
+        _table = table;
         PlayerTeamsLayout.Attach(table);
         if (form.IsHandleCreated) _ready.TrySetResult();
         form.HandleCreated += (_, _) => _ready.TrySetResult();
@@ -35,14 +36,22 @@ public sealed class PlayerCardUIManager
     public Task DispatchAsync(Action action)
     {
         if (_form.IsDisposed || _closed.IsCancellationRequested) return Task.CompletedTask;
-        if (Environment.CurrentManagedThreadId == _uiThread) { action(); return Task.CompletedTask; }
+        if (Environment.CurrentManagedThreadId == _uiThread)
+        {
+            action();
+            return Task.CompletedTask;
+        }
         if (!_form.IsHandleCreated) return DispatchWhenReadyAsync(action);
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         try
         {
             _form.BeginInvoke(new Action(() =>
             {
-                try { if (!_form.IsDisposed) action(); completion.TrySetResult(); }
+                try
+                {
+                    if (!_form.IsDisposed) action();
+                    completion.TrySetResult();
+                }
                 catch (Exception ex) { completion.TrySetException(ex); }
             }));
         }
@@ -64,7 +73,8 @@ public sealed class PlayerCardUIManager
             var wanted = states.Select(s => s.Key).ToHashSet();
             foreach (var pair in _cards.Where(p => !wanted.Contains(p.Key) || p.Value.Card.IsDisposed).ToArray())
             {
-                pair.Value.Panel.Dispose(); _cards.Remove(pair.Key);
+                pair.Value.Panel.Dispose();
+                _cards.Remove(pair.Key);
             }
             var owned = _cards.Values.Select(c => (Control)c.Panel).ToHashSet();
             foreach (Control control in _table.Controls.Cast<Control>().ToArray())
@@ -126,7 +136,11 @@ public sealed class PlayerCardUIManager
             card.SetRecentStatistics(state.Info);
             card.ListViewControl.SmallImageList = state.Info.HeroIcons;
         }
-        else { card.ClearRecentStatistics(); card.ListViewControl.SmallImageList = null; }
+        else
+        {
+            card.ClearRecentStatistics();
+            card.ListViewControl.SmallImageList = null;
+        }
         string status = state.Status;
         if (state.Info != null && state.Info.MatchItems.Count == 0 && status.Length == 0)
             status = state.Player.Value<bool?>("__roomSelectionOnly") == true ? "客户端未提供玩家资料，战绩不可用"

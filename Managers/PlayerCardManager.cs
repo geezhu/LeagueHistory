@@ -43,6 +43,7 @@ public sealed class PlayerCardManager : IDisposable
     private async Task RetryAsync(string key, long generation)
     {
         try { await _loader.RetryAsync(key, generation); }
+        // A newer room or a closed window cancelled the retry; its result is no longer wanted.
         catch (OperationCanceledException) { }
         catch (Exception ex) { RoomLoadDiagnostics.Shared.Report(generation, "retry-failed", key, ex.GetType().Name); }
     }
@@ -63,7 +64,16 @@ public sealed class PlayerCardManager : IDisposable
     public void CancelPendingLoads() => _loader.Reset();
     public PlayerMatchInfo CreateFailedPlayerInfo(long sid, int champion) => _factory.CreateFailedPlayerInfo(sid, champion);
     public Dictionary<long, PlayerMatchInfo> GetAllCachedPlayerInfos() => _cache.GetAllCachedPlayerInfos();
-    public void ClearAllCaches() { _matchQueryProcessor.ClearPlayerMatchCache(); _cache.ClearAll(); }
-    public void ClearGameState() { CancelPendingLoads(); _cache.ClearGameState(); }
+    public void ClearAllCaches()
+    {
+        _matchQueryProcessor.ClearPlayerMatchCache();
+        _cache.ClearAll();
+    }
+
+    public void ClearGameState()
+    {
+        CancelPendingLoads();
+        _cache.ClearGameState();
+    }
     public void Dispose() => _loader.Dispose();
 }

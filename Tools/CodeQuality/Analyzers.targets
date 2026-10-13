@@ -8,6 +8,8 @@
     <!-- Start from upstream's disabled preset, then enable only our scoped rules in .editorconfig. -->
     <GlobalAnalyzerConfigFiles Include="$(CodeQualityDefaults)" />
     <EditorConfigFiles Include="$(CodeQualityDefaults)" />
+    <!-- Check-UpstreamChanges.ps1: enables the rules everywhere; the script keeps only geezhu's added lines. -->
+    <EditorConfigFiles Include="$(CodeQualityGlobalConfig)" Condition="'$(CodeQualityGlobalConfig)' != ''" />
   </ItemGroup>
   <Target Name="ValidateCodeQualityAnalyzer" BeforeTargets="CoreCompile">
     <Error Condition="!Exists('$(CodeQualityAnalyzer)')" Text="Restore Tools/CodeQuality/CodeQuality.proj before running code quality checks." />

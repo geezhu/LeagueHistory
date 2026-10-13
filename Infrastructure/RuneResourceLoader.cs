@@ -34,9 +34,9 @@ namespace League.Infrastructure
             try
             {
                 using var styles = await _client.GetAsync("/lol-game-data/assets/v1/perkstyles.json");
-                if(styles.IsSuccessStatusCode) Styles=ParseStyles(JObject.Parse(await styles.Content.ReadAsStringAsync()));
+                if (styles.IsSuccessStatusCode) Styles = ParseStyles(JObject.Parse(await styles.Content.ReadAsStringAsync()));
             }
-            catch { Styles=new(); } // Individual rune resources remain usable without the tree.
+            catch { Styles = new(); } // Individual rune resources remain usable without the tree.
         }
 
         public RuneInfo? GetById(int runeId) => Runes.FirstOrDefault(r => r.id == runeId);

@@ -28,6 +28,7 @@
 
 - C# 排版使用仓库固定版本的 CSharpier；Game Bar C++ 使用 `.clang-format`。原有文件同时在 `.csharpierignore` 中排除。
 - 运行 `powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Check-CodeQuality.ps1`。`-Fix` 只修复选中且属于新增范围的源码排版；`-All` 用于调查全部新增源码的待整理问题。
+- 修改上游原有文件后运行 `Scripts/Check-UpstreamChanges.ps1`：只检查相对上游基线新增的行，异常、异步和资源规则形成门槛；`-IncludeStyle` 另列花括号和方法长度，仅供参考。
 - 编译检查中的 Meziantou 规则仅对选中的新增文件形成检查门槛；不向主项目永久添加分析器依赖或把已有警告全部升级为错误。
 - 语音改动编译 `Tests/StatisticsChecks/StatisticsChecks.csproj`，然后运行 `--sensevoice-checks`、`--assistant-voice-checks`、`--gamebar-voice-checks`。
 - 格式整理与行为改变分开审查。保留已有测试，必要时补充取消、错误和资源释放的回归验证。用户要求提交时再提交。

@@ -13,6 +13,7 @@ namespace League
         {
             if (args.Length == 1 && args[0] is "--test-game-chat-once" or "--test-game-enter-once" or "--test-game-chat-short-once")
             {
+                // Command-line probe: no window or message loop exists yet, so blocking Main is safe.
                 Environment.ExitCode = Services.GameChatSendProbe.RunAsync(args[0] == "--test-game-enter-once", args[0] == "--test-game-chat-short-once").GetAwaiter().GetResult();
                 return;
             }
