@@ -19,6 +19,9 @@ public sealed record OverlayChatRequest(
 {
     public bool IsVoice => Kind == "voice";
 
+    /// <summary>Requests that do not select roster players: confirmed voice text and wave summaries.</summary>
+    public bool IsRosterFree => Kind is "voice" or "waves";
+
     public static OverlayChatRequest? Parse(JObject value, string session, int[] heroes, long now)
     {
         var commandId = ReadCommandId(value, session);
@@ -45,7 +48,7 @@ public sealed record OverlayChatRequest(
             value["kind"] != null
             && (
                 value["kind"]!.Type != JTokenType.String
-                || (string?)value["kind"] is not ("tier" or "mastery" or "deathStreak" or "voice")
+                || (string?)value["kind"] is not ("tier" or "mastery" or "deathStreak" or "voice" or "waves")
             )
         )
         {
@@ -62,10 +65,12 @@ public sealed record OverlayChatRequest(
             return null;
         }
 
+        // Wave messages describe the whole game, so they name a content instead of players.
+        bool waves = kind == "waves";
         if (
-            target == "single"
-                ? slot < 0 || slot >= heroes.Length || hero <= 0 || heroes[slot] != hero
-                : target is not ("own" or "enemy") || slot != -1 || hero != 0
+            waves ? !MinionWaveChatMessage.IsTarget(target) || slot != -1 || hero != 0
+            : target == "single" ? slot < 0 || slot >= heroes.Length || hero <= 0 || heroes[slot] != hero
+            : target is not ("own" or "enemy") || slot != -1 || hero != 0
         )
         {
             return null;

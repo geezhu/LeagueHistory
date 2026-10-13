@@ -15,8 +15,9 @@ internal static class MinionWaveChecks
         CheckArrivals();
         CheckSnapshot();
         CheckDeathTimes();
+        CheckChat();
         Console.WriteLine(
-            "PASS: minion wave schedule, cannon phases, bounty growth, structure names, arrivals and death timers."
+            "PASS: minion wave schedule, cannon phases, bounty growth, structure names, arrivals, death timers and team chat lines."
         );
     }
 
@@ -190,5 +191,62 @@ internal static class MinionWaveChecks
         var deaths = MinionWaveForecaster.Calculate(OverlayDetailPreview.SampleWaves(), 0)!.Deaths;
         Check(deaths.Length == 10 && deaths.Take(5).All(d => d.Ally) && deaths.Count(d => d.Self) == 1, "Own first");
         Check(deaths[0].Level == 13 && deaths[0].Seconds == rift.Seconds(13, 846), "Highest level first");
+    }
+
+    private static bool Throws(Action action)
+    {
+        try
+        {
+            action();
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return true;
+        }
+    }
+
+    private static void CheckChat()
+    {
+        var sample = MinionWaveForecaster.Calculate(OverlayDetailPreview.SampleWaves(), 100000)!;
+        var spawn = MinionWaveChatMessage.Build(sample, "spawn", 100000).Single();
+        Check(spawn.StartsWith("兵线：0:19 后出第 29 波（炮车波）") && spawn.Contains("每 25 秒一波"), "Spawn line");
+        var later = MinionWaveChatMessage.Build(sample, "spawn", 105000).Single();
+        Check(later.StartsWith("兵线：0:14 后"), "The countdown is taken at send time");
+        Check(
+            MinionWaveChatMessage
+                .Build(sample, "super", 100000)
+                .SequenceEqual(["超级兵：下路 敌方水晶被破 · 我方每波 +1 超级兵 · 约 18:00 重生"]),
+            "Super minion line names the lane"
+        );
+        var deaths = MinionWaveChatMessage.Build(sample, "deaths", 100000);
+        Check(
+            deaths.Count == 2 && deaths[0].StartsWith("现在阵亡需等待（时间加成 +4%） 敌方：样例英雄 10 13级42秒"),
+            "Enemies first"
+        );
+        Check(Throws(() => MinionWaveChatMessage.Build(sample, "deaths", 116000)), "Stale data is not sent");
+        Check(Throws(() => MinionWaveChatMessage.Build(null, "spawn", 0)), "No forecast, no message");
+        var quiet = MinionWaveForecaster.Calculate(Game("CLASSIC", 11, 31, "ORDER"), 0)!;
+        Check(Throws(() => MinionWaveChatMessage.Build(quiet, "super", 0)), "No fallen inhibitor, no super line");
+
+        long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        JObject Request(string kind, string target) =>
+            new()
+            {
+                ["protocol"] = 1,
+                ["id"] = Guid.NewGuid().ToString("N"),
+                ["session"] = "s",
+                ["target"] = target,
+                ["kind"] = kind,
+                ["slot"] = -1,
+                ["championId"] = 0,
+                ["updatedAt"] = now,
+                ["dismissed"] = false,
+                ["cancelled"] = false,
+            };
+        var parsed = OverlayChatRequest.Parse(Request("waves", "deaths"), "s", new int[10], now);
+        Check(parsed is { Kind: "waves", Target: "deaths", IsRosterFree: true }, "Wave requests parse");
+        Check(OverlayChatRequest.Parse(Request("waves", "own"), "s", new int[10], now) == null, "Wave targets only");
+        Check(OverlayChatRequest.Parse(Request("tier", "spawn"), "s", new int[10], now) == null, "Tier targets only");
     }
 }

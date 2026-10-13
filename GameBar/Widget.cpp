@@ -615,6 +615,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         supportsChat = data.GetNamedNumber(L"chatProtocol", 0) == 1;
         supportsMasteryChat = data.GetNamedBoolean(L"chatMastery", false);
         supportsDeathStreakChat = data.GetNamedBoolean(L"chatDeathStreak", false);
+        supportsWaveChat = data.GetNamedBoolean(L"chatWaves", false);
         chatTeams = data.GetNamedBoolean(L"chatTeams", false);
         supportsVoiceChat = data.GetNamedBoolean(L"chatVoice", false);
         supportsVoiceRecording = data.GetNamedNumber(L"voiceProtocol", 0) == 2;

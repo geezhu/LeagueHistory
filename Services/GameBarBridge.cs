@@ -88,6 +88,7 @@ public sealed partial class GameBarBridge : IDisposable
                 ["chatProtocol"] = 1,
                 ["chatMastery"] = true,
                 ["chatDeathStreak"] = true,
+                ["chatWaves"] = true,
                 ["chatVoice"] = true,
                 ["voiceProtocol"] = 2,
                 ["chatTeams"] = roster?.Players.Any(p => p.Self) ?? false,

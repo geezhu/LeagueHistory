@@ -51,7 +51,7 @@ internal sealed partial class LoadingOverlayManager
         }
         int generation = _generation;
         var roster = _roster;
-        var players = request.IsVoice || roster == null ? [] : OverlayTierChatMessage.Select(roster, request);
+        var players = request.IsRosterFree || roster == null ? [] : OverlayTierChatMessage.Select(roster, request);
         bool currentRequest = true;
         bool Current() => CurrentChatContext(request, generation, players, currentRequest);
         try
@@ -87,10 +87,10 @@ internal sealed partial class LoadingOverlayManager
                 message = "未发送：等待返回游戏超时，请重新点击发送。";
                 return;
             }
-            // Counts may change while the user is in Game Bar; use the latest polled events.
-            if (request.Kind == "deathStreak")
+            // Counts and countdowns change while the user is in Game Bar; use the latest polled data.
+            if (request.Kind is "deathStreak" or "waves")
             {
-                messages = BuildDeathStreakMessages(request);
+                messages = BuildChatMessages(roster, request);
             }
             await SendWithMonitorAsync(request, messages, Report, Current, value => currentRequest = value);
         }
@@ -135,6 +135,11 @@ internal sealed partial class LoadingOverlayManager
             "voice" => OverlayVoiceChatText.Build(request),
             "mastery" => OverlayMasteryChatMessage.Build(roster!, request, _masteries, Champion),
             "deathStreak" => BuildDeathStreakMessages(request),
+            "waves" => MinionWaveChatMessage.Build(
+                _liveState?.Waves,
+                request.Target,
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            ),
             _ => OverlayTierChatMessage.Build(roster!, request, _ranks, Champion),
         };
 
@@ -153,7 +158,7 @@ internal sealed partial class LoadingOverlayManager
         && _phase == "InProgress"
         && Environment.TickCount64 - _lastPhaseRead < 15000
         && (
-            request.IsVoice
+            request.IsRosterFree
             || (
                 _roster != null
                 && players.Length > 0
