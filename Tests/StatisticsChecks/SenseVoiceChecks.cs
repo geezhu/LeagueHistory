@@ -28,8 +28,10 @@ internal static class SenseVoiceChecks
         await FailedModelChecksAsync();
         await CancelDuringPreparationChecksAsync();
         await DownloadChecks();
+        await ResumeChecks();
+        await ImportChecks();
         Console.WriteLine(
-            "PASS: SenseVoice capture/model stages, stop before decoding, cancellation, audio erasure, silence trimming, duration cap, model download/hash rejection/repair. No microphone or game chat used."
+            "PASS: SenseVoice capture/model stages, stop before decoding, cancellation, audio erasure, silence trimming, duration cap, model download/hash rejection/repair, mirror fallback, resume and manual import. No microphone or game chat used."
         );
     }
 
@@ -351,6 +353,114 @@ internal static class SenseVoiceChecks
             "Clearing also erases activity and voice bounds"
         );
         Array.Clear(audio);
+    }
+
+    private static async Task ImportChecks()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "league-model-import-" + Guid.NewGuid().ToString("N"));
+        string downloads = Path.Combine(root, "downloads"),
+            store = Path.Combine(root, "store");
+        Directory.CreateDirectory(downloads);
+        byte[] model = Encoding.UTF8.GetBytes("pinned model weights"),
+            tokens = Encoding.UTF8.GetBytes("tokens");
+        VoiceModelFile Pinned(string name, byte[] content) =>
+            new(name, content.Length, Convert.ToHexString(SHA256.HashData(content)));
+        var models = new VoiceModelStore(
+            store,
+            files: [Pinned("model.int8.onnx", model), Pinned("tokens.txt", tokens)]
+        );
+        string Write(string name, byte[] content)
+        {
+            string path = Path.Combine(downloads, name);
+            File.WriteAllBytes(path, content);
+            return path;
+        }
+
+        try
+        {
+            Check(models.DownloadLinks.Count() == 4, "Each file has a mirror and an official direct link");
+            var imported = await models.ImportAsync([Write("model.int8 (1).onnx", model)], CancellationToken.None);
+            Check(
+                imported.SequenceEqual(["model.int8.onnx"]) && models.MissingFiles.SequenceEqual(["tokens.txt"]),
+                "A browser-renamed file is recognized by size and the remaining file is reported"
+            );
+            async Task<bool> Rejected(string path)
+            {
+                try
+                {
+                    await models.ImportAsync([path], CancellationToken.None);
+                    return false;
+                }
+                catch (InvalidDataException)
+                {
+                    return true;
+                }
+            }
+            Check(await Rejected(Write("other.txt", [1, 2, 3])), "A file of another size is rejected");
+            Check(
+                await Rejected(Write("tokens.txt", new byte[tokens.Length])) && models.MissingFiles.Length == 1,
+                "A same-size damaged file is rejected without being published"
+            );
+            await models.ImportAsync([Write("tokens.txt", tokens)], CancellationToken.None);
+            Check(
+                models.MissingFiles.Length == 0
+                    && await models.ValidateAsync(CancellationToken.None) == store
+                    && !Directory.EnumerateFiles(store, "*.import").Any(),
+                "Imported files validate and leave no temporary copies"
+            );
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    // The first source fails outright; the second resumes the partial file with a range request.
+    private static async Task ResumeChecks()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "league-model-resume-" + Guid.NewGuid().ToString("N"));
+        byte[] good = Encoding.UTF8.GetBytes("pinned model fixture for resume");
+        var file = new VoiceModelFile("fixture.bin", good.Length, Convert.ToHexString(SHA256.HashData(good)));
+        var hosts = new List<string>();
+        long? range = null;
+        var store = new VoiceModelStore(
+            directory,
+            () =>
+                new HttpClient(
+                    new Handler(request =>
+                    {
+                        hosts.Add(request.RequestUri!.Host);
+                        if (hosts.Count == 1)
+                        {
+                            throw new HttpRequestException("mirror unreachable");
+                        }
+
+                        range = request.Headers.Range?.Ranges.First().From;
+                        return new(HttpStatusCode.PartialContent)
+                        {
+                            Content = new ByteArrayContent(good[(int)(range ?? 0)..]),
+                        };
+                    })
+                ),
+            [file]
+        );
+        try
+        {
+            Directory.CreateDirectory(directory);
+            await File.WriteAllBytesAsync(Path.Combine(directory, "fixture.bin.download"), good[..10]);
+            await store.DownloadAsync(null, CancellationToken.None);
+            Check(hosts.Distinct().Count() == 2, "A failing source falls through to the next one");
+            Check(range == 10, "The partial file resumes from its length");
+            Check(
+                (await File.ReadAllBytesAsync(Path.Combine(directory, "fixture.bin"))).SequenceEqual(good)
+                    && !File.Exists(Path.Combine(directory, "fixture.bin.download")),
+                "The resumed file is verified and published"
+            );
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
     }
 
     private static async Task DownloadChecks()

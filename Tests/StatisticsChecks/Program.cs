@@ -96,6 +96,7 @@ internal static class Program
         checks["--settings-checks"] = () => Ui(SettingsChecks.Render);
         checks["--live-match-checks"] = LiveMatchChecks.Run;
         checks["--live-insight-checks"] = () => Background(LiveInsightChecks.RunAsync);
+        checks["--gamebar-package-checks"] = GameBarPackageChecks.Run;
         checks["--statistics-view-checks"] = () => Ui(StatisticsViewChecks.Run);
         checks["--profile-view-checks"] = () => Ui(ProfileViewChecks.Run);
         checks["--room-view-checks"] = () => Ui(RoomViewChecks.Run);

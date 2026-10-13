@@ -42,6 +42,7 @@ internal static class DefaultStatisticsSuite
         RosterChecks.Run();
         LiveMatchChecks.Run();
         Task.Run(LiveInsightChecks.RunAsync).GetAwaiter().GetResult();
+        GameBarPackageChecks.Run();
         StatisticsViewChecks.Run();
         ProfileViewChecks.Run();
         RoomViewChecks.Run();

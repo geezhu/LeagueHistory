@@ -4,7 +4,7 @@
 
 ## 使用
 
-1. 构建并安装下述开发组件。
+1. 发布包用户：在「设置 → 对局速览」选择 Game Bar 后，点「Game Bar 组件 → 安装组件」。首次安装会弹出一次管理员授权，用于把组件签名证书加入本机“受信任的人”，组件本身只为当前用户安装；不需要开启开发者模式。开发时也可以用下述开发组件。
 2. 启动新版 League.exe，在「设置 → 功能辅助 → 对局速览」选择 **Game Bar（全屏验证版）**。
 3. 按 **Win＋G**，从小组件列表打开 **League 对局速览**。需要保留在游戏上方时，点击组件右上角图钉。
 4. 保持 League 主程序运行，进入加载 / 游戏阶段后同步十名玩家的英雄、梯队、胜率、选用率和已缓存战绩。通过 Win＋G 查看或关闭组件；关闭后可从小组件列表重新打开。
@@ -42,7 +42,16 @@
 
 SDK 固定为 Microsoft.Gaming.XboxGameBar 7.3.2607010，首次构建从 NuGet 下载；原生 DLL、元数据和 SDK 自带资源随组件打包。注册项从同版本元数据生成，防止 SDK 接口变化后使用过期 GUID。应用图标复用项目 favicon。
 
-安装脚本仅在电脑原本已启用开发模式时注册当前用户的组件，不自动开启开发模式、不导入证书。构建产物在 `bin/GameBar`，注册后必须保留 `Package` 目录。生成的 MSIX 尚未签名，不是普通用户直接双击安装的发行包；正式分发需要签名和相应分发流程。
+安装脚本仅在电脑原本已启用开发模式时注册当前用户的组件，不自动开启开发模式、不导入证书。构建产物在 `bin/GameBar`，注册后必须保留 `Package` 目录。不带证书参数时生成的 MSIX 未签名，只用于开发。
+
+## 发布
+
+```powershell
+./Scripts/New-GameBarCertificate.ps1     # 首次：创建或沿用自签名证书，写出 GameBar/LeagueHistory.GameBar.cer
+./Scripts/Publish-Release.ps1 -Version 1.1.0
+```
+
+发布包在 `bin/Publish/<版本>`：League.exe 自带 .NET 运行时；`GameBar/` 下是签名后的组件安装包和公钥证书，由设置页安装；不附带语音模型，用户在设置中下载（先尝试 hf-mirror.com，再 huggingface.co，支持断点续传，校验 SHA-256）。签名证书主体必须与清单 Publisher（`CN=LeagueHistory`）一致。私钥只保存在本机证书存储，请用 `New-GameBarCertificate.ps1 -BackupPath … -BackupPassword …` 备份；换用新证书后，用户需要重新信任新证书才能更新组件。已用开发脚本注册同版本组件的电脑，需先卸载开发组件再安装发布版。
 
 更新构建需提高清单版本号，否则 Windows 可能继续指向旧安装目录。脚本会核对实际安装位置，并在更新后退出 Game Bar 的界面进程，使下次打开时重新加载组件，避免留下空白旧窗口；不会结束游戏或 League 主程序。录制服务运行时跳过重启，也可用 `-KeepGameBarRunning` 跳过，然后自行重开 Game Bar。
 

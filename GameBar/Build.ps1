@@ -1,4 +1,4 @@
-param([string]$OutputDirectory = '', [string]$SdkVersion = '7.3.2607010')
+﻿param([string]$OutputDirectory = '', [string]$SdkVersion = '7.3.2607010', [string]$CertificateThumbprint = '')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 if (!$OutputDirectory) { $OutputDirectory = Join-Path $projectRoot 'bin/GameBar' }
@@ -61,4 +61,10 @@ foreach ($size in 44,50,150) {
 }
 $sourceImage.Dispose(); $icon.Dispose()
 Invoke-Checked "$sdkBin/makeappx.exe" @('pack','/d',$stage,'/p',"$output/LeagueHistory.GameBar.msix",'/o')
-Write-Host "组件已生成：$output/LeagueHistory.GameBar.msix（尚未签名 / 安装）"
+if ($CertificateThumbprint) {
+    # The certificate subject must equal the manifest Publisher (CN=LeagueHistory) or Windows rejects the package.
+    Invoke-Checked "$sdkBin/signtool.exe" @('sign','/fd','SHA256','/s','My','/sha1',$CertificateThumbprint,"$output/LeagueHistory.GameBar.msix")
+    Write-Host "组件已生成并签名：$output/LeagueHistory.GameBar.msix"
+} else {
+    Write-Host "组件已生成：$output/LeagueHistory.GameBar.msix（尚未签名 / 安装）"
+}

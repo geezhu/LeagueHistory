@@ -37,7 +37,8 @@
 			<Private>true</Private>
 		</Reference>
 	</ItemGroup>
-	<ItemGroup Condition="Exists('bin/VoiceModels/SenseVoice/model.int8.onnx')">
+	<!-- Release packages pass -p:BundleVoiceModel=false; users download the model in Settings instead. -->
+	<ItemGroup Condition="'$(BundleVoiceModel)' != 'false' And Exists('bin/VoiceModels/SenseVoice/model.int8.onnx')">
 		<Content Include="bin/VoiceModels/SenseVoice/model.int8.onnx;bin/VoiceModels/SenseVoice/tokens.txt;bin/VoiceModels/SenseVoice/LICENSE">
 			<Link>VoiceModels/SenseVoice/%(Filename)%(Extension)</Link>
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
