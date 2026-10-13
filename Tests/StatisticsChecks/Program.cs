@@ -159,6 +159,7 @@ internal static class Program
                 OverlayTierChatChecks.Run();
             });
         checks["--overlay-party-checks"] = () => Ui(OverlayPartyChecks.Run);
+        checks["--minion-wave-checks"] = MinionWaveChecks.Run;
         checks["--tier-chat-checks"] = () =>
         {
             ChampionTierChatChecks.Run();

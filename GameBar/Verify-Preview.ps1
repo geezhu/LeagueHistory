@@ -1,4 +1,4 @@
-﻿param([string]$PackageDirectory = '', [ValidateSet('skills','builds','runes','augments','live','roster','voice','')][string]$DetailTab = '')
+﻿param([string]$PackageDirectory = '', [ValidateSet('skills','builds','runes','augments','live','roster','voice','waves','')][string]$DetailTab = '')
 $ErrorActionPreference = 'Stop'
 if ($PackageDirectory) { & "$PSScriptRoot/Install-Development.ps1" -PackageDirectory $PackageDirectory }
 $package = Get-AppxPackage -Name LeagueHistory.GameBar

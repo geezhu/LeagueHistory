@@ -9,6 +9,7 @@ namespace League.Managers;
 internal sealed partial class LoadingOverlayManager
 {
     private readonly Dictionary<string, LiveBuildOption[]> _liveBuilds = new();
+    private readonly HashSet<string> _unknownStructures = new(StringComparer.Ordinal);
     private OverlayLiveState? _liveState;
     private JArray _liveSections = new();
     private string _liveRevision = "";
@@ -29,6 +30,7 @@ internal sealed partial class LoadingOverlayManager
         _enemyShareRead = false;
         _liveRetry = 0;
         _buildRetry = 0;
+        _unknownStructures.Clear();
     }
 
     private static int ItemValue(LiveMatchItem item) =>
@@ -49,8 +51,22 @@ internal sealed partial class LoadingOverlayManager
             return;
         }
 
-        _liveState = new(insight, _liveSections, _liveRevision);
+        var waves = MinionWaveForecaster.Calculate(snapshot, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        ReportUnknownStructures(waves);
+        _liveState = new(insight, _liveSections, _liveRevision) { Waves = waves };
         _ = RefreshLivePanelAsync(roster, snapshot, insight, _generation);
+    }
+
+    // Structure names are parsed from two observed formats; a new format is logged once so the parser can follow.
+    private void ReportUnknownStructures(MinionWaveForecast? waves)
+    {
+        foreach (string name in waves?.UnknownStructures ?? [])
+        {
+            if (_unknownStructures.Add(name))
+            {
+                ChatSendDiagnostics.Shared.Report("minion-wave", "兵线推算未识别的建筑名称：" + name);
+            }
+        }
     }
 
     private async Task RefreshLivePanelAsync(
