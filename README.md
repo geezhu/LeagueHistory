@@ -136,6 +136,8 @@
 最新版本：[League.v1.12](https://github.com/mizi6654/LeagueHistory/releases/latest)
 
 > 将压缩包解压后运行 `League.exe` 即可，无需额外依赖。
+>
+> 使用 Game Bar 对局速览时，在「设置 → 对局速览」选择 Game Bar 后点「安装组件」，首次需要一次管理员授权以信任组件证书。语音输入的中文模型（约 228 MiB）不随压缩包附带，首次使用前在「设置 → 消息发送 → 本机语音识别」下载。
 
 ---
 

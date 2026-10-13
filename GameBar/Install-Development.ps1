@@ -1,4 +1,4 @@
-param([string]$PackageDirectory = '', [switch]$KeepGameBarRunning)
+﻿param([string]$PackageDirectory = '', [switch]$KeepGameBarRunning)
 $ErrorActionPreference = 'Stop'
 if (!$PackageDirectory) { $PackageDirectory = Join-Path (Split-Path $PSScriptRoot -Parent) 'bin/GameBar/Package' }
 $manifestPath = Join-Path ([IO.Path]::GetFullPath($PackageDirectory)) 'AppxManifest.xml'

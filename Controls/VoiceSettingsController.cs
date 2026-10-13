@@ -11,6 +11,9 @@ internal sealed class VoiceSettingsController : IDisposable
     private readonly Action<string> _saveDevice;
     private readonly Label _status = new() { Name = "VoiceModelStatus" };
     private readonly Button _prepare = new() { Name = "VoiceModelDownload" };
+    private readonly Button _import = new() { Name = "VoiceModelImport", Text = "导入已下载的文件…" };
+    private readonly LinkLabel _links = new() { Name = "VoiceModelLinks" };
+    private readonly ToolTip _tips = new();
     private readonly ComboBox _microphone = new()
     {
         Name = "VoiceMicrophone",
@@ -41,6 +44,63 @@ internal sealed class VoiceSettingsController : IDisposable
         _microphone.SelectedIndexChanged += (_, _) => SaveSelection();
         _refresh.Click += async (_, _) => await LoadMicrophonesAsync();
         _prepare.Click += async (_, _) => await PrepareAsync();
+        _import.Click += async (_, _) => await ImportAsync();
+        BuildLinks();
+    }
+
+    // Manual download for networks where the in-app download fails: open each file in the browser,
+    // or copy every link for a download manager, then import the files with the button beside it.
+    private void BuildLinks()
+    {
+        var text = new System.Text.StringBuilder("手动下载 · ");
+        var links = new List<(int Start, int Length, string Data)>();
+        void Link(string label, string data)
+        {
+            links.Add((text.Length, label.Length, data));
+            text.Append(label);
+        }
+
+        Link("复制全部链接", "");
+        // One line per file, so a narrow page never wraps inside a file's pair of links.
+        foreach (var group in _store.DownloadLinks.GroupBy(link => link.File))
+        {
+            text.Append('\n').Append(group.Key).Append("：");
+            bool first = true;
+            foreach (var (_, source, url) in group)
+            {
+                if (!first)
+                {
+                    text.Append(" ｜ ");
+                }
+
+                Link(source.StartsWith("hf-mirror", StringComparison.Ordinal) ? "镜像" : "官方", url);
+                first = false;
+            }
+        }
+
+        _links.Text = text.ToString();
+        foreach (var (start, length, data) in links)
+        {
+            _links.Links.Add(start, length, data);
+        }
+
+        _links.LinkClicked += (_, e) => OpenLink((string)e.Link!.LinkData!);
+        _tips.SetToolTip(
+            _links,
+            "下载后点「导入已下载的文件…」，选择 model.int8.onnx 和 tokens.txt；导入前校验 SHA-256。\n浏览器直接显示 tokens.txt 内容时，按 Ctrl+S 保存。"
+        );
+    }
+
+    private void OpenLink(string url)
+    {
+        if (url.Length == 0)
+        {
+            Clipboard.SetText(string.Join(Environment.NewLine, _store.DownloadLinks.Select(link => link.Url)));
+            _status.Text = "已复制全部下载链接，可粘贴到浏览器或下载工具。";
+            return;
+        }
+
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
     }
 
     // Two setting rows: the model with its prepare action, and the input with its refresh action.
@@ -48,8 +108,9 @@ internal sealed class VoiceSettingsController : IDisposable
     {
         get
         {
-            var model = new SettingRow("中文语音模型", null, _prepare);
+            var model = new SettingRow("中文语音模型", null, _prepare, _import);
             model.AddNote(_status);
+            model.AddNote(_links);
             var microphone = new SettingRow("录音麦克风", null, _refresh);
             microphone.AddNote(_microphone);
             microphone.AddNote(_microphoneStatus);
@@ -167,7 +228,7 @@ internal sealed class VoiceSettingsController : IDisposable
             System.Diagnostics.Debug.WriteLine($"Voice model settings: {error}");
             if (!_disposed)
             {
-                _status.Text = "模型准备失败，请检查网络和本地空间后重试。";
+                ShowFailure("模型准备失败", error);
             }
         }
         finally
@@ -175,6 +236,65 @@ internal sealed class VoiceSettingsController : IDisposable
             _downloading = null;
             if (!_disposed)
             {
+                ResetPrepareButton();
+            }
+        }
+    }
+
+    // The message says what failed; the underlying network or file error stays in the tooltip.
+    private void ShowFailure(string title, Exception error)
+    {
+        _status.Text = $"{title}：{error.Message} 可用下方直链手动下载后导入。";
+        _tips.SetToolTip(_status, error.InnerException?.Message ?? error.Message);
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_disposed || _downloading != null)
+        {
+            return;
+        }
+
+        using var dialog = new OpenFileDialog
+        {
+            Title = "选择已下载的模型文件",
+            Filter = "SenseVoice 模型文件|*.onnx;*.txt|所有文件|*.*",
+            Multiselect = true,
+        };
+        if (dialog.ShowDialog(_import.FindForm()) != DialogResult.OK)
+        {
+            return;
+        }
+
+        using var source = new CancellationTokenSource();
+        _downloading = source;
+        _prepare.Enabled = _import.Enabled = false;
+        _status.Text = "正在校验并导入模型文件…";
+        try
+        {
+            string[] imported = await _store.ImportAsync(dialog.FileNames, source.Token);
+            string[] missing = _store.MissingFiles;
+            if (!_disposed)
+            {
+                _status.Text =
+                    missing.Length == 0
+                        ? "中文模型已导入 · 选人助手与 Game Bar 共用，识别时无需联网。"
+                        : $"已导入 {string.Join("、", imported)}，还缺少 {string.Join("、", missing)}。";
+            }
+        }
+        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            if (!_disposed)
+            {
+                ShowFailure("导入失败", error);
+            }
+        }
+        finally
+        {
+            _downloading = null;
+            if (!_disposed)
+            {
+                _prepare.Enabled = _import.Enabled = true;
                 ResetPrepareButton();
             }
         }
@@ -212,5 +332,6 @@ internal sealed class VoiceSettingsController : IDisposable
         _disposed = true;
         // The worker owns its cancellation source until file operations have unwound.
         _downloading?.Cancel();
+        _tips.Dispose();
     }
 }
