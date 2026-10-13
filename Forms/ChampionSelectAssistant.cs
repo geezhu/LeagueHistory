@@ -13,7 +13,7 @@ internal sealed partial class ChampionSelectAssistant : Form
     private static readonly int SystemDpi = (int)GetDpiForSystem();
     private const int LayoutWidth = 320;
     private const int MinimumLayoutHeight = 460;
-    private const int TabWidth = 26;
+    private const int TabWidth = 22;
     private const int ToolbarHeaderHeight = 28;
     private static int ContentWidth => Dip(282);
 
@@ -45,8 +45,6 @@ internal sealed partial class ChampionSelectAssistant : Form
     private readonly FlowLayoutPanel _body = new BufferedFlow()
     {
         Dock = DockStyle.Fill,
-        AutoScroll = true,
-        AutoScrollMargin = Dip(0, 16),
         FlowDirection = FlowDirection.TopDown,
         WrapContents = false,
         Padding = DipPadding(12, 4, 12, 4),
@@ -135,8 +133,8 @@ internal sealed partial class ChampionSelectAssistant : Form
         _timer.Start();
     }
 
-    // Most players keep the same filters, so the toolbar is one summary line that expands into the
-    // dropdowns on click. The window action stays at the top right; hiding uses the title bar or edge tab.
+    // Most players keep the same filters, so the toolbar is one summary line that opens a menu of
+    // them on click. The window action stays at the top right; hiding uses the title bar or edge tab.
     private Panel CreateAssistantToolbar()
     {
         var toolbar = new Panel
@@ -153,24 +151,20 @@ internal sealed partial class ChampionSelectAssistant : Form
         _filterSummary.TextAlign = ContentAlignment.MiddleLeft;
         _filterSummary.ForeColor = Color.FromArgb(215, 225, 226);
         _filterSummary.Cursor = Cursors.Hand;
+        League.Controls.DarkMenuRenderer.Apply(_filterMenu);
+        _filterMenu.Font = Font;
         _filterSummary.Click += (_, _) =>
         {
-            _filtersExpanded = !_filtersExpanded;
-            SyncFilters();
+            BuildFilterMenu();
+            _filterMenu.Show(_filterSummary, new Point(0, _filterSummary.Height));
         };
-        _tips.SetToolTip(_filterSummary, "攻略模式、统计地区、段位和分路；点击展开修改。默认跟随选人模式。");
+        _tips.SetToolTip(_filterSummary, "攻略模式、统计地区、段位和分路；点击修改。默认跟随选人模式。");
         _pin.FlatStyle = FlatStyle.Flat;
         _pin.Dock = DockStyle.Right;
         _pin.Margin = Padding.Empty;
         _tips.SetToolTip(_pin, "固定后不再自动贴靠客户端，可拖动到任意位置。");
         header.Controls.Add(_filterSummary);
         header.Controls.Add(_pin);
-        _filterPanel.Dock = DockStyle.Fill;
-        _filterPanel.Margin = Padding.Empty;
-        _filterPanel.Padding = DipPadding(0, 4, 0, 0);
-        _filterPanel.Visible = false;
-        _filterPanel.Controls.AddRange(new Control[] { _mode, _region, _tier, _lane });
-        toolbar.Controls.Add(_filterPanel);
         toolbar.Controls.Add(header);
         toolbar.Height = header.Height + toolbar.Padding.Vertical;
         _lane.Items.AddRange(new object[] { "自动分路", "上路", "打野", "中路", "下路", "辅助" });
@@ -248,8 +242,6 @@ internal sealed partial class ChampionSelectAssistant : Form
     {
         foreach (var box in new[] { _mode, _region, _tier, _lane })
         {
-            box.BackColor = Color.FromArgb(16, 45, 57);
-            box.ForeColor = ForeColor;
             box.SelectedIndexChanged += (_, _) =>
             {
                 if (_syncing)
@@ -264,17 +256,14 @@ internal sealed partial class ChampionSelectAssistant : Form
                 }
             };
         }
-        _tips.SetToolTip(_mode, "默认跟随选人模式，也可以手动切换攻略模式。英雄仍自动跟随当前选人。");
-        _tips.SetToolTip(_region, "OP.GG 统计地区，与登录账号大区无关。");
-        _tips.SetToolTip(_tier, "统计段位；各模式分别保留选择。");
     }
 
     private Controls.AssistantToggleTab CreateToggleTab()
     {
         var toggle = new Controls.AssistantToggleTab(Font);
-        toggle.Size = toggle.PreferredTabSize(Dip(TabWidth), Dip(10));
+        toggle.Size = toggle.PreferredTabSize(Dip(TabWidth), Dip(8));
         toggle.Toggled += (_, _) => SetPanelOpen(!_panelOpen);
-        _tips.SetToolTip(toggle, "打开或关闭选人助手；每次进入选人默认打开。");
+        _tips.SetToolTip(toggle, "收起选人助手；每次进入选人默认打开。");
         return toggle;
     }
 
@@ -282,6 +271,7 @@ internal sealed partial class ChampionSelectAssistant : Form
     {
         _panelOpen = open;
         _toggle.Open = open;
+        _tips.SetToolTip(_toggle, open ? "收起选人助手；每次进入选人默认打开。" : "展开选人助手");
         if (!open)
         {
             CloseVoiceInput();
@@ -420,7 +410,7 @@ internal sealed partial class ChampionSelectAssistant : Form
     }
 
     // The panel grows with its recommendations instead of scrolling; Placement caps it at the screen,
-    // where the body's scrollbar remains only as a last resort.
+    // and only then does the body scroll (see UpdateBodyScroll).
     private int PanelHeight()
     {
         int chrome = ClientSize.Height - _body.Height;
@@ -455,16 +445,28 @@ internal sealed partial class ChampionSelectAssistant : Form
     private void FitToContent()
     {
         var screen = Screen.FromControl(this).WorkingArea;
-        int height = Math.Min(PanelHeight(), screen.Height);
-        if (Height == height)
+        int wanted = PanelHeight(),
+            height = Math.Min(wanted, screen.Height);
+        if (Height != height)
         {
-            return;
+            Height = height;
+            if (Bottom > screen.Bottom)
+            {
+                Top = Math.Max(screen.Top, screen.Bottom - height);
+            }
         }
 
-        Height = height;
-        if (Bottom > screen.Bottom)
+        UpdateBodyScroll(wanted);
+    }
+
+    // A scrollbar appears only when the screen cannot fit the content. Always-on auto scrolling showed
+    // one whenever content filled the panel exactly, and let the wheel nudge a page that had nothing hidden.
+    private void UpdateBodyScroll(int wantedHeight)
+    {
+        bool overflow = wantedHeight > Height;
+        if (_body.AutoScroll != overflow)
         {
-            Top = Math.Max(screen.Top, screen.Bottom - height);
+            _body.AutoScroll = overflow;
         }
     }
 
@@ -496,7 +498,9 @@ internal sealed partial class ChampionSelectAssistant : Form
 
         var client = Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom);
         var screen = Screen.FromHandle(handle).WorkingArea;
-        var panel = Placement(client, screen, new Size(Width, PanelHeight()), _toggle.Width);
+        int wanted = PanelHeight();
+        var panel = Placement(client, screen, new Size(Width, wanted), _toggle.Width);
+        _toggle.PanelOnLeft = panel.Left < client.Left;
         PlaceToggle(handle, TabPlacement(client, screen, panel, _toggle.Size));
         if (!_panelOpen)
         {
@@ -515,6 +519,8 @@ internal sealed partial class ChampionSelectAssistant : Form
         {
             Bounds = panel;
         }
+
+        UpdateBodyScroll(wanted);
 
         ShowAttached(this, _windowLayer, handle);
     }
@@ -824,7 +830,7 @@ internal sealed partial class ChampionSelectAssistant : Form
                 var build = await _opgg.GetBuildAsync(query, false, token);
                 token.ThrowIfCancellationRequested();
                 RenderOpggTierAndRunes(build, query, mode, hero, token);
-                await RenderOpggEquipmentAndSpellsAsync(build, mode, token);
+                await RenderOpggEquipmentAndSpellsAsync(build, token);
             }
         }
         catch (OperationCanceledException)
@@ -845,7 +851,8 @@ internal sealed partial class ChampionSelectAssistant : Form
         var page = await _am.GetAsync(0, false, token);
         token.ThrowIfCancellationRequested();
         AddMayhemRecommendations(page, hero, token);
-        _status.Text = $"arammeta · 海克斯大乱斗 · 版本 {page.Index.Patch}" + (page.UpdateFailed ? " · 旧缓存" : "");
+        // The mode is already in the header; the status names only the source and its version.
+        _status.Text = $"arammeta · 版本 {page.Index.Patch}" + (page.UpdateFailed ? " · 旧缓存" : "");
     }
 
     private async Task<OpggQuery> ResolveRecommendationQueryAsync(string mode, int hero, CancellationToken token)
@@ -896,22 +903,14 @@ internal sealed partial class ChampionSelectAssistant : Form
         }
     }
 
-    private async Task RenderOpggEquipmentAndSpellsAsync(OpggBuild build, string mode, CancellationToken token)
+    private async Task RenderOpggEquipmentAndSpellsAsync(OpggBuild build, CancellationToken token)
     {
         var skills = build.Data["skill_masteries"]?.First?["ids"] as JArray;
         Line("核心装备" + (skills != null ? "  ·  加点 " + string.Join(" → ", skills.Values<string>()) : ""), true);
         AddEquipmentChoices(build, token);
         Line("召唤师技能", true);
         await AddSpellRecommendations(build.Data["summoner_spells"] as JArray ?? new(), token);
-        string modeName = mode switch
-        {
-            "ranked" => "召唤师峡谷",
-            "aram" => "极地大乱斗",
-            "arena" => "斗魂竞技场",
-            "urf" => "无限火力",
-            _ => "极限闪击",
-        };
-        _status.Text = $"OP.GG · {modeName} · {build.Version}";
+        _status.Text = $"OP.GG · 版本 {build.Version}";
         _apply.Enabled = _runes != null && !_applying;
     }
 
@@ -1197,6 +1196,12 @@ internal sealed partial class ChampionSelectAssistant : Form
             var pending = PendingAssistantWork();
             _cleanupWork = Task.Run(() => CleanupAssistantResourcesAsync(pending), CancellationToken.None);
             _tips.Dispose();
+            _filterMenu.Dispose();
+            foreach (var box in new[] { _mode, _region, _tier, _lane })
+            {
+                box.Dispose();
+            }
+
             _assistantFont?.Dispose();
         }
         base.Dispose(disposing);
