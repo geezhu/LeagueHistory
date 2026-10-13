@@ -3,16 +3,16 @@ using Newtonsoft.Json.Linq;
 
 internal static class ModelChecks
 {
-    public static async Task RunAsync()
+    public static Task RunAsync()
     {
-        ChampionAnalysisChecks.Run();
+        AramTeamScoreChecks.Run();
         ChampionTierChatChecks.Run();
         LiveChampionChecks.Run();
         LiveDeathStreakChecks.Run();
-        await ChampionCompositionChecks.RunAsync();
         OverlayTierChatChecks.Run();
         OverlayVoiceChatChecks.Run();
         Timeline();
+        return Task.CompletedTask;
     }
 
     private static void Timeline()

@@ -34,12 +34,6 @@ internal static class Program
         {
             OverlayDetailPreview.Export(args[1], args[2]);
         }
-        else if (args.Length > 0 && args[0] == "--champion-analysis")
-        {
-            ChampionAnalysisChecks.Run(
-                args.Length > 1 ? args[1] : Path.Combine(AppContext.BaseDirectory, "ChampionAnalysisReports")
-            );
-        }
         else
         {
             return false;
@@ -93,7 +87,6 @@ internal static class Program
         checks["--profile-surface-checks"] = () => Ui(ProfileSurfaceChecks.Run);
         checks["--opgg-lifecycle-checks"] = () => Ui(OpggViewLifecycleChecks.Run);
         checks["--profile-presentation-checks"] = () => Ui(ProfilePresentationChecks.Run);
-        checks["--composition-lifecycle-checks"] = () => Ui(CompositionViewLifecycleChecks.Run);
         checks["--selection-control-checks"] = () => Ui(SelectionControlChecks.Run);
         checks["--player-champion-checks"] = () => Ui(PlayerChampionChecks.Run);
         checks["--history-presentation-checks"] = () => Ui(HistoryPresentationChecks.Run);
@@ -132,10 +125,11 @@ internal static class Program
                 AssistantWindowChecks.Run();
             });
         checks["--mastery-checks"] = MasteryChecks;
+        checks["--team-score-checks"] = AramTeamScoreChecks.Run;
         checks["--composition-checks"] = () =>
         {
-            Background(ChampionCompositionChecks.RunAsync);
-            Ui(ChampionCompositionChecks.Render);
+            AramTeamScoreChecks.Run();
+            Ui(CompositionViewChecks.Run);
         };
         checks["--opgg-checks"] = () =>
         {

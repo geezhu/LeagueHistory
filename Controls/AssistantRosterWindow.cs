@@ -13,7 +13,7 @@ internal sealed class AssistantRosterWindow : Form
     private readonly Func<ChampionSelectRoster?> _getRoster;
     private readonly Func<int> _currentQueue;
     private readonly Func<string?> _currentPuuid;
-    private readonly Func<TimeSpan> _analysisLifetime;
+    private readonly Func<CancellationToken, Task<AramMetaIndex>> _loadTeamIndex;
     private readonly Func<
         CancellationToken,
         Task<(Dictionary<int, ChampionRosterTier> Ranks, string Version)>
@@ -39,7 +39,8 @@ internal sealed class AssistantRosterWindow : Form
     private ComboBox _sort = null!;
     private Button _retry = null!,
         _analysisButton = null!,
-        _sendTier = null!;
+        _sendTier = null!,
+        _sendAnalysis = null!;
     private ContextMenuStrip _sendMenu = null!;
     private ToolStripItem _sendAll = null!,
         _sendTeam = null!,
@@ -55,7 +56,7 @@ internal sealed class AssistantRosterWindow : Form
         Func<ChampionSelectRoster?> getRoster,
         Func<int> currentQueue,
         Func<string?> currentPuuid,
-        Func<TimeSpan> analysisLifetime,
+        Func<CancellationToken, Task<AramMetaIndex>> loadTeamIndex,
         Func<CancellationToken, Task<(Dictionary<int, ChampionRosterTier>, string)>> loadRanks,
         Func<string, CancellationToken, Task<bool>> announce,
         Action<int> openGuide,
@@ -68,7 +69,7 @@ internal sealed class AssistantRosterWindow : Form
         _getRoster = getRoster;
         _currentQueue = currentQueue;
         _currentPuuid = currentPuuid;
-        _analysisLifetime = analysisLifetime;
+        _loadTeamIndex = loadTeamIndex;
         _loadRanks = loadRanks;
         _announce = announce;
         _openGuide = openGuide;
@@ -108,8 +109,14 @@ internal sealed class AssistantRosterWindow : Form
         RenderRoster();
         if (_analysis.Visible && _getRoster() is { } roster)
         {
-            _analysis.SetRoster(roster);
+            ShowAnalysis(roster);
         }
+    }
+
+    private void ShowAnalysis(ChampionSelectRoster roster)
+    {
+        _analysis.SetRoster(roster);
+        _ = Track(_analysis.Loading);
     }
 
     private void CreateToolbar()
@@ -148,6 +155,15 @@ internal sealed class AssistantRosterWindow : Form
             Enabled = false,
         };
         _toolbar.Controls.Add(_sendTier);
+        _sendAnalysis = new Button
+        {
+            Text = "发送阵容分析",
+            AutoSize = true,
+            FlatStyle = FlatStyle.Flat,
+            Visible = false,
+        };
+        _tips.SetToolTip(_sendAnalysis, "把估计胜率、短板和换人建议发送到选人聊天。");
+        _toolbar.Controls.Add(_sendAnalysis);
         _sendMenu = new ContextMenuStrip();
         _sendAll = _sendMenu.Items.Add("发送全部梯队");
         _sendTeam = _sendMenu.Items.Add("发送我方梯队");
@@ -188,14 +204,7 @@ internal sealed class AssistantRosterWindow : Form
 
     private void CreateAnalysis()
     {
-        _analysis = new Controls.ChampionCompositionView(
-            id =>
-            {
-                var hero = FormMain.Globals.resLoading.GetChampionById(id);
-                return (hero?.Name ?? $"英雄 {id}", hero?.Alias ?? "");
-            },
-            _analysisLifetime
-        )
+        _analysis = new Controls.ChampionCompositionView(ChampionName, _loadTeamIndex, _mayhem, _lifetime.Token)
         {
             Dock = DockStyle.Fill,
             Visible = false,
@@ -209,10 +218,12 @@ internal sealed class AssistantRosterWindow : Form
             _status.Visible = !_analysis.Visible;
             _sort.Visible = !_analysis.Visible;
             _retry.Visible = !_analysis.Visible;
+            _sendTier.Visible = !_analysis.Visible;
+            _sendAnalysis.Visible = _analysis.Visible;
             _analysisButton.Text = _analysis.Visible ? "返回英雄梯队" : "阵容分析";
-            if (_analysis.Visible && _getRoster() != null)
+            if (_analysis.Visible && _getRoster() is { } roster)
             {
-                _analysis.SetRoster(_getRoster()!);
+                ShowAnalysis(roster);
             }
         };
     }
@@ -224,6 +235,7 @@ internal sealed class AssistantRosterWindow : Form
         _sendAll.Click += (_, _) => _ = Track(SendTiersAsync(null));
         _sendTeam.Click += (_, _) => _ = Track(SendTiersAsync(false));
         _sendBench.Click += (_, _) => _ = Track(SendTiersAsync(true));
+        _sendAnalysis.Click += (_, _) => _ = Track(SendAnalysisAsync());
         _sort.SelectedIndexChanged += (_, _) => RenderRoster();
         _retry.Click += (_, _) => _ = Track(LoadRankingsAsync());
         _content.SizeChanged += (_, _) =>
@@ -457,6 +469,60 @@ internal sealed class AssistantRosterWindow : Form
         : 99;
 
     private static string ChampionName(int id) => FormMain.Globals.resLoading.GetChampionById(id)?.Name ?? $"英雄 {id}";
+
+    private async Task SendAnalysisAsync()
+    {
+        if (_closing || _sending)
+        {
+            return;
+        }
+
+        if (_analysis.ChatMessage is not { } message)
+        {
+            ShowAnalysisStatus("阵容数据尚未读取完成，请稍后再发送。");
+            return;
+        }
+
+        _sending = true;
+        _sendAnalysis.Enabled = false;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        try
+        {
+            bool sent = await _announce(message, timeout.Token);
+            ShowAnalysisStatus(sent ? "阵容分析已发送到选人聊天。" : "未发送：请确认仍在选人阶段且聊天已连接。");
+        }
+        catch (OperationCanceledException)
+        {
+            if (!_lifetime.IsCancellationRequested)
+            {
+                ShowAnalysisStatus("发送超时，请检查选人聊天。");
+            }
+        }
+        catch (Exception)
+        {
+            ShowAnalysisStatus("阵容分析发送失败，请检查客户端连接后重试。");
+        }
+        finally
+        {
+            _sending = false;
+            if (!IsDisposed)
+            {
+                _sendAnalysis.Enabled = true;
+            }
+        }
+    }
+
+    private void ShowAnalysisStatus(string text)
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        _status.Visible = true;
+        _status.Text = text;
+    }
 
     private async Task SendTiersAsync(bool? selection)
     {

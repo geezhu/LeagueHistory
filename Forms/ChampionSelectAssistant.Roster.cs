@@ -80,8 +80,9 @@ internal sealed partial class ChampionSelectAssistant
             () => _roster,
             () => _queue,
             () => _owner.GetCurrentPuuid(),
-            () =>
-                TimeSpan.FromMinutes(Math.Clamp(_owner.GetAppConfig()?.ChampionAnalysisCacheMinutes ?? 1440, 1, 10080)),
+            // Team analysis reuses the cached arammeta statistics; it adds no separate download.
+            async token =>
+                (await _am.GetAsync(0, false, token)).Index,
             token => LoadRosterRanksAsync(mayhem, query, token),
             async (message, token) =>
             {
