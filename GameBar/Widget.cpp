@@ -132,6 +132,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
 #include "ChampionDetailView.inl"
 #include "TierChatView.inl"
 #include "VoiceChatView.inl"
+#include "WaveView.inl"
 
     fire_and_forget CapturePreview()
     {
@@ -170,6 +171,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         InitializeRoot();
         InitializeRoster();
         InitializeDetails();
+        InitializeWaves();
         InitializeChat();
     }
     void InitializeRoot()
@@ -381,6 +383,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                     self->ReadChatStatus();
                     self->ReadVoiceStatus();
                     self->UpdateRespawns();
+                    self->UpdateWaves();
                 }
             });
         timer.Start();
@@ -534,9 +537,11 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     {
         populatedCards = 0;
         rosterMarked = false;
+        CloseWaves();
         CloseDetails(false);
         CloseVoice();
         ResetChat();
+        waves = JsonObject();
         for (auto &card : cards)
         {
             card.hero = 0;
@@ -639,6 +644,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         for (uint32_t i = 0; i < 2 && i < teamNames.Size(); ++i)
             teams[i].Text(teamNames.GetStringAt(i));
         ApplyLive(data);
+        ApplyWaves(data);
         auto rows = data.GetNamedArray(L"players", JsonArray());
         populatedCards = 0;
         bool marked = false;
@@ -661,6 +667,8 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             fixtureOpened = true;
             if (detailTab == L"voice")
                 ConfigureVoicePreview();
+            else if (detailTab == L"waves")
+                OpenWaves();
             else if (detailTab != L"roster")
                 OpenDetails(0);
         }
@@ -829,7 +837,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     void CaptureWhenReady()
     {
         if (capturePending && root.ActualWidth() > 0 && root.ActualHeight() > 0 && populatedCards > 0 &&
-            (!fixturePreview || detailTab == L"roster" || detailTab == L"voice" ||
+            (!fixturePreview || detailTab == L"roster" || detailTab == L"voice" || detailTab == L"waves" ||
              (!detailRevision.empty() && pendingDetailImages == 0)))
         {
             capturePending = false;

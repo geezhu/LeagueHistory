@@ -112,6 +112,7 @@ public sealed partial class GameBarBridge : IDisposable
                 ),
                 ["liveRevision"] = enabled && active ? live?.Revision ?? "" : "",
                 ["liveSections"] = enabled && active ? live?.Sections.DeepClone() ?? new JArray() : new JArray(),
+                ["waves"] = enabled && active && live?.Waves is { } waves ? waves.ToJson() : null,
             }
         );
     }

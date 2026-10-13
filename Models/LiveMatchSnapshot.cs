@@ -124,6 +124,21 @@ public sealed record LiveMatchSnapshot(string Mode, int Map, double Time, LiveMa
         };
     }
 
+    // Structure events carry the structure under a key named after the event, e.g. "TurretKilled": "Turret_…".
+    private static readonly HashSet<string> KeptEvents =
+    [
+        "ChampionKill",
+        "GameStart",
+        "Multikill",
+        "Ace",
+        "GameEnd",
+        "MinionsSpawning",
+        "TurretKilled",
+        "InhibKilled",
+        "InhibRespawningSoon",
+        "InhibRespawned",
+    ];
+
     private static LiveMatchEvent[]? ReadEvents(JObject data)
     {
         var events = new List<LiveMatchEvent>();
@@ -131,7 +146,7 @@ public sealed record LiveMatchSnapshot(string Mode, int Map, double Time, LiveMa
         foreach (var row in (data["events"]?["Events"] as JArray ?? new()).OfType<JObject>())
         {
             string eventName = (string?)row["EventName"] ?? "";
-            if (eventName is not ("ChampionKill" or "GameStart" or "Multikill" or "Ace" or "GameEnd"))
+            if (!KeptEvents.Contains(eventName))
             {
                 continue;
             }
@@ -168,6 +183,7 @@ public sealed record LiveMatchSnapshot(string Mode, int Map, double Time, LiveMa
                     Streak = (int?)row["KillStreak"] ?? 0,
                     Team = (string?)row["AcingTeam"] ?? "",
                     Result = (string?)row["Result"] ?? "",
+                    Structure = row[eventName]?.Type == JTokenType.String ? (string)row[eventName]! : "",
                 }
             );
         }

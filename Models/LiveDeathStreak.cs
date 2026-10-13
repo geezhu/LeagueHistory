@@ -12,6 +12,9 @@ public sealed record LiveMatchEvent(long? Id, string Name, double Time, string K
 
     /// <summary>GameEnd: Win or Lose from the active player's point of view.</summary>
     public string Result { get; init; } = "";
+
+    /// <summary>TurretKilled, InhibKilled, InhibRespawningSoon, InhibRespawned: the structure's name.</summary>
+    public string Structure { get; init; } = "";
 }
 
 public sealed record LiveDeathStreak(int? Current, int? Highest, bool Complete, string Description)

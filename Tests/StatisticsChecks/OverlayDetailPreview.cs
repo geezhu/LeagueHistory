@@ -231,6 +231,31 @@ internal static class OverlayDetailPreview
         roster["teamSummaries"] = new JArray("18 杀 · 41.2k · 领先 2.3k", "14 杀 · 38.9k");
         roster["liveRevision"] = "fixture-live-1";
         roster["liveSections"] = LivePanelSections.Build(input, id => $"布局装备 {id}");
+        roster["waves"] = MinionWaveForecaster.Calculate(SampleWaves(), (long)roster["updatedAt"]!)!.ToJson();
+    }
+
+    // Summoner's Rift at 14:06 so the page shows three lanes, the 14:00 interval change and a fallen inhibitor.
+    public static LiveMatchSnapshot SampleWaves()
+    {
+        static LiveMatchEvent Structure(string name, double time, string structure) =>
+            new(null, name, time, "", "") { Structure = structure };
+        return new LiveMatchSnapshot(
+            "CLASSIC",
+            11,
+            846,
+            [new("self|0", "测试玩家 1", "Ahri", "样例英雄", "ORDER", true, 11, null)]
+        )
+        {
+            Events =
+            [
+                Structure("MinionsSpawning", 30, ""),
+                Structure("TurretKilled", 610, "Turret_T2_R_03_A"),
+                Structure("TurretKilled", 680, "Turret_T2_R_02_A"),
+                Structure("TurretKilled", 742, "Turret_T2_C_07_A"),
+                Structure("InhibKilled", 780, "Barracks_T2_R1"),
+                Structure("TurretKilled", 701, "Turret_T1_C_05_A"),
+            ],
+        };
     }
 
     private static string Encode(string path, int width = 48, int height = 48)
