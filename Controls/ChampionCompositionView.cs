@@ -1,417 +1,377 @@
-using System.Text;
-using League.Clients;
 using League.Models;
+using League.Services;
 
 namespace League.Controls;
 
-public sealed partial class ChampionCompositionView : UserControl
+/// <summary>
+/// Team analysis from arammeta's trained statistics: estimated win rate with its parts, the seven
+/// capability totals against their gap thresholds, teammate synergy, and what swapping the user's
+/// pick for each bench champion would change. Analysis only; it never picks or swaps champions.
+/// </summary>
+public sealed class ChampionCompositionView : FlowLayoutPanel
 {
-    private readonly ChampionAnalysisClient _client;
-    private readonly Func<int, (string Name, string Alias)> _champion;
-    private readonly Func<TimeSpan> _lifetime;
-    private readonly Label _summary = new()
-    {
-        Dock = DockStyle.Top,
-        Height = 78,
-        Padding = new Padding(10, 6, 10, 3),
-    };
-    private readonly DarkFilterComboBox _replacement = new() { Width = 190 };
-    private readonly DataGridView _grid = new()
-    {
-        Dock = DockStyle.Top,
-        Height = 196,
-        ReadOnly = true,
-        AllowUserToAddRows = false,
-        AllowUserToDeleteRows = false,
-        AllowUserToResizeRows = false,
-        RowHeadersVisible = false,
-        AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-        SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-        MultiSelect = false,
-        BackgroundColor = Color.FromArgb(8, 30, 40),
-        BorderStyle = BorderStyle.None,
-        CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal,
-        EnableHeadersVisualStyles = false,
-    };
-    private readonly RichTextBox _details = new()
-    {
-        Dock = DockStyle.Fill,
-        ReadOnly = true,
-        BorderStyle = BorderStyle.None,
-        DetectUrls = false,
-    };
-    private readonly Dictionary<int, ChampionAnalysisSnapshot> _snapshots = new();
-    private readonly Dictionary<int, string> _errors = new();
-    private ChampionSelectRoster? _roster;
-    private CancellationTokenSource? _request;
-    private readonly CancellationTokenSource _viewLifetime = new();
-    private readonly HashSet<Task> _pendingLoads = new();
-    private Task _cleanupWork = Task.CompletedTask;
-    private bool _changing;
+    private static readonly Color Muted = Color.FromArgb(150, 172, 182);
+    private static readonly Color Body = Color.FromArgb(215, 225, 226);
+    private static readonly Color Good = Color.FromArgb(86, 200, 206);
+    private static readonly Color Bad = Color.FromArgb(232, 128, 98);
+    private static readonly Color Gold = Color.FromArgb(208, 185, 130);
+    private static readonly Color Track = Color.FromArgb(22, 52, 64);
+    private const int MaxSwaps = 8;
 
-    private sealed record Choice(int Id, string Name)
-    {
-        public override string ToString() => Name;
-    }
+    private readonly Func<int, string> _name;
+    private readonly Func<CancellationToken, Task<AramMetaIndex>> _loadIndex;
+    private readonly bool _mayhem;
+    private readonly CancellationToken _lifetime;
+    private readonly ToolTip _tips = new() { AutoPopDelay = 20000 };
+    private readonly List<Font> _fonts = new();
+    private AramMetaIndex? _index;
+    private ChampionSelectRoster? _roster;
+    private bool _loading;
+    private string? _chatMessage;
+    private string? _error;
 
     public ChampionCompositionView(
-        Func<int, (string Name, string Alias)> champion,
-        Func<TimeSpan> lifetime,
-        ChampionAnalysisClient? client = null
+        Func<int, string> name,
+        Func<CancellationToken, Task<AramMetaIndex>> loadIndex,
+        bool mayhem,
+        CancellationToken lifetime
     )
     {
-        _champion = champion;
+        _name = name;
+        _loadIndex = loadIndex;
+        _mayhem = mayhem;
         _lifetime = lifetime;
-        _client = client ?? ChampionAnalysisClient.Shared;
-        BackColor = Color.FromArgb(8, 30, 40);
-        ForeColor = Color.FromArgb(202, 222, 228);
-        Padding = new Padding(8);
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 40 };
-        bar.Controls.Add(
-            new Label
-            {
-                Text = "替换自己预览",
-                AutoSize = true,
-                Margin = new Padding(2, 8, 8, 0),
-            }
-        );
-        bar.Controls.Add(_replacement);
-        var retry = new Button
-        {
-            Text = "重新读取",
-            AutoSize = true,
-            FlatStyle = FlatStyle.Flat,
-        };
-        bar.Controls.Add(retry);
-        _grid.DefaultCellStyle = new DataGridViewCellStyle
-        {
-            BackColor = BackColor,
-            ForeColor = ForeColor,
-            SelectionBackColor = Color.FromArgb(23, 76, 89),
-            SelectionForeColor = Color.White,
-            Padding = new Padding(4),
-        };
-        _grid.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
-        {
-            BackColor = Color.FromArgb(16, 45, 57),
-            ForeColor = ForeColor,
-        };
-        _grid.GridColor = Color.FromArgb(30, 58, 68);
-        _grid.RowTemplate.Height = 30;
-        foreach (string name in new[] { "英雄", "生命", "护甲 / 魔抗", "普攻距离", "普攻周期", "数据" })
-        {
-            _grid.Columns.Add(name, name);
-        }
-
-        _grid.Columns[0].FillWeight = 130;
-        _details.BackColor = BackColor;
-        _details.ForeColor = ForeColor;
-        _details.Font = Font;
-        InitializeDashboard(bar);
-        _replacement.SelectedIndexChanged += (_, _) =>
-        {
-            if (!_changing)
-            {
-                Render();
-                _ = LoadAsync();
-            }
-        };
-        _grid.SelectionChanged += (_, _) => ShowDetails();
-        retry.Click += (_, _) =>
-        {
-            _skillRetryAfter.Clear();
-            _ = LoadAsync();
-        };
+        FlowDirection = FlowDirection.TopDown;
+        WrapContents = false;
+        AutoScroll = true;
+        Padding = new Padding(16, 12, 16, 16);
+        DoubleBuffered = true;
+        SizeChanged += (_, _) => Render();
     }
+
+    /// <summary>The current analysis as one champion select chat line; null until statistics load.</summary>
+    public string? ChatMessage => _chatMessage;
+
+    /// <summary>Completes when the current statistics load finishes; used by lifecycle cleanup.</summary>
+    public Task Loading { get; private set; } = Task.CompletedTask;
 
     public void SetRoster(ChampionSelectRoster roster)
     {
-        if (_dashboardDisposed)
-        {
-            return;
-        }
-        bool changed = _roster?.Signature != roster.Signature;
         _roster = roster;
-        if (!changed)
+        if (_index == null && !_loading)
         {
-            return;
+            Loading = LoadAsync();
         }
 
-        int previous = (_replacement.SelectedItem as Choice)?.Id ?? 0;
-        _changing = true;
-        _replacement.Items.Clear();
-        _replacement.Items.Add(new Choice(0, "保持当前阵容"));
-        foreach (int id in roster.Bench)
-        {
-            _replacement.Items.Add(new Choice(id, _champion(id).Name));
-        }
-
-        _replacement.SelectedIndex = Math.Max(
-            0,
-            _replacement.Items.Cast<Choice>().ToList().FindIndex(c => c.Id == previous)
-        );
-        _replacement.Enabled = roster.Team.Any(e => e.IsSelf);
-        _changing = false;
         Render();
-        _ = LoadAsync();
     }
 
-    private ChampionSelectRosterEntry[] Team()
+    private async Task LoadAsync()
     {
-        int id = (_replacement.SelectedItem as Choice)?.Id ?? 0;
-        return _roster?.Team.Select(e => e.IsSelf && id > 0 ? e with { ChampionId = id, Preview = true } : e).ToArray()
-            ?? [];
-    }
-
-    private Task LoadAsync()
-    {
-        if (_dashboardDisposed)
-        {
-            return Task.CompletedTask;
-        }
-        RetireSource(_request);
-        _request = new CancellationTokenSource();
-        return TrackLoad(LoadTeamAsync(AnalysisChampions(), _request.Token));
-    }
-
-    private int[] AnalysisChampions() =>
-        // Keep the actual self for comparison; never download the entire bench.
-        Team()
-            .Concat(_roster?.Team.Where(e => e.IsSelf) ?? [])
-            .Where(e => e.ChampionId > 0)
-            .Select(e => e.ChampionId)
-            .Distinct()
-            .ToArray();
-
-    private async Task LoadTeamAsync(int[] ids, CancellationToken token)
-    {
-        // Register work before synchronous cache results can schedule a dashboard refresh.
-        await Task.Yield();
-        using var concurrency = new SemaphoreSlim(3);
-        await Task.WhenAll(ids.Select(id => LoadHeroAnalysisAsync(id, concurrency, token)));
-    }
-
-    private async Task LoadHeroAnalysisAsync(int id, SemaphoreSlim concurrency, CancellationToken token)
-    {
-        bool entered = false;
+        _loading = true;
+        _error = null;
         try
         {
-            await concurrency.WaitAsync(token);
-            entered = true;
-            var champion = _champion(id);
-            if (string.IsNullOrWhiteSpace(champion.Alias))
+            var index = await _loadIndex(_lifetime);
+            if (!IsDisposed && !_lifetime.IsCancellationRequested)
             {
-                throw new InvalidDataException("本地英雄别名尚未加载。");
+                _index = index;
             }
-            var result = await _client.GetAsync(champion.Alias, _lifetime(), token);
-            if (token.IsCancellationRequested || _dashboardDisposed)
-            {
-                return;
-            }
-            _snapshots[id] = result;
-            _errors.Remove(id);
         }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
-            // A changed roster or closed view no longer owns this analysis result.
-            return;
+            // The roster window closed; nothing is rendered after cancellation.
         }
-        catch (Exception ex)
+        catch (Exception error)
         {
-            if (token.IsCancellationRequested || _dashboardDisposed)
-            {
-                return;
-            }
-            _errors[id] = ex.Message;
+            System.Diagnostics.Debug.WriteLine($"Composition statistics: {error}");
+            _error = "arammeta 统计暂不可用";
         }
         finally
         {
-            if (entered)
+            _loading = false;
+            if (!IsDisposed && !_lifetime.IsCancellationRequested)
             {
-                concurrency.Release();
+                Render();
             }
         }
-        if (!token.IsCancellationRequested && !_dashboardDisposed)
-        {
-            QueueDashboardRefresh();
-        }
     }
-
-    private string DataStatus(int id) =>
-        _errors.ContainsKey(id) ? "读取失败"
-        : _snapshots.TryGetValue(id, out var data)
-            ? data.Stale ? "旧缓存"
-                : "已读取"
-        : id > 0 ? "读取中"
-        : "未选择";
-
-    private Task TrackLoad(Task work)
-    {
-        lock (_pendingLoads)
-        {
-            _pendingLoads.Add(work);
-        }
-        _ = work.ContinueWith(
-            completed =>
-            {
-                lock (_pendingLoads)
-                {
-                    _pendingLoads.Remove(completed);
-                }
-                if (completed.Exception is { } error)
-                {
-                    System.Diagnostics.Debug.WriteLine($"composition view: {error.GetBaseException().GetType().Name}");
-                }
-            },
-            CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default
-        );
-        return work;
-    }
-
-    private Task[] PendingLoads()
-    {
-        lock (_pendingLoads)
-        {
-            return _pendingLoads.ToArray();
-        }
-    }
-
-    private void RetireSource(CancellationTokenSource? source)
-    {
-        if (source == null)
-        {
-            return;
-        }
-        var pending = PendingLoads();
-        var cancellation = source.CancelAsync();
-        TrackLoad(
-            Task.WhenAll(pending.Append(cancellation))
-                .ContinueWith(
-                    completed =>
-                    {
-                        _ = completed.Exception;
-                        source.Dispose();
-                    },
-                    CancellationToken.None,
-                    TaskContinuationOptions.ExecuteSynchronously,
-                    TaskScheduler.Default
-                )
-        );
-    }
-
-    private static double? Value(ChampionAnalysisReport report, string name) =>
-        report.Attributes.FirstOrDefault(a => a.Name == name)?.Values.FirstOrDefault();
-
-    private static string Number(double? value, string format = "0.#") => value?.ToString(format) ?? "—";
 
     private void Render()
     {
-        if (_dashboardDisposed)
+        if (IsDisposed || _roster == null)
         {
             return;
         }
-        int? selected = _grid.CurrentRow?.Tag as int?;
-        var team = Team();
-        _grid.Rows.Clear();
-        foreach (var entry in team)
+
+        SuspendLayout();
+        foreach (Control child in Controls.Cast<Control>().ToArray())
         {
-            int id = entry.ChampionId;
-            _snapshots.TryGetValue(id, out var snapshot);
-            var r = snapshot?.Report;
-            string data = DataStatus(id);
-            string name = id > 0 ? _champion(id).Name : "等待选择";
-            var row = _grid.Rows[
-                _grid.Rows.Add(
-                    name + (entry.IsSelf ? " · 自己" : "") + (entry.Preview ? "（预选）" : ""),
-                    r == null ? "—" : Number(Value(r, "基础生命")),
-                    r == null ? "—" : Number(Value(r, "基础护甲")) + " / " + Number(Value(r, "基础魔抗")),
-                    r == null ? "—" : Number(Value(r, "普攻距离")),
-                    r == null ? "—" : Number(Value(r, "基础普攻周期（不含前摇、重置）"), "0.00") + " 秒",
-                    data
-                )
-            ];
-            row.Tag = id;
+            child.Dispose();
         }
-        if (_grid.Rows.Count > 0)
+
+        // Labels from the previous render are gone, so their fonts can be released.
+        foreach (var font in _fonts)
         {
-            var row = _grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => (int?)r.Tag == selected) ?? _grid.Rows[0];
-            _grid.CurrentCell = row.Cells[0];
+            font.Dispose();
         }
-        int known = team.Count(e => _snapshots.ContainsKey(e.ChampionId));
-        _summary.Text =
-            $"阵容分析 · 已读取 {known}/{team.Length} 人\n基础值，不含成长、装备、符文、强化与地图平衡。换人预览不会操作客户端。";
-        int replacement = (_replacement.SelectedItem as Choice)?.Id ?? 0;
-        int original = _roster?.Team.FirstOrDefault(e => e.IsSelf)?.ChampionId ?? 0;
-        if (
-            replacement > 0
-            && _snapshots.TryGetValue(original, out var before)
-            && _snapshots.TryGetValue(replacement, out var after)
-        )
+
+        _fonts.Clear();
+        _chatMessage = null;
+        if (_index == null)
         {
-            string Delta(string field) =>
-                (Value(after.Report, field) - Value(before.Report, field))?.ToString("+0.#;-0.#;0") ?? "未知";
-            _summary.Text +=
-                $"\n相对 {_champion(original).Name}：生命 {Delta("基础生命")} · 护甲 {Delta("基础护甲")} · 魔抗 {Delta("基础魔抗")} · 普攻距离 {Delta("普攻距离")}";
+            AddStatus();
         }
-        RenderDashboard();
-        ShowDetails();
+        else
+        {
+            int[] team = _roster.Team.Where(entry => entry.ChampionId > 0).Select(entry => entry.ChampionId).ToArray();
+            var evaluation = AramTeamScore.Evaluate(_index, team);
+            AddSummary(evaluation, _roster.Team.Length);
+            AddCapabilities(evaluation);
+            if (_mayhem)
+            {
+                AddPairs(evaluation);
+            }
+
+            var swaps = AddSwaps(evaluation);
+            _chatMessage = TeamAnalysisChatMessage.Build(
+                evaluation,
+                swaps.FirstOrDefault(),
+                _mayhem,
+                _index.Patch,
+                _name
+            );
+        }
+
+        ResumeLayout(true);
     }
 
-    private void ShowDetails()
+    private void AddStatus()
     {
-        int id = _grid.CurrentRow?.Tag as int? ?? 0;
-        if (!_snapshots.TryGetValue(id, out var snapshot))
+        if (_error == null)
         {
-            _details.Text =
-                _errors.GetValueOrDefault(id) ?? (id > 0 ? "正在读取英雄数据…" : "选择一名英雄查看详细数据。");
+            Add(Line("正在读取 arammeta 统计…", Muted));
             return;
         }
-        var text = new StringBuilder();
-        text.AppendLine($"{_champion(id).Name} · 基础能力\n");
-        foreach (var value in snapshot.Report.Attributes)
-        {
-            text.AppendLine($"{value.Name}：{Number(value.Values.FirstOrDefault(), "0.###")} {value.Unit}");
-        }
 
-        text.AppendLine("\n技能分析\n控制类型、实际射程、命中条件和护盾数值仍在验证中，当前不计入阵容合计。");
-        foreach (var spell in snapshot.Report.Spells)
+        var retry = Line(_error + " · 点击重试", Good);
+        retry.Cursor = Cursors.Hand;
+        retry.Click += (_, _) =>
         {
-            text.AppendLine($"\n{spell.Key} · 目标类型 {spell.Targeting}（不代表必中）");
-            foreach (
-                var formula in spell.Formulas.Where(f => f.Name.Contains("Shield", StringComparison.OrdinalIgnoreCase))
-            )
+            if (!_loading)
             {
-                text.AppendLine("护盾公式待验证：" + formula.Expression);
+                Loading = LoadAsync();
+                Render();
             }
-
-            if (spell.Warnings.Any(w => w.Contains("ChainDuration")))
-            {
-                text.AppendLine("连接阶段时间不计入已确认控制时长。");
-            }
-        }
-        text.AppendLine(
-            $"\n来源：CommunityDragon · latest（未锁定补丁）\n读取时间：{snapshot.FetchedAt.LocalDateTime:yyyy-MM-dd HH:mm}\n快照：{snapshot.ContentHash[..12]}"
-        );
-        if (snapshot.Warning != null)
-        {
-            text.AppendLine(snapshot.Warning);
-        }
-
-        _details.Text = text.ToString();
+        };
+        Add(retry);
     }
+
+    private void AddSummary(AramTeamEvaluation evaluation, int slots)
+    {
+        int picked = evaluation.Team.Length;
+        string scope = picked < slots ? $"已选 {picked}/{slots} 人，按人数折算 · " : "";
+        if (_mayhem)
+        {
+            var title = Line($"估计胜率 {evaluation.EstimatedWinRate:P1}", Gold, 15, FontStyle.Bold);
+            Add(title);
+            var parts = Line(
+                $"英雄 {evaluation.BaseWinRate:P1} · 搭配 {Signed(evaluation.PairLift)} · 阵容 {Signed(evaluation.CompositionScore)} · 可信度 {evaluation.Confidence}",
+                Body
+            );
+            Add(parts);
+            _tips.SetToolTip(
+                parts,
+                "英雄：五人调整后胜率均值；搭配：队友组合的历史提升；阵容：前排、伤害类型与短板的修正。\n"
+                    + "可信度按有搭配记录的组合数和样本场次估计。"
+            );
+            Add(Line($"{scope}arammeta 海克斯大乱斗 {_index!.Patch} 统计模型；不保证单场胜负。", Muted));
+        }
+        else
+        {
+            Add(Line("阵容能力", Body, 13, FontStyle.Bold));
+            Add(Line($"{scope}能力值参考 arammeta 海克斯大乱斗统计；普通大乱斗不显示估计胜率。", Muted));
+        }
+
+        if (evaluation.Missing.Length > 0)
+        {
+            Add(Line("缺少统计：" + string.Join("、", evaluation.Missing.Select(_name)) + "，未计入能力与胜率。", Bad));
+        }
+    }
+
+    private void AddCapabilities(AramTeamEvaluation evaluation)
+    {
+        Add(Heading("能力与短板"));
+        foreach (var capability in evaluation.Capabilities)
+        {
+            Add(CapabilityRow(capability));
+        }
+
+        string mix = evaluation.AdShare switch
+        {
+            < 0.25 => "（魔法伤害为主，对手易堆魔抗）",
+            > 0.75 => "（物理伤害为主，对手易堆护甲）",
+            _ => "",
+        };
+        Add(
+            Line(
+                $"物理伤害占比 {evaluation.AdShare:P0}{mix} · 前排 {evaluation.FrontCount} 人",
+                mix.Length > 0 ? Bad : Body
+            )
+        );
+    }
+
+    private Control CapabilityRow(AramTeamCapability capability)
+    {
+        var row = new Panel { Size = new Size(RowWidth, 22), Margin = new Padding(0, 1, 0, 1) };
+        // Gap thresholds are low, so a full track is 2.5× the threshold: the tick sits at 40% and the bar
+        // shows how far a total clears it. Totals beyond that simply fill the track.
+        double scale = capability.Threshold > 0 ? capability.Threshold * 2.5 : Math.Max(1, capability.Sum);
+        row.Paint += (_, e) =>
+        {
+            const int label = 48,
+                status = 64;
+            var bar = new Rectangle(label, 7, Math.Max(10, row.Width - label - status - 8), 8);
+            using var track = new SolidBrush(Track);
+            using var fill = new SolidBrush(capability.Lack ? Bad : Good);
+            using var tick = new Pen(Muted);
+            e.Graphics.FillRectangle(track, bar);
+            e.Graphics.FillRectangle(
+                fill,
+                bar.X,
+                bar.Y,
+                (int)(bar.Width * Math.Min(1, capability.Sum / scale)),
+                bar.Height
+            );
+            int threshold = bar.X + (int)(bar.Width * Math.Min(1, capability.Threshold / scale));
+            e.Graphics.DrawLine(tick, threshold, bar.Y - 3, threshold, bar.Bottom + 3);
+            TextRenderer.DrawText(e.Graphics, capability.Name, Font, new Point(0, 3), Body);
+            TextRenderer.DrawText(
+                e.Graphics,
+                capability.Lack ? "短板" : capability.Sum.ToString("0.0"),
+                Font,
+                new Rectangle(bar.Right + 8, 0, status, row.Height),
+                capability.Lack ? Bad : Muted,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.Left
+            );
+        };
+        _tips.SetToolTip(
+            row,
+            $"{capability.Name}：全队合计 {capability.Sum:0.##}，短板阈值 {capability.Threshold:0.##}（竖线）。"
+        );
+        return row;
+    }
+
+    private void AddPairs(AramTeamEvaluation evaluation)
+    {
+        var known = evaluation.Pairs.OrderByDescending(pair => pair.Lift).ToArray();
+        Add(Heading($"队友搭配 · 已知 {known.Length}/{evaluation.PairEdges} 组"));
+        if (known.Length == 0)
+        {
+            Add(Line("暂无这些队友组合的历史数据，按 0 计入。", Muted));
+            return;
+        }
+
+        var shown = known.Take(3).Concat(known.Skip(3).TakeLast(2)).Distinct();
+        foreach (var pair in shown)
+        {
+            var line = Line(
+                $"{_name(pair.First)} + {_name(pair.Second)}  {Signed(pair.Lift)}",
+                pair.Lift >= 0 ? Good : Bad
+            );
+            _tips.SetToolTip(line, $"同队 {pair.Games:N0} 场；相对两人各自预期的胜率变化。");
+            Add(line);
+        }
+    }
+
+    private AramTeamSwap[] AddSwaps(AramTeamEvaluation current)
+    {
+        var self = _roster!.Team.FirstOrDefault(entry => entry.IsSelf);
+        if (self == null || self.ChampionId <= 0)
+        {
+            Add(Heading("换人建议"));
+            Add(Line("选择英雄后可比较交换池中的英雄。", Muted));
+            return [];
+        }
+
+        Add(Heading($"换人建议 · 替换你的 {_name(self.ChampionId)}"));
+        if (_roster.Bench.Length == 0)
+        {
+            Add(Line("交换池暂无英雄。", Muted));
+            return [];
+        }
+
+        var swaps = AramTeamScore.Swaps(_index!, current, self.ChampionId, _roster.Bench, _mayhem);
+        foreach (var swap in swaps.Take(MaxSwaps))
+        {
+            var parts = new List<string>();
+            if (swap.Fixed.Length > 0)
+            {
+                parts.Add("补" + string.Join("、", swap.Fixed.Select(lack => lack.Name)));
+            }
+
+            if (swap.Added.Length > 0)
+            {
+                parts.Add("新短板 " + string.Join("、", swap.Added.Select(lack => lack.Name)));
+            }
+
+            string effect = parts.Count > 0 ? "  · " + string.Join("；", parts) : "";
+            string text = _mayhem
+                ? $"换成 {_name(swap.ChampionId)}：{Signed(swap.Delta)}{effect}"
+                : $"换成 {_name(swap.ChampionId)}{(effect.Length > 0 ? effect : "  · 短板不变")}";
+            Add(Line(text, swap.Delta >= 0 && swap.Added.Length == 0 ? Good : Body));
+        }
+
+        Add(Line("仅为分析，不会自动选择或交换英雄。", Muted));
+        return swaps;
+    }
+
+    private int RowWidth => Math.Max(240, Math.Min(560, ClientSize.Width - Padding.Horizontal - 24));
+
+    private Label Heading(string text)
+    {
+        var label = Line(text, Muted, 9, FontStyle.Bold);
+        label.Margin = new Padding(0, 14, 0, 4);
+        return label;
+    }
+
+    private Label Line(string text, Color color, float size = 9, FontStyle style = FontStyle.Regular)
+    {
+        var label = new Label
+        {
+            Text = text,
+            AutoSize = true,
+            MaximumSize = new Size(RowWidth, 0),
+            ForeColor = color,
+            Margin = new Padding(0, 2, 0, 2),
+        };
+        if (size != 9 || style != FontStyle.Regular)
+        {
+            var font = new Font(Font.FontFamily, size, style);
+            _fonts.Add(font);
+            label.Font = font;
+        }
+
+        return label;
+    }
+
+    private void Add(Control control) => Controls.Add(control);
+
+    // Values that round to zero read as neutral rather than "−0.0%".
+    private static string Signed(double value) =>
+        Math.Abs(value) < 0.0005 ? "±0.0%" : (value > 0 ? "+" : "−") + Math.Abs(value).ToString("P1");
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing && !_dashboardDisposed)
+        if (disposing)
         {
-            DisposeDashboard();
-            RetireSource(_request);
-            _request = null;
-            RetireSource(_viewLifetime);
-            _cleanupWork = Task.WhenAll(PendingLoads());
+            _tips.Dispose();
+            foreach (var font in _fonts)
+            {
+                font.Dispose();
+            }
         }
+
         base.Dispose(disposing);
     }
 }

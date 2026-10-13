@@ -12,7 +12,6 @@ internal static class ClientChecks
 
     public static async Task RunAsync()
     {
-        await ChampionCompositionChecks.RunAsync();
         await ChampionMasteryChecks.RunAsync();
         await LoadingRosterIdentityChecks.Run();
         await OpggChecks.RunAsync();

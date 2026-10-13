@@ -30,14 +30,6 @@ public partial class FormMain
             "单位：分钟，默认 1440（1 天）。缓存保存到本地，过期后在查看平衡提示时更新；失败时保留旧数据。",
             SaveAramBalanceCacheLifetime
         );
-        AddCacheLifetimeSetting(
-            layout,
-            "阵容分析英雄数据缓存有效期 · CommunityDragon",
-            _appConfig?.ChampionAnalysisCacheMinutes ?? 1440,
-            30,
-            "单位：分钟，默认 1440（1 天）。按英雄保存到磁盘；过期时检查更新，失败时保留旧数据。",
-            SaveChampionAnalysisCacheLifetime
-        );
         var mastery = AddCacheLifetimeSetting(
             layout,
             "玩家英雄成就缓存有效期 · 英雄联盟客户端",
@@ -115,15 +107,6 @@ public partial class FormMain
         if (_appConfig != null)
         {
             _appConfig.AramBalanceCacheMinutes = minutes;
-            SaveAppConfig();
-        }
-    }
-
-    private void SaveChampionAnalysisCacheLifetime(int minutes)
-    {
-        if (_appConfig != null)
-        {
-            _appConfig.ChampionAnalysisCacheMinutes = minutes;
             SaveAppConfig();
         }
     }

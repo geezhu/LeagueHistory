@@ -14,13 +14,12 @@ internal static class DefaultStatisticsSuite
         CoreUtilityChecks.Run();
         HistoryDataChecks.Run();
         TimelineDataChecks.Run();
-        ChampionAnalysisChecks.Run();
+        AramTeamScoreChecks.Run();
         ChampionTierChatChecks.Run();
         LiveChampionChecks.Run();
         LiveDeathStreakChecks.Run();
         RoomPlayerChecks.Run();
         Task.Run(ChatSendDiagnosticsChecks.RunAsync).GetAwaiter().GetResult();
-        Task.Run(ChampionCompositionChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(OpggChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(AramMetaChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(ItemSetChecks.RunAsync).GetAwaiter().GetResult();
@@ -33,7 +32,7 @@ internal static class DefaultStatisticsSuite
         OverlayPartyChecks.Run();
         AssistantWindowChecks.Run();
         TierHotkeyChecks.Run();
-        ChampionCompositionChecks.Render();
+        CompositionViewChecks.Run();
         OpggChecks.Render();
         AramMetaChecks.Render();
         SettingsChecks.Render();
