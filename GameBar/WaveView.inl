@@ -165,6 +165,7 @@ void RenderWaves(double now)
     AddWaveLine(L"按游戏时间推算；到达时间为无人干扰时的估计，不代表兵线实际位置。", 12, 0x91acbb);
     RenderWaveSpawns(now);
     RenderWaveLanes(now);
+    RenderDeathCosts();
 }
 void RenderWaveSpawns(double now)
 {
@@ -231,4 +232,45 @@ void RenderWaveLanes(double now)
         }
         waveBody.Children().Append(card);
     }
+}
+// Death timers from level and game time: the cost of dying now, own team on the left.
+void RenderDeathCosts()
+{
+    auto deaths = waves.GetNamedArray(L"deaths", JsonArray());
+    if (deaths.Size() == 0)
+        return;
+    double factor = waves.GetNamedNumber(L"deathFactor", 0);
+    AddWaveHeading(L"现在阵亡需等待");
+    AddWaveLine(factor > 0 ? L"按等级计算 · 时间加成 +" + to_hstring(static_cast<int>(factor + .5)) + L"%"
+                           : hstring(L"按等级计算 · 尚无时间加成"),
+                12,
+                0x91acbb);
+    Grid teamsGrid;
+    teamsGrid.ColumnDefinitions().Append(ColumnDefinition());
+    teamsGrid.ColumnDefinitions().Append(ColumnDefinition());
+    for (int column = 0; column < 2; ++column)
+    {
+        bool ally = column == 0;
+        StackPanel team;
+        team.Background(MakeBrush(0x112f3c));
+        team.Padding({10, 6, 10, 6});
+        team.Margin({0, 0, ally ? 6.0 : 0.0, 6});
+        team.Children().Append(MakeText(ally ? L"我方" : L"敌方", 14, ally ? 0x45c7ce : 0xf3b37e));
+        for (auto const &value : deaths)
+        {
+            auto death = value.GetObject();
+            if (death.GetNamedBoolean(L"ally", false) != ally)
+                continue;
+            int seconds = static_cast<int>(death.GetNamedNumber(L"seconds", 0) + .5);
+            auto line = MakeText(death.GetNamedString(L"champion", L"") + L"  " +
+                                     to_hstring(static_cast<int>(death.GetNamedNumber(L"level", 0))) + L" 级  " +
+                                     to_hstring(seconds) + L" 秒",
+                                 13,
+                                 death.GetNamedBoolean(L"self", false) ? 0x7ff0ee : 0xe2eef3);
+            team.Children().Append(line);
+        }
+        Grid::SetColumn(team, column);
+        teamsGrid.Children().Append(team);
+    }
+    waveBody.Children().Append(teamsGrid);
 }
