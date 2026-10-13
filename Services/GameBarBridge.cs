@@ -43,7 +43,8 @@ public sealed partial class GameBarBridge : IDisposable
         bool show,
         IReadOnlyDictionary<string, PlayerChampionMastery>? masteries = null,
         IReadOnlyDictionary<string, LiveDeathStreak>? deathStreaks = null,
-        IReadOnlyDictionary<string, OverlayPartyMarker>? parties = null
+        IReadOnlyDictionary<string, OverlayPartyMarker>? parties = null,
+        OverlayLiveState? live = null
     )
     {
         if (_disposed)
@@ -71,7 +72,9 @@ public sealed partial class GameBarBridge : IDisposable
                     rows.Add(new JObject());
                     continue;
                 }
-                rows.Add(PlayerRow(p, ranks, icons, champion, details, masteries, deathStreaks, parties));
+                var row = PlayerRow(p, ranks, icons, champion, details, masteries, deathStreaks, parties);
+                AddLiveFields(row, p, live);
+                rows.Add(row);
             }
         }
         _detailScope = new(
@@ -103,8 +106,38 @@ public sealed partial class GameBarBridge : IDisposable
                 ["status"] = status,
                 ["teams"] = new JArray(teams.Select(t => roster?.TeamLabel(t) ?? (t == 100 ? "我方" : "对方"))),
                 ["players"] = rows,
+                ["liveProtocol"] = 1,
+                ["teamSummaries"] = new JArray(
+                    enabled && active && live != null ? TeamSummaries(live.Insight) : ["", ""]
+                ),
+                ["liveRevision"] = enabled && active ? live?.Revision ?? "" : "",
+                ["liveSections"] = enabled && active ? live?.Sections.DeepClone() ?? new JArray() : new JArray(),
             }
         );
+    }
+
+    // Own team first, matching the roster columns.
+    private static string[] TeamSummaries(LiveMatchInsight insight) =>
+        [
+            $"{insight.Own.Kills} 杀 · {LivePanelSections.Gold(insight.Own.ItemGold)} · {LivePanelSections.Lead(insight.GoldLead)}",
+            $"{insight.Enemy.Kills} 杀 · {LivePanelSections.Gold(insight.Enemy.ItemGold)}",
+        ];
+
+    /// <summary>Respawn time counts down in the widget from the snapshot time; scores replace the loading statistics.</summary>
+    private static void AddLiveFields(JObject row, LoadingPlayer player, OverlayLiveState? live)
+    {
+        row["self"] = player.Self;
+        if (live?.Insight.Players.GetValueOrDefault(player.Key) is not { } insight)
+        {
+            return;
+        }
+
+        row["respawn"] = Math.Round(insight.Respawn, 1);
+        row["liveStats"] =
+            (insight.Score.Length > 0 ? insight.Score : "—")
+            + (insight.KillParticipation is double kp ? " · 参团 " + LivePanelSections.Percent(kp) : "")
+            + " · "
+            + LivePanelSections.Gold(insight.ItemGold);
     }
 
     private JObject PlayerRow(

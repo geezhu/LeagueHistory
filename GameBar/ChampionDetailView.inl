@@ -10,7 +10,8 @@ Image detailArtwork;
 std::array<Button, 10> heroButtons;
 std::array<Image, 10> heroIcons;
 std::array<Border, 10> heroIndicators;
-std::array<Button, 4> tabButtons;
+std::array<Button, 5> tabButtons;
+static constexpr std::array<wchar_t const *, 5> DetailTabKeys{L"skills", L"builds", L"runes", L"augments", L"live"};
 JsonObject detailData;
 hstring detailRequest, detailRevision, detailTab = L"skills";
 hstring pendingDetailRequest;
@@ -34,8 +35,8 @@ void ConfigureDetailPreview(hstring const &argument)
     if (!text.starts_with(prefix))
         return;
     auto tab = text.substr(prefix.size());
-    if (tab != L"skills" && tab != L"builds" && tab != L"runes" && tab != L"augments" && tab != L"roster" &&
-        tab != L"voice")
+    if (tab != L"skills" && tab != L"builds" && tab != L"runes" && tab != L"augments" && tab != L"live" &&
+        tab != L"roster" && tab != L"voice")
         return;
     fixturePreview = true;
     fixtureOpened = false;
@@ -145,16 +146,15 @@ void InitializeDetailTabs()
 {
     detailTabs.Orientation(Orientation::Horizontal);
     detailTabs.Margin({0, 8, 0, 8});
-    std::array<hstring, 4> names{L"技能", L"出装", L"符文", L"海克斯"};
-    std::array<hstring, 4> keys{L"skills", L"builds", L"runes", L"augments"};
-    for (int i = 0; i < 4; ++i)
+    std::array<hstring, 5> names{L"技能", L"出装", L"符文", L"海克斯", L"本局"};
+    for (int i = 0; i < 5; ++i)
     {
         auto &b = tabButtons[i];
         b = DetailButton(names[i]);
         b.Margin({0, 0, 6, 0});
         b.MinWidth(80);
         b.Click(
-            [this, key = keys[i]](auto &&, auto &&)
+            [this, key = hstring(DetailTabKeys[i])](auto &&, auto &&)
             {
                 detailTab = key;
                 RenderDetails();
@@ -185,9 +185,9 @@ void RefreshDetailHeader()
     if (selectedCard < 0)
         return;
     detailTitle.Text(cards[selectedCard].champion.Text() + L"  " + cards[selectedCard].tier.Text());
-    detailStats.Text(cards[selectedCard].stats.Text() + (cards[selectedCard].deathStreakText.empty()
-                                                             ? L""
-                                                             : L" · " + cards[selectedCard].deathStreakText));
+    detailStats.Text(cards[selectedCard].championStats + (cards[selectedCard].deathStreakText.empty()
+                                                              ? L""
+                                                              : L" · " + cards[selectedCard].deathStreakText));
     detailMastery.Text(cards[selectedCard].player.Text() + L" · " + cards[selectedCard].mastery.Text() +
                        (cards[selectedCard].partyLabel.empty() ? L"" : L" · " + cards[selectedCard].partyLabel));
     detailMastery.Foreground(MakeBrush(cards[selectedCard].partyColor ? cards[selectedCard].partyColor : 0xdbc47f));
@@ -200,6 +200,12 @@ void RefreshDetailHeader()
     bool mayhem = detailQueue == 2400 || detailQueue == 3270;
     tabButtons[2].Visibility(mayhem ? Visibility::Collapsed : Visibility::Visible);
     tabButtons[3].Visibility(mayhem ? Visibility::Visible : Visibility::Collapsed);
+    tabButtons[4].Visibility(HasLivePanel() ? Visibility::Visible : Visibility::Collapsed);
+}
+// The in-game panel describes the active player only; 2999 exposes no other player's attributes.
+bool HasLivePanel()
+{
+    return selectedCard >= 0 && cards[selectedCard].self && liveSections.Size() > 0;
 }
 void OpenDetails(int index)
 {
@@ -221,6 +227,14 @@ void OpenDetails(int index)
     if ((detailQueue == 2400 || detailQueue == 3270) && detailTab == L"runes")
         detailTab = L"augments";
     else if (detailQueue != 2400 && detailQueue != 3270 && detailTab == L"augments")
+        detailTab = L"skills";
+    // A layout fixture keeps the tab it was asked to capture.
+    if (HasLivePanel())
+    {
+        if (!fixturePreview)
+            detailTab = L"live";
+    }
+    else if (detailTab == L"live")
         detailTab = L"skills";
     rosterPanel.Visibility(Visibility::Collapsed);
     details.Visibility(Visibility::Collapsed);
@@ -341,6 +355,9 @@ Grid DetailIcons(JsonArray const &icons)
         Grid tile;
         tile.Background(MakeBrush(0x1b414e));
         tile.Margin({0, 0, 4, 4});
+        // Owned items in the build comparison stay visible but recede behind the missing ones.
+        if (icon.GetNamedBoolean(L"owned", false))
+            tile.Opacity(.4);
         auto placeholder =
             MakeText(hstring(std::wstring_view(name).substr(0, std::min<size_t>(2, name.size()))), 11, 0x91acbb);
         placeholder.HorizontalAlignment(HorizontalAlignment::Center);
@@ -363,20 +380,22 @@ Grid DetailIcons(JsonArray const &icons)
     }
     return grid;
 }
-void RenderDetails()
+// Live refreshes keep the scroll position; switching tabs or heroes starts from the top.
+void RenderDetails(bool resetScroll = true)
 {
     ++detailRender;
     detailBody.Children().Clear();
-    detailScroll.ChangeView(nullptr, 0.0, nullptr);
-    std::array<hstring, 4> keys{L"skills", L"builds", L"runes", L"augments"};
-    for (int i = 0; i < 4; ++i)
+    if (resetScroll)
+        detailScroll.ChangeView(nullptr, 0.0, nullptr);
+    for (int i = 0; i < 5; ++i)
     {
-        tabButtons[i].Background(MakeBrush(keys[i] == detailTab ? 0x008b98 : 0x143542));
+        tabButtons[i].Background(MakeBrush(DetailTabKeys[i] == detailTab ? 0x008b98 : 0x143542));
     }
     RenderRarityChoices();
     bool found = false;
     int rarityIndex = 0;
-    for (auto const &entry : detailData.GetNamedArray(L"sections", JsonArray()))
+    auto sections = detailTab == L"live" ? liveSections : detailData.GetNamedArray(L"sections", JsonArray());
+    for (auto const &entry : sections)
     {
         auto section = entry.GetObject();
         if (section.GetNamedString(L"tab", L"") != detailTab)
@@ -647,8 +666,9 @@ StackPanel CreateDetailRow(JsonObject const &row)
 }
 void RenderMissingSection()
 {
-    auto text = MakeText(detailData.GetNamedString(L"state", L"loading") == L"loading" ? L"正在读取这一页的数据…"
-                                                                                       : L"当前模式暂无这一项数据。",
+    auto text = MakeText(detailTab == L"live"                                            ? L"等待本局数据…"
+                         : detailData.GetNamedString(L"state", L"loading") == L"loading" ? L"正在读取这一页的数据…"
+                                                                                         : L"当前模式暂无这一项数据。",
                          14,
                          0x91acbb);
     text.Margin({12, 20, 12, 20});

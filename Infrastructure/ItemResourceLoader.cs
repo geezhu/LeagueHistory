@@ -32,7 +32,8 @@ namespace League.Infrastructure
                     Id = i.id,
                     Name = i.name,
                     Description = i.description,
-                    IconFileName = iconPath
+                    IconFileName = iconPath,
+                    PriceTotal = (int?)i.priceTotal ?? 0
                 });
             }
         }
