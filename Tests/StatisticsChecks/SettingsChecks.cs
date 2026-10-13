@@ -119,9 +119,10 @@ internal static class SettingsChecks
 
         if (
             All(tabs).OfType<TableLayoutPanel>().SingleOrDefault(c => c.Name == "ShortcutTable") is not { } table
-            || table.RowCount != 6
+            || table.RowCount != 4
         )
         {
+            // Header plus Ctrl+F7, F9 and F11; tier messages are sent from the Game Bar menu.
             throw new Exception("Message shortcuts are listed in a table");
         }
     }

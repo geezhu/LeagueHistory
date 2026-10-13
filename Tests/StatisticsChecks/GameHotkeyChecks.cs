@@ -1,13 +1,13 @@
 using System.Reflection;
 
-internal static class TierHotkeyChecks
+internal static class GameHotkeyChecks
 {
     private const int HotkeyMessage = 0x0312;
 
     public static void Run()
     {
         var context = SynchronizationContext.Current;
-        var type = typeof(League.FormMain).Assembly.GetType("League.Managers.TierHotkeyWindow")!;
+        var type = typeof(League.FormMain).Assembly.GetType("League.Managers.GameHotkeyWindow")!;
         // Isolate registration from the user's running application shortcuts.
         var keys = new[]
         {

@@ -110,20 +110,6 @@ namespace League
             _hotkeyManager.OnMyTeamHotkey += async () => await _chatSender.HandleMyTeamAsync();
             _hotkeyManager.OnFullTeamHotkey += async () => await _chatSender.HandleFullTeamAsync();
             _hotkeyManager.OnChampSelectF7 += async () => await _chatSender.HandleChampSelectF7Async();
-            var tierChat=new LiveTierChatService(()=>TimeSpan.FromMinutes(Math.Clamp(_appConfig?.AramMetaCacheMinutes??1440,1,10080)));
-            Disposed+=(_,_)=>tierChat.Dispose();
-            async Task SendTiers(bool enemy)
-            {
-                await _chatSender.HandleTierAsync(async token=>
-                {
-                    var client=Globals.lcuClient?.Client;if(client==null){ChatSendDiagnostics.Shared.Report("connection","未发送：客户端连接尚未建立。");return Array.Empty<string>();}
-                    var flow=JObject.Parse(await client.GetStringAsync("/lol-gameflow/v1/session",token));
-                    int queue=(int?)flow["gameData"]?["queue"]?["id"]??0;
-                    return await tierChat.BuildAsync(queue,enemy,Globals.resLoading.Champions.Champions,token);
-                });
-            }
-            _hotkeyManager.OnMyTierHotkey+=async ()=>await SendTiers(false);
-            _hotkeyManager.OnEnemyTierHotkey+=async ()=>await SendTiers(true);
         }
 
         internal Task SendOverlayTiersAsync(IReadOnlyList<string> messages,Action<string,string> progress,Func<bool> current,CancellationToken token)

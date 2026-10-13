@@ -161,7 +161,7 @@ internal static class Program
         checks["--tier-chat-checks"] = () =>
         {
             ChampionTierChatChecks.Run();
-            Ui(TierHotkeyChecks.Run);
+            Ui(GameHotkeyChecks.Run);
             Background(ChatSendDiagnosticsChecks.RunAsync);
         };
         checks["--loading-overlay-checks"] = () =>
