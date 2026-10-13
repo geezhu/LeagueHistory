@@ -12,7 +12,7 @@ public partial class FormMain
             tabControl1.Font,
             schedulerService ?? new ScheduledShutdownService()
         );
-        SettingsCard(parent, "定时关机 · 每日计划", controller.Content);
+        SettingsCard(parent, "到点关机 · 防熬夜", controller.Content);
         controller.Attach();
     }
 }

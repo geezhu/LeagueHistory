@@ -61,6 +61,7 @@ namespace League
         public FormMain()
         {
             InitializeComponent();
+            Text = "联盟视界 League v" + Services.AppVersion.Display;
             ConfigureLauncherSettings();
             InitializeSearchHistory();
             InitializeManagers();

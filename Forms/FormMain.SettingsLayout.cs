@@ -48,11 +48,14 @@ public partial class FormMain
     private void ConfigureGeneralSettings()
     {
         var general = SettingsPage(tabPage4, "功能辅助");
+        // Cards follow when they are used: champion select, the match itself, then the computer.
         ConfigureHistorySettings(general);
-        ConfigureAutomationSettings(general);
-        ConfigureShutdownSettings(general);
         ConfigureAssistantSetting(general);
+        ConfigurePreselectSettings(general);
+        ConfigureAutomationSettings(general);
         ConfigureClientMaintenanceSettings(general);
+        ConfigureShutdownSettings(general);
+        ConfigureAboutSettings(general);
     }
 
     private void ConfigureHistorySettings(FlowLayoutPanel general)
@@ -291,7 +294,7 @@ public partial class FormMain
         overlayStatusTimer.Start();
     }
 
-    private void ConfigureClientMaintenanceSettings(FlowLayoutPanel general)
+    private void ConfigurePreselectSettings(FlowLayoutPanel general)
     {
         lkbPreliminary.Text = "配置预选英雄 ›";
         foreach (
@@ -313,20 +316,28 @@ public partial class FormMain
             new SettingRow("预选英雄", "分路信息来自英雄联盟攻略中心", lkbPreliminary),
             new SettingRow("按模式启用", null, chkNormal, chkRanked, chkAram, chkNexus)
         );
+        groupBox1.Dispose();
+    }
+
+    private void ConfigureClientMaintenanceSettings(FlowLayoutPanel general)
+    {
         SettingsCard(
             general,
             "客户端维护",
             new SettingRow("重启客户端界面", "大厅、选人或读秒界面卡顿时使用，无需重新登录", btnRestartUx),
             new SettingRow("退出残留客户端", "退出游戏后清理仍占用资源的客户端进程", btnCloseClients)
         );
+        groupBox2.Dispose();
+    }
+
+    private void ConfigureAboutSettings(FlowLayoutPanel general)
+    {
         SettingsCard(
             general,
             "关于与交流",
             new SettingRow(label4.Text, null, lk_QQGroup),
             new SettingRow(label5.Text, null, lk_GitPro)
         );
-        groupBox1.Dispose();
-        groupBox2.Dispose();
         groupBox3.Dispose();
     }
 
