@@ -95,7 +95,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     {
         Button button;
         Image icon;
-        TextBlock champion, player, tier, stats, mastery, deathStreak, party;
+        TextBlock champion, player, tier, stats, live, mastery, deathStreak, party;
         Border partyBadge;
         hstring imageData, details, masteryDetails, deathStreakText, deathStreakDetails, partyLabel, partyDetails;
         hstring streakBadge, championStats;
@@ -311,18 +311,27 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         tierColumn.Width({34, GridUnitType::Pixel});
         heading.ColumnDefinitions().Append(tierColumn);
         heading.ColumnDefinitions().Append(ColumnDefinition());
-        ColumnDefinition streakColumn;
-        streakColumn.Width({1, GridUnitType::Auto});
-        heading.ColumnDefinitions().Append(streakColumn);
+        for (int i = 0; i < 2; ++i)
+        {
+            ColumnDefinition autoColumn;
+            autoColumn.Width({1, GridUnitType::Auto});
+            heading.ColumnDefinitions().Append(autoColumn);
+        }
         card.tier = MakeText(L"—", 14, 0x91acbb);
         card.tier.Width(34);
         card.champion = MakeText(L"等待英雄", 15);
         heading.Children().Append(card.tier);
         Grid::SetColumn(card.champion, 1);
         heading.Children().Append(card.champion);
+        // In game: participation and item value, right-aligned beside the champion name.
+        card.live = MakeText(L"", 11, 0x65d6d6);
+        card.live.Margin({6, 3, 0, 0});
+        card.live.HorizontalAlignment(HorizontalAlignment::Right);
+        Grid::SetColumn(card.live, 2);
+        heading.Children().Append(card.live);
         card.deathStreak = MakeText(L"", 11, 0xf3b37e);
         card.deathStreak.Margin({6, 3, 0, 0});
-        Grid::SetColumn(card.deathStreak, 2);
+        Grid::SetColumn(card.deathStreak, 3);
         heading.Children().Append(card.deathStreak);
         return heading;
     }
@@ -553,6 +562,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             card.button.BorderThickness({0});
             card.streakBadge = L"";
             card.championStats = L"";
+            card.live.Text(L"");
             card.respawnUntil = 0;
             card.self = false;
             card.icon.Opacity(1);
@@ -698,14 +708,13 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             current && current.ValueType() == JsonValueType::Number ? static_cast<int>(current.GetNumber()) : 0;
         card.streakBadge = streak >= 2 ? L"连死 " + to_hstring(streak) : L"";
         ToolTipService::SetToolTip(card.deathStreak, box_value(card.deathStreakDetails));
-        // In game the scoreboard line replaces the loading statistics, which move into the tooltip.
         card.championStats = row.GetNamedString(L"stats", L"胜率 —    选用率 —");
-        auto liveStats = row.GetNamedString(L"liveStats", L"");
-        card.stats.Text(liveStats.empty() ? card.championStats : liveStats);
+        card.stats.Text(card.championStats);
         ToolTipService::SetToolTip(
             card.stats,
-            box_value((liveStats.empty() ? L"" : card.championStats + L"\n") + card.deathStreakText +
+            box_value(card.deathStreakText +
                       (card.deathStreakDetails.empty() ? L"" : L"\n" + card.deathStreakDetails)));
+        card.live.Text(row.GetNamedString(L"liveStats", L""));
         card.self = row.GetNamedBoolean(L"self", false);
         double respawn = row.GetNamedNumber(L"respawn", 0);
         card.respawnUntil = respawn > 0 ? lastGood + static_cast<int64_t>(respawn * 1000) : 0;
