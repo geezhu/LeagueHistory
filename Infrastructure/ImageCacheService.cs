@@ -33,7 +33,7 @@ namespace League.Infrastructure
                 {
                     try
                     {
-                        using var input = File.OpenRead(cachePath);
+                        await using var input = File.OpenRead(cachePath);
                         using var source = Image.FromStream(input);
                         return new Bitmap(source);
                     }
@@ -43,7 +43,7 @@ namespace League.Infrastructure
                 {
                     using var response = await _client.GetAsync(iconPath);
                     if (!response.IsSuccessStatusCode) return null;
-                    using var input = await response.Content.ReadAsStreamAsync();
+                    await using var input = await response.Content.ReadAsStreamAsync();
                     using var source = Image.FromStream(input);
                     var image = new Bitmap(source); // Independent of the response stream's lifetime.
                     try

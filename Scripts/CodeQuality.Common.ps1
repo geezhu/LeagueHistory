@@ -98,3 +98,49 @@ function Get-CodeQualityViolations {
         }
     }
 }
+
+function Invoke-QualityCommand {
+    param([string]$Executable, [string[]]$Arguments)
+    & $Executable @Arguments
+    if ($LASTEXITCODE -ne 0) { throw "$Executable failed with exit code $LASTEXITCODE." }
+}
+
+# Rebuilds each project with the pinned Meziantou analyzer and returns the parsed SARIF reports.
+# $GlobalConfig, when given, replaces the repository .editorconfig files for the whole build.
+function Invoke-CodeQualityAnalysis {
+    param([string]$Repository, [string[]]$Projects, [string]$GlobalConfig = '')
+
+    Invoke-QualityCommand 'dotnet' @('restore', (Join-Path $Repository 'Tools/CodeQuality/CodeQuality.proj'), '--verbosity', 'quiet')
+    $assetsPath = Join-Path $Repository 'Tools/CodeQuality/obj/project.assets.json'
+    $assets = Get-Content -LiteralPath $assetsPath -Raw | ConvertFrom-Json
+    $analyzer = @($assets.packageFolders.PSObject.Properties.Name | ForEach-Object {
+        Join-Path $_ 'meziantou.analyzer/3.0.294/analyzers/dotnet/roslyn4.8/cs/Meziantou.Analyzer.dll'
+    } | Where-Object { Test-Path -LiteralPath $_ }) | Select-Object -First 1
+    if (!$analyzer) { throw 'The pinned Meziantou analyzer was not restored.' }
+    $defaults = [IO.Path]::GetFullPath((Join-Path (Split-Path $analyzer -Parent) '../../../../configuration/none.editorconfig'))
+    if (!(Test-Path -LiteralPath $defaults)) { throw 'The Meziantou disabled-rule preset was not restored.' }
+    if ($Projects -contains 'Tests/StatisticsChecks/StatisticsChecks.csproj') {
+        Invoke-QualityCommand 'dotnet' @('restore', (Join-Path $Repository 'Tests/StatisticsChecks/StatisticsChecks.csproj'), '--verbosity', 'quiet')
+    }
+    $output = Join-Path $Repository 'bin/code-quality'
+    New-Item -ItemType Directory -Force -Path $output | Out-Null
+    $targets = Join-Path $Repository 'Tools/CodeQuality/Analyzers.targets'
+    foreach ($project in $Projects) {
+        $name = [IO.Path]::GetFileNameWithoutExtension($project)
+        $report = Join-Path $output "$name.sarif"
+        $log = Join-Path $output "$name.log"
+        # Rebuild avoids a cached compilation silently omitting the analysis report.
+        $arguments = @('build', (Join-Path $Repository $project), '-c', 'Release', '--no-restore', '-t:Rebuild', '-v:quiet',
+            "-p:CustomBeforeMicrosoftCommonTargets=$targets", "-p:CodeQualityAnalyzer=$analyzer",
+            "-p:CodeQualityDefaults=$defaults", '-p:EnforceCodeStyleInBuild=true', "-p:ErrorLog=$report%2cversion=2.1")
+        if ($GlobalConfig) { $arguments += @('-p:DiscoverEditorConfigFiles=false', "-p:CodeQualityGlobalConfig=$GlobalConfig") }
+        if ($project -ne 'League.csproj') { $arguments += '-p:BuildProjectReferences=false' }
+        & dotnet @arguments *> $log
+        if ($LASTEXITCODE -ne 0) {
+            Get-Content -LiteralPath $log -Tail 20
+            throw "Code quality compilation failed: $project"
+        }
+        if (!(Test-Path -LiteralPath $report)) { throw "Analysis report was not generated: $project" }
+        Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+}

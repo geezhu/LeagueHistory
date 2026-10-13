@@ -25,7 +25,11 @@ namespace League.Models
 
         public bool IsRemake => _resultText == "重开" || MatchResult.IsRemake(RawGameData,AllParticipants);
         private Color _resultColor = Color.FromArgb(191,81,91);
-        public Color ResultColor { get => IsRemake ? MatchResult.RemakeColor : _resultColor; set => _resultColor = value; }
+        public Color ResultColor
+        {
+            get => IsRemake ? MatchResult.RemakeColor : _resultColor;
+            set => _resultColor = value;
+        }
 
         public int Index { get; set; } = 0;
 

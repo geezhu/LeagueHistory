@@ -34,6 +34,7 @@ namespace League.Managers
                         await HandleHotkeyAsync(shortcut & Keys.KeyCode, (shortcut & Keys.Control) != 0);
                 }));
             }
+            // The window handle can be destroyed between the check above and BeginInvoke while closing; the hotkey is dropped.
             catch (InvalidOperationException) { }
         }
 

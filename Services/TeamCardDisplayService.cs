@@ -12,7 +12,11 @@ public sealed class TeamCardDisplayService
     private string _selectionQueue = "";
     private bool _fromChampionSelect;
 
-    public TeamCardDisplayService(FormMain form, PlayerCardManager cardManager) { _form = form; _cards = cardManager; }
+    public TeamCardDisplayService(FormMain form, PlayerCardManager cardManager)
+    {
+        _form = form;
+        _cards = cardManager;
+    }
 
     public async Task EnterChampSelectAsync()
     {
@@ -20,11 +24,13 @@ public sealed class TeamCardDisplayService
         _cards.BeginSession();
         _fromChampionSelect = true;
         _selectionQueue = "";
-        _form._cachedMyTeam = new JArray(); _form._cachedEnemyTeam = new JArray();
+        _form._cachedMyTeam = new JArray();
+        _form._cachedEnemyTeam = new JArray();
         await _cards.ClearCardsAsync();
         await _cards._uiManager.DispatchAsync(() =>
         {
-            _form._waitingPanel?.Dispose(); _form._waitingPanel = null;
+            _form._waitingPanel?.Dispose();
+            _form._waitingPanel = null;
             League.Controls.PlayerTeamsLayout.Show(_form.tableLayoutPanel1, _form.penalGameMatchData);
         });
     }
@@ -68,13 +74,15 @@ public sealed class TeamCardDisplayService
         {
             if (clearCards)
             {
-                _form._cachedMyTeam = new JArray(); _form._cachedEnemyTeam = new JArray();
+                _form._cachedMyTeam = new JArray();
+                _form._cachedEnemyTeam = new JArray();
                 await _cards.ClearCardsAsync();
             }
             await _cards._uiManager.DispatchAsync(() =>
             {
                 if (token.IsCancellationRequested || generation != _cards.Generation) return;
-                _form._waitingPanel?.Dispose(); _form._waitingPanel = null;
+                _form._waitingPanel?.Dispose();
+                _form._waitingPanel = null;
                 League.Controls.PlayerTeamsLayout.Show(_form.tableLayoutPanel1, _form.penalGameMatchData);
             });
             // Team data may not be ready at the first InProgress transition. Retry the roster,
@@ -112,7 +120,8 @@ public sealed class TeamCardDisplayService
                             int supplemented = ours.Concat(theirs).Count(p => p.Value<bool?>("__roomSelectionOnly") == true);
                             RoomLoadDiagnostics.Shared.Report(generation, "session-roster", detail:
                                 $"one={one.Count} two={two.Count} selections={(data?["playerChampionSelections"] as JArray)?.Count ?? 0} ally={ours.Count} enemy={theirs.Count} supplemented={supplemented}");
-                            _form._cachedMyTeam = ours; _form._cachedEnemyTeam = theirs;
+                            _form._cachedMyTeam = ours;
+                            _form._cachedEnemyTeam = theirs;
                             await _cards.UpdateTeamAsync(ours, true, generation, queue);
                             await _cards.UpdateTeamAsync(theirs, false, generation, queue);
                             hadRoster = true;
@@ -121,23 +130,37 @@ public sealed class TeamCardDisplayService
                         }
                     }
                 }
-                catch (OperationCanceledException) when (!token.IsCancellationRequested) { RoomLoadDiagnostics.Shared.Report(generation, "session-timeout"); }
-                catch (Exception ex) when (ex is not OperationCanceledException) { RoomLoadDiagnostics.Shared.Report(generation, "session-failed", detail: ex.GetType().Name); }
+                catch (OperationCanceledException) when (!token.IsCancellationRequested)
+                {
+                    RoomLoadDiagnostics.Shared.Report(generation, "session-timeout");
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    RoomLoadDiagnostics.Shared.Report(generation, "session-failed", detail: ex.GetType().Name);
+                }
                 await Task.Delay(1500, token);
             }
             RoomLoadDiagnostics.Shared.Report(generation, hadRoster ? "roster-ready" : "roster-unavailable");
         }
+        // StopGameSessionLoad cancelled this load for a newer session or a cleared snapshot.
         catch (OperationCanceledException) { }
-        catch (Exception ex) { RoomLoadDiagnostics.Shared.Report(generation, "session-display-failed", detail: ex.GetType().Name); }
+        catch (Exception ex)
+        {
+            RoomLoadDiagnostics.Shared.Report(generation, "session-display-failed", detail: ex.GetType().Name);
+        }
     }
 
     private void StopGameSessionLoad()
     {
-        _gameSessionLoad?.Cancel(); _gameSessionLoad?.Dispose(); _gameSessionLoad = null;
+        _gameSessionLoad?.Cancel();
+        _gameSessionLoad?.Dispose();
+        _gameSessionLoad = null;
     }
+
     public void ClearSnapshots()
     {
-        StopGameSessionLoad(); _cards.CancelPendingLoads();
+        StopGameSessionLoad();
+        _cards.CancelPendingLoads();
         _fromChampionSelect = false;
         _form.lastChampSelectSnapshotString = "";
     }
