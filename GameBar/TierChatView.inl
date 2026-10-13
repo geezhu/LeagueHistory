@@ -2,14 +2,17 @@
 StackPanel chatFooter;
 // One send menu: pick the content, then the target team or the selected hero.
 Button sendMenu, cancelChat;
-MenuFlyoutSubItem tierMenu, masteryMenu, deathStreakMenu;
+MenuFlyoutSubItem tierMenu, masteryMenu, deathStreakMenu, waveChatMenu;
+// Wave summaries go to team chat; the targets name the content instead of players.
+std::array<MenuFlyoutItem, 3> waveChatTargets;
+static constexpr std::array<wchar_t const *, 3> WaveChatKeys{L"spawn", L"super", L"deaths"};
 static constexpr wchar_t const *ChatIdleText =
     L"发送到游戏聊天 · 需以管理员身份运行 League · 点击后按 Win＋G 返回游戏。";
 std::array<MenuFlyoutItem, 3> tierTargets, masteryTargets, deathStreakTargets;
 TextBlock chatStatus = MakeText(ChatIdleText, 12, 0x91acbb);
-bool supportsChat = false, supportsMasteryChat = false, supportsDeathStreakChat = false, chatTeams = false,
-     chatPending = false, chatWriting = false, chatReading = false, chatDismissed = false, chatCancelled = false,
-     chatCleanup = false;
+bool supportsChat = false, supportsMasteryChat = false, supportsDeathStreakChat = false, supportsWaveChat = false,
+     chatTeams = false, chatPending = false, chatWriting = false, chatReading = false, chatDismissed = false,
+     chatCancelled = false, chatCleanup = false;
 hstring chatId, chatSession, chatTarget, chatKind, chatText, pendingChatWrite;
 int chatSlot = -1, chatHero = 0;
 int64_t chatCreated = 0;
@@ -47,6 +50,16 @@ void InitializeChat()
     submenu(tierMenu, L"梯队与胜率", tierTargets, L"tier");
     submenu(masteryMenu, L"英雄成就", masteryTargets, L"mastery");
     submenu(deathStreakMenu, L"连死", deathStreakTargets, L"deathStreak");
+    std::array<hstring, 3> waveNames{L"出波与炮车", L"超级兵", L"现在阵亡需等待"};
+    waveChatMenu.Text(L"兵线（发到队伍）");
+    for (int i = 0; i < 3; ++i)
+    {
+        waveChatTargets[i].Text(waveNames[i]);
+        waveChatTargets[i].Click([this, target = hstring(WaveChatKeys[i])](auto &&, auto &&)
+                                 { QueueChat(target, L"waves"); });
+        waveChatMenu.Items().Append(waveChatTargets[i]);
+    }
+    flyout.Items().Append(waveChatMenu);
     sendMenu.Flyout(flyout);
     cancelChat.Click(
         [this](auto &&, auto &&)
@@ -76,7 +89,7 @@ void InitializeChat()
     UpdateChatButtons();
     ToolTipService::SetToolTip(
         sendMenu,
-        box_value(L"发送梯队与胜率、英雄成就或连死到游戏聊天，可选我方、敌方或当前选中英雄。\n"
+        box_value(L"发送梯队与胜率、英雄成就或连死到游戏聊天，可选我方、敌方或当前选中英雄；兵线信息发到队伍聊天。\n"
                   L"需以管理员身份运行 League；点击后按 Win＋G 返回游戏。连死：死亡加一，击杀清零，助攻不清零。"));
 }
 void UpdateChatButtons()
@@ -85,7 +98,8 @@ void UpdateChatButtons()
                      !voiceRunning && !voiceCleanup && Now() - lastGood <= 15000;
     bool single = selectedCard >= 0 && cards[selectedCard].hero > 0;
     bool targets = chatTeams || single;
-    sendMenu.IsEnabled(available && targets);
+    bool waveReady = available && supportsWaveChat && HasWaves();
+    sendMenu.IsEnabled(available && (targets || waveReady));
     tierMenu.IsEnabled(available && targets);
     masteryMenu.IsEnabled(available && supportsMasteryChat && targets);
     masteryMenu.Visibility(supportsMasteryChat ? Visibility::Visible : Visibility::Collapsed);
@@ -98,6 +112,10 @@ void UpdateChatButtons()
         masteryTargets[i].IsEnabled(available && supportsMasteryChat && scope);
         deathStreakTargets[i].IsEnabled(available && supportsDeathStreakChat && scope);
     }
+    waveChatMenu.Visibility(supportsWaveChat ? Visibility::Visible : Visibility::Collapsed);
+    waveChatMenu.IsEnabled(waveReady);
+    for (int i = 0; i < 3; ++i)
+        waveChatTargets[i].IsEnabled(waveReady && WaveChatAvailable(WaveChatKeys[i]));
     cancelChat.Visibility(chatPending ? Visibility::Visible : Visibility::Collapsed);
     cancelChat.IsEnabled(!chatCancelled);
     UpdateVoiceButtons();
@@ -118,6 +136,8 @@ bool CanQueueChat(hstring const &target, hstring const &kind) const
     if (stopped || !widget || fixturePreview || !supportsChat || chatPending || chatCleanup || voiceRunning ||
         voiceCleanup || !enabled || !active || Now() - lastGood > 15000)
         return false;
+    if (kind == L"waves")
+        return supportsWaveChat && HasWaves() && WaveChatAvailable(target);
     if ((kind != L"tier" && kind != L"mastery" && kind != L"deathStreak" && kind != L"voice") ||
         (kind == L"mastery" && !supportsMasteryChat) || (kind == L"deathStreak" && !supportsDeathStreakChat))
         return false;
@@ -154,11 +174,17 @@ void QueueChat(hstring const &target, hstring const &kind)
     chatPending = true;
     chatSlot = target == L"single" ? selectedCard : -1;
     chatHero = chatSlot >= 0 ? cards[chatSlot].hero : 0;
-    auto name = kind == L"voice"     ? L"已确认的文字"
+    auto name = kind == L"waves"     ? L"兵线"
+                : kind == L"voice"   ? L"已确认的文字"
                 : target == L"own"   ? L"我方英雄"
                 : target == L"enemy" ? L"敌方英雄"
                                      : cards[chatSlot].champion.Text();
-    auto metric = kind == L"mastery" ? L"熟练度" : kind == L"deathStreak" ? L"连死次数" : L"梯队";
+    auto metric = kind == L"mastery"       ? L"熟练度"
+                  : kind == L"deathStreak" ? L"连死次数"
+                  : target == L"spawn"     ? L"出波与炮车"
+                  : target == L"super"     ? L"超级兵"
+                  : target == L"deaths"    ? L"阵亡代价"
+                                           : L"梯队";
     chatStatus.Text(kind == L"voice" ? L"文字已确认。请在 20 秒内按 Win＋G 返回游戏，保持聊天输入框关闭；可取消发送。"
                                      : L"待发送：" + hstring(name) + metric +
                                            L"。请按 Win＋G 返回游戏，保持聊天输入框关闭（20 秒内）。");

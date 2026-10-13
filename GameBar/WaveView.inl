@@ -40,7 +40,7 @@ void InitializeWaves()
     waveRoot.Visibility(Visibility::Collapsed);
     root.Children().Append(waveRoot);
 }
-bool HasWaves()
+bool HasWaves() const
 {
     return waves.GetNamedNumber(L"protocol", 0) == 1 && waves.GetNamedArray(L"spawns", JsonArray()).Size() > 0;
 }
@@ -273,4 +273,18 @@ void RenderDeathCosts()
         teamsGrid.Children().Append(team);
     }
     waveBody.Children().Append(teamsGrid);
+}
+// Super minion and death messages need content; the main program checks again when building the lines.
+bool WaveChatAvailable(hstring const &target) const
+{
+    if (target == L"spawn")
+        return true;
+    if (target == L"deaths")
+        return waves.GetNamedArray(L"deaths", JsonArray()).Size() > 0;
+    if (target != L"super")
+        return false;
+    for (auto const &lane : waves.GetNamedArray(L"lanes", JsonArray()))
+        if (!lane.GetObject().GetNamedString(L"structures", L"").empty())
+            return true;
+    return false;
 }

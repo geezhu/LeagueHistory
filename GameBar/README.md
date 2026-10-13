@@ -108,7 +108,7 @@ dotnet run --project Tests/StatisticsChecks/StatisticsChecks.csproj -c Release -
 
 原生界面检查：运行 `GameBar/Verify-Preview.ps1`，用当前主程序缓存绘制预览并保存组件自己的 `LocalState/preview-verification.png`。该检查通过应用激活接口传入专用参数，不发送任何游戏输入；正常启动不会保存预览图。检查预览与 Game Bar 使用不同回执文件，避免把桌面预览误判为游戏内连接成功。
 
-兵线：底部「兵线」按钮显示下一波倒计时，点击打开独立的「兵线」页，「返回」回到名单或原英雄详情。出波、炮车、每波价值、超级兵和到达防御塔时间由主程序按模式规则和推塔事件计算（`MinionWaveForecaster`），快照 `waves` 字段携带游戏时间与对应的本机时间，组件只做本地倒计时；超过 5 秒未更新时暂停。到达时间为无人干扰时的估计。页面下方「现在阵亡需等待」按等级与游戏时间列出双方现在阵亡的复活时间。规则与数据来源见 [docs/minion-wave-requirements-draft.md](../docs/minion-wave-requirements-draft.md)，回归检查 `--minion-wave-checks`。
+兵线：底部「兵线」按钮显示下一波倒计时，点击打开独立的「兵线」页，「返回」回到名单或原英雄详情。出波、炮车、每波价值、超级兵和到达防御塔时间由主程序按模式规则和推塔事件计算（`MinionWaveForecaster`），快照 `waves` 字段携带游戏时间与对应的本机时间，组件只做本地倒计时；超过 5 秒未更新时暂停。到达时间为无人干扰时的估计。页面下方「现在阵亡需等待」按等级与游戏时间列出双方现在阵亡的复活时间。「发送 ▾ → 兵线（发到队伍）」可把出波与炮车、超级兵或阵亡代价发到队伍聊天，内容在返回游戏、输入前按最新数据生成。规则与数据来源见 [docs/minion-wave-requirements-draft.md](../docs/minion-wave-requirements-draft.md)，回归检查 `--minion-wave-checks`。
 
 详情布局检查：测试项目的 `--overlay-detail-fixture <输出目录> <已有 Assets 目录>` 导出明确标注的样例，复制其中两个 `detail-preview-*.json` 到组件 `LocalState` 后运行 `GameBar/Verify-Preview.ps1 -DetailTab skills`（或 `builds` / `augments` / `live` / `roster` / `waves`）。截图使用同一渲染代码，样例文件独立于真实快照与请求；默认检查 820×560，也可在样例快照中设置 `width` / `height` 检查最小 640×500。它不代替实际全屏交互验证。
 
