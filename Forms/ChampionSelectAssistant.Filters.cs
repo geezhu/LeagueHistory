@@ -56,8 +56,9 @@ internal sealed partial class ChampionSelectAssistant
     );
     private string _filterMode = "ranked";
     private readonly Button _filterSummary = new() { Name = "assistantFilterSummary" };
-    private readonly FlowLayoutPanel _filterPanel = new();
-    private bool _filtersExpanded;
+
+    // The dropdowns hold the selection; the header menu is the only place they are shown.
+    private readonly ContextMenuStrip _filterMenu = new();
     private readonly Dictionary<string, string> _selectedTiers = new();
 
     private static string FilterValue(ComboBox box) => ((FilterChoice)box.SelectedItem!).Value;
@@ -107,6 +108,40 @@ internal sealed partial class ChampionSelectAssistant
         return string.Join(" · ", parts);
     }
 
+    /// <summary>Modes at the top level; region, tier and lane only where the selected source uses them.</summary>
+    private void BuildFilterMenu()
+    {
+        foreach (var item in _filterMenu.Items.Cast<ToolStripItem>().ToArray())
+        {
+            item.Dispose();
+        }
+
+        AddFilterChoices(_filterMenu.Items, _mode);
+        var filters = new (ComboBox Box, string Title)[] { (_region, "统计地区"), (_tier, "段位"), (_lane, "分路") };
+        foreach (var (box, title) in filters.Where(filter => filter.Box.Visible))
+        {
+            if (_filterMenu.Items.Count == _mode.Items.Count)
+            {
+                _filterMenu.Items.Add(new ToolStripSeparator());
+            }
+
+            var submenu = new ToolStripMenuItem($"{title} · {box.Text}");
+            AddFilterChoices(submenu.DropDownItems, box);
+            _filterMenu.Items.Add(submenu);
+        }
+    }
+
+    private static void AddFilterChoices(ToolStripItemCollection items, ComboBox box)
+    {
+        for (int i = 0; i < box.Items.Count; i++)
+        {
+            int index = i;
+            var item = new ToolStripMenuItem(box.Items[i]!.ToString()) { Checked = i == box.SelectedIndex };
+            item.Click += (_, _) => box.SelectedIndex = index;
+            items.Add(item);
+        }
+    }
+
     private void SyncFilters()
     {
         string mode = SelectedMode;
@@ -127,15 +162,7 @@ internal sealed partial class ChampionSelectAssistant
             _tier.Visible = mode is not ("arena" or "mayhem");
             _lane.Visible = mode == "ranked";
             _apply.Visible = true;
-            _filterSummary.Text = FilterSummary(mode) + (_filtersExpanded ? "  ▴" : "  ▾");
-            _filterPanel.Visible = _filtersExpanded;
-            if (_filterPanel.Parent is Panel toolbar)
-            {
-                // Preferred size follows each filter's own visibility, so it is valid while hidden.
-                int width = Dip(LayoutWidth) - toolbar.Padding.Horizontal;
-                int filters = _filtersExpanded ? _filterPanel.GetPreferredSize(new Size(width, 0)).Height : 0;
-                toolbar.Height = Dip(ToolbarHeaderHeight) + filters + toolbar.Padding.Vertical;
-            }
+            _filterSummary.Text = FilterSummary(mode) + "  ▾";
         }
         finally
         {

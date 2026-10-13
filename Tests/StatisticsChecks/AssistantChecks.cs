@@ -487,36 +487,31 @@ internal static class AssistantChecks
 
     private static void CheckToolbar(Form assistant, Type type, BindingFlags flags)
     {
-        var modeFilter = (ComboBox)type.GetField("_mode", flags)!.GetValue(assistant)!;
-        var regionFilter = (ComboBox)type.GetField("_region", flags)!.GetValue(assistant)!;
-        var tierFilter = (ComboBox)type.GetField("_tier", flags)!.GetValue(assistant)!;
-        var laneFilter = (ComboBox)type.GetField("_lane", flags)!.GetValue(assistant)!;
         var summary = (Button)type.GetField("_filterSummary", flags)!.GetValue(assistant)!;
-        var filters = modeFilter.Parent!;
-        var toolbar = filters.Parent!;
-        int collapsed = toolbar.Height;
-        if (filters.Visible || !summary.Text.Contains("峡谷") || collapsed > Dip(type, 44))
+        var menu = (ContextMenuStrip)type.GetField("_filterMenu", flags)!.GetValue(assistant)!;
+        var toolbar = summary.Parent!.Parent!;
+        int height = toolbar.Height;
+        if (!summary.Text.Contains("峡谷") || height > Dip(type, 44) || toolbar.Controls.Count != 1)
         {
-            throw new Exception("Filters start as one summary line instead of dropdown rows");
+            throw new Exception("Filters are one summary line with no dropdown row under it");
         }
 
-        summary.PerformClick();
-        Application.DoEvents();
-        if (!modeFilter.Visible || toolbar.Height <= collapsed)
+        void Build() => type.GetMethod("BuildFilterMenu", flags)!.Invoke(assistant, null);
+        ToolStripMenuItem[] Modes() => menu.Items.OfType<ToolStripMenuItem>().Where(i => !i.HasDropDownItems).ToArray();
+        string[] Submenus() =>
+            menu.Items.OfType<ToolStripMenuItem>().Where(i => i.HasDropDownItems).Select(i => i.Text!).ToArray();
+        Build();
+        if (Modes().Length != 7 || !Modes()[0].Checked || Submenus().Length != 3)
         {
-            throw new Exception("Clicking the summary expands the filter dropdowns");
+            throw new Exception("The menu lists every mode, with region, tier and lane for ranked");
         }
 
-        modeFilter.SelectedIndex = 3;
+        Modes()[3].PerformClick();
         Application.DoEvents();
-        if (
-            regionFilter.Visible
-            || tierFilter.Visible
-            || laneFilter.Visible
-            || !summary.Text.StartsWith("海克斯大乱斗")
-        )
+        Build();
+        if (!summary.Text.StartsWith("海克斯大乱斗") || Submenus().Length != 0 || toolbar.Height != height)
         {
-            throw new Exception("Mayhem hides irrelevant filters and names the mode in the summary");
+            throw new Exception("Mayhem names the mode once and offers no irrelevant filters: " + summary.Text);
         }
 
         using (var mayhemPreview = new Bitmap(assistant.Width, assistant.Height))
@@ -524,18 +519,12 @@ internal static class AssistantChecks
             assistant.DrawToBitmap(mayhemPreview, new Rectangle(Point.Empty, mayhemPreview.Size));
             mayhemPreview.Save(Path.Combine(AppContext.BaseDirectory, "assistant-mayhem-toolbar.png"));
         }
-        modeFilter.SelectedIndex = 0;
+        Modes()[0].PerformClick();
         Application.DoEvents();
-        if (!regionFilter.Visible || !tierFilter.Visible || !laneFilter.Visible)
+        Build();
+        if (Submenus().Length != 3 || !Submenus()[0].StartsWith("统计地区 · "))
         {
             throw new Exception("Ranked filters must reappear when switching back");
-        }
-
-        summary.PerformClick();
-        Application.DoEvents();
-        if (filters.Visible || toolbar.Height != collapsed)
-        {
-            throw new Exception("Clicking the summary again collapses the filters");
         }
 
         CheckHideAndFit(assistant, type, flags);
