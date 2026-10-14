@@ -183,6 +183,7 @@ public sealed partial class GameBarBridge : IDisposable
 
         return new JObject
         {
+            ["key"] = p.Key,
             ["championId"] = p.ChampionId,
             ["champion"] = champion(p.ChampionId),
             ["name"] = p.Name + (p.Self ? " · 自己" : ""),

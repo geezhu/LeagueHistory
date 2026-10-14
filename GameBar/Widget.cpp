@@ -100,7 +100,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         Image icon;
         TextBlock champion, player, tier, stats, live, mastery, deathStreak, party;
         Border partyBadge;
-        hstring imageData, details, masteryDetails, deathStreakText, deathStreakDetails, partyLabel, partyDetails;
+        hstring key, imageData, details, masteryDetails, deathStreakText, deathStreakDetails, partyLabel, partyDetails;
         hstring streakBadge, championStats;
         int hero = 0;
         uint32_t partyColor = 0;
@@ -553,6 +553,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         for (auto &card : cards)
         {
             card.hero = 0;
+            card.key = L"";
             card.icon.Source(nullptr);
             card.imageData = L"";
             card.details = L"等待当前对局数据。";
@@ -696,6 +697,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             CloseDetails(false);
         ForgetMarkIfReplaced(card, hero);
         card.hero = hero;
+        card.key = row.GetNamedString(L"key", L"");
         auto playerName = row.GetNamedString(L"name", L"空缺位置");
         card.player.Text(playerName.empty() ? L"玩家名称尚未提供" : playerName);
         card.tier.Text(row.GetNamedString(L"tier", L"—"));

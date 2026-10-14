@@ -45,8 +45,11 @@ public sealed record LaneProgress(
     string Hint
 );
 
-/// <summary>How long a champion would stay dead if it died now, from its level and the game time.</summary>
-public sealed record DeathCost(bool Ally, string Champion, int Level, double Seconds, bool Self);
+/// <summary>
+/// How long a champion would stay dead if it died now, from its level and the game time. <see cref="Player"/> is
+/// the roster key, so the widget can show the hero icon the roster already loaded.
+/// </summary>
+public sealed record DeathCost(bool Ally, string Champion, int Level, double Seconds, bool Self, string Player);
 
 /// <summary>
 /// Time-based wave estimate for the Game Bar. Times are game seconds; <see cref="Clock"/> is the wall clock
@@ -115,6 +118,7 @@ public sealed record MinionWaveForecast(
                     ["level"] = d.Level,
                     ["seconds"] = Math.Round(d.Seconds, 1),
                     ["self"] = d.Self,
+                    ["player"] = d.Player,
                 })
             ),
         };

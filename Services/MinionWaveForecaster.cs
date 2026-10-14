@@ -62,7 +62,8 @@ public static class MinionWaveForecaster
                 p.ChampionName,
                 p.Level,
                 rules.Seconds(p.Level, snapshot.Time),
-                p.Self
+                p.Self,
+                p.Key
             ))
             .OrderByDescending(d => d.Ally)
             .ThenByDescending(d => d.Level)
