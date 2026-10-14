@@ -458,7 +458,7 @@ void RenderSectionHeading(JsonObject const &section)
 }
 void RenderDetailSection(JsonObject const &section)
 {
-    if (RenderRecordSection(section))
+    if (RenderCardSection(section))
         return;
     RenderSectionHeading(section);
     auto rows = section.GetNamedArray(L"rows", JsonArray());

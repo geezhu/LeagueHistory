@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using League.Models;
 using Newtonsoft.Json.Linq;
+using static League.Services.DetailCards;
 
 namespace League.Services;
 
@@ -112,7 +113,7 @@ public static class OverlayRecordSections
             Rank("单双排", info.Player.SoloRank),
             Rank("灵活组排", info.Player.FlexRank),
         };
-        var section = Section("近期战绩", "tiles", tiles);
+        var section = Section(Tab, "近期战绩", Tiles, tiles);
         section["tip"] =
             $"主窗口查询的最近 {games} 场，只读主程序缓存，不额外请求。"
             + (info.Player.IsPublic == "隐藏" ? "\n该玩家的资料设为隐藏。" : "");
@@ -173,7 +174,7 @@ public static class OverlayRecordSections
             )
             .ToList();
         double total = b.AvgMissingPings + b.AvgVisionPings + b.AvgGetBackPings + b.AvgDangerPings;
-        var section = Section("行为特征", "chips", chips);
+        var section = Section(Tab, "行为特征", Chips, chips);
         section["tip"] =
             $"按主窗口查询的最近 {info.RecentMatches.Count} 场估算，仅供参考。\n投降率统计以投降结束的对局，不区分是哪一方投降；信号为每场平均次数。";
         section["signals"] = new JArray(
@@ -262,7 +263,7 @@ public static class OverlayRecordSections
             rows.Add(row);
         }
 
-        return Section("最近对局", "games", rows);
+        return Section(Tab, "最近对局", DetailCards.Games, rows);
     }
 
     private static string Result(PlayerMatchInfo info, int index) =>
@@ -316,23 +317,6 @@ public static class OverlayRecordSections
     private static bool Remake(ListViewItem? item) => item?.ForeColor == MatchResult.RemakeColor;
 
     private static string Percent(double value) => value.ToString("0", CultureInfo.InvariantCulture) + "%";
-
-    private static JObject Tile(string title, string value, string stats, string tone = "", string description = "") =>
-        new()
-        {
-            ["title"] = title,
-            ["value"] = value,
-            ["stats"] = stats,
-            ["tone"] = tone,
-            ["description"] = description,
-        };
-
-    private static JObject Section(string title, string layout, IEnumerable<JObject> rows)
-    {
-        var section = OverlayChampionDetailService.Section(Tab, title, rows);
-        section["layout"] = layout;
-        return section;
-    }
 
     private static JObject Notice(string title, string description) =>
         OverlayChampionDetailService.Section(Tab, "近期战绩", [OverlayChampionDetailService.Row(title, description)]);
