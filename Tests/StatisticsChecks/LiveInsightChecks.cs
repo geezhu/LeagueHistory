@@ -137,21 +137,28 @@ internal static class LiveInsightChecks
         );
         string[] titles = sections.Select(s => (string)s["title"]!).ToArray();
         Check(
-            titles.SequenceEqual(["本局结束", "战况", "生存与属性", "出装对照", "符文页"])
-                && sections.All(s => (string?)s["tab"] == LivePanelSections.Tab),
-            "The live tab lists the ending, battle, survivability, build and runes: " + string.Join(",", titles)
+            titles.SequenceEqual(["本局结束", "战况", "你的状态", "防装建议", "出装对照", "符文页"])
+                && sections.All(s => (string?)s["tab"] == LivePanelSections.Tab)
+                && sections.All(s => (string?)s["layout"] == "tiles"),
+            "The live tab shows the ending, battle, state, defense, build and runes as cards: "
+                + string.Join(",", titles)
         );
-        var build = (JObject)sections[3]["rows"]![0]!;
+        var build = (JObject)sections[4]!;
         Check(
-            (string)build["title"]! == "下一件：装备3053"
+            (string?)build["rows"]![0]!["value"] == "装备3053"
                 && (bool)build["icons"]![0]!["owned"]!
                 && !(bool)build["icons"]![1]!["owned"]!,
-            "The build row names the next item and dims owned ones"
+            "The build cards name the next item and dim owned ones"
         );
-        string battle = sections[1]["rows"]![0]!.ToString();
+        var battle = (JArray)sections[1]["rows"]!;
         Check(
-            battle.Contains("领先 2.4k") && battle.Contains("团战 1 胜 0 负"),
-            "The battle row shows lead and fights"
+            battle.Any(t => (string?)t["value"] == "领先 2.4k" && (string?)t["tone"] == "good")
+                && battle.Any(t => (string?)t["title"] == "团战" && (string?)t["value"] == "1 胜 0 负"),
+            "The battle cards show the lead and fights: " + battle
+        );
+        Check(
+            ((JArray)sections[2]["signals"]!).Count == 5 && ((JArray)sections[5]["icons"]!).Count > 0,
+            "Attributes follow the state as small cards; the rune page keeps its icons"
         );
         return sections;
     }

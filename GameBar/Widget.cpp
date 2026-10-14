@@ -133,7 +133,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     bool capturePending = false;
 
 #include "ChampionDetailView.inl"
-#include "RecordView.inl"
+#include "DetailCards.inl"
 #include "TierChatView.inl"
 #include "VoiceChatView.inl"
 #include "WaveView.inl"

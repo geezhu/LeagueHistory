@@ -1,4 +1,5 @@
-// Included inside WidgetView. The record tab draws stat tiles, tag chips and game cards; explanations are tooltips.
+// Included inside WidgetView. Detail cards for the record and live tabs: stat tiles, tag chips and game cards, with
+// explanations as tooltips. Services/DetailCards.cs writes the sections.
 static uint32_t RecordTone(hstring const &tone, uint32_t fallback = 0xe2eef3)
 {
     if (tone == L"good" || tone == L"win")
@@ -73,12 +74,14 @@ static Border RecordTile(JsonObject const &row, double size)
     SetRecordTip(card, row.GetNamedString(L"description", L""));
     return card;
 }
-static Grid RecordTiles(JsonArray const &rows, int columns, double size)
+// Up to maxColumns per row; fewer tiles share the width instead of leaving empty columns.
+static Grid RecordTiles(JsonArray const &rows, int maxColumns, double size)
 {
     std::vector<FrameworkElement> cells;
     for (auto const &value : rows)
         cells.push_back(RecordTile(value.GetObject(), size));
-    return RecordGrid(cells, columns);
+    int columns = static_cast<int>(rows.Size()) < maxColumns ? static_cast<int>(rows.Size()) : maxColumns;
+    return RecordGrid(cells, columns > 0 ? columns : 1);
 }
 static StackPanel RecordChips(JsonArray const &rows)
 {
@@ -109,26 +112,28 @@ static StackPanel RecordChips(JsonArray const &rows)
         add(L"无明显特征", 0x4fcf8f, L"最近的投降与信号次数都未达到任何标签的阈值。");
     return chips;
 }
-// Sections without a record layout keep the generic text rows.
-bool RenderRecordSection(JsonObject const &section)
+// Sections without a card layout keep the generic text rows. Smaller tiles ("signals") and icons follow the main
+// cards of any layout.
+bool RenderCardSection(JsonObject const &section)
 {
     auto layout = section.GetNamedString(L"layout", L"");
     if (layout != L"tiles" && layout != L"chips" && layout != L"games")
         return false;
     RenderRecordHeading(section);
     auto rows = section.GetNamedArray(L"rows", JsonArray());
-    if (layout == L"tiles")
-    {
-        detailBody.Children().Append(RecordTiles(rows, 5, 18));
-        RenderRecordForm(section.GetNamedArray(L"form", JsonArray()));
-    }
-    else if (layout == L"chips")
-    {
+    if (layout == L"chips")
         detailBody.Children().Append(RecordChips(rows));
-        detailBody.Children().Append(RecordTiles(section.GetNamedArray(L"signals", JsonArray()), 6, 16));
-    }
-    else
+    else if (layout == L"games")
         detailBody.Children().Append(RecordGames(rows));
+    else if (rows.Size() > 0)
+        detailBody.Children().Append(RecordTiles(rows, 5, 18));
+    RenderRecordForm(section.GetNamedArray(L"form", JsonArray()));
+    auto signals = section.GetNamedArray(L"signals", JsonArray());
+    if (signals.Size() > 0)
+        detailBody.Children().Append(RecordTiles(signals, 6, 16));
+    auto icons = section.GetNamedArray(L"icons", JsonArray());
+    if (icons.Size() > 0)
+        detailBody.Children().Append(DetailIcons(icons));
     return true;
 }
 void RenderRecordHeading(JsonObject const &section)
