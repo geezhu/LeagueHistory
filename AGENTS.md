@@ -1,11 +1,11 @@
 # LeagueHistory 项目指令
 
-## 适用范围：仅 geezhu 新增的源码
+## 适用范围：基线之外的全部源码
 
-- 格式和结构规范仅适用于 `config/code-quality.json` 中上游基线不存在的源码文件。上游原有文件即使被 geezhu 修改过，也不因此进入规范范围。
-- 修改上游原有文件时，保持已有排版、命名和结构，只做完成需求所需的局部修改。不得为了规范化而重新排版、改名、移动原有文件或整理 using。
+- 格式和结构规范适用于 `config/code-quality.json` 记录的原有源码之外的全部源码文件，不区分作者或来源。原有源码（上游基线中已有的文件）即使后来被修改，也不因此进入规范范围。
+- 修改原有源码时，保持已有排版、命名和结构，只做完成需求所需的局部修改。不得为了规范化而重新排版、改名、移动原有文件或整理 using。
 - 不运行全仓库格式化。使用 `Scripts/Check-CodeQuality.ps1`；它根据原有文件排除清单限定检查和修复范围。
-- 新增源码按本规范编写。现有新增源码按模块逐步整理，`adoptedFiles` 是已完成整理、持续检查的样板清单。
+- 新增源码按本规范编写。所有新增源码默认进入检查范围，不再维护样板清单；新文件无需登记。
 - 更新上游前，运行 `Scripts/Update-CodeQualityScope.ps1 -UpstreamRef origin/master` 更新原有文件排除清单；审查配置差异。不要用 Git 作者名字判断文件归属。
 
 ## 可读性与职责
@@ -27,8 +27,8 @@
 ## 工具与验证
 
 - C# 排版使用仓库固定版本的 CSharpier；Game Bar C++ 使用 `.clang-format`。原有文件同时在 `.csharpierignore` 中排除。
-- 运行 `powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Check-CodeQuality.ps1`。`-Fix` 只修复选中且属于新增范围的源码排版；`-All` 用于调查全部新增源码的待整理问题。
-- 修改上游原有文件后运行 `Scripts/Check-UpstreamChanges.ps1`：只检查相对上游基线新增的行，异常、异步和资源规则形成门槛；`-IncludeStyle` 另列花括号和方法长度，仅供参考。
+- 运行 `powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Check-CodeQuality.ps1`。默认检查全部新增源码；`-Fix` 只修复选中且属于新增范围的源码排版；`-BaseRef` 只检查某个提交以来改动的源码。编译分析输出到 `bin/code-quality/build`，不影响正在运行的 `bin/Release`。
+- 修改原有源码后运行 `Scripts/Check-UpstreamChanges.ps1`：只检查相对基线新增的行，异常、异步和资源规则形成门槛；`-IncludeStyle` 另列花括号和方法长度，仅供参考。
 - 编译检查中的 Meziantou 规则仅对选中的新增文件形成检查门槛；不向主项目永久添加分析器依赖或把已有警告全部升级为错误。
 - 语音改动编译 `Tests/StatisticsChecks/StatisticsChecks.csproj`，然后运行 `--sensevoice-checks`、`--assistant-voice-checks`、`--gamebar-voice-checks`。
 - 格式整理与行为改变分开审查。保留已有测试，必要时补充取消、错误和资源释放的回归验证。用户要求提交时再提交。

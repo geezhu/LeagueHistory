@@ -1,15 +1,14 @@
 # 新增代码的规范与检查
 
-本规范只作用于 geezhu 新增的源码。官方原有文件即使在本分支改过，也保持原有格式，避免后续合并产生无关差异。
+本规范作用于基线之外的全部源码，不区分作者或来源。基线中已有的原有文件即使后来改过，也保持原有格式，避免与上游合并时产生无关差异。
 
 ## 范围
 
 `config/code-quality.json` 记录官方仓库的原有源码路径。初始基线是 `mizi6654/LeagueHistory` 的 `42db0c3c437d9db5bb54fd502dbf5c08e7db975b`，共 98 个文件。依据路径和上游树判断归属，不依据提交作者。
 
 - `upstreamFiles`：始终排除的原有文件；上游后来删除文件也不会自动解除排除。
-- `adoptedFiles`：已经整理完的样板，每次检查都验证。
-- 默认检查范围：样板，加本次修改或新增、且不在原有文件清单中的源码。
-- `-All`：调查全部新增源码的待整理问题，不会扩大到官方原有源码。
+- 默认检查范围：Git 跟踪和未跟踪的全部源码，减去原有文件清单。新增文件自动进入，不需要登记。
+- `-BaseRef <提交>`：只检查该提交以来改动的新增源码，用于快速核对。
 - 纯格式整理不能修改原有文件。功能开发必须修改原有文件时，保留它的局部风格。
 
 `AGENTS.md` 规定职责、状态、异常与异步资源管理要求。`.editorconfig` 对原有路径逐项取消设置；根目录文件的规则以 `/` 开头，避免误排除子目录里同名的新增文件。`.csharpierignore` 排除原有文件、生成文件和项目 XML。配置由范围更新脚本生成，不手改生成结果。
@@ -28,8 +27,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Check-CodeQuality.ps
 # 快速排版检查，不进行编译分析
 powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Check-CodeQuality.ps1 -SkipAnalysis
 
-# 调查所有 geezhu 新增源码；未整理模块可能不通过
-powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Check-CodeQuality.ps1 -All
+# 只检查某个提交以来改动的新增源码
+powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Check-CodeQuality.ps1 -BaseRef origin/master
 ```
 
 显式选择文件时仍会检查归属，传入官方原有路径会直接拒绝。不要直接运行全仓库格式化。
@@ -38,7 +37,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Check-CodeQuality.ps
 
 检查规则包括完整花括号（IDE0011）、取消参数传递（MA0040）、异步方法避免阻塞调用（MA0042）、方法长度（MA0051）、包装异常保留原异常（MA0054）。方法长度是梳理职责的提示；如有合理例外，说明理由后局部配置，不为通过检查机械拆分。
 
-编译日志和 SARIF 报告在 `bin/code-quality`。只有选中新增源码的上述规则形成检查失败，不把上游已有警告升级为错误。
+编译日志和 SARIF 报告在 `bin/code-quality`，分析编译输出在 `bin/code-quality/build/<项目名>`，中间文件在各项目的 `obj/code-quality`。分析使用重新编译，若输出到 `bin/Release` 会清掉正在运行的 League.exe 的 runtimeconfig 和 deps 文件，所以与正常编译分开。只有选中新增源码的上述规则形成检查失败，不把上游已有警告升级为错误。
 
 ## 更新官方基线
 
@@ -49,13 +48,13 @@ git fetch origin master
 powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Update-CodeQualityScope.ps1 -UpstreamRef origin/master
 ```
 
-如果克隆的是 geezhu 的仓库，`origin` 可能指向自己的分支，应改用指向 `mizi6654/LeagueHistory` 的引用。日常检查只读保存的清单，不依赖远端名称，也不会自动刷新基线。
+如果 `origin` 指向的不是 `mizi6654/LeagueHistory`（例如自己的分支），应改用指向官方仓库的引用。日常检查只读保存的清单，不依赖远端名称，也不会自动刷新基线。
 
-范围变化后审查 `config/code-quality.json`、`.editorconfig`、`.csharpierignore`。新样板加入 `adoptedFiles` 前先完成整理并验证，删除或重命名样板时同步维护清单。
+更新基线时，上游新增的源码也加入原有清单（例如上游后来新增的 `Clients/LcuManager.cs`），保留上游作者的排版，规范不要求上游遵守。范围变化后审查 `config/code-quality.json`、`.editorconfig`、`.csharpierignore`。
 
 ## 当前样板与验证
 
-本轮待整理清单已全部完成。当前全部 252 个新增源码（含整理过程中新增的控件与回归）都已加入 `adoptedFiles`，涵盖客户端、模型、服务、管理器、界面、Game Bar 和测试；原有 98 个源码仍排除。以 Git 跟踪源码和新增源码清单作差集核对覆盖，不能仅凭检查通过判断没有遗漏。
+本轮待整理清单已全部完成，之后取消了 `adoptedFiles` 样板清单：清单需要手动登记，后续新增的 49 个源码曾因此漏检。现在默认检查全部新增源码，`Tests/CodeQualityChecks.ps1` 核对默认范围与 Git 跟踪的新增源码一致；原有 98 个源码仍排除。
 
 阵容分析的证据提取与结论生成分开，实时对局按玩家和事件解析，时间轴按帧、金币和事件处理。客户端分别处理缓存读取、网络刷新和原子保存；共享初始化不因单个视图取消而中止，等待方仍可取消。玩家加载分离名单核对、请求与结果投递；符文应用分离保存与当前页面校验。
 
