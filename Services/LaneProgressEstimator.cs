@@ -76,7 +76,7 @@ public static class LaneProgressEstimator
         var turrets = lane.Turrets(team);
         for (int i = 0; i < turrets.Length; i++)
         {
-            yield return new(bar.At(turrets[i]), side + turrets[i].Label, ally, i >= down);
+            yield return new(bar.At(turrets[i]), side + turrets[i].Label, ally, i >= down, turrets[i].Kind);
         }
 
         var inhibitor = lane.Inhibitor(team);
@@ -84,12 +84,19 @@ public static class LaneProgressEstimator
             bar.At(inhibitor),
             side + inhibitor.Label,
             ally,
-            structures.InhibitorDownSince(team, lane.Key) == null
+            structures.InhibitorDownSince(team, lane.Key) == null,
+            inhibitor.Kind
         );
         // Both nexus turrets share one marker; it reads as fallen once both are down.
         int standing = 2 - Math.Min(2, structures.NexusTurretsDown(team));
-        yield return new(bar.At(lane.Nexus(team)), $"{side}门牙塔（剩 {standing} 座）", ally, standing > 0);
-        yield return new(bar.At(lane.Base(team)), side + "大水晶", ally, true);
+        yield return new(
+            bar.At(lane.Nexus(team)),
+            $"{side}门牙塔（剩 {standing} 座）",
+            ally,
+            standing > 0,
+            LaneStructureKind.Nexus
+        );
+        yield return new(bar.At(lane.Base(team)), side + "大水晶", ally, true, LaneStructureKind.Base);
     }
 
     private static string Hint(MinionLane lane, LaneStructureState structures, int own, int enemy)

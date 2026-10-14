@@ -17,6 +17,7 @@
 #include <winrt/Windows.UI.Xaml.Input.h>
 #include <winrt/Windows.UI.Xaml.Media.h>
 #include <winrt/Windows.UI.Xaml.Media.Imaging.h>
+#include <winrt/Windows.UI.Xaml.Shapes.h>
 #include <winrt/Microsoft.Gaming.XboxGameBar.h>
 #include <algorithm>
 #include <array>
@@ -466,6 +467,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         ResetChat();
         stopped = true;
         timer.Stop();
+        waveFrames.revoke();
         widget = nullptr;
     }
     void UpdateHint()

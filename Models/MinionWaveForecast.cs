@@ -22,7 +22,7 @@ public sealed record LaneWaveForecast(string Name, WaveArrival Ally, WaveArrival
 }
 
 /// <summary>A structure on the lane bar: 0 is the own inhibitor, 1 the enemy inhibitor.</summary>
-public sealed record LaneMarker(double At, string Label, bool Ally, bool Alive);
+public sealed record LaneMarker(double At, string Label, bool Ally, bool Alive, LaneStructureKind Kind);
 
 /// <summary>
 /// One wave on a lane, for timetables at any point: both teams spawn it together at opposite inhibitors and walk
@@ -145,9 +145,20 @@ public sealed record MinionWaveForecast(
                         ["label"] = m.Label,
                         ["ally"] = m.Ally,
                         ["alive"] = m.Alive,
+                        ["kind"] = MarkerKind(m.Kind),
                     })
                 ),
             };
+
+    // The widget draws a turret, inhibitor or nexus icon; the three turret tiers share one icon.
+    private static string MarkerKind(LaneStructureKind kind) =>
+        kind switch
+        {
+            LaneStructureKind.Inhibitor => "inhibitor",
+            LaneStructureKind.Nexus => "nexus",
+            LaneStructureKind.Base => "base",
+            _ => "turret",
+        };
 
     private static JObject Arrival(WaveArrival arrival) =>
         new()

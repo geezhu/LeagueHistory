@@ -9,9 +9,11 @@ JsonObject waves;
 bool waveOpen = false;
 int waveReturnCard = -1;
 int64_t waveRenderedSecond = -1;
-// The chosen stop per lane as a fraction from the own inhibitor; negative means the default stop.
+// The chosen stop per lane as a fraction of the bar from the own nexus; negative means the default stop.
 std::array<double, 3> waveStops{-1, -1, -1};
 bool waveRenderPending = false;
+// Moves the wave dots every frame while the page is open; the page itself is rebuilt once a second.
+CompositionTarget::Rendering_revoker waveFrames;
 static constexpr int64_t WaveStaleMilliseconds = 5000;
 
 void InitializeWaves()
@@ -148,6 +150,12 @@ void OpenWaves()
     waveRenderedSecond = -1;
     waveScroll.ChangeView(nullptr, 0.0, nullptr);
     UpdateWaves();
+    waveFrames = CompositionTarget::Rendering(auto_revoke,
+                                              [weak = weak_from_this()](auto &&, auto &&)
+                                              {
+                                                  if (auto self = weak.lock(); self && !self->stopped)
+                                                      self->MoveWaveDots();
+                                              });
 }
 // Back returns to the roster or the hero that was open, without re-requesting its details.
 void CloseWaves()
@@ -155,6 +163,8 @@ void CloseWaves()
     if (!waveOpen)
         return;
     waveOpen = false;
+    waveFrames.revoke();
+    waveDots.clear();
     waveBody.Children().Clear();
     waveRoot.Visibility(Visibility::Collapsed);
     if (waveReturnCard >= 0 && waveReturnCard == selectedCard)
@@ -181,6 +191,7 @@ void AddWaveLine(hstring const &text, double size = 13, uint32_t color = 0xe2eef
 }
 void RenderWaves(double now)
 {
+    waveDots.clear();
     waveBody.Children().Clear();
     waveTitle.Text(L"兵线 · " + waves.GetNamedString(L"map", L""));
     waveRules.Text(L"");
@@ -254,8 +265,8 @@ void RenderWaveLanes(double now)
         ++index;
     }
 }
-// The drawn lane runs nexus turrets to nexus turrets; waves spawn at the inhibitors inside it. Converts bar
-// fractions to the distance each side's waves walk from their own inhibitor, and back.
+// The drawn lane runs nexus to nexus, where the waves spawn. Converts bar fractions to the distance each side's
+// waves have walked from their spawn.
 struct LaneSpan
 {
     double length = 0, spawn = 0, enemySpawn = 1;
@@ -272,30 +283,47 @@ struct LaneSpan
     {
         return (enemySpawn - at) * length;
     }
-    double AllyAt(double walked) const
-    {
-        return spawn + walked / length;
-    }
-    double EnemyAt(double walked) const
-    {
-        return enemySpawn - walked / length;
-    }
 };
 // A child placed at a fraction of the bar with star columns, so it follows resizes without a Canvas.
 static Grid AtFraction(UIElement const &child, double at)
 {
-    at = std::clamp(at, 0.0, 1.0);
     Grid layer;
     ColumnDefinition left, middle, right;
-    left.Width({at, GridUnitType::Star});
     middle.Width({1, GridUnitType::Auto});
-    right.Width({1 - at, GridUnitType::Star});
     layer.ColumnDefinitions().Append(left);
     layer.ColumnDefinitions().Append(middle);
     layer.ColumnDefinitions().Append(right);
+    SetFraction(layer, at);
     Grid::SetColumn(child.as<FrameworkElement>(), 1);
     layer.Children().Append(child);
     return layer;
+}
+static void SetFraction(Grid const &layer, double at)
+{
+    at = std::clamp(at, 0.0, 1.0);
+    auto columns = layer.ColumnDefinitions();
+    columns.GetAt(0).Width({at, GridUnitType::Star});
+    columns.GetAt(2).Width({1 - at, GridUnitType::Star});
+}
+// A walking wave's dot: where it is at a game time, from its spawn up to the stop where it fights.
+struct WaveDot
+{
+    Grid layer{nullptr};
+    double time = 0, speed = 0, bonus = 0, reach = 0, origin = 0, direction = 1, length = 1;
+    double At(double now) const
+    {
+        double walked = speed * (std::max)(0.0, now - time) + bonus;
+        return origin + direction * (std::min)(walked, reach) / length;
+    }
+};
+std::vector<WaveDot> waveDots;
+void MoveWaveDots()
+{
+    double now = WaveGameTime();
+    if (now < 0)
+        return;
+    for (auto const &dot : waveDots)
+        SetFraction(dot.layer, dot.At(now));
 }
 // Without a chosen stop, waves meet halfway between each side's outermost standing structure.
 static double DefaultStop(JsonArray const &markers)
@@ -400,7 +428,7 @@ Grid CreateLaneHeader(hstring const &name, JsonArray const &markers, int index, 
     header.Children().Append(right);
     return header;
 }
-// When a wave reaches a distance from its own inhibitor if nothing stops it; negative without a speed.
+// When a wave reaches a distance from its spawn if nothing stops it; negative without a speed.
 static double WaveArrival(JsonObject const &wave, double distance)
 {
     double speed = wave.GetNamedNumber(L"speed", 0);
@@ -466,7 +494,7 @@ static Border CreateArrivalChip(JsonArray const &timetable, double distance, dou
     chip.VerticalAlignment(VerticalAlignment::Center);
     return chip;
 }
-// Own inhibitor on the left, enemy on the right; walking waves stop at the chosen stop, where they would fight.
+// Own nexus on the left, enemy on the right; walking waves stop at the chosen stop, where they would fight.
 Grid CreateLaneBar(JsonObject const &progress, JsonArray const &markers, int index, double stop, double now)
 {
     Grid bar;
@@ -493,29 +521,36 @@ Grid CreateLaneBar(JsonObject const &progress, JsonArray const &markers, int ind
     {
         auto marker = value.GetObject();
         bool ally = marker.GetNamedBoolean(L"ally", false), alive = marker.GetNamedBoolean(L"alive", true);
-        auto text = MakeText(L"▮", 13, !alive ? 0x4a5a63 : ally ? 0x45c7ce : 0xf3b37e);
-        text.VerticalAlignment(VerticalAlignment::Center);
-        ToolTipService::SetToolTip(text,
+        uint32_t color = !alive ? 0x4a5a63 : ally ? 0x45c7ce : 0xf3b37e;
+        auto icon = CreateStructureIcon(MarkerKind(marker), color);
+        icon.VerticalAlignment(VerticalAlignment::Center);
+        ToolTipService::SetToolTip(icon,
                                    box_value(marker.GetNamedString(L"label", L"") + (alive ? L"" : L"（已被摧毁）")));
-        place(AtFraction(text, marker.GetNamedNumber(L"at", 0)), 1);
+        place(AtFraction(icon, marker.GetNamedNumber(L"at", 0)), 1);
     }
     LaneSpan span(progress);
     PlaceTurretCountdowns(progress.GetNamedArray(L"waves", JsonArray()), markers, span, stop, now, place);
     for (auto const &value : progress.GetNamedArray(L"waves", JsonArray()))
     {
         auto wave = value.GetObject();
-        double elapsed = now - wave.GetNamedNumber(L"time", 0);
-        if (elapsed <= 0)
+        if (now <= wave.GetNamedNumber(L"time", 0) || span.length <= 0)
             continue;
-        double walked = wave.GetNamedNumber(L"speed", 0) * elapsed + wave.GetNamedNumber(L"bonus", 0);
         for (bool ally : {true, false})
         {
+            WaveDot dot;
+            dot.time = wave.GetNamedNumber(L"time", 0);
+            dot.speed = wave.GetNamedNumber(L"speed", 0);
+            dot.bonus = wave.GetNamedNumber(L"bonus", 0);
             // A wave stops at the chosen stop, where it would meet the other side's wave.
-            double reach = (std::max)(0.0, ally ? span.AllyDistance(stop) : span.EnemyDistance(stop));
-            double travelled = (std::min)(walked, reach);
-            auto dot = MakeText(L"●", 20, ally ? 0x45c7ce : 0xf3b37e);
-            dot.VerticalAlignment(VerticalAlignment::Center);
-            place(AtFraction(dot, ally ? span.AllyAt(travelled) : span.EnemyAt(travelled)), 1);
+            dot.reach = (std::max)(0.0, ally ? span.AllyDistance(stop) : span.EnemyDistance(stop));
+            dot.origin = ally ? span.spawn : span.enemySpawn;
+            dot.direction = ally ? 1 : -1;
+            dot.length = span.length;
+            auto text = MakeText(L"●", 20, ally ? 0x45c7ce : 0xf3b37e);
+            text.VerticalAlignment(VerticalAlignment::Center);
+            dot.layer = AtFraction(text, dot.At(now));
+            place(dot.layer, 1);
+            waveDots.push_back(dot);
         }
     }
     auto pin = MakeText(L"◆", 16, 0xffd27a);
@@ -551,11 +586,11 @@ static void PlaceTurretCountdowns(JsonArray const &timetable,
     {
         auto marker = value.GetObject();
         auto label = marker.GetNamedString(L"label", L"");
-        std::wstring_view name(label);
+        auto kind = MarkerKind(marker);
         bool ally = marker.GetNamedBoolean(L"ally", false);
         double at = marker.GetNamedNumber(L"at", 0);
-        if (!marker.GetNamedBoolean(L"alive", true) || name.find(L"大水晶") != std::wstring_view::npos ||
-            (name.find(L"小水晶") != std::wstring_view::npos && HasCloseTurret(markers, ally, at)))
+        if (!marker.GetNamedBoolean(L"alive", true) || kind == L"base" ||
+            (kind == L"inhibitor" && HasCloseTurret(markers, ally, at)))
             continue;
         if (ally ? at > stop : at < stop)
             continue;
@@ -585,14 +620,102 @@ static bool HasCloseTurret(JsonArray const &markers, bool ally, double at)
     for (auto const &value : markers)
     {
         auto marker = value.GetObject();
-        auto label = marker.GetNamedString(L"label", L"");
-        std::wstring_view name(label);
         if (marker.GetNamedBoolean(L"ally", false) == ally && marker.GetNamedBoolean(L"alive", true) &&
-            name.find(L"水晶") == std::wstring_view::npos && name.find(L"门牙塔") == std::wstring_view::npos &&
-            std::abs(marker.GetNamedNumber(L"at", 0) - at) < 0.05)
+            MarkerKind(marker) == L"turret" && std::abs(marker.GetNamedNumber(L"at", 0) - at) < 0.05)
             return true;
     }
     return false;
+}
+// A main program older than the widget sends no kind; its labels still name the structure.
+static hstring MarkerKind(JsonObject const &marker)
+{
+    auto kind = marker.GetNamedString(L"kind", L"");
+    if (!kind.empty())
+        return kind;
+    auto label = marker.GetNamedString(L"label", L"");
+    std::wstring_view name(label);
+    if (name.find(L"大水晶") != std::wstring_view::npos)
+        return L"base";
+    if (name.find(L"门牙塔") != std::wstring_view::npos)
+        return L"nexus";
+    return name.find(L"水晶") != std::wstring_view::npos ? hstring(L"inhibitor") : hstring(L"turret");
+}
+// Minimap-like silhouettes: a turret, the two nexus turrets, the inhibitor crystal and the larger nexus crystal.
+static FrameworkElement CreateStructureIcon(hstring const &kind, uint32_t color)
+{
+    using Windows::Foundation::Point;
+    static const std::array<Point, 18> tower{{{1, 18},
+                                              {11, 18},
+                                              {9, 13},
+                                              {9, 7},
+                                              {11, 7},
+                                              {11, 1},
+                                              {9, 1},
+                                              {9, 3},
+                                              {7, 3},
+                                              {7, 1},
+                                              {5, 1},
+                                              {5, 3},
+                                              {3, 3},
+                                              {3, 1},
+                                              {1, 1},
+                                              {1, 7},
+                                              {3, 7},
+                                              {3, 13}}};
+    if (kind == L"inhibitor")
+        return CreateCrystal({{6, 0}, {12, 7}, {6, 18}, {0, 7}}, {{6, 0}, {6, 18}, {0, 7}}, 12, 18, color);
+    if (kind == L"base")
+        return CreateCrystal(
+            {{9, 0}, {17, 5}, {17, 15}, {9, 20}, {1, 15}, {1, 5}}, {{9, 0}, {9, 20}, {1, 15}, {1, 5}}, 18, 20, color);
+    if (kind == L"nexus")
+    {
+        StackPanel pair;
+        pair.Orientation(Orientation::Horizontal);
+        pair.Children().Append(CreatePolygon(tower, 7, 13, color));
+        auto second = CreatePolygon(tower, 7, 13, color);
+        second.Margin({1, 0, 0, 0});
+        pair.Children().Append(second);
+        return pair;
+    }
+    return CreatePolygon(tower, 11, 16, color);
+}
+// Two faces, the left one lighter, so the crystal reads as cut stone rather than a flat shape.
+static Grid CreateCrystal(std::initializer_list<Windows::Foundation::Point> outline,
+                          std::initializer_list<Windows::Foundation::Point> face,
+                          double width,
+                          double height,
+                          uint32_t color)
+{
+    Grid crystal;
+    crystal.Width(width);
+    crystal.Height(height);
+    crystal.Children().Append(CreatePolygon(outline, width, height, color, false));
+    crystal.Children().Append(CreatePolygon(face, width, height, Lighten(color), false));
+    return crystal;
+}
+// Draws the points as given, or scaled to the size when stretched.
+template <typename Points>
+static Windows::UI::Xaml::Shapes::Polygon CreatePolygon(
+    Points const &points, double width, double height, uint32_t color, bool stretch = true)
+{
+    Windows::UI::Xaml::Shapes::Polygon shape;
+    PointCollection collection;
+    for (auto const &point : points)
+        collection.Append(point);
+    shape.Points(collection);
+    shape.Fill(MakeBrush(color));
+    if (stretch)
+    {
+        shape.Stretch(Stretch::Fill);
+        shape.Width(width);
+        shape.Height(height);
+    }
+    return shape;
+}
+static uint32_t Lighten(uint32_t color)
+{
+    auto mix = [color](int shift) { return (((color >> shift) & 0xff) * 3 + 0xff * 2) / 5 << shift; };
+    return mix(16) | mix(8) | mix(0);
 }
 // Death timers from level and game time: the cost of dying now, own team on the left.
 void RenderDeathCosts()
