@@ -231,7 +231,21 @@ internal static class OverlayDetailPreview
         roster["teamSummaries"] = new JArray("18 杀 · 41.2k · 领先 2.3k", "14 杀 · 38.9k");
         roster["liveRevision"] = "fixture-live-1";
         roster["liveSections"] = LivePanelSections.Build(input, id => $"布局装备 {id}");
-        roster["waves"] = MinionWaveForecaster.Calculate(SampleWaves(), (long)roster["updatedAt"]!)!.ToJson();
+        var waves = MinionWaveForecaster.Calculate(SampleWaves(), (long)roster["updatedAt"]!)!;
+        // The sample is Summoner's Rift, which gets no advice; a fixed one shows the Howling Abyss layout.
+        roster["waves"] = (waves with { DeathAdvice = SampleDeathAdvice() }).ToJson();
+    }
+
+    private static DeathTimingAdvice SampleDeathAdvice()
+    {
+        DeathTimingFactor[] factors =
+        [
+            new(1, "缺席约 29 秒，期间敌方兵线到不了我方外塔"),
+            new(3, "对面 2 人阵亡（最长还剩 24 秒）"),
+            new(2, "身上 2650 金，够买大件"),
+            new(-1, "你是我方主要前排"),
+        ];
+        return new(DeathTimingVerdict.Good, [factors[1].Text, factors[2].Text], factors);
     }
 
     // Summoner's Rift at 14:06 so the page shows three lanes, the 14:00 interval change and a fallen inhibitor.

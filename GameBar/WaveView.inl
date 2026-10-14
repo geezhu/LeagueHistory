@@ -726,6 +726,7 @@ void RenderDeathCosts()
     double factor = waves.GetNamedNumber(L"deathFactor", 0);
     AddWaveHeading(factor > 0 ? L"现在阵亡需等待 · 时间加成 +" + to_hstring(static_cast<int>(factor + .5)) + L"%"
                               : hstring(L"现在阵亡需等待"));
+    RenderDeathAdvice();
     // Players of one level wait the same time, so each level is one row with its heroes on both sides.
     std::vector<int> levels;
     for (auto const &value : deaths)
@@ -792,6 +793,45 @@ void RenderDeathCosts()
         ++row;
     }
     waveBody.Children().Append(table);
+}
+// The main program's verdict on dying now to shop, its deciding reasons beside it and every factor in the tooltip.
+void RenderDeathAdvice()
+{
+    auto value = waves.TryLookup(L"deathAdvice");
+    if (!value || value.ValueType() != JsonValueType::Object)
+        return;
+    auto advice = value.GetObject();
+    auto verdict = advice.GetNamedString(L"verdict", L"avoid");
+    bool good = verdict == L"good", okay = verdict == L"okay";
+    uint32_t color = good ? 0x7fd88f : okay ? 0xffd27a : 0xff8a7a;
+    Border chip;
+    chip.Child(MakeText(good ? L"适合送死" : okay ? L"可以送死" : L"不建议送死", 13, 0x071e29));
+    chip.Background(MakeBrush(color));
+    chip.CornerRadius({3, 3, 3, 3});
+    chip.Padding({8, 1, 8, 1});
+    chip.Margin({0, 0, 8, 0});
+    chip.VerticalAlignment(VerticalAlignment::Top);
+    std::wstring reasons;
+    for (auto const &reason : advice.GetNamedArray(L"reasons", JsonArray()))
+        reasons += (reasons.empty() ? L"" : L" · ") + std::wstring(reason.GetString());
+    auto text = MakeText(hstring(reasons), 12, color);
+    text.TextWrapping(TextWrapping::Wrap);
+    text.VerticalAlignment(VerticalAlignment::Center);
+    std::wstring details;
+    for (auto const &detail : advice.GetNamedArray(L"details", JsonArray()))
+        details += std::wstring(detail.GetString()) + L"\n";
+    details += L"按复活时间、兵线理论到塔时间、双方阵亡和阵容推算，仅供参考。";
+    Grid row;
+    row.Margin({0, 0, 0, 6});
+    ColumnDefinition chipColumn;
+    chipColumn.Width({1, GridUnitType::Auto});
+    row.ColumnDefinitions().Append(chipColumn);
+    row.ColumnDefinitions().Append(ColumnDefinition());
+    row.Children().Append(chip);
+    Grid::SetColumn(text, 1);
+    row.Children().Append(text);
+    ToolTipService::SetToolTip(row, box_value(hstring(details)));
+    waveBody.Children().Append(row);
 }
 // The hero icon the roster already loaded; the champion's first character until it arrives.
 Border CreateDeathAvatar(JsonObject const &death)

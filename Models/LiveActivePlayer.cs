@@ -14,6 +14,8 @@ public sealed record LiveChampionStats(
     double MagicPenetrationPercent
 )
 {
+    public double CurrentHealth { get; init; }
+
     public static LiveChampionStats? Parse(JObject? stats)
     {
         if (stats?["maxHealth"] is not JToken health || (double?)health is not (double maxHealth and > 0))
@@ -35,12 +37,17 @@ public sealed record LiveChampionStats(
             Penetration("armorPenetrationPercent"),
             Value("magicPenetrationFlat"),
             Penetration("magicPenetrationPercent")
-        );
+        )
+        {
+            CurrentHealth = Value("currentHealth"),
+        };
     }
 }
 
 public sealed record LiveActivePlayer(LiveChampionStats? Stats, int[] Runes)
 {
+    public double CurrentGold { get; init; }
+
     public static LiveActivePlayer? Parse(JObject? active)
     {
         if (active == null)
@@ -56,6 +63,10 @@ public sealed record LiveActivePlayer(LiveChampionStats? Stats, int[] Runes)
             .Select(rune => (int?)rune["id"] ?? 0)
             .Where(id => id > 0)
             .ToArray();
-        return new(LiveChampionStats.Parse(active["championStats"] as JObject), ids);
+        double gold = (double?)active["currentGold"] ?? 0;
+        return new(LiveChampionStats.Parse(active["championStats"] as JObject), ids)
+        {
+            CurrentGold = double.IsFinite(gold) ? Math.Max(0, gold) : 0,
+        };
     }
 }

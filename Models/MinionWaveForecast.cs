@@ -75,6 +75,9 @@ public sealed record MinionWaveForecast(
     /// <summary>The time factor in percent, shown beside the death costs.</summary>
     public double DeathFactor { get; init; }
 
+    /// <summary>Whether dying now to shop is a good trade; null outside the Howling Abyss or while dead.</summary>
+    public DeathTimingAdvice? DeathAdvice { get; init; }
+
     public JObject ToJson() =>
         new()
         {
@@ -110,6 +113,7 @@ public sealed record MinionWaveForecast(
                     ? null
                     : new JObject { ["wave"] = Current.Number, ["time"] = Math.Round(Current.Time, 2) },
             ["deathFactor"] = Math.Round(DeathFactor, 1),
+            ["deathAdvice"] = DeathAdvice?.ToJson(),
             ["deaths"] = new JArray(
                 Deaths.Select(d => new JObject
                 {
