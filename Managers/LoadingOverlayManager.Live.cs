@@ -19,6 +19,10 @@ internal sealed partial class LoadingOverlayManager
     private string _liveRevision = "";
     private int[]? _clientRunes;
     private double? _enemyPhysicalShare;
+    private TeamPressure? _teamPressure;
+    private DeathTimingAdvice? _shownDeathAdvice;
+    private int? _augmentsOpenedAt;
+    private bool _selfDead;
     private bool _liveBusy,
         _enemyShareRead;
     private long _liveRetry,
@@ -31,6 +35,10 @@ internal sealed partial class LoadingOverlayManager
         _liveRevision = "";
         _clientRunes = null;
         _enemyPhysicalShare = null;
+        _teamPressure = null;
+        _shownDeathAdvice = null;
+        _augmentsOpenedAt = null;
+        _selfDead = false;
         _enemyShareRead = false;
         _liveRetry = 0;
         _buildRetry = 0;
@@ -58,7 +66,16 @@ internal sealed partial class LoadingOverlayManager
             return;
         }
 
+        TrackAugments(snapshot);
         var waves = MinionWaveForecaster.Calculate(snapshot, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        if (waves != null)
+        {
+            waves = waves with
+            {
+                DeathAdvice = DeathTimingAdvisor.Evaluate(snapshot, waves, _teamPressure, _augmentsOpenedAt),
+            };
+        }
+        ReportDeathTiming(snapshot, waves?.DeathAdvice);
         ReportUnknownStructures(waves);
         CheckRespawnFormula(snapshot);
         _ = UpdateRespawnSoundsAsync(roster, snapshot, _generation);
@@ -126,6 +143,36 @@ internal sealed partial class LoadingOverlayManager
                 $"复活时间核对 {snapshot.Mode} {MinionWaveForecaster.Clock(snapshot.Time)} {player.ChampionName} "
                     + $"{player.Level} 级：公式 {predicted:0.0} 秒，游戏剩余 {player.RespawnTimer:0.0} 秒"
             );
+        }
+    }
+
+    // The shop, and with it the augment choice, is open on the platform at the start and whenever the player is dead.
+    // A program started mid-game cannot know the earlier choices and waits for the next death.
+    private void TrackAugments(LiveMatchSnapshot snapshot)
+    {
+        if (snapshot.Players.FirstOrDefault(p => p.Self) is { } self && (self.IsDead || snapshot.Time < 30))
+        {
+            _augmentsOpenedAt = self.Level;
+        }
+    }
+
+    // Each own death logs the advice shown just before it, so the thresholds can be checked against real games.
+    private void ReportDeathTiming(LiveMatchSnapshot snapshot, DeathTimingAdvice? advice)
+    {
+        bool dead = snapshot.Players.FirstOrDefault(p => p.Self)?.IsDead ?? false;
+        if (dead && !_selfDead && _shownDeathAdvice is { } shown)
+        {
+            ChatSendDiagnostics.Shared.Report(
+                "death-timing",
+                $"阵亡时的送死建议 {MinionWaveForecaster.Clock(snapshot.Time)} {shown.Verdict}："
+                    + string.Join("；", shown.Factors.Select(DeathTimingAdvice.Describe))
+            );
+        }
+
+        _selfDead = dead;
+        if (!dead)
+        {
+            _shownDeathAdvice = advice;
         }
     }
 
@@ -250,6 +297,12 @@ internal sealed partial class LoadingOverlayManager
             var index = await _championDetails.LoadAramMetaIndexAsync(token);
             var evaluation = AramTeamScore.Evaluate(index, enemies);
             _enemyPhysicalShare = evaluation.Missing.Length < enemies.Length ? evaluation.AdShare : null;
+            var self = roster.Players.FirstOrDefault(p => p.Self);
+            int[] allies = roster
+                .Players.Where(p => p.Team == own && p.ChampionId > 0)
+                .Select(p => p.ChampionId)
+                .ToArray();
+            _teamPressure = TeamPressure.From(index, allies, enemies, self?.ChampionId ?? 0);
             _enemyShareRead = true;
         }
         catch (Exception e) when (e is HttpRequestException or IOException or InvalidDataException)
