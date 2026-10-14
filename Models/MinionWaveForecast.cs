@@ -19,10 +19,23 @@ public sealed record WaveArrival(string Target, double From, double To);
 public sealed record LaneWaveForecast(string Name, WaveArrival Ally, WaveArrival Enemy, string Structures)
 {
     public LaneProgress? Progress { get; init; }
+
+    /// <summary>The active player against the next enemy turret; null without turret rules or own stats.</summary>
+    public TurretSiege? Siege { get; init; }
 }
 
 /// <summary>A structure on the lane bar: 0 is the own inhibitor, 1 the enemy inhibitor.</summary>
-public sealed record LaneMarker(double At, string Label, bool Ally, bool Alive, LaneStructureKind Kind);
+public sealed record LaneMarker(double At, string Label, bool Ally, bool Alive, LaneStructureKind Kind)
+{
+    /// <summary>Tooltip lines with the turret's stats and rules; empty for structures without entered stats.</summary>
+    public string[] Details { get; init; } = [];
+
+    /// <summary>The game time the turret's fortification ends, while it is active.</summary>
+    public double? FortifiedUntil { get; init; }
+
+    /// <summary>The fortification's damage reduction, as a fraction.</summary>
+    public double Fortification { get; init; }
+}
 
 /// <summary>
 /// One wave on a lane, for timetables at any point: both teams spawn it together at opposite inhibitors and walk
@@ -106,6 +119,7 @@ public sealed record MinionWaveForecast(
                     ["enemy"] = Arrival(l.Enemy),
                     ["structures"] = l.Structures,
                     ["progress"] = Progress(l.Progress),
+                    ["siege"] = l.Siege?.ToJson(),
                 })
             ),
             ["current"] =
@@ -154,6 +168,9 @@ public sealed record MinionWaveForecast(
                         ["ally"] = m.Ally,
                         ["alive"] = m.Alive,
                         ["kind"] = MarkerKind(m.Kind),
+                        ["details"] = string.Join("\n", m.Details),
+                        ["fortifiedUntil"] = m.FortifiedUntil is double until ? Math.Round(until, 1) : null,
+                        ["fortification"] = Math.Round(m.Fortification, 2),
                     })
                 ),
             };

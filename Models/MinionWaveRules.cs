@@ -46,6 +46,12 @@ public sealed record MinionWaveRules(
     /// <summary>Seconds until a destroyed inhibitor returns; null where the value is not confirmed.</summary>
     public double? InhibitorRespawn { get; init; }
 
+    /// <summary>Waves that carry super minions after an inhibitor falls; null where not known.</summary>
+    public int? SuperWaves { get; init; }
+
+    /// <summary>Turret stats for the tooltips and fortification; null where the map's values are not entered.</summary>
+    public TurretRules? Turrets { get; init; }
+
     /// <summary>Summoner's Rift side lanes: extra speed on early waves so they meet mid-lane timing.</summary>
     public bool SideLaneBonus { get; init; }
 
@@ -120,6 +126,9 @@ public sealed record MinionWaveRules(
     )
     {
         Experience = [64, 32, 94, 100],
+        // The LoL Wiki's inhibitor page; the game data does not hold the count, so the text marks it as approximate.
+        SuperWaves = 10,
+        Turrets = TurretRules.HowlingAbyss,
     };
 
     /// <summary>Rules for a 2999 game mode and map; null for modes without lane minions or with unknown rules.</summary>

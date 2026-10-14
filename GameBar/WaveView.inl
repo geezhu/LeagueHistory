@@ -385,6 +385,7 @@ void RenderWaveLane(JsonObject const &lane, int index, double now)
         auto timetable = progress.GetNamedArray(L"waves", JsonArray());
         card.Children().Append(CreateStopRow(timetable, span, stop, now));
     }
+    RenderSiege(card, lane);
     // An inference only helps when structures have fallen; "no structures lost" is left out.
     auto hint = progress.GetNamedString(L"hint", L"");
     if (!hint.empty() && std::wstring_view(hint).find(L"无法") == std::wstring_view::npos)
@@ -397,6 +398,47 @@ void RenderWaveLane(JsonObject const &lane, int index, double now)
         card.Children().Append(text);
     }
     waveBody.Children().Append(card);
+}
+// The player's basic attacks against the next enemy turret at full health, and that turret's shots back.
+static void RenderSiege(StackPanel const &card, JsonObject const &lane)
+{
+    auto value = lane.TryLookup(L"siege");
+    if (!value || value.ValueType() != JsonValueType::Object)
+        return;
+    auto siege = value.GetObject();
+    auto target = siege.GetNamedString(L"target", L"");
+    auto count = [&siege](wchar_t const *hits, wchar_t const *seconds)
+    {
+        return to_hstring(static_cast<int>(siege.GetNamedNumber(hits, 0))) + L" 下约 " +
+               to_hstring(static_cast<int>(siege.GetNamedNumber(seconds, 0) + .5)) + L" 秒";
+    };
+    std::wstring attack = L"拆" + std::wstring(target) + L"：每下 " +
+                          std::wstring(to_hstring(static_cast<int>(siege.GetNamedNumber(L"hit", 0)))) +
+                          (siege.GetNamedBoolean(L"magic", false) ? L" 魔法" : L" 物理") + L" · 有兵 " +
+                          std::wstring(count(L"hits", L"seconds")) + L" · 无兵 " +
+                          std::wstring(count(L"hitsAlone", L"secondsAlone"));
+    int fortification = static_cast<int>(siege.GetNamedNumber(L"fortification", 0) * 100 + .5);
+    if (fortification > 0)
+        attack += L" · 含减伤 " + std::wstring(to_hstring(fortification)) + L"%";
+    std::wstring shots;
+    for (auto const &shot : siege.GetNamedArray(L"shots", JsonArray()))
+        shots += (shots.empty() ? L"" : L" / ") + std::wstring(to_hstring(static_cast<int>(shot.GetNumber())));
+    std::wstring defense = std::wstring(target) + L"打你：" + shots + L" · 按当前血量扛 " +
+                           std::wstring(to_hstring(static_cast<int>(siege.GetNamedNumber(L"shotsToDown", 0)))) + L" 下";
+    StackPanel lines;
+    lines.Margin({0, 2, 0, 2});
+    for (auto const &text : {attack, defense})
+    {
+        auto line = MakeText(hstring(text), 12, 0xa4bcc7);
+        line.TextWrapping(TextWrapping::Wrap);
+        lines.Children().Append(line);
+    }
+    ToolTipService::SetToolTip(
+        lines,
+        box_value(L"按塔满血计算：游戏接口不提供塔的当前血量。\n"
+                  L"只算普攻：攻击力 + 60% 法强，伤害类型按两者大小估计；不含技能、符文和强化。\n"
+                  L"无兵指附近没有我方小兵，塔受到英雄伤害 −80%。塔打你每下 +50%，最多 +150%。"));
+    card.Children().Append(lines);
 }
 // The lane name on the left; the stop and its reset on the right, where a timetable names its station.
 Grid CreateLaneHeader(hstring const &name, JsonArray const &markers, int index, double stop, bool chosen)
@@ -524,10 +566,14 @@ Grid CreateLaneBar(JsonObject const &progress, JsonArray const &markers, int ind
         uint32_t color = !alive ? 0x4a5a63 : ally ? 0x45c7ce : 0xf3b37e;
         auto icon = CreateStructureIcon(MarkerKind(marker), color);
         icon.VerticalAlignment(VerticalAlignment::Center);
-        ToolTipService::SetToolTip(icon,
-                                   box_value(marker.GetNamedString(L"label", L"") + (alive ? L"" : L"（已被摧毁）")));
+        auto details = marker.GetNamedString(L"details", L"");
+        hstring tip = marker.GetNamedString(L"label", L"") + (alive ? L"" : L"（已被摧毁）");
+        if (alive && !details.empty())
+            tip = tip + L"\n" + details;
+        ToolTipService::SetToolTip(icon, box_value(tip));
         place(AtFraction(icon, marker.GetNamedNumber(L"at", 0)), 1);
     }
+    PlaceFortifications(bar, markers, now);
     LaneSpan span(progress);
     PlaceTurretCountdowns(progress.GetNamedArray(L"waves", JsonArray()), markers, span, stop, now, place);
     for (auto const &value : progress.GetNamedArray(L"waves", JsonArray()))
@@ -612,6 +658,34 @@ static void PlaceTurretCountdowns(JsonArray const &timetable,
             place(AtFraction(countdown, at), 0);
             break;
         }
+    }
+}
+// Below a turret whose fortification is running: the reduction and its countdown, in a row added only then.
+static void PlaceFortifications(Grid const &bar, JsonArray const &markers, double now)
+{
+    bool added = false;
+    for (auto const &value : markers)
+    {
+        auto marker = value.GetObject();
+        auto until = marker.TryLookup(L"fortifiedUntil");
+        if (!until || until.ValueType() != JsonValueType::Number || until.GetNumber() <= now)
+            continue;
+        if (!added)
+        {
+            RowDefinition row;
+            row.Height({16, GridUnitType::Pixel});
+            bar.RowDefinitions().Append(row);
+            added = true;
+        }
+        int percent = static_cast<int>(marker.GetNamedNumber(L"fortification", 0) * 100 + .5);
+        bool ally = marker.GetNamedBoolean(L"ally", false);
+        hstring reduction = L"−" + to_hstring(percent) + L"%";
+        auto text = MakeText(reduction + L" " + WaveCountdown(until.GetNumber() - now), 11, ally ? 0x45c7ce : 0xf3b37e);
+        hstring tip = marker.GetNamedString(L"label", L"") + L"刚失去一塔，受到伤害 " + reduction + L"，到点后结束";
+        ToolTipService::SetToolTip(text, box_value(tip));
+        auto layer = AtFraction(text, marker.GetNamedNumber(L"at", 0));
+        Grid::SetRow(layer, 2);
+        bar.Children().Append(layer);
     }
 }
 // Whether a standing turret of the same side sits within 5% of the bar, too close for a second countdown label.

@@ -232,9 +232,33 @@ internal static class OverlayDetailPreview
         roster["liveRevision"] = "fixture-live-1";
         roster["liveSections"] = LivePanelSections.Build(input, id => $"布局装备 {id}");
         var waves = MinionWaveForecaster.Calculate(SampleWaves(), (long)roster["updatedAt"]!)!;
-        // The sample is Summoner's Rift, which gets no advice; a fixed one shows the Howling Abyss layout.
-        roster["waves"] = (waves with { DeathAdvice = SampleDeathAdvice() }).ToJson();
+        // The sample is Summoner's Rift, which gets no advice or turret rules; fixed ones show the Howling Abyss
+        // layout: the death advice and a fortified inner turret on the mid lane.
+        var lanes = waves.Lanes.Select(l =>
+            l.Name == "中路" ? l with { Progress = Fortified(l.Progress!, 846), Siege = SampleSiege() } : l
+        );
+        roster["waves"] = (waves with { DeathAdvice = SampleDeathAdvice(), Lanes = lanes.ToArray() }).ToJson();
     }
+
+    private static TurretSiege SampleSiege() =>
+        new("敌方二塔", 98, false, 40, 23.4, 199, 117.7, [262, 393, 524, 655], 3) { Fortification = 0.3 };
+
+    private static LaneProgress Fortified(LaneProgress progress, double now) =>
+        progress with
+        {
+            Markers = progress
+                .Markers.Select(m =>
+                    !m.Ally && m.Kind == LaneStructureKind.Inner
+                        ? m with
+                        {
+                            FortifiedUntil = now + 42,
+                            Fortification = 0.3,
+                            Details = ["满血 3900 · 攻击 361 · 护甲与魔抗 84", "一塔被破后 60 秒内受到伤害 −30%"],
+                        }
+                        : m
+                )
+                .ToArray(),
+        };
 
     private static DeathTimingAdvice SampleDeathAdvice()
     {

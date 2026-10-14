@@ -32,12 +32,32 @@ public static class MinionWaveForecaster
         int own = LiveMatchSnapshot.TeamId(snapshot.Players.FirstOrDefault(p => p.Self)?.Team ?? "") is 200 ? 200 : 100;
         var lanes = rules
             .Lanes.Lanes.Select(lane =>
-                ForecastLane(rules, lane, structures, spawns[0], own, snapshot.Time) with
+                ForecastLane(rules, lane, structures, spawns[0], own, snapshot.Time, first) with
                 {
-                    Progress = LaneProgressEstimator.Build(rules, lane, structures, recent.Concat(spawns), own),
+                    Progress = TurretInsight.Annotate(
+                        LaneProgressEstimator.Build(rules, lane, structures, recent.Concat(spawns), own),
+                        rules,
+                        lane,
+                        structures,
+                        own,
+                        snapshot
+                    ),
                 }
             )
             .ToArray();
+        if (rules.Turrets is { } turrets)
+        {
+            bool mayhem = snapshot.Mode.Equals("KIWI", StringComparison.OrdinalIgnoreCase);
+            var stats = snapshot.Active?.Stats;
+            lanes = lanes
+                .Select(l =>
+                    l with
+                    {
+                        Siege = TurretSiegeCalculator.Evaluate(turrets, l.Progress!, stats, snapshot.Time, mayhem),
+                    }
+                )
+                .ToArray();
+        }
         return new(rules.Name, snapshot.Time, clock, spawns, Notes(rules, snapshot.Time), Value(rules, spawns), lanes)
         {
             UnknownStructures = structures.Unknown.Distinct().ToArray(),
@@ -114,7 +134,8 @@ public static class MinionWaveForecaster
         LaneStructureState structures,
         WaveSpawn spawn,
         int own,
-        double now
+        double now,
+        double first
     )
     {
         int enemy = own == 100 ? 200 : 100;
@@ -122,7 +143,7 @@ public static class MinionWaveForecaster
             lane.Name,
             Arrive(rules, lane, structures, spawn, own, enemy, "敌方"),
             Arrive(rules, lane, structures, spawn, enemy, own, "我方"),
-            DescribeStructures(rules, lane, structures, own, now)
+            DescribeStructures(rules, lane, structures, own, now, first)
         );
     }
 
@@ -164,7 +185,8 @@ public static class MinionWaveForecaster
         MinionLane lane,
         LaneStructureState structures,
         int own,
-        double now
+        double now,
+        double first
     )
     {
         var parts = new List<string>();
@@ -182,7 +204,19 @@ public static class MinionWaveForecaster
                     ? $"我方小水晶被破 · 敌方每波 +{extra} 超级兵"
                     : $"敌方小水晶被破 · 我方每波 +{extra} 超级兵";
             double? back = since + rules.InhibitorRespawn;
-            parts.Add(text + (back > now ? $" · 约 {Clock(back.Value)} 重生" : ""));
+            if (back > now)
+            {
+                text += $" · 约 {Clock(back.Value)} 重生";
+            }
+            else if (rules.SuperWaves is int waves)
+            {
+                int spawned = Spawns(rules, first)
+                    .SkipWhile(s => s.Time <= since)
+                    .TakeWhile(s => s.Time <= now)
+                    .Count();
+                text += waves > spawned ? $" · 超级兵约还剩 {waves - spawned} 波" : " · 超级兵约已出完";
+            }
+            parts.Add(text);
         }
         return string.Join("；", parts);
     }

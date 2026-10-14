@@ -13,13 +13,17 @@ namespace League.Models;
 /// </summary>
 public sealed partial class LaneStructureState
 {
-    private readonly Dictionary<(int Team, string Lane), int> _turrets = new();
+    private readonly Dictionary<(int Team, string Lane), List<double>> _turrets = new();
     private readonly Dictionary<(int Team, string Lane), double?> _inhibitors = new();
     private readonly Dictionary<int, int> _nexusTurrets = new();
 
     public List<string> Unknown { get; } = new();
 
-    public int TurretsDown(int team, string lane) => _turrets.GetValueOrDefault((team, lane));
+    public int TurretsDown(int team, string lane) => _turrets.GetValueOrDefault((team, lane))?.Count ?? 0;
+
+    /// <summary>The game time a lane turret fell, counted from the outermost; null while it stands.</summary>
+    public double? TurretFellAt(int team, string lane, int index) =>
+        _turrets.TryGetValue((team, lane), out var times) && index < times.Count ? times[index] : null;
 
     /// <summary>The game time the inhibitor fell, or null while it stands.</summary>
     public double? InhibitorDownSince(int team, string lane) => _inhibitors.GetValueOrDefault((team, lane));
@@ -36,7 +40,7 @@ public sealed partial class LaneStructureState
             switch (e.Name)
             {
                 case "TurretKilled":
-                    state.ApplyTurret(e.Structure, singleLane);
+                    state.ApplyTurret(e.Structure, singleLane, e.Time);
                     break;
                 case "InhibKilled":
                     state.ApplyInhibitor(e.Structure, singleLane, e.Time);
@@ -49,7 +53,7 @@ public sealed partial class LaneStructureState
         return state;
     }
 
-    private void ApplyTurret(string name, bool singleLane)
+    private void ApplyTurret(string name, bool singleLane, double time)
     {
         if (ParseTurret(name, singleLane) is not { } turret)
         {
@@ -61,9 +65,13 @@ public sealed partial class LaneStructureState
         {
             _nexusTurrets[turret.Team] = NexusTurretsDown(turret.Team) + 1;
         }
+        else if (_turrets.TryGetValue((turret.Team, turret.Lane), out var times))
+        {
+            times.Add(time);
+        }
         else
         {
-            _turrets[(turret.Team, turret.Lane)] = TurretsDown(turret.Team, turret.Lane) + 1;
+            _turrets[(turret.Team, turret.Lane)] = [time];
         }
     }
 
