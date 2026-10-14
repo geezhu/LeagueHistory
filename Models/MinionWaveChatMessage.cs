@@ -52,7 +52,7 @@ public static class MinionWaveChatMessage
             .ToArray();
         return lines.Length > 0
             ? lines.Select(l => "超级兵：" + l).ToArray()
-            : throw new InvalidOperationException("未发送：目前没有被破的水晶。");
+            : throw new InvalidOperationException("未发送：目前没有被破的小水晶。");
     }
 
     private static IReadOnlyList<string> DeathLines(MinionWaveForecast forecast)

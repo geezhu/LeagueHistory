@@ -5,6 +5,12 @@ namespace League.Models;
 public sealed record WaveSpawn(int Number, double Time, int Melee, int Caster, int Siege)
 {
     public int Count => Melee + Caster + Siege;
+
+    /// <summary>Bounty of the whole wave at its upgrade level; set for the upcoming waves sent to the widget.</summary>
+    public double Gold { get; init; }
+
+    /// <summary>Experience of the whole wave; per-minion experience does not grow, so only the mix changes it.</summary>
+    public double Experience { get; init; }
 }
 
 /// <summary>When the first and last minion of a wave reach a structure if nothing stops them.</summary>
@@ -19,10 +25,25 @@ public sealed record LaneWaveForecast(string Name, WaveArrival Ally, WaveArrival
 public sealed record LaneMarker(double At, string Label, bool Ally, bool Alive);
 
 /// <summary>
-/// What the widget needs to move the latest waves along the lane: both teams spawn together at opposite
-/// inhibitors, so without interference they meet halfway. <see cref="Hint"/> reads the lane from structures.
+/// One wave on a lane, for timetables at any point: both teams spawn it together at opposite inhibitors and walk
+/// at <see cref="Speed"/>; <see cref="Bonus"/> is the extra distance from the early side-lane speed bonus.
 /// </summary>
-public sealed record LaneProgress(double Length, double Speed, double Bonus, LaneMarker[] Markers, string Hint);
+public sealed record LaneWave(int Number, double Time, double Speed, double Bonus, bool Cannon);
+
+/// <summary>
+/// What the widget needs to time waves at a stop the user picks on the lane: recent and upcoming waves, the
+/// structures along it, and <see cref="Hint"/>, which reads the lane from the structures each side has lost.
+/// The bar runs nexus to nexus over <see cref="Length"/> units; waves spawn at the nexus, at fractions
+/// <see cref="Spawn"/> (own) and <see cref="EnemySpawn"/> of the bar.
+/// </summary>
+public sealed record LaneProgress(
+    double Length,
+    double Spawn,
+    double EnemySpawn,
+    LaneWave[] Waves,
+    LaneMarker[] Markers,
+    string Hint
+);
 
 /// <summary>How long a champion would stay dead if it died now, from its level and the game time.</summary>
 public sealed record DeathCost(bool Ally, string Champion, int Level, double Seconds, bool Self);
@@ -65,6 +86,8 @@ public sealed record MinionWaveForecast(
                     ["time"] = Math.Round(s.Time, 2),
                     ["siege"] = s.Siege,
                     ["label"] = s.Siege > 0 ? "炮车波" : "普通波",
+                    ["gold"] = Math.Round(s.Gold),
+                    ["xp"] = Math.Round(s.Experience),
                 })
             ),
             ["notes"] = new JArray(Notes),
@@ -102,9 +125,19 @@ public sealed record MinionWaveForecast(
             : new JObject
             {
                 ["length"] = Math.Round(progress.Length),
-                ["speed"] = progress.Speed,
-                ["bonus"] = Math.Round(progress.Bonus),
+                ["spawn"] = Math.Round(progress.Spawn, 4),
+                ["enemySpawn"] = Math.Round(progress.EnemySpawn, 4),
                 ["hint"] = progress.Hint,
+                ["waves"] = new JArray(
+                    progress.Waves.Select(w => new JObject
+                    {
+                        ["wave"] = w.Number,
+                        ["time"] = Math.Round(w.Time, 2),
+                        ["speed"] = w.Speed,
+                        ["bonus"] = Math.Round(w.Bonus),
+                        ["cannon"] = w.Cannon,
+                    })
+                ),
                 ["markers"] = new JArray(
                     progress.Markers.Select(m => new JObject
                     {

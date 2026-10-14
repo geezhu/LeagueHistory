@@ -116,11 +116,18 @@ internal static class MinionWaveChecks
         var forecast = MinionWaveForecaster.Calculate(Game("CLASSIC", 11, 31, "ORDER"), 0)!;
         var mid = forecast.Lanes.Single(l => l.Name == "中路");
         // Wave 2 spawns at 1:00; 7804 units to the red outer turret at 350 speed is about 22.3 seconds.
-        Check(Math.Abs(mid.Ally.From - (60 + 7804 / 350.0)) < 0.01 && mid.Ally.Target == "敌方一塔", "Mid arrival");
+        // Waves spawn at the nexus: 1717 + 560 units behind the blue inhibitor, 1710 + 560 behind the red one.
+        Check(
+            Math.Abs(mid.Ally.From - (60 + (7804 + 1717 + 560) / 350.0)) < 0.01 && mid.Ally.Target == "敌方一塔",
+            "Mid arrival"
+        );
         Check(Math.Abs(mid.Ally.To - mid.Ally.From - 5 * 0.8) < 0.01, "Six minions arrive over four seconds");
-        Check(Math.Abs(mid.Enemy.From - (60 + 7791 / 350.0)) < 0.01 && mid.Enemy.Target == "我方一塔", "Enemy wave");
+        Check(
+            Math.Abs(mid.Enemy.From - (60 + (7791 + 1710 + 560) / 350.0)) < 0.01 && mid.Enemy.Target == "我方一塔",
+            "Enemy wave"
+        );
         var top = forecast.Lanes.Single(l => l.Name == "上路");
-        Check(top.Ally.From < 60 + 13138 / 350.0, "The side-lane bonus speeds up early side waves");
+        Check(top.Ally.From < 60 + (13138 + 1735 + 560) / 350.0, "The side-lane bonus speeds up early side waves");
 
         var red = MinionWaveForecaster.Calculate(Game("CLASSIC", 11, 31, "CHAOS"), 0)!;
         Check(red.Lanes.Single(l => l.Name == "中路").Ally.Target == "敌方一塔", "Red sees its own wave as ally");
@@ -133,7 +140,7 @@ internal static class MinionWaveChecks
 
         var sample = MinionWaveForecaster.Calculate(OverlayDetailPreview.SampleWaves(), 0)!;
         var lane = sample.Lanes.Single(l => l.Name == "下路");
-        Check(lane.Structures.Contains("敌方水晶被破") && lane.Structures.Contains("18:00 重生"), "Inhibitor note");
+        Check(lane.Structures.Contains("敌方小水晶被破") && lane.Structures.Contains("18:00 重生"), "Inhibitor note");
         Check(sample.Notes.Any(n => n.Contains("每 25 秒一波")), "The current interval is described");
     }
 
@@ -217,7 +224,7 @@ internal static class MinionWaveChecks
         Check(
             MinionWaveChatMessage
                 .Build(sample, "super", 100000)
-                .SequenceEqual(["超级兵：下路 敌方水晶被破 · 我方每波 +1 超级兵 · 约 18:00 重生"]),
+                .SequenceEqual(["超级兵：下路 敌方小水晶被破 · 我方每波 +1 超级兵 · 约 18:00 重生"]),
             "Super minion line names the lane"
         );
         var deaths = MinionWaveChatMessage.Build(sample, "deaths", 100000);
@@ -256,16 +263,29 @@ internal static class MinionWaveChecks
         var sample = MinionWaveForecaster.Calculate(OverlayDetailPreview.SampleWaves(), 0)!;
         Check(sample.Current is { Number: 28, Time: 840 }, "The latest spawned wave is the current one");
         var mid = sample.Lanes.Single(l => l.Name == "中路").Progress!;
+        Check(mid.Markers.Length == 12, "Mid lane has twelve structures with the nexus turrets and nexus");
         Check(
-            mid.Markers.Length == 8 && mid.Speed == 375 && mid.Bonus == 0,
-            "Mid lane has eight structures, 375 speed"
+            mid.Waves.Select(w => w.Number).SequenceEqual([27, 28, 29, 30, 31, 32])
+                && mid.Waves[1] is { Speed: 375, Bonus: 0, Cannon: false }
+                && mid.Waves[2].Cannon,
+            "Two walking waves and four upcoming ones, with speed and cannon flags"
         );
         var ownOuter = mid.Markers.Single(m => m.Label == "我方一塔");
         Check(
-            !ownOuter.Alive && Math.Abs(ownOuter.At - 4113 / 11904.0) < 1e-4,
-            "Own outer turret fallen, own side left"
+            !ownOuter.Alive && Math.Abs(ownOuter.At - (4113 + 1717 + 560) / 16451.0) < 1e-4,
+            "Own outer turret fallen, measured on the nexus-to-nexus bar"
         );
-        Check(mid.Markers.First().Label == "我方水晶" && mid.Markers.Last().Label == "敌方水晶", "Own inhibitor at 0");
+        Check(
+            mid.Markers.First().Label == "我方大水晶"
+                && mid.Markers.Last().Label == "敌方大水晶"
+                && mid.Markers[1].Label == "我方门牙塔（剩 2 座）"
+                && mid.Markers[2].Label == "我方小水晶",
+            "The bar runs nexus to nexus with nexus turrets and inhibitors inside"
+        );
+        Check(
+            Math.Abs(mid.Length - 16451) < 1 && mid.Spawn == 0 && mid.EnemySpawn == 1,
+            "Waves spawn at the nexus at both ends of the bar"
+        );
         Check(mid.Hint.Contains("我方半场"), "Losing a turret suggests the lane sits on the own half");
         Check(sample.Lanes.Single(l => l.Name == "下路").Progress!.Hint.Contains("敌方高地"), "Fallen enemy inhibitor");
         Check(sample.Lanes.Single(l => l.Name == "上路").Progress!.Hint.Contains("无法"), "No structures, no guess");
@@ -273,16 +293,34 @@ internal static class MinionWaveChecks
         var red = MinionWaveForecaster.Calculate(Game("CLASSIC", 11, 75, "CHAOS"), 0)!;
         var redMid = red.Lanes.Single(l => l.Name == "中路").Progress!;
         Check(
-            redMid.Markers.First().Label == "我方水晶" && Math.Abs(redMid.Markers[1].At - 651 / 11904.0) < 1e-4,
+            redMid.Markers[2].Label == "我方小水晶"
+                && Math.Abs(redMid.Markers[2].At - (1710 + 560) / 16451.0) < 1e-4
+                && Math.Abs(redMid.Markers[3].At - (1710 + 560 + 651) / 16451.0) < 1e-4,
             "Red sees its own base on the left"
         );
-        Check(red.Lanes.Single(l => l.Name == "上路").Progress!.Bonus > 0, "Early side-lane waves carry their bonus");
+        Check(
+            red.Lanes.Single(l => l.Name == "上路").Progress!.Waves.All(w => w.Number < 2 || w.Bonus > 0)
+                && redMid.Waves.All(w => w.Bonus == 0),
+            "Early side-lane waves carry their bonus, mid waves none"
+        );
         var json = (JObject)sample.ToJson()["lanes"]![1]!["progress"]!;
         Check(
-            ((JArray)json["markers"]!).Count == 8 && (string?)json["hint"] == mid.Hint,
+            ((JArray)json["markers"]!).Count == 12
+                && (double?)json["enemySpawn"] == 1
+                && (string?)json["hint"] == mid.Hint
+                && (int?)json["waves"]?[2]?["wave"] == 29
+                && (bool?)json["waves"]?[2]?["cannon"] == true,
             "Progress travels to the widget"
         );
         Check((int?)sample.ToJson()["current"]?["wave"] == 28, "The current wave travels to the widget");
+        var spawns = (JArray)sample.ToJson()["spawns"]!;
+        Check(
+            (int?)spawns[0]!["gold"] == 141
+                && (int?)spawns[0]!["xp"] == 292
+                && (int?)spawns[1]!["gold"] == 102
+                && (int?)spawns[1]!["xp"] == 279,
+            "Each upcoming wave carries its gold and experience"
+        );
         Check(
             MinionWaveForecaster.Calculate(Game("ARAM", 12, 10, "ORDER"), 0)!.Current == null,
             "Before the first wave"

@@ -4,10 +4,14 @@ StackPanel waveBody;
 ScrollViewer waveScroll;
 Button waveButton;
 TextBlock waveTitle = MakeText(L"兵线", 20, 0xe9d8a6);
+TextBlock waveRules = MakeText(L"", 12, 0xdbc47f);
 JsonObject waves;
 bool waveOpen = false;
 int waveReturnCard = -1;
 int64_t waveRenderedSecond = -1;
+// The chosen stop per lane as a fraction from the own inhibitor; negative means the default stop.
+std::array<double, 3> waveStops{-1, -1, -1};
+bool waveRenderPending = false;
 static constexpr int64_t WaveStaleMilliseconds = 5000;
 
 void InitializeWaves()
@@ -29,6 +33,10 @@ void InitializeWaves()
     navigation.Children().Append(back);
     waveTitle.VerticalAlignment(VerticalAlignment::Center);
     navigation.Children().Append(waveTitle);
+    // Current and upcoming wave rules sit beside the title instead of taking lines of their own.
+    waveRules.VerticalAlignment(VerticalAlignment::Center);
+    waveRules.Margin({16, 2, 0, 0});
+    navigation.Children().Append(waveRules);
     waveRoot.Children().Append(navigation);
     waveScroll.Content(waveBody);
     waveScroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
@@ -108,6 +116,24 @@ void UpdateWaves()
         }
     }
 }
+// A tap must not rebuild the bar while its Tapped event is still routing: clearing the page there destroys the
+// sender and crashed the widget on repeated taps. The rebuild runs after the event, once per burst of taps.
+void RequestWaveRender()
+{
+    waveRenderedSecond = -1;
+    if (waveRenderPending)
+        return;
+    waveRenderPending = true;
+    root.Dispatcher().RunAsync(Windows::UI::Core::CoreDispatcherPriority::Low,
+                               [weak = weak_from_this()]
+                               {
+                                   if (auto self = weak.lock())
+                                   {
+                                       self->waveRenderPending = false;
+                                       self->UpdateWaves();
+                                   }
+                               });
+}
 void OpenWaves()
 {
     if (!HasWaves())
@@ -157,85 +183,104 @@ void RenderWaves(double now)
 {
     waveBody.Children().Clear();
     waveTitle.Text(L"兵线 · " + waves.GetNamedString(L"map", L""));
+    waveRules.Text(L"");
     if (now < 0)
     {
         AddWaveLine(L"等待游戏数据…（超过 5 秒未更新时暂停倒计时）", 13, 0x91acbb);
         return;
     }
-    AddWaveLine(L"按游戏时间推算；到达时间为无人干扰时的估计，不代表兵线实际位置。", 12, 0x91acbb);
     RenderWaveSpawns(now);
     RenderWaveLanes(now);
     RenderDeathCosts();
 }
+// Upcoming waves as cards, like departures on a timetable: countdown, kind, gold and experience.
 void RenderWaveSpawns(double now)
 {
-    AddWaveHeading(L"出波");
-    auto next = NextWave(now);
-    if (next)
-    {
-        AddWaveLine(L"下一波 " + WaveCountdown(next.GetNamedNumber(L"time", 0) - now) + L" · 第 " +
-                        to_hstring(static_cast<int>(next.GetNamedNumber(L"wave", 0))) + L" 波 · " +
-                        next.GetNamedString(L"label", L""),
-                    18,
-                    0x7ff0ee);
-    }
-    std::wstring later;
+    std::wstring rules;
+    for (auto const &note : waves.GetNamedArray(L"notes", JsonArray()))
+        rules += (rules.empty() ? L"" : L" · ") + std::wstring(note.GetString());
+    waveRules.Text(hstring(rules));
+    Grid row;
+    row.Margin({0, 0, 0, 8});
+    int column = 0;
     for (auto const &value : waves.GetNamedArray(L"spawns", JsonArray()))
     {
         auto spawn = value.GetObject();
         double time = spawn.GetNamedNumber(L"time", 0);
-        if (time <= now || (next && time == next.GetNamedNumber(L"time", 0)))
+        if (time <= now || column >= 4)
             continue;
-        later += (later.empty() ? L"" : L"   ") + std::wstring(WaveClock(time)) + L" " +
-                 std::wstring(spawn.GetNamedString(L"label", L""));
+        row.ColumnDefinitions().Append(ColumnDefinition());
+        auto card = CreateSpawnCard(spawn, time - now, column == 0);
+        card.Margin({0, 0, 6, 0});
+        Grid::SetColumn(card, column++);
+        row.Children().Append(card);
     }
-    if (!later.empty())
-        AddWaveLine(L"之后 " + hstring(later), 12, 0xa4bcc7);
-    for (auto const &note : waves.GetNamedArray(L"notes", JsonArray()))
-        AddWaveLine(note.GetString(), 12, 0xdbc47f);
-    auto value = waves.GetNamedString(L"value", L"");
-    if (!value.empty())
-        AddWaveLine(L"每波价值 · " + value, 12, 0xa4bcc7);
+    waveBody.Children().Append(row);
 }
-hstring WaveArrivalText(hstring const &side, JsonObject const &arrival, double now)
+Border CreateSpawnCard(JsonObject const &spawn, double seconds, bool next)
 {
-    double from = arrival.GetNamedNumber(L"from", 0), to = arrival.GetNamedNumber(L"to", 0);
-    hstring when = from > now ? WaveCountdown(from - now) + L" 后"
-                   : to > now ? hstring(L"正在到达")
-                              : hstring(L"已到达");
-    return side + L" → " + arrival.GetNamedString(L"target", L"") + L"   约 " + WaveClock(from) + L"–" + WaveClock(to) +
-           L"（" + when + L"）";
+    bool cannon = spawn.GetNamedNumber(L"siege", 0) > 0;
+    StackPanel body;
+    body.Children().Append(
+        MakeText(L"第 " + to_hstring(static_cast<int>(spawn.GetNamedNumber(L"wave", 0))) + L" 波", 11, 0x91acbb));
+    auto countdown = MakeText(WaveCountdown(seconds), next ? 22 : 17, next ? 0x7ff0ee : 0xe2eef3);
+    countdown.FontWeight(Windows::UI::Text::FontWeights::SemiBold());
+    body.Children().Append(countdown);
+    body.Children().Append(MakeText(cannon ? L"炮车波" : L"普通波", 12, cannon ? 0xffd27a : 0xa4bcc7));
+    body.Children().Append(MakeText(to_hstring(static_cast<int>(spawn.GetNamedNumber(L"gold", 0))) + L" 金 · " +
+                                        to_hstring(static_cast<int>(spawn.GetNamedNumber(L"xp", 0))) + L" 经验",
+                                    11,
+                                    0x91acbb));
+    Border card;
+    card.Child(body);
+    card.Background(MakeBrush(next ? 0x163f4b : 0x112f3c));
+    card.BorderBrush(MakeBrush(cannon ? 0x8a6d2f : 0x23505c));
+    card.BorderThickness({next ? 2.0 : 1.0});
+    card.Padding({10, 6, 10, 6});
+    return card;
 }
 void RenderWaveLanes(double now)
 {
-    AddWaveHeading(L"各路兵线 · 当前进度与下一波到塔时间");
+    auto heading = MakeText(L"兵线 · 点击进度条选择停靠点", 15, 0xe0c688);
+    heading.Margin({0, 4, 0, 6});
+    ToolTipService::SetToolTip(heading,
+                               box_value(L"位置与到达时间按游戏时间推算，不代表实际兵线：游戏接口不提供小兵位置。"));
+    waveBody.Children().Append(heading);
+    int index = 0;
     for (auto const &value : waves.GetNamedArray(L"lanes", JsonArray()))
     {
-        auto lane = value.GetObject();
-        StackPanel card;
-        card.Background(MakeBrush(0x112f3c));
-        card.Padding({10, 6, 10, 6});
-        card.Margin({0, 0, 0, 6});
-        card.Children().Append(MakeText(lane.GetNamedString(L"name", L""), 14, 0xe9d8a6));
-        auto progress = lane.TryLookup(L"progress");
-        if (progress && progress.ValueType() == JsonValueType::Object)
-            RenderLaneProgress(card, progress.GetObject(), now);
-        auto ally =
-            MakeText(WaveArrivalText(L"我方兵线", lane.GetNamedObject(L"ally", JsonObject()), now), 13, 0x45c7ce);
-        auto enemy =
-            MakeText(WaveArrivalText(L"敌方兵线", lane.GetNamedObject(L"enemy", JsonObject()), now), 13, 0xf3b37e);
-        card.Children().Append(ally);
-        card.Children().Append(enemy);
-        auto structures = lane.GetNamedString(L"structures", L"");
-        if (!structures.empty())
-        {
-            auto text = MakeText(structures, 12, 0xff8a7a);
-            text.TextWrapping(TextWrapping::Wrap);
-            card.Children().Append(text);
-        }
-        waveBody.Children().Append(card);
+        if (index < static_cast<int>(waveStops.size()))
+            RenderWaveLane(value.GetObject(), index, now);
+        ++index;
     }
 }
+// The drawn lane runs nexus turrets to nexus turrets; waves spawn at the inhibitors inside it. Converts bar
+// fractions to the distance each side's waves walk from their own inhibitor, and back.
+struct LaneSpan
+{
+    double length = 0, spawn = 0, enemySpawn = 1;
+    explicit LaneSpan(JsonObject const &progress)
+        : length(progress.GetNamedNumber(L"length", 0)), spawn(progress.GetNamedNumber(L"spawn", 0)),
+          enemySpawn(progress.GetNamedNumber(L"enemySpawn", 1))
+    {
+    }
+    double AllyDistance(double at) const
+    {
+        return (at - spawn) * length;
+    }
+    double EnemyDistance(double at) const
+    {
+        return (enemySpawn - at) * length;
+    }
+    double AllyAt(double walked) const
+    {
+        return spawn + walked / length;
+    }
+    double EnemyAt(double walked) const
+    {
+        return enemySpawn - walked / length;
+    }
+};
 // A child placed at a fraction of the bar with star columns, so it follows resizes without a Canvas.
 static Grid AtFraction(UIElement const &child, double at)
 {
@@ -252,18 +297,199 @@ static Grid AtFraction(UIElement const &child, double at)
     layer.Children().Append(child);
     return layer;
 }
-// Own inhibitor on the left, enemy on the right; both latest waves walk toward the middle in game time.
-void RenderLaneProgress(StackPanel const &card, JsonObject const &progress, double now)
+// Without a chosen stop, waves meet halfway between each side's outermost standing structure.
+static double DefaultStop(JsonArray const &markers)
+{
+    double ally = 0, enemy = 1;
+    for (auto const &value : markers)
+    {
+        auto marker = value.GetObject();
+        if (!marker.GetNamedBoolean(L"alive", true))
+            continue;
+        double at = marker.GetNamedNumber(L"at", 0);
+        if (marker.GetNamedBoolean(L"ally", false))
+            ally = (std::max)(ally, at);
+        else
+            enemy = (std::min)(enemy, at);
+    }
+    return (ally + enemy) / 2;
+}
+// A tap near a structure stops at the structure itself, so a turret's timetable is one tap away.
+static double SnapStop(JsonArray const &markers, double at)
+{
+    for (auto const &value : markers)
+    {
+        double marker = value.GetObject().GetNamedNumber(L"at", 0);
+        if (std::abs(marker - at) <= 0.03)
+            return marker;
+    }
+    return at;
+}
+static hstring StopLabel(JsonArray const &markers, double at, bool chosen)
+{
+    for (auto const &value : markers)
+    {
+        auto marker = value.GetObject();
+        if (std::abs(marker.GetNamedNumber(L"at", 0) - at) <= 0.002)
+            return marker.GetNamedString(L"label", L"") +
+                   (marker.GetNamedBoolean(L"alive", true) ? L"" : L"（已被摧毁）");
+    }
+    return chosen ? L"自选位置 · 距我方水晶 " + to_hstring(static_cast<int>(at * 100 + .5)) + L"%"
+                  : hstring(L"双方前塔中点（默认）");
+}
+void RenderWaveLane(JsonObject const &lane, int index, double now)
+{
+    StackPanel card;
+    card.Background(MakeBrush(0x112f3c));
+    card.Padding({10, 6, 10, 6});
+    card.Margin({0, 0, 0, 6});
+    auto progressValue = lane.TryLookup(L"progress");
+    auto progress =
+        progressValue && progressValue.ValueType() == JsonValueType::Object ? progressValue.GetObject() : JsonObject();
+    auto markers = progress.GetNamedArray(L"markers", JsonArray());
+    LaneSpan span(progress);
+    bool chosen = waveStops[index] >= 0;
+    double stop = chosen ? waveStops[index] : DefaultStop(markers);
+    card.Children().Append(CreateLaneHeader(lane.GetNamedString(L"name", L""), markers, index, stop, chosen));
+    if (span.length > 0)
+    {
+        card.Children().Append(CreateLaneBar(progress, markers, index, stop, now));
+        auto timetable = progress.GetNamedArray(L"waves", JsonArray());
+        card.Children().Append(CreateStopRow(timetable, span, stop, now));
+    }
+    // An inference only helps when structures have fallen; "no structures lost" is left out.
+    auto hint = progress.GetNamedString(L"hint", L"");
+    if (!hint.empty() && std::wstring_view(hint).find(L"无法") == std::wstring_view::npos)
+        card.Children().Append(MakeText(hint, 12, 0xdbc47f));
+    auto structures = lane.GetNamedString(L"structures", L"");
+    if (!structures.empty())
+    {
+        auto text = MakeText(structures, 12, 0xff8a7a);
+        text.TextWrapping(TextWrapping::Wrap);
+        card.Children().Append(text);
+    }
+    waveBody.Children().Append(card);
+}
+// The lane name on the left; the stop and its reset on the right, where a timetable names its station.
+Grid CreateLaneHeader(hstring const &name, JsonArray const &markers, int index, double stop, bool chosen)
+{
+    Grid header;
+    header.ColumnDefinitions().Append(ColumnDefinition());
+    ColumnDefinition stopColumn;
+    stopColumn.Width({1, GridUnitType::Auto});
+    header.ColumnDefinitions().Append(stopColumn);
+    header.Children().Append(MakeText(name, 14, 0xe9d8a6));
+    StackPanel right;
+    right.Orientation(Orientation::Horizontal);
+    right.VerticalAlignment(VerticalAlignment::Center);
+    right.Children().Append(MakeText(L"停靠：" + StopLabel(markers, stop, chosen), 12, 0xa4bcc7));
+    if (chosen)
+    {
+        auto reset = MakeText(L"  ↺", 14, 0x7ff0ee);
+        ToolTipService::SetToolTip(reset, box_value(L"恢复默认停靠点"));
+        reset.Tapped(
+            [this, index](auto &&, Windows::UI::Xaml::Input::TappedRoutedEventArgs const &e)
+            {
+                e.Handled(true);
+                waveStops[index] = -1;
+                RequestWaveRender();
+            });
+        right.Children().Append(reset);
+    }
+    Grid::SetColumn(right, 1);
+    header.Children().Append(right);
+    return header;
+}
+// When a wave reaches a distance from its own inhibitor if nothing stops it; negative without a speed.
+static double WaveArrival(JsonObject const &wave, double distance)
+{
+    double speed = wave.GetNamedNumber(L"speed", 0);
+    return speed <= 0
+               ? -1
+               : wave.GetNamedNumber(L"time", 0) + (std::max)(0.0, distance - wave.GetNamedNumber(L"bonus", 0)) / speed;
+}
+// A wave spreads over about five seconds as its minions arrive one by one.
+static constexpr double WaveArrivalSpread = 5;
+// The next wave of each side at the stop on one line: own on the left, enemy on the right, like the bar.
+Grid CreateStopRow(JsonArray const &timetable, LaneSpan const &span, double stop, double now)
+{
+    Grid row;
+    row.Margin({0, 2, 0, 2});
+    row.ColumnDefinitions().Append(ColumnDefinition());
+    row.ColumnDefinitions().Append(ColumnDefinition());
+    ToolTipService::SetToolTip(row, box_value(L"双方下一波兵到 ◆ 停靠点的时间；点击进度条可移动停靠点。"));
+    for (bool ally : {true, false})
+    {
+        uint32_t color = ally ? 0x45c7ce : 0xf3b37e;
+        StackPanel side;
+        side.Orientation(Orientation::Horizontal);
+        side.HorizontalAlignment(ally ? HorizontalAlignment::Left : HorizontalAlignment::Right);
+        auto name = MakeText(ally ? L"我方 →" : L"← 敌方", 13, color);
+        name.VerticalAlignment(VerticalAlignment::Center);
+        name.Margin({ally ? 0.0 : 6.0, 0, ally ? 6.0 : 0.0, 0});
+        auto chip = CreateArrivalChip(timetable, ally ? span.AllyDistance(stop) : span.EnemyDistance(stop), now);
+        if (ally)
+        {
+            side.Children().Append(name);
+            side.Children().Append(chip);
+        }
+        else
+        {
+            side.Children().Append(chip);
+            side.Children().Append(name);
+        }
+        Grid::SetColumn(side, ally ? 0 : 1);
+        row.Children().Append(side);
+    }
+    return row;
+}
+// The first wave not yet past a distance: its countdown, "到达中" while its minions arrive, and a cannon mark.
+static Border CreateArrivalChip(JsonArray const &timetable, double distance, double now)
+{
+    hstring text = L"—";
+    bool cannon = false;
+    for (auto const &value : timetable)
+    {
+        auto wave = value.GetObject();
+        double arrive = WaveArrival(wave, distance);
+        if (arrive < 0 || arrive + WaveArrivalSpread <= now)
+            continue;
+        cannon = wave.GetNamedBoolean(L"cannon", false);
+        text = arrive > now ? WaveCountdown(arrive - now) : hstring(L"到达中");
+        break;
+    }
+    Border chip;
+    chip.Child(MakeText(cannon ? text + L" 炮车" : text, 13, cannon ? 0xffd27a : 0xe2eef3));
+    chip.Background(MakeBrush(0x143542));
+    chip.CornerRadius({3, 3, 3, 3});
+    chip.Padding({8, 1, 8, 1});
+    chip.VerticalAlignment(VerticalAlignment::Center);
+    return chip;
+}
+// Own inhibitor on the left, enemy on the right; walking waves stop at the chosen stop, where they would fight.
+Grid CreateLaneBar(JsonObject const &progress, JsonArray const &markers, int index, double stop, double now)
 {
     Grid bar;
-    bar.Height(22);
-    bar.Margin({0, 4, 0, 2});
+    bar.Margin({0, 2, 0, 2});
+    // A background makes the whole bar hit-testable, not only its markers.
+    bar.Background(MakeBrush(0x112f3c));
+    // Row 0 holds the countdowns above the turrets; row 1 the track, structures and waves.
+    RowDefinition labels, lane;
+    labels.Height({16, GridUnitType::Pixel});
+    lane.Height({24, GridUnitType::Pixel});
+    bar.RowDefinitions().Append(labels);
+    bar.RowDefinitions().Append(lane);
+    auto place = [&bar](FrameworkElement const &element, int row)
+    {
+        Grid::SetRow(element, row);
+        bar.Children().Append(element);
+    };
     Border track;
     track.Height(4);
     track.Background(MakeBrush(0x1d4c57));
     track.VerticalAlignment(VerticalAlignment::Center);
-    bar.Children().Append(track);
-    for (auto const &value : progress.GetNamedArray(L"markers", JsonArray()))
+    place(track, 1);
+    for (auto const &value : markers)
     {
         auto marker = value.GetObject();
         bool ally = marker.GetNamedBoolean(L"ally", false), alive = marker.GetNamedBoolean(L"alive", true);
@@ -271,36 +497,102 @@ void RenderLaneProgress(StackPanel const &card, JsonObject const &progress, doub
         text.VerticalAlignment(VerticalAlignment::Center);
         ToolTipService::SetToolTip(text,
                                    box_value(marker.GetNamedString(L"label", L"") + (alive ? L"" : L"（已被摧毁）")));
-        bar.Children().Append(AtFraction(text, marker.GetNamedNumber(L"at", 0)));
+        place(AtFraction(text, marker.GetNamedNumber(L"at", 0)), 1);
     }
-    auto current = waves.TryLookup(L"current");
-    double length = progress.GetNamedNumber(L"length", 1), speed = progress.GetNamedNumber(L"speed", 1);
-    double bonus = progress.GetNamedNumber(L"bonus", 0), half = length / 2;
-    std::wstring line = L"首波尚未出发";
-    if (current && current.ValueType() == JsonValueType::Object && length > 0 && speed > 0)
+    LaneSpan span(progress);
+    PlaceTurretCountdowns(progress.GetNamedArray(L"waves", JsonArray()), markers, span, stop, now, place);
+    for (auto const &value : progress.GetNamedArray(L"waves", JsonArray()))
     {
-        auto wave = current.GetObject();
-        double start = wave.GetNamedNumber(L"time", 0), elapsed = now - start;
-        double walked = elapsed > 0 ? (std::min)(half, speed * elapsed + bonus) : 0;
-        double meet = start + (std::max)(0.0, half - bonus) / speed;
-        int number = static_cast<int>(wave.GetNamedNumber(L"wave", 0));
+        auto wave = value.GetObject();
+        double elapsed = now - wave.GetNamedNumber(L"time", 0);
+        if (elapsed <= 0)
+            continue;
+        double walked = wave.GetNamedNumber(L"speed", 0) * elapsed + wave.GetNamedNumber(L"bonus", 0);
         for (bool ally : {true, false})
         {
-            auto dot = MakeText(L"●", 22, ally ? 0x45c7ce : 0xf3b37e);
+            // A wave stops at the chosen stop, where it would meet the other side's wave.
+            double reach = (std::max)(0.0, ally ? span.AllyDistance(stop) : span.EnemyDistance(stop));
+            double travelled = (std::min)(walked, reach);
+            auto dot = MakeText(L"●", 20, ally ? 0x45c7ce : 0xf3b37e);
             dot.VerticalAlignment(VerticalAlignment::Center);
-            bar.Children().Append(AtFraction(dot, ally ? walked / length : 1 - walked / length));
+            place(AtFraction(dot, ally ? span.AllyAt(travelled) : span.EnemyAt(travelled)), 1);
         }
-        line = walked < half
-                   ? L"第 " + std::to_wstring(number) + L" 波已出发 " + std::to_wstring(static_cast<int>(elapsed)) +
-                         L" 秒 · 约 " + std::wstring(WaveClock(meet)) + L" 在路中间相遇"
-                   : L"第 " + std::to_wstring(number) + L" 波约 " + std::wstring(WaveClock(meet)) +
-                         L" 在路中间相遇，交战中";
     }
-    card.Children().Append(bar);
-    card.Children().Append(MakeText(hstring(line) + L"（无人干扰时的理论位置）", 12, 0xa4bcc7));
-    auto hint = MakeText(progress.GetNamedString(L"hint", L""), 12, 0xdbc47f);
-    hint.TextWrapping(TextWrapping::Wrap);
-    card.Children().Append(hint);
+    auto pin = MakeText(L"◆", 16, 0xffd27a);
+    pin.VerticalAlignment(VerticalAlignment::Center);
+    place(AtFraction(pin, stop), 1);
+    // The sender is the bar; capturing the bar itself would keep every re-rendered bar alive.
+    bar.Tapped(
+        [this, index, markers](IInspectable const &sender, Windows::UI::Xaml::Input::TappedRoutedEventArgs const &e)
+        {
+            auto tapped = sender.as<Grid>();
+            double width = tapped.ActualWidth();
+            if (width <= 0)
+                return;
+            e.Handled(true);
+            waveStops[index] = SnapStop(markers, std::clamp(e.GetPosition(tapped).X / width, 0.0, 1.0));
+            RequestWaveRender();
+        });
+    return bar;
+}
+// Above each standing turret: when the side's own wave next passes it on the way out, the current wave until it
+// has passed, then the next one; the countdown reaches zero as the dot on the bar passes the turret. Waves stop
+// at the chosen stop to fight, so turrets beyond it get no countdown. The nexus is the spawn and gets none; an
+// inhibitor gets one unless a turret of its side stands too close for two labels (Summoner's Rift side lanes).
+template <typename Place>
+static void PlaceTurretCountdowns(JsonArray const &timetable,
+                                  JsonArray const &markers,
+                                  LaneSpan const &span,
+                                  double stop,
+                                  double now,
+                                  Place const &place)
+{
+    for (auto const &value : markers)
+    {
+        auto marker = value.GetObject();
+        auto label = marker.GetNamedString(L"label", L"");
+        std::wstring_view name(label);
+        bool ally = marker.GetNamedBoolean(L"ally", false);
+        double at = marker.GetNamedNumber(L"at", 0);
+        if (!marker.GetNamedBoolean(L"alive", true) || name.find(L"大水晶") != std::wstring_view::npos ||
+            (name.find(L"小水晶") != std::wstring_view::npos && HasCloseTurret(markers, ally, at)))
+            continue;
+        if (ally ? at > stop : at < stop)
+            continue;
+        double distance = ally ? span.AllyDistance(at) : span.EnemyDistance(at);
+        if (distance < 0)
+            continue;
+        for (auto const &entry : timetable)
+        {
+            auto wave = entry.GetObject();
+            double arrive = WaveArrival(wave, distance);
+            if (arrive < 0 || arrive + WaveArrivalSpread <= now)
+                continue;
+            hstring text = arrive > now ? WaveCountdown(arrive - now) : hstring(L"过");
+            if (wave.GetNamedBoolean(L"cannon", false))
+                text = L"炮" + text;
+            auto countdown = MakeText(text, 11, ally ? 0x45c7ce : 0xf3b37e);
+            ToolTipService::SetToolTip(countdown,
+                                       box_value((ally ? L"我方兵线经过" : L"敌方兵线经过") + label + L"的倒计时"));
+            place(AtFraction(countdown, at), 0);
+            break;
+        }
+    }
+}
+// Whether a standing turret of the same side sits within 5% of the bar, too close for a second countdown label.
+static bool HasCloseTurret(JsonArray const &markers, bool ally, double at)
+{
+    for (auto const &value : markers)
+    {
+        auto marker = value.GetObject();
+        auto label = marker.GetNamedString(L"label", L"");
+        std::wstring_view name(label);
+        if (marker.GetNamedBoolean(L"ally", false) == ally && marker.GetNamedBoolean(L"alive", true) &&
+            name.find(L"水晶") == std::wstring_view::npos && name.find(L"门牙塔") == std::wstring_view::npos &&
+            std::abs(marker.GetNamedNumber(L"at", 0) - at) < 0.05)
+            return true;
+    }
+    return false;
 }
 // Death timers from level and game time: the cost of dying now, own team on the left.
 void RenderDeathCosts()
@@ -309,11 +601,8 @@ void RenderDeathCosts()
     if (deaths.Size() == 0)
         return;
     double factor = waves.GetNamedNumber(L"deathFactor", 0);
-    AddWaveHeading(L"现在阵亡需等待");
-    AddWaveLine(factor > 0 ? L"按等级计算 · 时间加成 +" + to_hstring(static_cast<int>(factor + .5)) + L"%"
-                           : hstring(L"按等级计算 · 尚无时间加成"),
-                12,
-                0x91acbb);
+    AddWaveHeading(factor > 0 ? L"现在阵亡需等待 · 时间加成 +" + to_hstring(static_cast<int>(factor + .5)) + L"%"
+                              : hstring(L"现在阵亡需等待"));
     Grid teamsGrid;
     teamsGrid.ColumnDefinitions().Append(ColumnDefinition());
     teamsGrid.ColumnDefinitions().Append(ColumnDefinition());
