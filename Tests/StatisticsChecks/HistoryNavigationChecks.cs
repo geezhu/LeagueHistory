@@ -15,8 +15,10 @@ internal static class HistoryNavigationChecks
         OutcomeCacheBoundaries();
         OutcomeRequestRetirement();
         OutcomeLastPage();
+        CleanupWithoutWaiting();
+        CancelledUpdateReleasesPanels();
         Console.WriteLine(
-            "PASS: history profile layout, detail switching, return/close, player/queue cache boundaries and stale outcome requests."
+            "PASS: history profile layout, detail switching, return/close, player/queue cache boundaries, stale outcome requests and cleanup without UI waits."
         );
     }
 
@@ -92,6 +94,49 @@ internal static class HistoryNavigationChecks
                     return prepare(detail);
                 }
             )
+        );
+    }
+
+    // Cleanup runs on the UI thread that pending parse tasks need for their panels, so it cancels instead of waiting.
+    private static void CleanupWithoutWaiting()
+    {
+        foreach (
+            var cleanup in new Action<MatchTabPageContent>[] { view => view.ForceCleanup(), view => view.Cleanup() }
+        )
+        {
+            using Control control = new MatchTabPageContent();
+            var view = (MatchTabPageContent)control;
+            using var host = Host(view);
+            SetField(view, "_currentParsingTask", new TaskCompletionSource().Task);
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            cleanup(view);
+            Check(
+                watch.ElapsedMilliseconds < 300,
+                $"Cleanup does not wait for parsing: {watch.ElapsedMilliseconds} ms."
+            );
+        }
+    }
+
+    // An update cancelled while parsing releases the panels it produced instead of showing them.
+    private static void CancelledUpdateReleasesPanels()
+    {
+        using Control control = new MatchTabPageContent();
+        var view = (MatchTabPageContent)control;
+        using var host = Host(view);
+        using var cancellation = new CancellationTokenSource();
+        var late = new Panel();
+        view.ParsePanelRequested += async (_, _, _) =>
+        {
+            await Task.Delay(50, cancellation.Token);
+            await cancellation.CancelAsync();
+            return late;
+        };
+        var update = (Task)Invoke(view, "UpdateMatchListInternal", new JArray(new JObject()), cancellation.Token)!;
+        PumpUntil(() => update.IsCompleted);
+        Check(update.Status == TaskStatus.RanToCompletion, "A cancelled update completes without an error.");
+        Check(
+            late.IsDisposed && !Field<FlowLayoutPanel>(view, "flowLayoutPanelRight").Controls.Contains(late),
+            "A panel parsed after cancellation is released, not shown."
         );
     }
 

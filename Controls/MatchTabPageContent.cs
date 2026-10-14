@@ -72,18 +72,9 @@ namespace League.Controls
         // 新增 ForceCleanup 方法
         public void ForceCleanup()
         {
-            // 停止所有异步操作
+            // 停止所有异步操作。不在 UI 线程等待解析任务：它要回到 UI 线程创建面板，等待只会卡住界面；
+            // 被取消的更新会自己释放晚到的面板。
             _updateCts?.Cancel();
-
-            // 等待任务完成（最多等待 1 秒）
-            if (_currentParsingTask != null && !_currentParsingTask.IsCompleted)
-            {
-                try
-                {
-                    _currentParsingTask.Wait(TimeSpan.FromSeconds(1));
-                }
-                catch { }
-            }
 
             // 清理图片资源
             DisposeAllImages();
@@ -363,6 +354,13 @@ namespace League.Controls
                 _currentParsingTask = null;
                 return panelList;
             }, token);
+
+            // 清理时不再等待解析，取消后晚到的面板由这里释放，不再加入已清理的列表
+            if (token.IsCancellationRequested)
+            {
+                foreach (var panel in panels) panel.Dispose();
+                return;
+            }
 
             SafeInvoke(flowLayoutPanelRight, () =>
             {
@@ -905,25 +903,8 @@ namespace League.Controls
         {
             Debug.WriteLine($"[深度清理] MatchTabPageContent 开始清理，PUUID: {_puuid}");
 
-            // 1. 取消所有异步操作
+            // 1. 取消所有异步操作；与 ForceCleanup 相同，不在 UI 线程等待解析任务
             _updateCts?.Cancel();
-
-            // 2. 等待当前解析任务完成（最多500ms）
-            if (_currentParsingTask != null && !_currentParsingTask.IsCompleted)
-            {
-                try
-                {
-                    bool completed = _currentParsingTask.Wait(500);
-                    if (!completed)
-                    {
-                        Debug.WriteLine($"[清理] 解析任务未在500ms内完成，强制继续清理");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"[清理等待异常] {ex.Message}");
-                }
-            }
 
             // 3. 清理所有图片资源
             DisposeAllImages();

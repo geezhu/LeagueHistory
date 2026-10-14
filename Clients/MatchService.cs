@@ -42,12 +42,12 @@ namespace League.Clients
                     Debug.WriteLine($"[正常请求] {path}");
 
                     var watch = Stopwatch.StartNew();
-                    var response = await _client.GetAsync(path);
+                    var response = await _client.GetAsync(path, cts.Token);
                     watch.Stop();
 
                     if (response.IsSuccessStatusCode)
                     {
-                        var content = await response.Content.ReadAsStringAsync();
+                        var content = await response.Content.ReadAsStringAsync(cts.Token);
 
                         if (!isPreheat)
                         {
@@ -93,11 +93,11 @@ namespace League.Clients
                 try
                 {
                     using var cts = new CancellationTokenSource(timeout);
-                    var response = await _client.GetAsync($"/lol-match-history/v1/products/lol/{puuid}/matches");
+                    var response = await _client.GetAsync($"/lol-match-history/v1/products/lol/{puuid}/matches", cts.Token);
 
                     response.EnsureSuccessStatusCode();
 
-                    var content = await response.Content.ReadAsStringAsync();
+                    var content = await response.Content.ReadAsStringAsync(cts.Token);
                     var json = JObject.Parse(content);
 
                     return json["games"]?["games"] as JArray;

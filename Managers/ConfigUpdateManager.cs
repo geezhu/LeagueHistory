@@ -204,13 +204,17 @@ namespace League.Managers
                     progressForm.Invoke(() => progressForm.UpdateStatus("下载完成，正在解压..."));
 
                     // ==================== 解压 ====================
+                    string extractRoot = Path.GetFullPath(extractPath) + Path.DirectorySeparatorChar;
                     using (var archive = ZipFile.OpenRead(zipPath))
                     {
                         foreach (var entry in archive.Entries)
                         {
                             if (string.IsNullOrEmpty(entry.Name)) continue;
 
-                            string destPath = Path.Combine(extractPath, entry.FullName.Replace('/', Path.DirectorySeparatorChar));
+                            string destPath = Path.GetFullPath(Path.Combine(extractPath, entry.FullName.Replace('/', Path.DirectorySeparatorChar)));
+                            // 拒绝 ../ 等指向解压目录之外的条目
+                            if (!destPath.StartsWith(extractRoot, StringComparison.OrdinalIgnoreCase))
+                                throw new InvalidDataException("更新包包含解压目录之外的路径：" + entry.FullName);
                             string destDir = Path.GetDirectoryName(destPath)!;
 
                             if (!Directory.Exists(destDir))
@@ -236,25 +240,31 @@ title 更新中，请勿关闭...
 timeout /t 2 /nobreak >nul
 
 REM 备份用户配置文件
-if exist ""{appDir}\LeagueConfig.json"" (
-    copy /y ""{appDir}\LeagueConfig.json"" ""{tempDir}\LeagueConfig.json.bak"" >nul
+if exist ""%LH_UPDATE_APP%\LeagueConfig.json"" (
+    copy /y ""%LH_UPDATE_APP%\LeagueConfig.json"" ""%LH_UPDATE_TEMP%\LeagueConfig.json.bak"" >nul
 )
 
 REM 全量覆盖更新文件
-xcopy ""{extractPath}\*.*"" ""{appDir}\"" /s /e /y /q /i /h
+xcopy ""%LH_UPDATE_EXTRACT%\*.*"" ""%LH_UPDATE_APP%\"" /s /e /y /q /i /h
 
 REM 恢复用户配置文件（防止被新版本的json覆盖）
-if exist ""{tempDir}\LeagueConfig.json.bak"" (
-    copy /y ""{tempDir}\LeagueConfig.json.bak"" ""{appDir}\LeagueConfig.json"" >nul
+if exist ""%LH_UPDATE_TEMP%\LeagueConfig.json.bak"" (
+    copy /y ""%LH_UPDATE_TEMP%\LeagueConfig.json.bak"" ""%LH_UPDATE_APP%\LeagueConfig.json"" >nul
 )
 
-echo {newVersion} > ""{appDir}\version.txt""
+echo {newVersion} > ""%LH_UPDATE_APP%\version.txt""
 
-start """" /d ""{appDir}"" ""{exeName}""
-rd /s /q ""{tempDir}""
+start """" /d ""%LH_UPDATE_APP%"" ""%LH_UPDATE_EXE%""
+rd /s /q ""%LH_UPDATE_TEMP%""
 exit";
 
-                    File.WriteAllText(batPath, batContent, System.Text.Encoding.UTF8);
+                    // cmd 按系统代码页读取批处理：中文用户名（临时目录）或安装目录直接写进脚本会被读错，
+                    // 路径改由环境变量传给子进程。不写 BOM，否则首行 @echo off 无法识别。
+                    Environment.SetEnvironmentVariable("LH_UPDATE_APP", appDir);
+                    Environment.SetEnvironmentVariable("LH_UPDATE_EXTRACT", extractPath);
+                    Environment.SetEnvironmentVariable("LH_UPDATE_TEMP", tempDir);
+                    Environment.SetEnvironmentVariable("LH_UPDATE_EXE", exeName);
+                    await File.WriteAllTextAsync(batPath, batContent, new System.Text.UTF8Encoding(false));
 
                     // 启动 BAT 并退出当前程序
                     Process.Start(new ProcessStartInfo
