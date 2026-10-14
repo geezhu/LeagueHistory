@@ -40,7 +40,8 @@ internal sealed class AssistantRosterWindow : Form
     private Button _retry = null!,
         _analysisButton = null!,
         _sendTier = null!,
-        _sendAnalysis = null!;
+        _sendAnalysis = null!,
+        _sendGrades = null!;
     private ContextMenuStrip _sendMenu = null!;
     private ToolStripItem _sendAll = null!,
         _sendTeam = null!,
@@ -164,6 +165,15 @@ internal sealed class AssistantRosterWindow : Form
         };
         _tips.SetToolTip(_sendAnalysis, "把估计胜率、短板和换人建议发送到选人聊天。");
         _toolbar.Controls.Add(_sendAnalysis);
+        _sendGrades = new Button
+        {
+            Text = "发送能力等级",
+            AutoSize = true,
+            FlatStyle = FlatStyle.Flat,
+            Visible = false,
+        };
+        _tips.SetToolTip(_sendGrades, "把前排、控制等七项能力的等级发送到选人聊天：按同人数随机阵容排名，D 为短板。");
+        _toolbar.Controls.Add(_sendGrades);
         _sendMenu = new ContextMenuStrip();
         _sendAll = _sendMenu.Items.Add("发送全部梯队");
         _sendTeam = _sendMenu.Items.Add("发送我方梯队");
@@ -220,6 +230,7 @@ internal sealed class AssistantRosterWindow : Form
             _retry.Visible = !_analysis.Visible;
             _sendTier.Visible = !_analysis.Visible;
             _sendAnalysis.Visible = _analysis.Visible;
+            _sendGrades.Visible = _analysis.Visible;
             _analysisButton.Text = _analysis.Visible ? "返回英雄梯队" : "阵容分析";
             if (_analysis.Visible && _getRoster() is { } roster)
             {
@@ -235,7 +246,8 @@ internal sealed class AssistantRosterWindow : Form
         _sendAll.Click += (_, _) => _ = Track(SendTiersAsync(null));
         _sendTeam.Click += (_, _) => _ = Track(SendTiersAsync(false));
         _sendBench.Click += (_, _) => _ = Track(SendTiersAsync(true));
-        _sendAnalysis.Click += (_, _) => _ = Track(SendAnalysisAsync());
+        _sendAnalysis.Click += (_, _) => _ = Track(SendAnalysisAsync(_analysis.ChatMessage, "阵容分析"));
+        _sendGrades.Click += (_, _) => _ = Track(SendAnalysisAsync(_analysis.GradesMessage, "能力等级"));
         _sort.SelectedIndexChanged += (_, _) => RenderRoster();
         _retry.Click += (_, _) => _ = Track(LoadRankingsAsync());
         _content.SizeChanged += (_, _) =>
@@ -470,14 +482,15 @@ internal sealed class AssistantRosterWindow : Form
 
     private static string ChampionName(int id) => FormMain.Globals.resLoading.GetChampionById(id)?.Name ?? $"英雄 {id}";
 
-    private async Task SendAnalysisAsync()
+    // The conclusion and the capability grades share the send path; one message is sent at a time.
+    private async Task SendAnalysisAsync(string? message, string subject)
     {
         if (_closing || _sending)
         {
             return;
         }
 
-        if (_analysis.ChatMessage is not { } message)
+        if (message == null)
         {
             ShowAnalysisStatus("阵容数据尚未读取完成，请稍后再发送。");
             return;
@@ -485,12 +498,13 @@ internal sealed class AssistantRosterWindow : Form
 
         _sending = true;
         _sendAnalysis.Enabled = false;
+        _sendGrades.Enabled = false;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         timeout.CancelAfter(TimeSpan.FromSeconds(10));
         try
         {
             bool sent = await _announce(message, timeout.Token);
-            ShowAnalysisStatus(sent ? "阵容分析已发送到选人聊天。" : "未发送：请确认仍在选人阶段且聊天已连接。");
+            ShowAnalysisStatus(sent ? subject + "已发送到选人聊天。" : "未发送：请确认仍在选人阶段且聊天已连接。");
         }
         catch (OperationCanceledException)
         {
@@ -501,7 +515,7 @@ internal sealed class AssistantRosterWindow : Form
         }
         catch (Exception)
         {
-            ShowAnalysisStatus("阵容分析发送失败，请检查客户端连接后重试。");
+            ShowAnalysisStatus(subject + "发送失败，请检查客户端连接后重试。");
         }
         finally
         {
@@ -509,6 +523,7 @@ internal sealed class AssistantRosterWindow : Form
             if (!IsDisposed)
             {
                 _sendAnalysis.Enabled = true;
+                _sendGrades.Enabled = true;
             }
         }
     }
