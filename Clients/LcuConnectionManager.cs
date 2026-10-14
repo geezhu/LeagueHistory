@@ -49,7 +49,7 @@ namespace League.Clients
             try
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                var response = await _lcuClient.GetAsync("/lol-summoner/v1/current-summoner");
+                var response = await _lcuClient.GetAsync("/lol-summoner/v1/current-summoner", cts.Token);
 
                 if (response.IsSuccessStatusCode)
                 {
