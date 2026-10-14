@@ -726,34 +726,116 @@ void RenderDeathCosts()
     double factor = waves.GetNamedNumber(L"deathFactor", 0);
     AddWaveHeading(factor > 0 ? L"现在阵亡需等待 · 时间加成 +" + to_hstring(static_cast<int>(factor + .5)) + L"%"
                               : hstring(L"现在阵亡需等待"));
-    Grid teamsGrid;
-    teamsGrid.ColumnDefinitions().Append(ColumnDefinition());
-    teamsGrid.ColumnDefinitions().Append(ColumnDefinition());
-    for (int column = 0; column < 2; ++column)
+    // Players of one level wait the same time, so each level is one row with its heroes on both sides.
+    std::vector<int> levels;
+    for (auto const &value : deaths)
     {
-        bool ally = column == 0;
-        StackPanel team;
-        team.Background(MakeBrush(0x112f3c));
-        team.Padding({10, 6, 10, 6});
-        team.Margin({0, 0, ally ? 6.0 : 0.0, 6});
-        team.Children().Append(MakeText(ally ? L"我方" : L"敌方", 14, ally ? 0x45c7ce : 0xf3b37e));
+        int level = static_cast<int>(value.GetObject().GetNamedNumber(L"level", 0));
+        if (std::find(levels.begin(), levels.end(), level) == levels.end())
+            levels.push_back(level);
+    }
+    std::sort(levels.begin(), levels.end(), std::greater<>());
+    Grid table;
+    table.Background(MakeBrush(0x112f3c));
+    table.Padding({10, 4, 10, 6});
+    table.Margin({0, 0, 0, 6});
+    for (int column = 0; column < 4; ++column)
+    {
+        ColumnDefinition definition;
+        definition.Width({1, column < 2 ? GridUnitType::Auto : GridUnitType::Star});
+        table.ColumnDefinitions().Append(definition);
+    }
+    auto cell = [&table](FrameworkElement const &element, int row, int column)
+    {
+        Grid::SetRow(element, row);
+        Grid::SetColumn(element, column);
+        table.Children().Append(element);
+    };
+    table.RowDefinitions().Append(RowDefinition());
+    int column = 0;
+    for (auto label : {L"等级", L"等待", L"我方", L"敌方"})
+    {
+        auto header = MakeText(label, 12, column == 2 ? 0x45c7ce : column == 3 ? 0xf3b37e : 0x91acbb);
+        header.Margin({0, 0, 14, 2});
+        cell(header, 0, column++);
+    }
+    int row = 1;
+    for (int level : levels)
+    {
+        table.RowDefinitions().Append(RowDefinition());
+        double seconds = 0;
+        std::array<StackPanel, 2> sides;
+        for (auto &side : sides)
+        {
+            side.Orientation(Orientation::Horizontal);
+            side.Margin({0, 2, 8, 2});
+        }
         for (auto const &value : deaths)
         {
             auto death = value.GetObject();
-            if (death.GetNamedBoolean(L"ally", false) != ally)
+            if (static_cast<int>(death.GetNamedNumber(L"level", 0)) != level)
                 continue;
-            int seconds = static_cast<int>(death.GetNamedNumber(L"seconds", 0) + .5);
-            auto line = MakeText(death.GetNamedString(L"champion", L"") + L"  " +
-                                     to_hstring(static_cast<int>(death.GetNamedNumber(L"level", 0))) + L" 级  " +
-                                     to_hstring(seconds) + L" 秒",
-                                 13,
-                                 death.GetNamedBoolean(L"self", false) ? 0x7ff0ee : 0xe2eef3);
-            team.Children().Append(line);
+            seconds = death.GetNamedNumber(L"seconds", 0);
+            sides[death.GetNamedBoolean(L"ally", false) ? 0 : 1].Children().Append(CreateDeathAvatar(death));
         }
-        Grid::SetColumn(team, column);
-        teamsGrid.Children().Append(team);
+        auto levelText = MakeText(to_hstring(level) + L" 级", 13, 0xa4bcc7);
+        levelText.VerticalAlignment(VerticalAlignment::Center);
+        levelText.Margin({0, 0, 14, 0});
+        cell(levelText, row, 0);
+        auto wait = MakeText(to_hstring(static_cast<int>(seconds + .5)) + L" 秒", 15, 0xe2eef3);
+        wait.FontWeight(Windows::UI::Text::FontWeights::SemiBold());
+        wait.VerticalAlignment(VerticalAlignment::Center);
+        wait.Margin({0, 0, 14, 0});
+        cell(wait, row, 1);
+        cell(sides[0], row, 2);
+        cell(sides[1], row, 3);
+        ++row;
     }
-    waveBody.Children().Append(teamsGrid);
+    waveBody.Children().Append(table);
+}
+// The hero icon the roster already loaded; the champion's first character until it arrives.
+Border CreateDeathAvatar(JsonObject const &death)
+{
+    auto champion = death.GetNamedString(L"champion", L"");
+    bool self = death.GetNamedBoolean(L"self", false);
+    Border frame;
+    frame.Width(30);
+    frame.Height(30);
+    frame.Margin({0, 0, 4, 0});
+    frame.CornerRadius({4, 4, 4, 4});
+    frame.Background(MakeBrush(0x1d4c57));
+    frame.BorderBrush(MakeBrush(self ? 0x7ff0ee : 0x23505c));
+    frame.BorderThickness({self ? 2.0 : 1.0});
+    if (auto source = RosterIcon(death.GetNamedString(L"player", L""), champion))
+    {
+        Image image;
+        image.Source(source);
+        image.Stretch(Stretch::UniformToFill);
+        frame.Child(image);
+    }
+    else
+    {
+        hstring letter = champion.empty() ? hstring(L"?") : hstring(std::wstring_view(champion).substr(0, 1));
+        auto initial = MakeText(letter, 13, 0xe2eef3);
+        initial.HorizontalAlignment(HorizontalAlignment::Center);
+        initial.VerticalAlignment(VerticalAlignment::Center);
+        frame.Child(initial);
+    }
+    ToolTipService::SetToolTip(frame,
+                               box_value(champion + L" · " +
+                                         to_hstring(static_cast<int>(death.GetNamedNumber(L"level", 0))) + L" 级" +
+                                         (self ? L" · 自己" : L"")));
+    return frame;
+}
+// By roster key; a main program older than the widget sends no key, so the champion name is the fallback.
+ImageSource RosterIcon(hstring const &player, hstring const &champion) const
+{
+    for (auto const &card : cards)
+    {
+        if (player.empty() ? !champion.empty() && card.champion.Text() == champion : card.key == player)
+            return card.icon.Source();
+    }
+    return nullptr;
 }
 // Super minion and death messages need content; the main program checks again when building the lines.
 bool WaveChatAvailable(hstring const &target) const

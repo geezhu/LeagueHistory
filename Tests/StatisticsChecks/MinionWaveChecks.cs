@@ -199,6 +199,7 @@ internal static class MinionWaveChecks
         var deaths = MinionWaveForecaster.Calculate(OverlayDetailPreview.SampleWaves(), 0)!.Deaths;
         Check(deaths.Length == 10 && deaths.Take(5).All(d => d.Ally) && deaths.Count(d => d.Self) == 1, "Own first");
         Check(deaths[0].Level == 13 && deaths[0].Seconds == rift.Seconds(13, 846), "Highest level first");
+        Check(deaths.All(d => d.Player.Length > 0), "Each death names its roster key for the hero icon");
     }
 
     private static bool Throws(Action action)
