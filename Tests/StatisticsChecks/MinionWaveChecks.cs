@@ -306,6 +306,10 @@ internal static class MinionWaveChecks
         var json = (JObject)sample.ToJson()["lanes"]![1]!["progress"]!;
         Check(
             ((JArray)json["markers"]!).Count == 12
+                && (string?)json["markers"]?[0]?["kind"] == "base"
+                && (string?)json["markers"]?[1]?["kind"] == "nexus"
+                && (string?)json["markers"]?[2]?["kind"] == "inhibitor"
+                && (string?)json["markers"]?[3]?["kind"] == "turret"
                 && (double?)json["enemySpawn"] == 1
                 && (string?)json["hint"] == mid.Hint
                 && (int?)json["waves"]?[2]?["wave"] == 29
