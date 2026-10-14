@@ -49,7 +49,7 @@ public sealed record OverlayChatRequest(
             && (
                 value["kind"]!.Type != JTokenType.String
                 || (string?)value["kind"]
-                    is not ("tier" or "mastery" or "deathStreak" or "record" or "voice" or "waves")
+                    is not ("tier" or "mastery" or "deathStreak" or "record" or "party" or "voice" or "waves")
             )
         )
         {
@@ -62,6 +62,12 @@ public sealed record OverlayChatRequest(
             return ReadVoice(value, session, id, target, slot, hero, stamp);
         }
         if (value["text"] != null || value["confirmed"] != null)
+        {
+            return null;
+        }
+
+        // Premades describe a side; a single hero has no group to report.
+        if (kind == "party" && target == "single")
         {
             return null;
         }

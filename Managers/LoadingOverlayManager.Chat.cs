@@ -148,6 +148,7 @@ internal sealed partial class LoadingOverlayManager
                 _owner.GetAppConfig()?.HideSelfWhenSending ?? false,
                 _owner.GetAppConfig()?.UseChampionNameWhenSending ?? false
             ),
+            "party" => OverlayPartyChatMessage.Build(roster!, request, CachedPlayers(), Champion),
             _ => OverlayTierChatMessage.Build(roster!, request, _ranks, Champion),
         };
 
