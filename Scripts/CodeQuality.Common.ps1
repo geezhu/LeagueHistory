@@ -15,8 +15,7 @@ function Get-CodeQualitySelection {
         [string]$Repository,
         [object]$Configuration,
         [string]$BaseRef,
-        [string[]]$Files,
-        [switch]$All
+        [string[]]$Files
     )
 
     $protectedPaths = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
@@ -28,19 +27,18 @@ function Get-CodeQualitySelection {
             if ($protectedPaths.Contains($path)) { throw "Upstream file is excluded from code quality changes: $path" }
         }
     } else {
-        [string[]]$arguments = if ($All) {
-            @('ls-files')
-        } elseif ($BaseRef) {
+        # Every source outside the baseline list is checked by default, whoever wrote it; a base reference
+        # narrows the run to its changes.
+        [string[]]$arguments = if ($BaseRef) {
             @('diff', '--name-only', '--diff-filter=ACMR', "$BaseRef...HEAD")
         } else {
-            @('diff', '--name-only', '--diff-filter=ACMR', 'HEAD')
+            @('ls-files')
         }
         $candidates = @(& git -C $Repository @arguments)
         if ($LASTEXITCODE -ne 0) { throw 'Unable to enumerate source changes.' }
         $untracked = @(& git -C $Repository ls-files --others --exclude-standard)
         if ($LASTEXITCODE -ne 0) { throw 'Unable to enumerate new source files.' }
         $candidates += $untracked
-        $candidates += $Configuration.adoptedFiles
     }
 
     return @($candidates | Where-Object {
@@ -125,6 +123,8 @@ function Invoke-CodeQualityAnalysis {
     $output = Join-Path $Repository 'bin/code-quality'
     New-Item -ItemType Directory -Force -Path $output | Out-Null
     $targets = Join-Path $Repository 'Tools/CodeQuality/Analyzers.targets'
+    # Forward slashes: a trailing backslash would escape the closing quote of a path with spaces.
+    $build = ($output -replace '\\', '/') + '/build/'
     foreach ($project in $Projects) {
         $name = [IO.Path]::GetFileNameWithoutExtension($project)
         $report = Join-Path $output "$name.sarif"
@@ -132,7 +132,8 @@ function Invoke-CodeQualityAnalysis {
         # Rebuild avoids a cached compilation silently omitting the analysis report.
         $arguments = @('build', (Join-Path $Repository $project), '-c', 'Release', '--no-restore', '-t:Rebuild', '-v:quiet',
             "-p:CustomBeforeMicrosoftCommonTargets=$targets", "-p:CodeQualityAnalyzer=$analyzer",
-            "-p:CodeQualityDefaults=$defaults", '-p:EnforceCodeStyleInBuild=true', "-p:ErrorLog=$report%2cversion=2.1")
+            "-p:CodeQualityDefaults=$defaults", '-p:EnforceCodeStyleInBuild=true', "-p:ErrorLog=$report%2cversion=2.1",
+            "-p:CodeQualityOutput=$build")
         if ($GlobalConfig) { $arguments += @('-p:DiscoverEditorConfigFiles=false', "-p:CodeQualityGlobalConfig=$GlobalConfig") }
         if ($project -ne 'League.csproj') { $arguments += '-p:BuildProjectReferences=false' }
         & dotnet @arguments *> $log

@@ -1,4 +1,4 @@
-name: Fork code quality
+name: Code quality
 
 on:
   pull_request:
@@ -23,20 +23,13 @@ jobs:
       - name: Verify upstream exclusions
         shell: pwsh
         run: ./Tests/CodeQualityChecks.ps1
-      - name: Check fork-added changes and adopted examples
+      - name: Check all sources outside the baseline
         shell: pwsh
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          PUSH_BASE: ${{ github.event.before }}
-        run: |
-          $baseRef = if ($env:EVENT_NAME -eq 'pull_request') { $env:PR_BASE } else { $env:PUSH_BASE }
-          if (!$baseRef -or $baseRef -match '^0+$') { $baseRef = 'HEAD' }
-          ./Scripts/Check-CodeQuality.ps1 -BaseRef $baseRef
+        run: ./Scripts/Check-CodeQuality.ps1
       - name: Verify voice lifecycle
         shell: pwsh
         run: |
-          $checks = 'Tests/StatisticsChecks/bin/Release/net8.0-windows/StatisticsChecks.dll'
+          $checks = 'bin/code-quality/build/StatisticsChecks/StatisticsChecks.dll'
           foreach ($flag in @('--sensevoice-checks', '--assistant-voice-checks', '--gamebar-voice-checks')) {
             dotnet $checks $flag
             if ($LASTEXITCODE -ne 0) { throw "Voice check failed: $flag" }

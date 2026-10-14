@@ -3,8 +3,8 @@
     [switch]$SkipAnalysis
 )
 
-# Checks only the lines geezhu added to upstream-owned C# files (compared with the recorded upstream
-# commit, including uncommitted edits). Upstream lines are never reported, so fixing a finding stays a
+# Checks only the lines added to baseline C# files since the recorded upstream commit, including
+# uncommitted edits, whoever added them. Upstream lines are never reported, so fixing a finding stays a
 # local edit, as AGENTS.md requires for upstream files.
 # AGENTS.md keeps upstream files out of the format and structure rules, so braces and method length
 # are listed only with -IncludeStyle and never fail the check; exception, async and resource rules do.
@@ -21,7 +21,7 @@ function Get-AddedLines {
     param([string]$Path)
 
     $lines = [Collections.Generic.HashSet[int]]::new()
-    # -w: re-indented upstream lines are not geezhu's code.
+    # -w: re-indented baseline lines are not new code.
     foreach ($row in @(& git -C $repository diff -w -U0 --no-color $base -- $Path)) {
         if ($row -match '^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@') {
             $count = if ($Matches[2]) { [int]$Matches[2] } else { 1 }
@@ -119,6 +119,6 @@ if ($IncludeStyle -and $style.Count) {
 }
 if ($findings.Count) {
     $findings | Sort-Object -Unique | Write-Output
-    throw "geezhu 在上游文件中新增的代码有 $($findings.Count) 处不符合规范（检查 $($added.Count) 个文件、$total 行）。"
+    throw "原有源码中相对基线新增的代码有 $($findings.Count) 处不符合规范（检查 $($added.Count) 个文件、$total 行）。"
 }
-Write-Output "PASS: geezhu 在 $($added.Count) 个上游文件中新增的 $total 行已检查（另有 $($style.Count) 处格式与结构参考项，用 -IncludeStyle 查看）。"
+Write-Output "PASS: $($added.Count) 个原有源码中相对基线新增的 $total 行已检查（另有 $($style.Count) 处格式与结构参考项，用 -IncludeStyle 查看）。"

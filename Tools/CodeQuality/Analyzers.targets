@@ -3,12 +3,19 @@
     <CodeQualityAnalyzer Condition="'$(CodeQualityAnalyzer)' == ''">$(NuGetPackageRoot)meziantou.analyzer/3.0.294/analyzers/dotnet/roslyn4.8/cs/Meziantou.Analyzer.dll</CodeQualityAnalyzer>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
+  <!-- The analysis rebuild must not clean bin/Release: a running League.exe loses its runtimeconfig and deps files.
+       Each project builds into its own folder under CodeQualityOutput, and the separate intermediate folder keeps
+       Clean from removing files recorded by normal builds. -->
+  <PropertyGroup Condition="'$(CodeQualityOutput)' != ''">
+    <OutputPath>$(CodeQualityOutput)$(MSBuildProjectName)\</OutputPath>
+    <IntermediateOutputPath>$(BaseIntermediateOutputPath)code-quality\</IntermediateOutputPath>
+  </PropertyGroup>
   <ItemGroup>
     <Analyzer Include="$(CodeQualityAnalyzer)" />
     <!-- Start from upstream's disabled preset, then enable only our scoped rules in .editorconfig. -->
     <GlobalAnalyzerConfigFiles Include="$(CodeQualityDefaults)" />
     <EditorConfigFiles Include="$(CodeQualityDefaults)" />
-    <!-- Check-UpstreamChanges.ps1: enables the rules everywhere; the script keeps only geezhu's added lines. -->
+    <!-- Check-UpstreamChanges.ps1: enables the rules everywhere; the script keeps only lines added since the baseline. -->
     <EditorConfigFiles Include="$(CodeQualityGlobalConfig)" Condition="'$(CodeQualityGlobalConfig)' != ''" />
   </ItemGroup>
   <Target Name="ValidateCodeQualityAnalyzer" BeforeTargets="CoreCompile">
