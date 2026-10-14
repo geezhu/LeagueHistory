@@ -6,8 +6,10 @@ namespace League.Models;
 /// Destroyed lane structures rebuilt from 2999 events. Lane turrets fall outermost first, so a team and lane
 /// identify the next standing turret without its exact position. Two name formats are known:
 /// <c>Turret_T1_L_03_A</c> (L top, R bot, C mid; C_06 / C_07 are the top / bot inhibitor turrets; C_01 / C_02
-/// nexus) and <c>Turret_T1_L1_P3_x</c> (L0 bot, L1 mid, L2 top; positions above 3 are nexus turrets).
-/// Names matching neither are returned as unknown instead of being guessed.
+/// nexus) and <c>Turret_T1_L1_P3_x</c> (L0 bot, L1 mid, L2 top; positions above 3 are nexus turrets). The digit
+/// format also names the team: <c>Turret_TChaos_L1_P3_x</c> and <c>Inhib_TOrder_L1_P1_x</c>, seen on the Howling
+/// Abyss, where P3 and P2 fall before the inhibitor and P4 and P5 after it. Names matching neither are returned as
+/// unknown instead of being guessed.
 /// </summary>
 public sealed partial class LaneStructureState
 {
@@ -74,7 +76,7 @@ public sealed partial class LaneStructureState
             return;
         }
 
-        int team = match.Groups["team"].Value == "1" ? 100 : 200;
+        int team = Team(match);
         string lane = singleLane ? "mid" : Lane(match.Groups["lane"].Value);
         if (lane.Length == 0)
         {
@@ -112,7 +114,7 @@ public sealed partial class LaneStructureState
         return null;
     }
 
-    private static int Team(Match match) => match.Groups["team"].Value == "1" ? 100 : 200;
+    private static int Team(Match match) => match.Groups["team"].Value is "1" or "Order" ? 100 : 200;
 
     private static string Lane(string value) =>
         value switch
@@ -126,10 +128,10 @@ public sealed partial class LaneStructureState
     [GeneratedRegex(@"^Turret_T(?<team>[12])_(?<lane>[LCR])_(?<index>\d{2})")]
     private static partial Regex LetterTurret();
 
-    [GeneratedRegex(@"^Turret_T(?<team>[12])_L(?<lane>\d)_P(?<position>\d)")]
+    [GeneratedRegex(@"^Turret_T(?<team>[12]|Order|Chaos)_L(?<lane>\d)_P(?<position>\d)")]
     private static partial Regex DigitTurret();
 
-    // Barracks_T1_L1 / Barracks_T2_C1 / Barracks_T1_R1, or Inhib_T1_L0_P1_x in the digit format.
-    [GeneratedRegex(@"^(?:Barracks|Inhib)_T(?<team>[12])_(?:(?<lane>[LCR])1|L(?<lane>\d))")]
+    // Barracks_T1_L1 / Barracks_T2_C1 / Barracks_T1_R1, or Inhib_T1_L0_P1_x / Inhib_TOrder_L1_P1_x in the digit format.
+    [GeneratedRegex(@"^(?:Barracks|Inhib)_T(?<team>[12]|Order|Chaos)_(?:(?<lane>[LCR])1|L(?<lane>\d))")]
     private static partial Regex InhibitorName();
 }

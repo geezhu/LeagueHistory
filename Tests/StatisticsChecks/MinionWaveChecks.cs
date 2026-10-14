@@ -89,6 +89,28 @@ internal static class MinionWaveChecks
         Check(LaneStructureState.ParseTurret("Turret_T1_L1_P4_1", false) == (100, "mid", true), "Digit nexus turret");
         Check(LaneStructureState.ParseTurret("Turret_T1_R_02_A", true) == (100, "mid", false), "Single lane maps");
         Check(LaneStructureState.ParseTurret("Obelisk_T1", false) == null, "Unknown names are not guessed");
+        Check(
+            LaneStructureState.ParseTurret("Turret_TChaos_L1_P3_671196429_0", true) == (200, "mid", false)
+                && LaneStructureState.ParseTurret("Turret_TOrder_L1_P5_1477396591_0", true) == (100, "mid", true),
+            "Team-named Howling Abyss turrets"
+        );
+        // The order one Howling Abyss game logged: outer, inner, inhibitor, then both nexus turrets.
+        var aram = LaneStructureState.From(
+            [
+                Event("TurretKilled", 503, "Turret_TChaos_L1_P3_671196429_0"),
+                Event("TurretKilled", 710, "Turret_TChaos_L1_P2_620863572_0"),
+                Event("InhibKilled", 746, "Inhib_TChaos_L1_P1_2432143522_0"),
+                Event("TurretKilled", 776, "Turret_TChaos_L1_P4_587308334_0"),
+            ],
+            true
+        );
+        Check(
+            aram.TurretsDown(200, "mid") == 2
+                && aram.InhibitorDownSince(200, "mid") == 746
+                && aram.NexusTurretsDown(200) == 1
+                && aram.Unknown.Count == 0,
+            "Howling Abyss structures fall with team names"
+        );
 
         var events = OverlayDetailPreview.SampleWaves().Events!.Append(Event("TurretKilled", 800, "Odd_Name"));
         var state = LaneStructureState.From(events, false);
