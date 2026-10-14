@@ -20,15 +20,21 @@ public static class MinionWaveForecaster
 
         var events = snapshot.Events ?? [];
         double first = FirstWave(rules, events);
-        var current = Spawns(rules, first).TakeWhile(s => s.Time <= snapshot.Time).LastOrDefault();
-        var spawns = Spawns(rules, first).SkipWhile(s => s.Time <= snapshot.Time).Take(UpcomingWaves).ToArray();
+        // Two waves can be on a lane at once: a lane takes longer to walk than the time between spawns.
+        var recent = Spawns(rules, first).TakeWhile(s => s.Time <= snapshot.Time).TakeLast(2).ToArray();
+        var current = recent.LastOrDefault();
+        var spawns = Spawns(rules, first)
+            .SkipWhile(s => s.Time <= snapshot.Time)
+            .Take(UpcomingWaves)
+            .Select(s => s with { Gold = Gold(rules, s), Experience = Experience(rules, s) })
+            .ToArray();
         var structures = LaneStructureState.From(events, rules.Lanes.Lanes.Length == 1);
         int own = LiveMatchSnapshot.TeamId(snapshot.Players.FirstOrDefault(p => p.Self)?.Team ?? "") is 200 ? 200 : 100;
         var lanes = rules
             .Lanes.Lanes.Select(lane =>
                 ForecastLane(rules, lane, structures, spawns[0], own, snapshot.Time) with
                 {
-                    Progress = LaneProgressEstimator.Build(rules, lane, structures, current, own),
+                    Progress = LaneProgressEstimator.Build(rules, lane, structures, recent.Concat(spawns), own),
                 }
             )
             .ToArray();
@@ -171,7 +177,9 @@ public static class MinionWaveForecaster
             int inhibitors = Math.Max(1, structures.InhibitorsDown(team));
             int extra = rules.SuperPerInhibitorsDown[Math.Min(inhibitors, rules.SuperPerInhibitorsDown.Length) - 1];
             string text =
-                team == own ? $"我方水晶被破 · 敌方每波 +{extra} 超级兵" : $"敌方水晶被破 · 我方每波 +{extra} 超级兵";
+                team == own
+                    ? $"我方小水晶被破 · 敌方每波 +{extra} 超级兵"
+                    : $"敌方小水晶被破 · 我方每波 +{extra} 超级兵";
             double? back = since + rules.InhibitorRespawn;
             parts.Add(text + (back > now ? $" · 约 {Clock(back.Value)} 重生" : ""));
         }

@@ -10,6 +10,7 @@
 #include <winrt/Windows.Storage.Streams.h>
 #include <winrt/Windows.System.h>
 #include <winrt/Windows.UI.Core.h>
+#include <winrt/Windows.UI.Text.h>
 #include <winrt/Windows.UI.Xaml.Automation.h>
 #include <winrt/Windows.UI.Xaml.Controls.h>
 #include <winrt/Windows.UI.Xaml.Controls.Primitives.h>
@@ -25,6 +26,7 @@
 #include <vector>
 #include <functional>
 #include <cwctype>
+#include <cmath>
 
 using namespace winrt;
 using namespace Windows::ApplicationModel::Activation;
@@ -545,6 +547,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         CloseVoice();
         ResetChat();
         waves = JsonObject();
+        waveStops.fill(-1);
         for (auto &card : cards)
         {
             card.hero = 0;
