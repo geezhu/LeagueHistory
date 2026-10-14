@@ -6,6 +6,8 @@ $ErrorActionPreference = 'Stop'
 # Builds the package for other users: a self-contained League.exe (no .NET install needed), the unsigned
 # Game Bar MSIX under GameBar/ (each computer signs it with its own certificate when installing from
 # Settings), and no voice model (downloaded in Settings). No signing key is involved.
+# The package follows upstream's: files at the zip root, with version.txt for the auto-updater; the title bar
+# keeps upstream's text.
 $projectRoot = Split-Path $PSScriptRoot -Parent
 if (!$OutputDirectory) { $OutputDirectory = Join-Path $projectRoot "bin/Publish/$Version" }
 $output = [IO.Path]::GetFullPath($OutputDirectory)
@@ -16,8 +18,9 @@ if ((Test-Path $output) -and (Get-ChildItem $output -Force | Select-Object -Firs
 $app = Join-Path $output 'League'
 $gameBarBuild = Join-Path $output 'GameBarBuild'
 & dotnet publish (Join-Path $projectRoot 'League.csproj') -c Release -r win-x64 --self-contained true `
-    -p:BundleVoiceModel=false -p:DebugType=none -p:Version=$Version -o $app -nologo -v q
+    -p:BundleVoiceModel=false -p:DebugType=none -o $app -nologo -v q
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish 失败：$LASTEXITCODE" }
+[IO.File]::WriteAllText((Join-Path $app 'version.txt'), $Version.TrimStart('v', 'V'))
 
 & (Join-Path $projectRoot 'GameBar/Build.ps1') -OutputDirectory $gameBarBuild
 $components = New-Item -ItemType Directory -Force (Join-Path $app 'GameBar')
@@ -27,7 +30,7 @@ Remove-Item -Recurse -Force $gameBarBuild
 $zip = Join-Path $output "League-$Version-win-x64.zip"
 # Antivirus may briefly lock freshly written files; retry the archive instead of failing the release.
 for ($attempt = 1; ; $attempt++) {
-    try { Compress-Archive -Path $app -DestinationPath $zip -Force; break }
+    try { Compress-Archive -Path (Join-Path $app '*') -DestinationPath $zip -Force; break }
     catch {
         if ($attempt -ge 3) { throw }
         Start-Sleep -Seconds 3
