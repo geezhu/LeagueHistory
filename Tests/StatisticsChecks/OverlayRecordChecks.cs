@@ -36,6 +36,11 @@ internal static class OverlayRecordChecks
             OverlayChatRequest.Parse(Request("record", "own"), "match", new int[10], 100000)?.Kind == "record",
             "The record message is an accepted Game Bar request"
         );
+        Check(
+            OverlayChatRequest.Parse(Request("party", "enemy"), "match", new int[10], 100000)?.Kind == "party"
+                && OverlayChatRequest.Parse(Request("party", "single", 0, 103), "match", Heroes(), 100000) == null,
+            "Premades are sent per side; a single hero has no group"
+        );
         Console.WriteLine(
             "PASS: Game Bar record tab and message: seat matching, results and streaks, tag rules, F9/F11 line format and send settings."
         );

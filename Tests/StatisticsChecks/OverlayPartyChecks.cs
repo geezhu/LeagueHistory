@@ -29,10 +29,11 @@ internal static class OverlayPartyChecks
         {
             PopulateHistory(cache);
             Grouping(roster, cache);
+            ChatMessage(roster, cache);
             AccountIdentity(roster, cache);
             HistoryThresholds(roster, cache);
             Console.WriteLine(
-                "PASS: cached five/two/three-player groups, distinct colors, hidden/unknown identities, same-game opposing teams, duplicates, no cache mutation and marker removal."
+                "PASS: cached five/two/three-player groups, distinct colors, hidden/unknown identities, same-game opposing teams, duplicates, no cache mutation, marker removal and the suspected premade message."
             );
         }
         finally
@@ -102,6 +103,62 @@ internal static class OverlayPartyChecks
         Check(
             OverlayPartyAnalysis.ForRoster(roster with { Players = [players[0]] }, cache).Count == 0,
             "Out-of-roster cached friends cannot inflate a current group"
+        );
+    }
+
+    // The message lists the roster colors' groups, largest first; unloaded players are unknown, never solo.
+    private static void ChatMessage(LoadingRoster roster, PlayerMatchInfo[] cache)
+    {
+        roster = roster with { Players = roster.Players.Select((p, i) => p with { ChampionId = 100 + i }).ToArray() };
+        string Hero(int id) => "英雄" + id;
+        OverlayChatRequest Request(string target) => new("id", "match", target, -1, 0, 0, false, false, "party");
+        Check(
+            OverlayPartyChatMessage.Build(roster, Request("enemy"), cache, Hero).Single()
+                == "【疑似组排·对方】3排：[英雄107、英雄108、英雄109]；2排：[英雄105、英雄106]（按近期同队战绩推测）",
+            "Enemy premades are listed largest first and marked as suspected"
+        );
+        var hidden = roster with
+        {
+            Players = roster.Players.Select(p => p.Key == "k4" ? p with { IdentityHidden = true } : p).ToArray(),
+        };
+        Check(
+            OverlayPartyChatMessage.Build(hidden, Request("own"), cache, Hero).Single()
+                == "【疑似组排·我方】4排：[英雄100、英雄101、英雄102、英雄103]；未知：[英雄104]（按近期同队战绩推测）",
+            "A hidden player is unknown, not solo"
+        );
+        var keys = cache[4].MatchKeys.ToList();
+        cache[4].MatchKeys.Clear();
+        try
+        {
+            Check(
+                OverlayPartyChatMessage
+                    .Build(roster, Request("own"), cache, Hero)
+                    .Single()
+                    .Contains("；单排：[英雄104]"),
+                "A loaded player without shared games is solo"
+            );
+        }
+        finally
+        {
+            cache[4].MatchKeys.AddRange(keys);
+        }
+
+        bool Rejected(Func<IReadOnlyList<string>> build)
+        {
+            try
+            {
+                build();
+                return false;
+            }
+            catch (InvalidOperationException)
+            {
+                return true;
+            }
+        }
+        Check(
+            Rejected(() => OverlayPartyChatMessage.Build(roster, Request("own"), [], Hero))
+                && Rejected(() => OverlayPartyChatMessage.Build(roster, Request("single"), cache, Hero)),
+            "Nothing is sent without histories or for a single hero"
         );
     }
 

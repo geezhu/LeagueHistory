@@ -134,6 +134,7 @@ internal static class OverlayDetailPreview
             ["chatMastery"] = true,
             ["chatDeathStreak"] = true,
             ["chatRecord"] = true,
+            ["chatParty"] = true,
             ["chatVoice"] = true,
             ["voiceProtocol"] = 2,
             ["chatTeams"] = true,
