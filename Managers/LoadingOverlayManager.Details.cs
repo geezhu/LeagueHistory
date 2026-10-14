@@ -74,6 +74,7 @@ internal sealed partial class LoadingOverlayManager
             _detailWork = LoadChampionDetail(
                 request,
                 player,
+                _roster,
                 _roster.Queue,
                 _ranks.GetValueOrDefault(player.Key)?.Position ?? "none",
                 _detailCancellation.Token
@@ -92,6 +93,7 @@ internal sealed partial class LoadingOverlayManager
     private async Task LoadChampionDetail(
         OverlayDetailRequest request,
         LoadingPlayer player,
+        LoadingRoster roster,
         int queue,
         string position,
         CancellationToken token
@@ -102,6 +104,7 @@ internal sealed partial class LoadingOverlayManager
         {
             if (!_disposed && !token.IsCancellationRequested && _lastDetailRequest == request.Id)
             {
+                AddRecordSections(data, player, roster);
                 last = (JObject)data.DeepClone();
                 _gameBar.PublishDetail(request, data);
             }
@@ -140,5 +143,24 @@ internal sealed partial class LoadingOverlayManager
                 }
             );
         }
+    }
+
+    // The player's record comes from the main window's cache with every reply, so the tab is ready before the
+    // champion details load, and a history that finished loading meanwhile appears on the next reply.
+    private void AddRecordSections(JObject data, LoadingPlayer player, LoadingRoster roster)
+    {
+        var sections = data["sections"] as JArray ?? new JArray();
+        foreach (var old in sections.Where(s => (string?)s["tab"] == OverlayRecordSections.Tab).ToArray())
+        {
+            old.Remove();
+        }
+
+        var info = OverlayPlayerRecords.Find(roster, player, CachedPlayers());
+        foreach (var section in OverlayRecordSections.Build(player, info, Champion, icons: true))
+        {
+            sections.Add(section);
+        }
+
+        data["sections"] = sections;
     }
 }

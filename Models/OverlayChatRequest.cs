@@ -48,7 +48,8 @@ public sealed record OverlayChatRequest(
             value["kind"] != null
             && (
                 value["kind"]!.Type != JTokenType.String
-                || (string?)value["kind"] is not ("tier" or "mastery" or "deathStreak" or "voice" or "waves")
+                || (string?)value["kind"]
+                    is not ("tier" or "mastery" or "deathStreak" or "record" or "voice" or "waves")
             )
         )
         {

@@ -133,6 +133,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     bool capturePending = false;
 
 #include "ChampionDetailView.inl"
+#include "RecordView.inl"
 #include "TierChatView.inl"
 #include "VoiceChatView.inl"
 #include "WaveView.inl"
@@ -624,6 +625,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         supportsChat = data.GetNamedNumber(L"chatProtocol", 0) == 1;
         supportsMasteryChat = data.GetNamedBoolean(L"chatMastery", false);
         supportsDeathStreakChat = data.GetNamedBoolean(L"chatDeathStreak", false);
+        supportsRecordChat = data.GetNamedBoolean(L"chatRecord", false);
         supportsWaveChat = data.GetNamedBoolean(L"chatWaves", false);
         chatTeams = data.GetNamedBoolean(L"chatTeams", false);
         supportsVoiceChat = data.GetNamedBoolean(L"chatVoice", false);

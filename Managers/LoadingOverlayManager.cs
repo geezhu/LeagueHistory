@@ -593,12 +593,13 @@ internal sealed partial class LoadingOverlayManager : IDisposable
             _wanted && !_display.Preview,
             _masteries,
             _deathStreaks,
-            OverlayPartyAnalysis.ForRoster(
-                _roster,
-                _owner._playerCardManager?.GetAllCachedPlayerInfos().Values.AsEnumerable() ?? []
-            ),
+            OverlayPartyAnalysis.ForRoster(_roster, CachedPlayers()),
             _liveState
         );
+
+    /// <summary>Histories the main window already loaded for the room; the overlay never requests its own.</summary>
+    private IEnumerable<PlayerMatchInfo> CachedPlayers() =>
+        _owner._playerCardManager?.GetAllCachedPlayerInfos().Values.AsEnumerable() ?? [];
 
     private void PaintSnapshot()
     {

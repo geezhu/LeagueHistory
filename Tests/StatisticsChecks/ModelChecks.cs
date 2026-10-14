@@ -10,6 +10,7 @@ internal static class ModelChecks
         LiveChampionChecks.Run();
         LiveDeathStreakChecks.Run();
         OverlayTierChatChecks.Run();
+        OverlayRecordChecks.Run();
         OverlayVoiceChatChecks.Run();
         Timeline();
         return Task.CompletedTask;

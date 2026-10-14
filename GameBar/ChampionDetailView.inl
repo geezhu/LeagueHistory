@@ -10,8 +10,9 @@ Image detailArtwork;
 std::array<Button, 10> heroButtons;
 std::array<Image, 10> heroIcons;
 std::array<Border, 10> heroIndicators;
-std::array<Button, 5> tabButtons;
-static constexpr std::array<wchar_t const *, 5> DetailTabKeys{L"skills", L"builds", L"runes", L"augments", L"live"};
+std::array<Button, 6> tabButtons;
+static constexpr std::array<wchar_t const *, 6> DetailTabKeys{
+    L"skills", L"builds", L"runes", L"augments", L"live", L"record"};
 JsonObject detailData;
 hstring detailRequest, detailRevision, detailTab = L"skills";
 hstring pendingDetailRequest;
@@ -36,7 +37,7 @@ void ConfigureDetailPreview(hstring const &argument)
         return;
     auto tab = text.substr(prefix.size());
     if (tab != L"skills" && tab != L"builds" && tab != L"runes" && tab != L"augments" && tab != L"live" &&
-        tab != L"roster" && tab != L"voice" && tab != L"waves" && tab != L"marks")
+        tab != L"record" && tab != L"roster" && tab != L"voice" && tab != L"waves" && tab != L"marks")
         return;
     fixturePreview = true;
     fixtureOpened = false;
@@ -146,8 +147,9 @@ void InitializeDetailTabs()
 {
     detailTabs.Orientation(Orientation::Horizontal);
     detailTabs.Margin({0, 8, 0, 8});
-    std::array<hstring, 5> names{L"技能", L"出装", L"符文", L"海克斯", L"本局"};
-    for (int i = 0; i < 5; ++i)
+    // The player's record follows the hero tabs: it describes the account, not the champion.
+    std::array<hstring, 6> names{L"技能", L"出装", L"符文", L"海克斯", L"本局", L"战绩"};
+    for (size_t i = 0; i < names.size(); ++i)
     {
         auto &b = tabButtons[i];
         b = DetailButton(names[i]);
@@ -388,7 +390,7 @@ void RenderDetails(bool resetScroll = true)
     detailBody.Children().Clear();
     if (resetScroll)
         detailScroll.ChangeView(nullptr, 0.0, nullptr);
-    for (int i = 0; i < 5; ++i)
+    for (size_t i = 0; i < tabButtons.size(); ++i)
     {
         tabButtons[i].Background(MakeBrush(DetailTabKeys[i] == detailTab ? 0x008b98 : 0x143542));
     }
@@ -456,6 +458,8 @@ void RenderSectionHeading(JsonObject const &section)
 }
 void RenderDetailSection(JsonObject const &section)
 {
+    if (RenderRecordSection(section))
+        return;
     RenderSectionHeading(section);
     auto rows = section.GetNamedArray(L"rows", JsonArray());
     if (rows.Size() == 0)
