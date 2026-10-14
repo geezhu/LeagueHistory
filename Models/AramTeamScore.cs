@@ -46,6 +46,8 @@ public static class AramTeamScore
         ("sustain", "续航"),
     ];
 
+    public static IEnumerable<string> CapabilityKeys => CapabilityNames.Select(capability => capability.Key);
+
     private static readonly string[] SumKeys =
     [
         "phys",
@@ -322,6 +324,6 @@ public static class AramTeamScore
     private static double Sigmoid(double x) => 1 / (1 + Math.Exp(-x));
 
     // Mirrors JavaScript Number(x || 0): missing or non-numeric values count as zero.
-    private static double Number(JToken? token) =>
+    internal static double Number(JToken? token) =>
         token?.Type is JTokenType.Float or JTokenType.Integer && double.IsFinite((double)token) ? (double)token : 0;
 }

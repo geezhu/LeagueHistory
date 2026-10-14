@@ -46,27 +46,12 @@ internal static class CompositionViewChecks
                 && !message.Contains(" %"),
             "The Mayhem chat summary carries the estimate within one chat line: " + message
         );
+        Grades(index, mayhem.GradesMessage!, AramTeamScore.Evaluate(index, ids.Take(5).ToArray()));
         mayhem.Parent!.Dispose();
         ChatSummary(index, ids, Name);
         AnalysisSummary(index, roster, Name, message);
 
-        var aram = Render(roster, _ => Task.FromResult(index), false, Name, "composition-view-aram");
-        Check(
-            !Labels(aram).Any(label => label.Text.Contains("估计胜率 "))
-                && Labels(aram).Any(label => label.Text.Contains("不显示估计胜率")),
-            "Normal ARAM shows capabilities without a Mayhem-trained win estimate"
-        );
-        Check(
-            aram.ChatMessage!.StartsWith("【大乱斗·阵容分析】") && !aram.ChatMessage.Contains("估计胜率"),
-            "The normal ARAM chat summary leaves out the Mayhem-trained estimate"
-        );
-        Check(
-            League.Services.TeamAnalysisChatMessage.Analyze(index, roster, false, Name) is var plain
-                && plain.Message == aram.ChatMessage
-                && !plain.Brief.Contains("胜率"),
-            "The normal ARAM assistant line leaves out the estimate"
-        );
-        aram.Parent!.Dispose();
+        NormalAram(index, roster, Name);
 
         var failed = Render(
             roster,
@@ -79,9 +64,69 @@ internal static class CompositionViewChecks
             Labels(failed).Any(label => label.Text.EndsWith("点击重试")),
             "A failed statistics load offers a retry instead of an empty panel"
         );
-        Check(failed.ChatMessage == null, "Nothing is offered for sending until statistics load");
+        Check(
+            failed.ChatMessage == null && failed.GradesMessage == null,
+            "Nothing is offered for sending until statistics load"
+        );
         failed.Parent!.Dispose();
         Console.WriteLine("PASS: composition view shows estimate, capabilities, synergy and ordered swap suggestions.");
+    }
+
+    // Every capability travels as a grade without its total, and the line fits one chat message.
+    private static void Grades(AramMetaIndex index, string message, AramTeamEvaluation evaluation)
+    {
+        var grades = AramCapabilityGrades.Build(index);
+        Check(
+            message.StartsWith("【海克斯大乱斗·阵容能力】")
+                && evaluation.Capabilities.All(capability =>
+                    message.Contains($"{capability.Name} {grades.Grade(capability, 5)} ·")
+                    || message.Contains($"{capability.Name} {grades.Grade(capability, 5)}；")
+                )
+                && !System.Text.RegularExpressions.Regex.IsMatch(message, @"\d\.\d")
+                && message.Length <= 180,
+            "The grades message names every capability's grade without totals: " + message
+        );
+
+        AramTeamCapability Front(double sum, bool lack) => new("front", "前排", sum, 1.8, lack);
+        Check(
+            grades.Grade(Front(100, false), 5) == "S+"
+                && grades.Grade(Front(0, false), 5) == "C"
+                && grades.Grade(Front(100, true), 5) == "D",
+            "Grades run from C to S+ by percentile, and a gap is always D"
+        );
+        var again = AramCapabilityGrades.Build(index);
+        Check(
+            evaluation.Capabilities.All(capability =>
+                again.Percentile(capability, 5) == grades.Percentile(capability, 5)
+            ),
+            "The same statistics always give the same grades"
+        );
+        double one = grades.Percentile(Front(1.5, false), 1),
+            five = grades.Percentile(Front(1.5, false), 5);
+        Check(one > five, "A total ranks against random teams of the same size: " + one + " / " + five);
+    }
+
+    // Normal ARAM keeps the capabilities and grades but leaves out the Mayhem-trained estimate.
+    private static void NormalAram(AramMetaIndex index, ChampionSelectRoster roster, Func<int, string> name)
+    {
+        var aram = Render(roster, _ => Task.FromResult(index), false, name, "composition-view-aram");
+        Check(
+            !Labels(aram).Any(label => label.Text.Contains("估计胜率 "))
+                && Labels(aram).Any(label => label.Text.Contains("不显示估计胜率")),
+            "Normal ARAM shows capabilities without a Mayhem-trained win estimate"
+        );
+        Check(
+            aram.ChatMessage!.StartsWith("【大乱斗·阵容分析】") && !aram.ChatMessage.Contains("估计胜率"),
+            "The normal ARAM chat summary leaves out the Mayhem-trained estimate"
+        );
+        Check(aram.GradesMessage!.StartsWith("【大乱斗·阵容能力】"), "The normal ARAM grades name the mode");
+        Check(
+            League.Services.TeamAnalysisChatMessage.Analyze(index, roster, false, name) is var plain
+                && plain.Message == aram.ChatMessage
+                && !plain.Brief.Contains("胜率"),
+            "The normal ARAM assistant line leaves out the estimate"
+        );
+        aram.Parent!.Dispose();
     }
 
     private static void ChatSummary(AramMetaIndex index, int[] ids, Func<int, string> name)

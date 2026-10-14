@@ -25,6 +25,7 @@ public sealed class ChampionCompositionView : FlowLayoutPanel
     private readonly ToolTip _tips = new() { AutoPopDelay = 20000 };
     private readonly List<Font> _fonts = new();
     private AramMetaIndex? _index;
+    private AramCapabilityGrades? _grades;
     private ChampionSelectRoster? _roster;
     private bool _loading;
     private string? _chatMessage;
@@ -52,6 +53,9 @@ public sealed class ChampionCompositionView : FlowLayoutPanel
     /// <summary>The current analysis as one champion select chat line; null until statistics load.</summary>
     public string? ChatMessage => _chatMessage;
 
+    /// <summary>The capability grades as one champion select chat line; null until statistics load.</summary>
+    public string? GradesMessage { get; private set; }
+
     /// <summary>Completes when the current statistics load finishes; used by lifecycle cleanup.</summary>
     public Task Loading { get; private set; } = Task.CompletedTask;
 
@@ -73,9 +77,12 @@ public sealed class ChampionCompositionView : FlowLayoutPanel
         try
         {
             var index = await _loadIndex(_lifetime);
+            // Sampling random teams takes a moment for every team size, so it stays off the UI thread.
+            var grades = await Task.Run(() => AramCapabilityGrades.Build(index), _lifetime);
             if (!IsDisposed && !_lifetime.IsCancellationRequested)
             {
                 _index = index;
+                _grades = grades;
             }
         }
         catch (OperationCanceledException)
@@ -118,7 +125,8 @@ public sealed class ChampionCompositionView : FlowLayoutPanel
 
         _fonts.Clear();
         _chatMessage = null;
-        if (_index == null)
+        GradesMessage = null;
+        if (_index == null || _grades == null)
         {
             AddStatus();
         }
@@ -141,6 +149,7 @@ public sealed class ChampionCompositionView : FlowLayoutPanel
                 _index.Patch,
                 _name
             );
+            GradesMessage = TeamAnalysisChatMessage.Grades(evaluation, _grades, _mayhem);
         }
 
         ResumeLayout(true);
@@ -204,7 +213,7 @@ public sealed class ChampionCompositionView : FlowLayoutPanel
         Add(Heading("能力与短板"));
         foreach (var capability in evaluation.Capabilities)
         {
-            Add(CapabilityRow(capability));
+            Add(CapabilityRow(capability, evaluation.Team.Length));
         }
 
         string mix = evaluation.AdShare switch
@@ -221,8 +230,13 @@ public sealed class ChampionCompositionView : FlowLayoutPanel
         );
     }
 
-    private Control CapabilityRow(AramTeamCapability capability)
+    private Control CapabilityRow(AramTeamCapability capability, int size)
     {
+        string grade = _grades!.Grade(capability, size);
+        Color gradeColor =
+            capability.Lack ? Bad
+            : grade.StartsWith('S') ? Gold
+            : Muted;
         var row = new Panel { Size = new Size(RowWidth, 22), Margin = new Padding(0, 1, 0, 1) };
         // Gap thresholds are low, so a full track is 2.5× the threshold: the tick sits at 40% and the bar
         // shows how far a total clears it. Totals beyond that simply fill the track.
@@ -248,16 +262,23 @@ public sealed class ChampionCompositionView : FlowLayoutPanel
             TextRenderer.DrawText(e.Graphics, capability.Name, Font, new Point(0, 3), Body);
             TextRenderer.DrawText(
                 e.Graphics,
-                capability.Lack ? "短板" : capability.Sum.ToString("0.0"),
+                $"{grade} {capability.Sum:0.0}",
                 Font,
                 new Rectangle(bar.Right + 8, 0, status, row.Height),
-                capability.Lack ? Bad : Muted,
+                gradeColor,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.Left
             );
         };
         _tips.SetToolTip(
             row,
-            $"{capability.Name}：全队合计 {capability.Sum:0.##}，短板阈值 {capability.Threshold:0.##}（竖线）。"
+            $"{capability.Name}：全队合计 {capability.Sum:0.##}，短板阈值 {capability.Threshold:0.##}（竖线）。\n"
+                + $"等级 {grade}："
+                + (
+                    capability.Lack
+                        ? "低于短板阈值。"
+                        : $"高于 {_grades.Percentile(capability, size):P0} 的同人数随机阵容。"
+                )
+                + "\n等级只表示与其他阵容相比的位置；估计胜率只计算是否短板。"
         );
         return row;
     }

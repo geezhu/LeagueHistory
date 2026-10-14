@@ -86,9 +86,26 @@ public static class TeamAnalysisChatMessage
         }
 
         string prefix = mayhem ? "【海克斯大乱斗·阵容分析】" : "【大乱斗·阵容分析】";
-        string message = prefix + string.Join("；", parts);
-        return message.Length <= Limit ? message : message[..(Limit - 1)] + "…";
+        return Fit(prefix + string.Join("；", parts));
     }
+
+    /// <summary>Each capability as a grade among random teams, D marking a gap, then the damage mix and front line.</summary>
+    public static string Grades(AramTeamEvaluation evaluation, AramCapabilityGrades grades, bool mayhem)
+    {
+        int size = evaluation.Team.Length;
+        var levels = evaluation.Capabilities.Select(capability =>
+            capability.Name + " " + grades.Grade(capability, size)
+        );
+        string prefix = mayhem ? "【海克斯大乱斗·阵容能力】" : "【大乱斗·阵容能力】";
+        return Fit(
+            prefix
+                + string.Join(" · ", levels)
+                + $"；物理伤害 {(evaluation.AdShare * 100).ToString("0", CultureInfo.InvariantCulture)}%"
+                + $" · 前排 {evaluation.FrontCount} 人；等级按同人数随机阵容排名，{AramCapabilityGrades.Gap} 为短板"
+        );
+    }
+
+    private static string Fit(string message) => message.Length <= Limit ? message : message[..(Limit - 1)] + "…";
 
     // Only a swap that helps is worth announcing: a higher estimate, or more gaps fixed than added.
     private static AramTeamSwap? Recommended(AramTeamSwap? swap, bool mayhem) =>
