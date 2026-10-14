@@ -16,6 +16,15 @@ public sealed record LiveChampionStats(
 {
     public double CurrentHealth { get; init; }
 
+    public double AttackDamage { get; init; }
+
+    public double AbilityPower { get; init; }
+
+    /// <summary>Attacks per second.</summary>
+    public double AttackSpeed { get; init; }
+
+    public double AttackRange { get; init; }
+
     public static LiveChampionStats? Parse(JObject? stats)
     {
         if (stats?["maxHealth"] is not JToken health || (double?)health is not (double maxHealth and > 0))
@@ -40,6 +49,10 @@ public sealed record LiveChampionStats(
         )
         {
             CurrentHealth = Value("currentHealth"),
+            AttackDamage = Value("attackDamage"),
+            AbilityPower = Value("abilityPower"),
+            AttackSpeed = Value("attackSpeed"),
+            AttackRange = Value("attackRange"),
         };
     }
 }
