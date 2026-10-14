@@ -2,17 +2,17 @@
 StackPanel chatFooter;
 // One send menu: pick the content, then the target team or the selected hero.
 Button sendMenu, cancelChat;
-MenuFlyoutSubItem tierMenu, masteryMenu, deathStreakMenu, waveChatMenu;
+MenuFlyoutSubItem tierMenu, masteryMenu, deathStreakMenu, recordMenu, waveChatMenu;
 // Wave summaries go to team chat; the targets name the content instead of players.
 std::array<MenuFlyoutItem, 3> waveChatTargets;
 static constexpr std::array<wchar_t const *, 3> WaveChatKeys{L"spawn", L"super", L"deaths"};
 static constexpr wchar_t const *ChatIdleText =
     L"发送到游戏聊天 · 需以管理员身份运行 League · 点击后按 Win＋G 返回游戏。";
-std::array<MenuFlyoutItem, 3> tierTargets, masteryTargets, deathStreakTargets;
+std::array<MenuFlyoutItem, 3> tierTargets, masteryTargets, deathStreakTargets, recordTargets;
 TextBlock chatStatus = MakeText(ChatIdleText, 12, 0x91acbb);
-bool supportsChat = false, supportsMasteryChat = false, supportsDeathStreakChat = false, supportsWaveChat = false,
-     chatTeams = false, chatPending = false, chatWriting = false, chatReading = false, chatDismissed = false,
-     chatCancelled = false, chatCleanup = false;
+bool supportsChat = false, supportsMasteryChat = false, supportsDeathStreakChat = false, supportsRecordChat = false,
+     supportsWaveChat = false, chatTeams = false, chatPending = false, chatWriting = false, chatReading = false,
+     chatDismissed = false, chatCancelled = false, chatCleanup = false;
 hstring chatId, chatSession, chatTarget, chatKind, chatText, pendingChatWrite;
 int chatSlot = -1, chatHero = 0;
 int64_t chatCreated = 0;
@@ -50,6 +50,7 @@ void InitializeChat()
     submenu(tierMenu, L"梯队与胜率", tierTargets, L"tier");
     submenu(masteryMenu, L"英雄成就", masteryTargets, L"mastery");
     submenu(deathStreakMenu, L"连死", deathStreakTargets, L"deathStreak");
+    submenu(recordMenu, L"战绩与特征", recordTargets, L"record");
     std::array<hstring, 3> waveNames{L"出波与炮车", L"超级兵", L"现在阵亡需等待"};
     waveChatMenu.Text(L"兵线（发到队伍）");
     for (int i = 0; i < 3; ++i)
@@ -89,8 +90,10 @@ void InitializeChat()
     UpdateChatButtons();
     ToolTipService::SetToolTip(
         sendMenu,
-        box_value(L"发送梯队与胜率、英雄成就或连死到游戏聊天，可选我方、敌方或当前选中英雄；兵线信息发到队伍聊天。\n"
-                  L"需以管理员身份运行 League；点击后按 Win＋G 返回游戏。连死：死亡加一，击杀清零，助攻不清零。"));
+        box_value(
+            L"发送梯队与胜率、英雄成就、连死或战绩与特征到游戏聊天，可选我方、敌方或当前选中英雄；兵线信息发到队伍聊天。\n"
+            L"需以管理员身份运行 League；点击后按 Win＋G 返回游戏。连死：死亡加一，击杀清零，助攻不清零。\n"
+            L"战绩与特征：近期胜率和行为标签，与 F9 / F11 相同，按「发送战绩时隐藏自己」和「使用英雄名称」设置。"));
 }
 void UpdateChatButtons()
 {
@@ -105,12 +108,15 @@ void UpdateChatButtons()
     masteryMenu.Visibility(supportsMasteryChat ? Visibility::Visible : Visibility::Collapsed);
     deathStreakMenu.IsEnabled(available && supportsDeathStreakChat && targets);
     deathStreakMenu.Visibility(supportsDeathStreakChat ? Visibility::Visible : Visibility::Collapsed);
+    recordMenu.IsEnabled(available && supportsRecordChat && targets);
+    recordMenu.Visibility(supportsRecordChat ? Visibility::Visible : Visibility::Collapsed);
     for (int i = 0; i < 3; ++i)
     {
         bool scope = i == 2 ? single : chatTeams;
         tierTargets[i].IsEnabled(available && scope);
         masteryTargets[i].IsEnabled(available && supportsMasteryChat && scope);
         deathStreakTargets[i].IsEnabled(available && supportsDeathStreakChat && scope);
+        recordTargets[i].IsEnabled(available && supportsRecordChat && scope);
     }
     waveChatMenu.Visibility(supportsWaveChat ? Visibility::Visible : Visibility::Collapsed);
     waveChatMenu.IsEnabled(waveReady);
@@ -138,8 +144,9 @@ bool CanQueueChat(hstring const &target, hstring const &kind) const
         return false;
     if (kind == L"waves")
         return supportsWaveChat && HasWaves() && WaveChatAvailable(target);
-    if ((kind != L"tier" && kind != L"mastery" && kind != L"deathStreak" && kind != L"voice") ||
-        (kind == L"mastery" && !supportsMasteryChat) || (kind == L"deathStreak" && !supportsDeathStreakChat))
+    if ((kind != L"tier" && kind != L"mastery" && kind != L"deathStreak" && kind != L"record" && kind != L"voice") ||
+        (kind == L"mastery" && !supportsMasteryChat) || (kind == L"deathStreak" && !supportsDeathStreakChat) ||
+        (kind == L"record" && !supportsRecordChat))
         return false;
     if (kind != L"voice" && target != L"own" && target != L"enemy" && target != L"single")
     {
@@ -181,6 +188,7 @@ void QueueChat(hstring const &target, hstring const &kind)
                                      : cards[chatSlot].champion.Text();
     auto metric = kind == L"mastery"       ? L"熟练度"
                   : kind == L"deathStreak" ? L"连死次数"
+                  : kind == L"record"      ? L"战绩"
                   : target == L"spawn"     ? L"出波与炮车"
                   : target == L"super"     ? L"超级兵"
                   : target == L"deaths"    ? L"阵亡代价"

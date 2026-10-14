@@ -43,6 +43,11 @@ internal static class OverlayDetailPreview
         {
             ((JArray)content["sections"]!).Add(section.DeepClone());
         }
+        string[] heroes = ["九尾妖狐", "拉克丝", "莫甘娜", "提莫"];
+        foreach (var section in OverlayRecordSections.Build(SamplePlayer(), SampleRecord(), id => heroes[id % 4]))
+        {
+            ((JArray)content["sections"]!).Add(section);
+        }
         ((JArray)content["sections"]!).Insert(
             0,
             OverlayChampionDetailService.Section(
@@ -128,6 +133,7 @@ internal static class OverlayDetailPreview
             ["chatProtocol"] = 1,
             ["chatMastery"] = true,
             ["chatDeathStreak"] = true,
+            ["chatRecord"] = true,
             ["chatVoice"] = true,
             ["voiceProtocol"] = 2,
             ["chatTeams"] = true,
@@ -238,6 +244,66 @@ internal static class OverlayDetailPreview
             l.Name == "中路" ? l with { Progress = Fortified(l.Progress!, 846), Siege = SampleSiege() } : l
         );
         roster["waves"] = (waves with { DeathAdvice = SampleDeathAdvice(), Lanes = lanes.ToArray() }).ToJson();
+    }
+
+    private static LoadingPlayer SamplePlayer() => new("p|0", "测试玩家 1", "sample-puuid", 1, 103, 100, true);
+
+    // Twenty games so the record tab shows its full length; a remake and a surrender check their labels.
+    private static PlayerMatchInfo SampleRecord()
+    {
+        var info = new PlayerMatchInfo
+        {
+            Player = new PlayerInfo
+            {
+                Puuid = "sample-puuid",
+                SoloRank = "黄金 II(45)",
+                FlexRank = "白银 I(12)",
+                IsPublic = "公开",
+            },
+            Behavior = new PlayerBehavior
+            {
+                SurrenderRate = 35,
+                AvgMissingPings = 3.4,
+                AvgVisionPings = 0.8,
+                AvgGetBackPings = 4.2,
+                AvgDangerPings = 1.1,
+                ShortGameCount = 3,
+                BehaviorSummary = "[容易投降、爱发问号、爱发撤退、玻璃心]",
+            },
+        };
+        for (int i = 0; i < 20; i++)
+        {
+            bool remake = i == 4;
+            info.WinHistory.Add(!remake && i % 3 != 2);
+            info.RecentMatches.Add(
+                new MatchStat
+                {
+                    Kills = 4 + i % 6,
+                    Deaths = 2 + i % 5,
+                    Assists = 9 + i % 7,
+                    GameDurationMinutes = remake ? 3 : 18 + i % 9,
+                    GameEndedInSurrender = i % 5 == 1,
+                }
+            );
+            var item = new ListViewItem
+            {
+                ImageKey = "Ahri",
+                ForeColor = remake ? MatchResult.RemakeColor : Color.Green,
+                Tag = new MatchMetadata
+                {
+                    GameData = new JObject
+                    {
+                        ["participants"] = new JArray(
+                            new JObject { ["puuid"] = "sample-puuid", ["championId"] = 100 + i % 4 }
+                        ),
+                    },
+                },
+            };
+            item.SubItems.AddRange(["海克斯大乱斗", "", $"2026-10-{14 - i / 3:00}"]);
+            info.MatchItems.Add(item);
+        }
+
+        return info;
     }
 
     private static TurretSiege SampleSiege() =>

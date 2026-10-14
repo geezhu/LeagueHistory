@@ -157,7 +157,9 @@ internal static class Program
             {
                 OverlayVoiceChatChecks.Run();
                 OverlayTierChatChecks.Run();
+                OverlayRecordChecks.Run();
             });
+        checks["--overlay-record-checks"] = () => Background(OverlayRecordChecks.Run);
         checks["--overlay-party-checks"] = () => Ui(OverlayPartyChecks.Run);
         checks["--minion-wave-checks"] = MinionWaveChecks.Run;
         checks["--death-timing-checks"] = DeathTimingChecks.Run;
@@ -194,6 +196,7 @@ internal static class Program
         GameBarBridgeChecks.Run();
         OverlayChampionDetailChecks.Run();
         OverlayTierChatChecks.Run();
+        OverlayRecordChecks.Run();
         OverlayVoiceChatChecks.Run();
     }
 

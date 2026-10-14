@@ -140,6 +140,14 @@ internal sealed partial class LoadingOverlayManager
                 request.Target,
                 DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             ),
+            "record" => OverlayRecordChatMessage.Build(
+                roster!,
+                request,
+                CachedPlayers(),
+                Champion,
+                _owner.GetAppConfig()?.HideSelfWhenSending ?? false,
+                _owner.GetAppConfig()?.UseChampionNameWhenSending ?? false
+            ),
             _ => OverlayTierChatMessage.Build(roster!, request, _ranks, Champion),
         };
 
