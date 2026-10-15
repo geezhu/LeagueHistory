@@ -577,7 +577,9 @@ internal sealed partial class LoadingOverlayManager : IDisposable
         }
     }
 
-    private void PublishGameBar(bool? enabled = null) =>
+    private void PublishGameBar(bool? enabled = null)
+    {
+        RequestControls();
         _gameBar.Publish(
             _roster,
             _ranks,
@@ -594,8 +596,11 @@ internal sealed partial class LoadingOverlayManager : IDisposable
             _masteries,
             _deathStreaks,
             OverlayPartyAnalysis.ForRoster(_roster, CachedPlayers()),
-            _liveState
+            _liveState,
+            _controls,
+            _cooldowns
         );
+    }
 
     /// <summary>Histories the main window already loaded for the room; the overlay never requests its own.</summary>
     private IEnumerable<PlayerMatchInfo> CachedPlayers() =>

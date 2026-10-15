@@ -135,6 +135,7 @@ internal static class OverlayDetailPreview
             ["chatDeathStreak"] = true,
             ["chatRecord"] = true,
             ["chatParty"] = true,
+            ["controlProtocol"] = 1,
             ["chatVoice"] = true,
             ["voiceProtocol"] = 2,
             ["chatTeams"] = true,
@@ -199,8 +200,54 @@ internal static class OverlayDetailPreview
             row["partyColor"] = party.Color;
             row["partyLabel"] = party.Label;
             row["partyDetails"] = party.Description;
+            AddControlPreview(row, slot);
             slot++;
         }
+    }
+
+    // Varied lengths check the chip rows: several abilities, none recognized, and a slot whose data is still loading.
+    private static void AddControlPreview(JObject row, int slot)
+    {
+        JObject Skill(string key, string name, string effects) =>
+            new()
+            {
+                ["key"] = key,
+                ["name"] = name,
+                ["effects"] = effects,
+                ["description"] = "布局样例：技能说明。",
+            };
+        JObject Item(string name, string effect) =>
+            new()
+            {
+                ["name"] = name,
+                ["effect"] = effect,
+                ["rule"] = "布局样例",
+            };
+        if (slot != 4)
+        {
+            row["controls"] = slot is 2 or 8
+                ? new JArray()
+                : new JArray(
+                    Skill("Q", "光之束缚", "禁锢"),
+                    Skill("E", "魅惑妖术", "魅惑"),
+                    Skill("R", "日炎耀斑", slot == 5 ? "击飞/晕眩/减速80% 1秒" : "晕眩")
+                );
+            if (slot is 5 or 6)
+            {
+                var slow = Skill("W", "剧毒之桶", "减速50% 2秒 覆盖15%");
+                slow["slow"] = 50;
+                slow["range"] = 950;
+                slow["slowDuration"] = 2;
+                slow["slowZone"] = 4;
+                slow["slowNote"] = "9 级时该技能最高 5/5 级：减速持续 2秒，区域持续 4秒，停留其中可能再次减速";
+                ((JArray)row["controls"]!).Insert(1, slow);
+            }
+        }
+
+        row["survival"] =
+            slot is 1 or 7 ? new JArray()
+            : slot == 5 ? new JArray(Item("中娅沙漏", "凝滞"), Item("女妖面纱", "法术护盾"), Item("水银饰带", "解控"))
+            : new JArray(Item("守护天使", "复活"));
     }
 
     // Scoreboard facts as 2999 would report them mid-game: two enemies dead, and the active player's panel.
@@ -210,8 +257,22 @@ internal static class OverlayDetailPreview
         foreach (var row in ((JArray)roster["players"]!).OfType<JObject>())
         {
             row["self"] = slot == 0;
+            // Augments name players by key, as the bridge writes it for every seat.
+            row["key"] = $"preview-{slot}";
             row["respawn"] = slot is 6 or 8 ? 9 + slot * 2 : 0;
             row["liveStats"] = $"参团 {40 + slot * 5}% · 装备 {5.2 + slot * 0.4:0.0}k";
+            // The player's real stats, estimates for the rest, and a seat whose champion stats are still loading.
+            if (slot != 4)
+            {
+                row["health"] = slot == 0 ? "4414 · 物理 9667 · 法术 7680" : "约 2830 · 物理 6130 · 法术 4510";
+                row["healthDetails"] = "布局样例：生命估算说明。";
+            }
+
+            if (slot is 0 or 5)
+            {
+                row["calc"] = CalculatorPreview(slot == 0);
+            }
+
             slot++;
         }
 
@@ -234,10 +295,21 @@ internal static class OverlayDetailPreview
             [3071],
             [8010, 9111, 9104, 8299, 8473, 8242, 5005, 5008, 5011],
             "布局样例 · 不代表当前对局"
-        );
+        )
+        {
+            // Long names, an unlearned ability and a charge ability check the tile widths.
+            Cooldowns =
+            [
+                new("Q", "光之束缚", 3, 5, 9, 7.2),
+                new("W", "棱光屏障", 0, 5, 0, 0),
+                new("E", "透光奇点", 4, 5, 15, 12) { Charges = 3 },
+                new("R", "终极闪光", 2, 3, 60, 48),
+            ],
+        };
         roster["teamSummaries"] = new JArray("18 杀 · 41.2k · 领先 2.3k", "14 杀 · 38.9k");
         roster["liveRevision"] = "fixture-live-1";
         roster["liveSections"] = LivePanelSections.Build(input, id => $"布局装备 {id}");
+        AddAugmentPreview(roster);
         var waves = MinionWaveForecaster.Calculate(SampleWaves(), (long)roster["updatedAt"]!)!;
         // The sample is Summoner's Rift, which gets no advice or turret rules; fixed ones show the Howling Abyss
         // layout: the death advice and a fortified inner turret on the mid lane.
@@ -245,6 +317,81 @@ internal static class OverlayDetailPreview
             l.Name == "中路" ? l with { Progress = Fortified(l.Progress!, 846), Siege = SampleSiege() } : l
         );
         roster["waves"] = (waves with { DeathAdvice = SampleDeathAdvice(), Lanes = lanes.ToArray() }).ToJson();
+    }
+
+    // The player's ranks from 2999, or the level's highest ranks for an enemy; a charge ability and an unlearned one.
+    private static JObject CalculatorPreview(bool self)
+    {
+        JObject Ability(string key, string name, int rank, double[] cooldowns, double[]? recharge = null) =>
+            new()
+            {
+                ["key"] = key,
+                ["name"] = name,
+                ["rank"] = rank,
+                ["cooldowns"] = new JArray(cooldowns),
+                ["recharge"] = new JArray(recharge ?? []),
+                ["charges"] = new JArray(recharge != null ? new[] { 2, 2, 2, 3, 3 } : []),
+            };
+        return new JObject
+        {
+            ["level"] = 9,
+            ["haste"] = self ? 35 : 15,
+            ["hasteDetails"] = "布局样例：技能急速来源。",
+            ["rankSource"] = self ? "技能等级取自 2999。" : "技能等级按 9 级可达的最高等级；实际加点未知。",
+            ["abilities"] = new JArray(
+                Ability("Q", "光之束缚", self ? 3 : 5, [11, 10.5, 10, 9.5, 9]),
+                Ability("W", "棱光屏障", self ? 0 : 5, [14, 13, 12, 11, 10]),
+                Ability("E", "透光奇点", self ? 4 : 5, [0.4, 0.4, 0.4, 0.4, 0.4], [18, 17, 16, 15, 14]),
+                Ability("R", "终极闪光", 1, [80, 60, 40])
+            ),
+        };
+    }
+
+    // The player's Shrink Engine added at 4:00 and counted since, and an enemy's Tank Engine on the control page;
+    // the other augments show their add buttons.
+    private static void AddAugmentPreview(JObject roster)
+    {
+        var players = (JArray)roster["players"]!;
+        JObject Record(int slot, TrackedAugment augment, int stacks, string choice = "", bool approximate = false) =>
+            new()
+            {
+                ["player"] = players[slot]["key"],
+                ["augment"] = augment.ToString(),
+                ["name"] = AugmentCatalog.Get(augment).Name,
+                ["kind"] = AugmentCatalog.Get(augment).Kind.ToString(),
+                ["choice"] = choice,
+                ["time"] = AugmentCatalog.Get(augment).Kind == AugmentKind.Takedowns ? 240 : 0,
+                ["start"] = stacks,
+                ["stacks"] = stacks,
+                ["bonus"] = AugmentEffects.Bonus(augment, stacks, AugmentCatalog.Choice(augment, choice)),
+                ["approximate"] = approximate,
+                ["complete"] = true,
+                ["note"] = "布局样例：海克斯说明。",
+            };
+        roster["augmentProtocol"] = 2;
+        roster["augmentCatalog"] = new JArray(
+            AugmentCatalog.All.Select(info => new JObject
+            {
+                ["augment"] = info.Augment.ToString(),
+                ["name"] = info.Name,
+                ["kind"] = info.Kind.ToString(),
+                ["effect"] = info.Effect,
+                ["choices"] = new JArray(
+                    info.Choices.Select(c => new JObject { ["key"] = c.Key, ["label"] = c.Label })
+                ),
+            })
+        );
+        // Takedown, manual and fixed records, with choices, on the player and two enemies.
+        roster["augmentStacks"] = new JArray(
+            Record(0, TrackedAugment.ShrinkEngine, 3, approximate: true),
+            Record(0, TrackedAugment.BreadAndButter, 0),
+            Record(5, TrackedAugment.TankEngine, 2),
+            Record(5, TrackedAugment.SoulEater, 6, "later"),
+            Record(5, TrackedAugment.MadScientist, 0, "haste"),
+            Record(6, TrackedAugment.PursuitOfHaste, 1, "W"),
+            Record(6, TrackedAugment.Goliath, 0)
+        );
+        roster["ultimateHaste"] = new JObject { [(string)players[0]["key"]!] = 15 };
     }
 
     private static LoadingPlayer SamplePlayer() => new("p|0", "测试玩家 1", "sample-puuid", 1, 103, 100, true);

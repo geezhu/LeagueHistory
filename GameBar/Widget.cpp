@@ -26,6 +26,7 @@
 #include <fstream>
 #include <vector>
 #include <functional>
+#include <map>
 #include <cwctype>
 #include <cmath>
 
@@ -137,7 +138,10 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
 #include "TierChatView.inl"
 #include "VoiceChatView.inl"
 #include "WaveView.inl"
+#include "ControlView.inl"
 #include "RespawnMarkView.inl"
+#include "AugmentStackView.inl"
+#include "CooldownView.inl"
 
     fire_and_forget CapturePreview()
     {
@@ -177,6 +181,8 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         InitializeRoster();
         InitializeDetails();
         InitializeWaves();
+        InitializeControls();
+        InitializeAugmentPage();
         InitializeChat();
         InitializeMarks();
     }
@@ -534,6 +540,10 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             {
                 card.icon.Source(bitmap);
                 RefreshDetailHeader();
+                // The control and augment pages copy card icons when they render; redraw once an icon arrives.
+                if (controlOpen)
+                    RenderControls();
+                RefreshAugmentPage();
             }
         }
         catch (...)
@@ -545,7 +555,12 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         populatedCards = 0;
         rosterMarked = false;
         CloseWaves();
+        CloseControls();
+        controlRows = JsonArray();
         ClearMarks();
+        ClearAugments();
+        calcCard = -1;
+        calcSignature = L"";
         CloseDetails(false);
         CloseVoice();
         ResetChat();
@@ -658,6 +673,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             teams[i].Text(teamNames.GetStringAt(i));
         ApplyLive(data);
         ApplyWaves(data);
+        ApplyAugments(data);
         auto rows = data.GetNamedArray(L"players", JsonArray());
         populatedCards = 0;
         bool marked = false;
@@ -671,6 +687,9 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             marked = marked || cards[i].partyColor != 0;
         }
         rosterMarked = marked;
+        ApplyControls(data, rows);
+        ApplyCalculator();
+        RefreshAugmentPage();
         UpdateRespawns();
         if (selectedCard >= 0)
             RefreshDetailHeader();
@@ -682,6 +701,10 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                 ConfigureVoicePreview();
             else if (detailTab == L"waves")
                 OpenWaves();
+            else if (detailTab == L"controls")
+                OpenControls();
+            else if (detailTab == L"augmentpage")
+                OpenAugmentPage();
             else if (detailTab == L"marks")
             {
                 ToggleMark(6);
@@ -859,7 +882,9 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     {
         if (capturePending && root.ActualWidth() > 0 && root.ActualHeight() > 0 && populatedCards > 0 &&
             (!fixturePreview || detailTab == L"roster" || detailTab == L"voice" || detailTab == L"waves" ||
-             detailTab == L"marks" || (!detailRevision.empty() && pendingDetailImages == 0)))
+             detailTab == L"marks" ||
+             ((detailTab == L"controls" || detailTab == L"augmentpage") && ControlIconsReady()) ||
+             (!detailRevision.empty() && pendingDetailImages == 0)))
         {
             capturePending = false;
             CapturePreview();

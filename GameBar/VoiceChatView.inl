@@ -139,6 +139,7 @@ void ConfigureVoiceEditor()
     voiceEditor.AcceptsReturn(false);
     voiceEditor.TextWrapping(TextWrapping::NoWrap);
     voiceEditor.PlaceholderText(L"说话或直接输入，Enter 发送");
+    UseChineseInput(voiceEditor);
     voiceEditor.FontSize(14);
     voiceEditor.Margin({6, 0, 6, 0});
     voiceEditor.VerticalAlignment(VerticalAlignment::Center);

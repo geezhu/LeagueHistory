@@ -61,6 +61,9 @@ public sealed record LiveActivePlayer(LiveChampionStats? Stats, int[] Runes)
 {
     public double CurrentGold { get; init; }
 
+    /// <summary>Ranks put into Q, W, E and R; 2999 reports them only for the active player.</summary>
+    public IReadOnlyDictionary<string, int> AbilityRanks { get; init; } = new Dictionary<string, int>();
+
     public static LiveActivePlayer? Parse(JObject? active)
     {
         if (active == null)
@@ -80,6 +83,13 @@ public sealed record LiveActivePlayer(LiveChampionStats? Stats, int[] Runes)
         return new(LiveChampionStats.Parse(active["championStats"] as JObject), ids)
         {
             CurrentGold = double.IsFinite(gold) ? Math.Max(0, gold) : 0,
+            AbilityRanks = (active["abilities"] as JObject ?? new())
+                .Properties()
+                .Where(ability =>
+                    ability.Name is "Q" or "W" or "E" or "R"
+                    && ability.Value["abilityLevel"]?.Type == JTokenType.Integer
+                )
+                .ToDictionary(ability => ability.Name, ability => Math.Max(0, (int)ability.Value["abilityLevel"]!)),
         };
     }
 }

@@ -15,7 +15,14 @@ public sealed record LivePanelInput(
     int[] OwnedItems,
     int[] Runes,
     string RuneSource
-);
+)
+{
+    /// <summary>The active player's ability cooldowns now; empty until the champion's data has loaded.</summary>
+    public AbilityCooldown[] Cooldowns { get; init; } = [];
+
+    /// <summary>The cooldown page's options for the player, already applied to <see cref="Cooldowns"/>.</summary>
+    public CooldownOptions CooldownOptions { get; init; } = CooldownOptions.None;
+}
 
 /// <summary>
 /// The "本局" detail tab as cards: the ending, the battle against the enemy team, the active player's state and
@@ -37,6 +44,11 @@ public static class LivePanelSections
         if (input.Self != null || input.Stats != null)
         {
             sections.Add(State(input));
+        }
+
+        if (input.Cooldowns.Length > 0)
+        {
+            sections.Add(Cooldowns(input.Cooldowns, input.Stats?.AbilityHaste ?? 0, input.CooldownOptions.Summary()));
         }
 
         if (input.Defense?.PhysicalShare is double share)
@@ -149,6 +161,50 @@ public static class LivePanelSections
             ]
         );
     }
+
+    // One tile per ability: the cooldown after haste, with the rank and the base cooldown under it.
+    private static JObject Cooldowns(AbilityCooldown[] cooldowns, double haste, string options)
+    {
+        var tiles = cooldowns.Select(cooldown =>
+        {
+            string title = $"{cooldown.Key} {cooldown.Name}";
+            string rank = $"{cooldown.Rank}/{cooldown.Ranks} 级";
+            if (cooldown.Rank == 0)
+            {
+                return Tile(title, "未学", "");
+            }
+
+            if (cooldown.Base <= 0)
+            {
+                return Tile(title, "—", rank + " · 数据里没有冷却");
+            }
+
+            string charges = cooldown.Charges > 0 ? $" · {cooldown.Charges} 层充能" : "";
+            return Tile(
+                title,
+                (cooldown.Charges > 0 ? "充能 " : "") + Seconds(cooldown.Current),
+                $"{rank}{charges} · 基础 {Seconds(cooldown.Base)}",
+                "info"
+            );
+        });
+        return Section(
+            Tab,
+            "技能冷却",
+            Tiles,
+            tiles,
+            $"按 2999 的技能急速 {haste:0}（与游戏属性面板相同）计算：冷却 = 基础冷却 × 100 / (100 + 急速)。"
+                + "充能技能显示每层的充能时间。"
+                + (
+                    options.Length > 0
+                        ? $"已计入「海克斯」页的记录：{options}。"
+                        : "大招急速和只对部分技能生效的海克斯（大招工具人、面包系列等）可在「海克斯」页记录。"
+                )
+                + "技能命中后的冷却返还未计入。"
+        );
+    }
+
+    private static string Seconds(double seconds) =>
+        seconds.ToString(seconds < 10 ? "0.#" : "0", CultureInfo.InvariantCulture) + " 秒";
 
     // The player's score and survivability as tiles; attributes as smaller tiles under them.
     private static JObject State(LivePanelInput input)

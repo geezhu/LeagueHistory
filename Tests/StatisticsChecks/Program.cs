@@ -69,6 +69,10 @@ internal static class Program
         checks["--roster-identity-checks"] = () => Background(LoadingRosterIdentityChecks.Run);
         checks["--live-champion-checks"] = LiveChampionChecks.Run;
         checks["--death-streak-checks"] = LiveDeathStreakChecks.Run;
+        checks["--augment-stack-checks"] = AugmentStackChecks.Run;
+        checks["--health-checks"] = HealthEstimateChecks.Run;
+        checks["--cooldown-checks"] = CooldownChecks.Run;
+        checks["--cooldown-option-checks"] = CooldownOptionChecks.Run;
         checks["--room-player-checks"] = RoomPlayerChecks.Run;
         checks["--config-checks"] = LeagueConfigChecks.Run;
         checks["--shutdown-checks"] = ShutdownSettingsChecks.Run;
@@ -160,6 +164,7 @@ internal static class Program
                 OverlayRecordChecks.Run();
             });
         checks["--overlay-record-checks"] = () => Background(OverlayRecordChecks.Run);
+        checks["--control-checks"] = () => Background(ControlChecks.Run);
         checks["--overlay-party-checks"] = () => Ui(OverlayPartyChecks.Run);
         checks["--minion-wave-checks"] = MinionWaveChecks.Run;
         checks["--death-timing-checks"] = DeathTimingChecks.Run;
@@ -197,6 +202,7 @@ internal static class Program
         OverlayChampionDetailChecks.Run();
         OverlayTierChatChecks.Run();
         OverlayRecordChecks.Run();
+        ControlChecks.Run();
         OverlayVoiceChatChecks.Run();
     }
 
