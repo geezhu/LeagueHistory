@@ -20,6 +20,9 @@ namespace League.ChampionSkin
 
         public event Action<int, int>? PreferredSkinChanged;
 
+        private static readonly Color SkinFrameNormal = Color.FromArgb(50, 50, 50);
+        private static readonly Color SkinFrameSelected = Color.FromArgb(255, 40, 40); // 亮红
+
         #endregion
 
         #region 构造 / 注入
@@ -196,11 +199,11 @@ namespace League.ChampionSkin
                 bool isBase = s.IsBase || (s.SkinId % 1000 == 0);
                 var frame = new Panel
                 {
-                    Width = 32,
-                    Height = 32,
+                    Width = 33,
+                    Height = 33,
                     Margin = new Padding(2),
-                    Padding = new Padding(2),
-                    BackColor = Color.FromArgb(40, 40, 40),
+                    Padding = new Padding(3), // 选中时露出的边框更粗
+                    BackColor = Color.FromArgb(50, 50, 50),
                     Tag = s
                 };
                 var box = new PictureBox
@@ -254,7 +257,8 @@ namespace League.ChampionSkin
             foreach (Control c in flpSkins.Controls)
             {
                 if (c is not Panel frame || frame.Tag is not SkinThumbItem item) continue;
-                frame.BackColor = Color.FromArgb(40, 40, 40);
+                frame.BackColor = SkinFrameNormal;
+                frame.Padding = new Padding(1);
                 if (item.SkinId == _selectedSkinId) target = frame;
                 if (item.IsBase || item.SkinId % 1000 == 0) baseFrame = frame;
             }
@@ -263,7 +267,8 @@ namespace League.ChampionSkin
             if (target == null) return;
 
             _selectedFrame = target;
-            target.BackColor = Color.FromArgb(255, 220, 0);
+            target.Padding = new Padding(3);          // 加粗
+            target.BackColor = SkinFrameSelected;     // 亮红
             if (target.Tag is SkinThumbItem it)
                 _selectedSkinId = it.SkinId;
         }
@@ -279,10 +284,14 @@ namespace League.ChampionSkin
             {
                 foreach (Control c in flpSkins.Controls)
                 {
-                    if (c is Panel p) p.BackColor = Color.FromArgb(40, 40, 40);
+                    if (c is Panel p)
+                    {
+                        p.BackColor = SkinFrameNormal;
+                        p.Padding = new Padding(1);
+                    }
                 }
-                frame.BackColor = Color.FromArgb(255, 220, 0);
-                _selectedFrame = frame;
+                frame.BackColor = SkinFrameSelected;
+                frame.Padding = new Padding(3);
             }
 
             bool isBase = item.IsBase || item.SkinId % 1000 == 0;

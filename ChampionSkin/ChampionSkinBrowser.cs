@@ -29,11 +29,13 @@ namespace League.ChampionSkin
         private System.Windows.Forms.Timer? _searchDebounce;
         private CancellationTokenSource? _loadCts;
 
-        private static readonly HttpClient PublicHttp = CreatePublicHttp();
         private readonly SemaphoreSlim _skinDownloadLock = new(2, 2);
 
-        // 还想更清楚：256 + 88；还想更小：160 + 80。、128x80
-        /// <summary>缓存图最长边（接近头像 128，控制体积）。</summary>
+        /// <summary>
+        /// 缓存图最长边（接近头像 128，控制体积）。
+        /// 还想更清楚：256 + 88；
+        /// 还想体积更小：160 + 80。、128x80
+        /// </summary>
         private const int SkinCacheMaxEdge = 256;
 
         /// <summary>JPEG 质量，可调 70～85。</summary>
@@ -61,14 +63,6 @@ namespace League.ChampionSkin
             BindUiEvents();
             Load += async (_, _) => await InitializeAsync();
             FormClosing += ChampionSkinBrowser_FormClosing;
-        }
-
-        private static HttpClient CreatePublicHttp()
-        {
-            var c = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-            c.DefaultRequestHeaders.TryAddWithoutValidation(
-                "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) LeagueHistory");
-            return c;
         }
 
         #endregion
@@ -149,6 +143,10 @@ namespace League.ChampionSkin
 
         private async Task InitializeAsync()
         {
+            // 开头，加载完成前先藏起 flpCards
+            flpCards.Visible = false;
+            flpCards.SuspendLayout();
+
             _loadCts?.Cancel();
             _loadCts = new CancellationTokenSource();
             var token = _loadCts.Token;
@@ -209,7 +207,10 @@ namespace League.ChampionSkin
                 _dataReady = true;
                 HighlightPositionButton(btnAll);
                 EnsureCardPool();
-                ApplyFilterAndRender();
+                ApplyFilterAndRender(); // 内部仍会 Suspend/Resume
+
+                flpCards.ResumeLayout(true);
+                flpCards.Visible = true;  // 只露一次，已有同步读到的本地图
 
                 _ = PreloadAllOwnedSkinImagesAsync(ownedSkinsByChamp, token);
             }
@@ -753,23 +754,6 @@ namespace League.ChampionSkin
                 Debug.WriteLine($"[皮肤图] JPEG 写盘失败: {ex.Message}");
                 try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
                 return false;
-            }
-        }
-
-        /// <summary>公网下载，404 不抛到调试器（避免刷屏）。</summary>
-        private static async Task<byte[]?> TryGetBytesFromPublicAsync(string url)
-        {
-            try
-            {
-                using var resp = await PublicHttp.GetAsync(url).ConfigureAwait(false);
-                if (!resp.IsSuccessStatusCode)
-                    return null; // 含 404，静默
-                var bytes = await resp.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
-                return bytes.Length >= 256 ? bytes : null;
-            }
-            catch
-            {
-                return null;
             }
         }
 
