@@ -6,6 +6,32 @@ namespace League.Services;
 
 public sealed partial class GameBarBridge
 {
+    /// <summary>The control page's settings; null when the widget has not written them or the file is malformed.</summary>
+    public async Task<ControlSettings?> ReadControlSettingsAsync()
+    {
+        string directory = _testDirectory ?? _directory;
+        if (_disposed || directory.Length == 0)
+        {
+            return null;
+        }
+
+        string path = Path.Combine(directory, "control-settings.json");
+        try
+        {
+            if (!File.Exists(path) || new FileInfo(path).Length > 1024)
+            {
+                return null;
+            }
+
+            return ControlSettings.Parse(JObject.Parse(await File.ReadAllTextAsync(path).ConfigureAwait(false)));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or Newtonsoft.Json.JsonException)
+        {
+            // The widget replaces the file atomically; a read during the swap is retried on the next poll.
+            return null;
+        }
+    }
+
     // Control skills arrive once the champion data is read; a missing field means it is still loading.
     private static void AddControls(
         JObject row,

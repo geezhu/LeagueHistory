@@ -26,6 +26,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+		<PackageReference Include="NVorbis" Version="0.10.5" />
 		<PackageReference Include="System.Management" Version="9.0.4" />
 		<PackageReference Include="System.Speech" Version="9.0.4" />
 		<PackageReference Include="NAudio.Wasapi" Version="2.2.1" />

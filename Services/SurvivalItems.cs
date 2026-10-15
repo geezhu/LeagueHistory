@@ -37,5 +37,5 @@ public static class SurvivalItems
             .DistinctBy(item => BaseId(item.Id))
             .ToArray();
 
-    private static int BaseId(int id) => id >= 100000 ? id % 10000 : id;
+    public static int BaseId(int id) => id >= 100000 ? id % 10000 : id;
 }
