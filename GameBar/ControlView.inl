@@ -7,6 +7,16 @@ Button controlButton;
 JsonArray controlRows;
 bool controlOpen = false, supportsControls = false;
 int controlReturnCard = -1;
+// New survival items play the item's own sound for the teams chosen here (the own team includes the player); the
+// main program plays it, since Windows mutes this widget while the game has focus. Turning a team on bumps the test
+// counter, asking for one sample.
+Button survivalSoundButton;
+ToggleMenuFlyoutItem enemySoundItem, allySoundItem;
+bool enemySound = true, allySound = false, controlSettingsWritten = false, controlSettingsWriting = false;
+int64_t survivalSoundTest = 0;
+hstring pendingControlSettings;
+static constexpr wchar_t const *SurvivalSoundSetting = L"survivalItemSound";
+static constexpr wchar_t const *AllySoundSetting = L"survivalItemAllySound";
 
 void InitializeControls()
 {
@@ -40,7 +50,9 @@ void InitializeControls()
                  L"保命：Tab 计分板里的保命装备；2999 不提供装备冷却，已经用过的也会显示。\n"
                  L"生命：自己取 2999 的实际属性；其他玩家按等级基础属性 + 装备 + 已添加的坦克引擎估算，"
                  L"看不到其他海克斯、碎片和叠层装备，实际通常更高。\n"
-                 L"海克斯：在「海克斯」页记录，这里只显示；生命和覆盖率按记录计算。");
+                 L"海克斯：在「海克斯」页记录，这里只显示；生命和覆盖率按记录计算。\n"
+                 L"保命提示音：做出保命装备时播放该装备的游戏音效，可分别选择敌方、我方（含自己）。");
+    InitializeSurvivalSound(navigation);
     controlRoot.Children().Append(navigation);
     controlScroll.Content(controlBody);
     controlScroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
@@ -52,9 +64,96 @@ void InitializeControls()
     controlRoot.Visibility(Visibility::Collapsed);
     root.Children().Append(controlRoot);
 }
+void InitializeSurvivalSound(StackPanel const &navigation)
+{
+    auto values = ApplicationData::Current().LocalSettings().Values();
+    auto enemy = values.TryLookup(SurvivalSoundSetting);
+    auto ally = values.TryLookup(AllySoundSetting);
+    enemySound = !enemy || unbox_value_or<bool>(enemy, true);
+    allySound = ally && unbox_value_or<bool>(ally, false);
+    MenuFlyout menu;
+    enemySoundItem.Text(L"敌方");
+    allySoundItem.Text(L"我方（含自己）");
+    for (auto item : {enemySoundItem, allySoundItem})
+    {
+        item.Click([this](auto &&, auto &&) { ChangeSurvivalSound(); });
+        menu.Items().Append(item);
+    }
+    survivalSoundButton = DetailButton(L"");
+    survivalSoundButton.Margin({12, 0, 0, 0});
+    survivalSoundButton.Flyout(menu);
+    ToolTipService::SetToolTip(
+        survivalSoundButton,
+        box_value(L"做出保命装备时播放该装备的游戏音效（取自英雄联盟官方维基），可分别选择敌方、我方。"
+                  L"2999 看不到装备冷却和使用，所以提示的是做出装备，不是使用装备。"));
+    RefreshSurvivalSoundButton();
+    navigation.Children().Append(survivalSoundButton);
+}
+// A team just turned on asks for one sample.
+void ChangeSurvivalSound()
+{
+    bool enemy = enemySoundItem.IsChecked(), ally = allySoundItem.IsChecked();
+    if ((enemy && !enemySound) || (ally && !allySound))
+        ++survivalSoundTest;
+    enemySound = enemy;
+    allySound = ally;
+    auto values = ApplicationData::Current().LocalSettings().Values();
+    values.Insert(SurvivalSoundSetting, box_value(enemySound));
+    values.Insert(AllySoundSetting, box_value(allySound));
+    RefreshSurvivalSoundButton();
+    SaveControlSettings();
+}
+void RefreshSurvivalSoundButton()
+{
+    enemySoundItem.IsChecked(enemySound);
+    allySoundItem.IsChecked(allySound);
+    hstring state = enemySound && allySound ? L"双方" : enemySound ? L"敌方" : allySound ? L"我方" : L"关";
+    survivalSoundButton.Content(MakeText(L"保命提示音：" + state + L" ▾", 13));
+}
+void SaveControlSettings()
+{
+    if (!widget || fixturePreview || stopped)
+        return;
+    controlSettingsWritten = true;
+    JsonObject settings;
+    settings.Insert(L"protocol", JsonValue::CreateNumberValue(1));
+    settings.Insert(L"survivalSound", JsonValue::CreateBooleanValue(enemySound));
+    settings.Insert(L"allySound", JsonValue::CreateBooleanValue(allySound));
+    settings.Insert(L"test", JsonValue::CreateNumberValue(double(survivalSoundTest)));
+    pendingControlSettings = settings.Stringify();
+    WriteControlSettings();
+}
+fire_and_forget WriteControlSettings()
+{
+    if (controlSettingsWriting || stopped)
+        co_return;
+    auto lifetime = shared_from_this();
+    controlSettingsWriting = true;
+    try
+    {
+        while (!pendingControlSettings.empty() && !stopped)
+        {
+            auto value = pendingControlSettings;
+            pendingControlSettings = L"";
+            auto file = co_await ApplicationData::Current().LocalFolder().CreateFileAsync(
+                L"control-settings.tmp", CreationCollisionOption::ReplaceExisting);
+            co_await FileIO::WriteTextAsync(file, value);
+            co_await file.RenameAsync(L"control-settings.json", NameCollisionOption::ReplaceExisting);
+        }
+    }
+    catch (hresult_error const &e)
+    {
+        // The main program keeps the last setting it read; the next change writes the file again.
+        Trace(L"control-settings-write-error " + e.message());
+    }
+    controlSettingsWriting = false;
+}
 void ApplyControls(JsonObject const &data, JsonArray const &rows)
 {
     supportsControls = data.GetNamedNumber(L"controlProtocol", 0) == 1;
+    // The main program defaults to sound on; the stored choice reaches it once a snapshot shows it is listening.
+    if (supportsControls && !controlSettingsWritten)
+        SaveControlSettings();
     controlRows = rows;
     controlButton.Visibility(supportsControls ? Visibility::Visible : Visibility::Collapsed);
     controlButton.IsEnabled(supportsControls && populatedCards > 0);

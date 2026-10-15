@@ -22,6 +22,7 @@ internal static class DefaultStatisticsSuite
         HealthEstimateChecks.Run();
         CooldownChecks.Run();
         CooldownOptionChecks.Run();
+        SurvivalSoundChecks.Run();
         MinionWaveChecks.Run();
         RespawnMarkChecks.Run();
         RoomPlayerChecks.Run();

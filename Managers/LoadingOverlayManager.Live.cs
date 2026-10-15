@@ -48,6 +48,7 @@ internal sealed partial class LoadingOverlayManager
         _respawnSounds.Reset();
         _augmentSelections = [];
         _ultimateHaste = new Dictionary<string, double>();
+        _survivalAlerts.Reset();
     }
 
     private static int ItemValue(LiveMatchItem item) =>
@@ -82,6 +83,11 @@ internal sealed partial class LoadingOverlayManager
         CheckRespawnFormula(snapshot);
         _ = UpdateRespawnSoundsAsync(roster, snapshot, _generation);
         _ = ReadAugmentSelectionsAsync(_generation);
+        if (UseGameBar)
+        {
+            UpdateSurvivalSounds(roster, insight);
+        }
+
         var augmentStacks = CountAugmentStacks(roster, snapshot);
         var effects = SumAugmentEffects(roster, augmentStacks);
         _liveState = new(insight, _liveSections, _liveRevision)

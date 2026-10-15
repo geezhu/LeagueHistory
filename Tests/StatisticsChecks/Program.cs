@@ -73,6 +73,7 @@ internal static class Program
         checks["--health-checks"] = HealthEstimateChecks.Run;
         checks["--cooldown-checks"] = CooldownChecks.Run;
         checks["--cooldown-option-checks"] = CooldownOptionChecks.Run;
+        checks["--survival-sound-checks"] = SurvivalSoundChecks.Run;
         checks["--room-player-checks"] = RoomPlayerChecks.Run;
         checks["--config-checks"] = LeagueConfigChecks.Run;
         checks["--shutdown-checks"] = ShutdownSettingsChecks.Run;
