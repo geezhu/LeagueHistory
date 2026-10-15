@@ -63,6 +63,8 @@ namespace League
             lk_GitPro = new LinkLabel();
             label4 = new Label();
             groupBox1 = new GroupBox();
+            chkAutoSkinSelect = new CheckBox();
+            labChampionSkinBrowser = new LinkLabel();
             chkPickUrf = new CheckBox();
             chkUrf = new CheckBox();
             chkNexus = new CheckBox();
@@ -435,6 +437,8 @@ namespace League
             // 
             // groupBox1
             // 
+            groupBox1.Controls.Add(chkAutoSkinSelect);
+            groupBox1.Controls.Add(labChampionSkinBrowser);
             groupBox1.Controls.Add(chkPickUrf);
             groupBox1.Controls.Add(chkUrf);
             groupBox1.Controls.Add(chkNexus);
@@ -448,6 +452,28 @@ namespace League
             groupBox1.TabIndex = 6;
             groupBox1.TabStop = false;
             groupBox1.Text = "英雄预选 - 位置信息根据英雄联盟攻略中心数据划分";
+            // 
+            // chkAutoSkinSelect
+            // 
+            chkAutoSkinSelect.AutoSize = true;
+            chkAutoSkinSelect.Location = new Point(461, 60);
+            chkAutoSkinSelect.Name = "chkAutoSkinSelect";
+            chkAutoSkinSelect.Size = new Size(123, 21);
+            chkAutoSkinSelect.TabIndex = 13;
+            chkAutoSkinSelect.Text = "是否自动配置皮肤";
+            chkAutoSkinSelect.UseVisualStyleBackColor = true;
+            // 
+            // labChampionSkinBrowser
+            // 
+            labChampionSkinBrowser.AutoSize = true;
+            labChampionSkinBrowser.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            labChampionSkinBrowser.Location = new Point(461, 31);
+            labChampionSkinBrowser.Name = "labChampionSkinBrowser";
+            labChampionSkinBrowser.Size = new Size(361, 17);
+            labChampionSkinBrowser.TabIndex = 12;
+            labChampionSkinBrowser.TabStop = true;
+            labChampionSkinBrowser.Text = "浏览已有英雄及皮肤 + 为每个英雄设置选默认皮肤（仅限已拥有）";
+            labChampionSkinBrowser.LinkClicked += labChampionSkinBrowser_LinkClicked;
             // 
             // chkPickUrf
             // 
@@ -686,5 +712,7 @@ namespace League
         private ComboBox cboCardMatchCount;
         private CheckBox chkPickUrf;
         private CheckBox chkUrf;
+        private LinkLabel labChampionSkinBrowser;
+        private CheckBox chkAutoSkinSelect;
     }
 }

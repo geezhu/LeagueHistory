@@ -19,10 +19,11 @@ namespace League.Models
         /// </summary>
         public int CardMatchHistoryCount { get; set; } = 20;
 
-        // 新增：预选相关配置
+        /// <summary>
+        /// 预选相关配置
+        /// </summary>
         public PreliminaryConfig Preliminary { get; set; } = new PreliminaryConfig();
 
-        // ==================== 新增：各模式自动预选开关 ====================
         // 默认全开，确保升级后旧用户行为不变
         public bool EnablePreliminaryInNormal { get; set; } = false;    // 匹配（盲选/征召）
         public bool EnablePreliminaryInRanked { get; set; } = false;    // 排位（单双/灵活）
@@ -30,8 +31,6 @@ namespace League.Models
         public bool EnablePreliminaryInNexusBlitz { get; set; } = false; // 海克斯大乱斗（2400）
         public bool EnablePreliminaryInUrf { get; set; } = false;          // 无限乱斗（900，随机）
         public bool EnablePreliminaryInPickUrf { get; set; } = false;      // 无限火力（1900，自选）
-
-        // ==================== 新增：战绩/自定义文本发送配置 ====================
 
         /// <summary>
         /// 发送信息模式：1 = 自动发送战绩，2 = 发送自定义文本
@@ -73,5 +72,25 @@ namespace League.Models
         /// 自动跳过结算统计界面
         /// </summary>
         public bool EnableSkipEndOfGameStats { get; set; } = false;
+
+        /// <summary>
+        /// 英雄偏好皮肤：key=championId, value=skinId
+        /// </summary>
+        public Dictionary<int, int> PreferredChampionSkins { get; set; } = new();
+
+        /// <summary>
+        /// 是否仅显示账号已有英雄
+        /// </summary>
+        public bool SkinBrowserOwnedOnly { get; set; } = true;
+
+        /// <summary>
+        /// 是否仅显示已有皮肤的英雄
+        /// </summary>
+        public bool SkinBrowserHasSkinOnly { get; set; } = true;
+
+        /// <summary>
+        /// 选人阶段是否按 PreferredChampionSkins 自动切皮肤
+        /// </summary>
+        public bool EnableAutoSkinSelect { get; set; } = false;
     }
 }

@@ -185,5 +185,35 @@ namespace League.Clients
 
             return bannedChampIds;
         }
+
+        /// <summary>
+        /// 选人阶段切换皮肤：PATCH /lol-champ-select/v1/session/my-selection
+        /// </summary>
+        public async Task<bool> TryApplyPreferredSkinAsync(
+            int championId,
+            int skinId,
+            int? lastAppliedSkinId = null)
+        {
+            if (championId <= 0 || skinId <= 0 || skinId % 1000 == 0)
+                return false;
+            if (lastAppliedSkinId == skinId)
+                return false;
+
+            try
+            {
+                var body = new JObject { ["selectedSkinId"] = skinId };
+                var content = new StringContent(body.ToString(), Encoding.UTF8, "application/json");
+                var resp = await _client.PatchAsync(
+                    "/lol-champ-select/v1/session/my-selection", content);
+
+                Debug.WriteLine($"[自动皮肤] champ={championId} skin={skinId} status={resp.StatusCode}");
+                return resp.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[自动皮肤] {ex.Message}");
+                return false;
+            }
+        }
     }
 }

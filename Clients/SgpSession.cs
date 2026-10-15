@@ -133,15 +133,15 @@ namespace League.Clients
         }
 
         public async Task<JArray> SgpFetchLatestMatches(
-            string puuid,
-            int startIndex = 0,
-            int count = 19,
-            string tag = null)
+        string puuid,
+        int startIndex = 0,
+        int count = 19,
+        string tag = null)
         {
             if (string.IsNullOrWhiteSpace(_sgpUrl))
             {
                 Debug.WriteLine("❌ _sgpUrl 为空");
-                return null;
+                return null; // 配置/初始化失败，视为不可用
             }
 
             if (string.IsNullOrWhiteSpace(_accessToken))
@@ -179,7 +179,10 @@ namespace League.Clients
                     {
                         string content = await response.Content.ReadAsStringAsync();
                         JObject json = JObject.Parse(content);
-                        return json["games"] as JArray;
+
+                        // ★ 成功：有 games 就返回，没有就返回空数组（不要返回 null）
+                        var games = json["games"] as JArray;
+                        return games ?? new JArray();
                     }
 
                     string errorContent = await response.Content.ReadAsStringAsync();
@@ -194,6 +197,7 @@ namespace League.Clients
                             return null;
                         }
                     }
+                    // 5xx / 503 等服务器错误：继续重试，最后仍失败则返回 null
                 }
                 catch (TaskCanceledException tce)
                 {
@@ -212,7 +216,6 @@ namespace League.Clients
                     _sgpLimiter.Release();
                 }
 
-                // 重试前短暂停一下，并尝试刷新 token
                 if (attempt < 3)
                 {
                     await LoadEntitlementsTokenAsync();
@@ -220,8 +223,8 @@ namespace League.Clients
                 }
             }
 
-            Debug.WriteLine("SGP 多次重试后仍失败");
-            return null;
+            Debug.WriteLine("SGP 多次重试后仍失败（服务器异常或网络不可用）");
+            return null; // ★ 明确表示：请求失败，不是「没有战绩」
         }
     }
 }

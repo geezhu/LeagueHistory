@@ -1,4 +1,5 @@
 ﻿using League.Caching;
+using League.ChampionSkin;
 using League.Clients;
 using League.Controls;
 using League.Extensions;
@@ -171,6 +172,8 @@ namespace League
                 chkSkipHonor.Checked = _appConfig.EnableSkipHonor;  //自动跳过点赞界面
                 chkSkipEndOfGameStats.Checked = _appConfig.EnableSkipEndOfGameStats;    //自动跳过结算统计界面
 
+                chkAutoSkinSelect.Checked = _appConfig.EnableAutoSkinSelect;    // 是否自动配置皮肤
+
                 // 根据配置文件恢复消息发送信息 ===
                 if (rbModeMatch != null && rbModeCustom != null && txtCustomContent != null)
                 {
@@ -211,6 +214,7 @@ namespace League
                 chkSkipHonor.CheckedChanged += ChkSkipHonor_CheckedChanged;
                 chkSkipEndOfGameStats.CheckedChanged += ChkSkipEndOfGameStats_CheckedChanged;
                 cboCardMatchCount.SelectedIndexChanged += cboCardMatchCount_SelectedIndexChanged;
+                chkAutoSkinSelect.CheckedChanged += chkAutoSkinSelect_CheckedChanged;
 
                 // 启动轮询 LCU 检测
                 StartLcuConnectPolling();
@@ -696,35 +700,27 @@ namespace League
         {
             bool refreshFlag = forceRefresh ?? RefreshState.ForceMatchRefresh;
 
-            //if (refreshFlag)
-            //    //Debug.WriteLine("⚡ 强制刷新已启用");
-
-            //    // 1️⃣ 尝试从缓存读取
-            //    if (!refreshFlag)
-            //    {
-            //        var cached = MatchCache.Get(puuid, queueId, begIndex, pageSize);
-            //        if (cached != null)
-            //        {
-            //            //Debug.WriteLine($"从缓存读取: {puuid} [{queueId ?? "all"}] 起点{begIndex} 每页{pageSize}");
-            //            return cached;
-            //        }
-            //    }
-
-            // 非强制刷新时优先读缓存
-            if (!refreshFlag)
+            // ★ 强制刷新时，先清除该玩家全部缓存，防止新旧分页数据错位
+            if (refreshFlag)
             {
+                MatchCache.ClearPlayer(puuid);
+                Debug.WriteLine($"[LoadFullMatchData] 强制刷新，已清除玩家缓存: {puuid}");
+            }
+            else
+            {
+                // 非强制刷新时优先读缓存
                 var cached = MatchCache.Get(puuid, queueId, begIndex, pageSize);
                 if (cached != null)
                     return cached;
             }
 
-            // 2️⃣ 发起网络请求
+            // 发起网络请求
             var allGames = await Globals.sgpClient.SgpFetchLatestMatches(puuid, begIndex, pageSize, queueId);
 
-            // 3️⃣ 写入缓存
+            // 写入缓存,null 表示失败，不要写入缓存；空数组可以写入（表示“这页确实没数据”）
             MatchCache.Add(puuid, queueId, begIndex, pageSize, allGames);
 
-            // 4️⃣ 重置强制刷新状态（只生效一次）
+            // 重置强制刷新状态（只生效一次）
             RefreshState.ForceMatchRefresh = false;
 
             return allGames;
@@ -894,6 +890,25 @@ namespace League
 
             _preSelectedHeroes = null;  // 清除缓存，下次自动预选会重新读取最新
             Debug.WriteLine("[自动预选] 预选配置已修改，缓存已清除");
+        }
+
+        /// <summary>
+        /// 浏览已有英雄 + 为每英雄选默认皮肤
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void labChampionSkinBrowser_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            if (!_uiManager!.LcuReady)
+            {
+                MessageBox.Show("请先登录英雄联盟客户端并等待连接成功！", "客户端未连接",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            using var form = new League.ChampionSkin.ChampionSkinBrowser(_appConfig!);
+            form.Owner = this;
+            form.ShowDialog();
         }
 
         /// <summary>
@@ -1092,6 +1107,19 @@ namespace League
             _appConfig.EnableSkipEndOfGameStats = chkSkipEndOfGameStats.Checked;
             SaveAppConfig();
             Debug.WriteLine($"[游戏结束配置] 跳过结算界面 已更新: {_appConfig.EnableSkipEndOfGameStats}");
+        }
+
+        /// <summary>
+        /// 是否自动配置英雄皮肤
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void chkAutoSkinSelect_CheckedChanged(object? sender, EventArgs e)
+        {
+            if (_appConfig == null) return;
+            _appConfig.EnableAutoSkinSelect = chkAutoSkinSelect.Checked;
+            SaveAppConfig();
+            Debug.WriteLine($"[英雄皮肤自动配置] 自动配置皮肤 已更新: {_appConfig.EnableAutoSkinSelect}");
         }
 
         #endregion

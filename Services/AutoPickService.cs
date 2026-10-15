@@ -15,6 +15,8 @@ namespace League.Services
         private bool _hasAutoPreliminated = false;
         private bool _hasSwappedInAram = false;
         private TeamCardDisplayService? _cardDisplayService;
+        private int _lastSkinChampionId = 0;  // 上次处理的英雄
+        private int _lastAppliedSkinId = 0;   // 上次成功/尝试的皮肤
 
         public AutoPickService(FormMain form)
         {
@@ -46,7 +48,11 @@ namespace League.Services
                         // 我方队伍卡片显示
                         await _cardDisplayService.ShowMyTeamCards();
 
+                        // 自动预选抢英雄
                         await TryAutoPreliminaryAsync();
+
+                        // 自动配置皮肤
+                        await TryAutoSkinAsync();
 
                         var session = await Globals.lcuClient.GetChampSelectSession();
                         int queueId = session?["queueId"]?.Value<int>() ?? 0;
@@ -75,6 +81,9 @@ namespace League.Services
         {
             _hasAutoPreliminated = false;
             _hasSwappedInAram = false;
+
+            _lastSkinChampionId = 0;
+            _lastAppliedSkinId = 0;
         }
 
         /// <summary>
@@ -128,5 +137,75 @@ namespace League.Services
                 Debug.WriteLine("[自动预选] 普通模式意图声明成功");
             }
         }
+
+        /// <summary>
+        /// 选人阶段：若开启自动皮肤，且当前英雄在 PreferredChampionSkins 中有非默认皮，则 PATCH。
+        /// </summary>
+        private async Task TryAutoSkinAsync()
+        {
+            var cfg = _form.GetAppConfig();
+            if (cfg == null || !cfg.EnableAutoSkinSelect)
+                return;
+
+            if (cfg.PreferredChampionSkins == null || cfg.PreferredChampionSkins.Count == 0)
+                return;
+
+            try
+            {
+                var session = await Globals.lcuClient.GetChampSelectSession();
+                if (session == null) return;
+
+                int cellId = session["localPlayerCellId"]?.Value<int>() ?? -1;
+                if (cellId < 0) return;
+
+                var myTeam = session["myTeam"] as JArray;
+                var me = myTeam?.FirstOrDefault(p => p["cellId"]?.Value<int>() == cellId);
+                if (me == null) return;
+
+                // 已锁定/已选 > 悬停意图
+                int championId = me["championId"]?.Value<int>() ?? 0;
+                if (championId <= 0)
+                    championId = me["championPickIntent"]?.Value<int>() ?? 0;
+                if (championId <= 0)
+                    return;
+
+                // 换英雄了：允许再切一次皮
+                if (championId != _lastSkinChampionId)
+                {
+                    _lastSkinChampionId = championId;
+                    _lastAppliedSkinId = 0;
+                }
+
+                if (!cfg.PreferredChampionSkins.TryGetValue(championId, out int wantSkin)
+                    || wantSkin <= 0
+                    || wantSkin % 1000 == 0)
+                    return;
+
+                int currentSkin = me["selectedSkinId"]?.Value<int>() ?? 0;
+                if (currentSkin == wantSkin)
+                {
+                    _lastAppliedSkinId = wantSkin;
+                    return;
+                }
+
+                if (_lastAppliedSkinId == wantSkin)
+                    return;
+
+                bool ok = await Globals.lcuClient.TryApplyPreferredSkinAsync(
+                    championId, wantSkin, _lastAppliedSkinId);
+
+                // 无论成功与否先记下，避免失败时每秒刷屏；若要失败重试可只在 ok 时赋值
+                _lastAppliedSkinId = wantSkin;
+
+                if (ok)
+                    Debug.WriteLine($"[自动皮肤] 已请求切换 champ={championId} skin={wantSkin}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[自动皮肤] TryAutoSkinAsync: {ex.Message}");
+            }
+        }
+
+        
     }
 }

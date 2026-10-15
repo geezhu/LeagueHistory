@@ -23,7 +23,6 @@ namespace League.Clients
         private ChampionSelectService _championSelectService;
         private ChatService _chatService;
 
-
         public ChatService ChatService => _chatService;
 
         /// <summary>
@@ -233,6 +232,14 @@ namespace League.Clients
         public async Task<bool> AutoDeclareIntentAsync(List<PreliminaryHero> preSelectedHeroes)
         {
             return await _championSelectService.AutoDeclareIntentAsync(preSelectedHeroes);
+        }
+
+        /// <summary>
+        /// 选人阶段按偏好切换皮肤
+        /// </summary>
+        public Task<bool> TryApplyPreferredSkinAsync(int championId,int skinId,int? lastAppliedSkinId = null)
+        {
+            return _championSelectService.TryApplyPreferredSkinAsync(championId, skinId, lastAppliedSkinId);
         }
 
         /// <summary>

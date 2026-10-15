@@ -1,4 +1,4 @@
-﻿using League.Controls;
+﻿using League.Caching;
 using League.Models;
 using League.States;
 using Newtonsoft.Json.Linq;
@@ -23,7 +23,7 @@ namespace League.Controls
         private SemaphoreSlim _updateLock = new SemaphoreSlim(1, 1);
         private CancellationTokenSource _updateCts;
 
-        // ✅ 新增：保存当前JArray引用，用于释放
+        // 保存当前JArray引用，用于释放
         private JArray _currentMatches;
 
         // 1. 添加一个字段，保存当前正在解析的任务（可选但推荐）
@@ -40,6 +40,7 @@ namespace League.Controls
         private DateTime _lastRefreshTime = DateTime.MinValue;
         private readonly TimeSpan _minimumRefreshInterval = TimeSpan.FromSeconds(2); // 最小刷新间隔                                               
         private bool _isRefreshing = false; // 添加标志防止递归
+        private string _summonerId; //保存该 Tab 的 summonerId
 
         // 添加属性和方法
         public bool NeedsRefresh => _needsRefresh;
@@ -67,7 +68,7 @@ namespace League.Controls
             _needsRefresh = needsRefresh;
         }
 
-        // 🔥 新增 ForceCleanup 方法
+        // 新增 ForceCleanup 方法
         public void ForceCleanup()
         {
             // 停止所有异步操作
@@ -121,7 +122,7 @@ namespace League.Controls
         // 初始化筛选器
         private void InitComboBoxes()
         {
-            comboPage.Items.AddRange(new object[] { 7, 8, 20, 30, 50 });
+            comboPage.Items.AddRange(new object[] { 7, 8, 10, 20, 30, 50 });
             comboPage.SelectedItem = 7; // 默认值
             _pageSize = 7;
 
@@ -133,9 +134,30 @@ namespace League.Controls
                 new QueueFilterItem { Text = "单双排位", Value = "q_420" },
                 new QueueFilterItem { Text = "灵活排位", Value = "q_440" },
                 new QueueFilterItem { Text = "匹配模式", Value = "q_430" },
-                new QueueFilterItem { Text = "大乱斗", Value = "q_450" }
+                new QueueFilterItem { Text = "大乱斗", Value = "q_450" },
+                new QueueFilterItem { Text = "海克斯乱斗", Value = "q_2400" }
             });
             comboFilter.SelectedIndex = 0;
+        }
+
+        /// <summary>
+        /// 当前筛选模式下拉框的显示名（如：单双排位、匹配模式）
+        /// </summary>
+        private string GetSelectedFilterText()
+        {
+            if (comboFilter.SelectedItem is QueueFilterItem item && !string.IsNullOrEmpty(item.Text))
+                return item.Text;
+
+            // 兜底：按 Value 映射
+            return _selectedQueueId switch
+            {
+                "q_420" => "单双排位",
+                "q_440" => "灵活排位",
+                "q_430" => "匹配模式",
+                "q_450" => "大乱斗",
+                "q_2400" => "海克斯乱斗",
+                _ => "全部"
+            };
         }
 
         //下拉框事件绑定
@@ -170,58 +192,101 @@ namespace League.Controls
         {
             await _loadSemaphore.WaitAsync();
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss}] 开始加载数据 - PUUID: {_puuid}");
-            if (this.LoadDataRequested == null || this.ParsePanelRequested == null)
-            {
-                Debug.WriteLine("[严重错误] 未绑定数据加载事件");
-                ShowErrorMessage("系统错误：功能未初始化");
-                return;
-            }
+
             try
             {
+                if (this.LoadDataRequested == null || this.ParsePanelRequested == null)
+                {
+                    Debug.WriteLine("[严重错误] 未绑定数据加载事件");
+                    ShowErrorMessage("系统错误：功能未初始化");
+                    return;
+                }
+
                 SetLoadingState(isLoading: true);
+
                 int startIndex = (_currentPage - 1) * _pageSize;
                 int count = _pageSize;
+
                 if (startIndex + count > 200)
                 {
                     count = 200 - startIndex;
                     if (count <= 0)
                     {
-                        ShowEmptyMessage();
+                        ShowEmptyMessage("已到达API接口查询上限（最多200场），没有更多比赛记录了");
+                        SafeSetEnabled(btnPrev, _currentPage > 1);
+                        SafeSetEnabled(btnNext, false);
                         return;
                     }
                 }
+
+                // 仅作上限参考，真正是否有下一页看本页返回数量
                 TotalPages = (int)Math.Ceiling(200.0 / (double)_pageSize);
+
                 JArray matches = await this.LoadDataRequested(_puuid, startIndex, count, _selectedQueueId);
-                Debug.WriteLine($"收到 {matches?.Count ?? 0} 条数据，请求参数: startIndex={startIndex}, count={count}");
-                if (matches == null || matches.Count == 0)
+                Debug.WriteLine($"收到 {(matches == null ? "null(服务器异常)" : matches.Count.ToString())} 条数据，请求参数: startIndex={startIndex}, count={count}");
+
+                if (matches == null)
                 {
-                    ShowEmptyMessage();
+                    ShowErrorMessage(
+                        "战绩服务器异常\n" +
+                        "客户端头像处对局记录查不到，那么这里也查不到，表示正在维护中（一般3-5小时会恢复）...");
+                    SafeSetEnabled(btnPrev, _currentPage > 1);
+                    SafeSetEnabled(btnNext, false);
                     return;
                 }
-                //Debug.WriteLine("开始解析数据...");
+
+                if (matches.Count == 0)
+                {
+                    if (_currentPage > 1)
+                    {
+                        // 翻到没有数据的页
+                        ShowEmptyMessage("没有更多比赛记录了");
+                    }
+                    else
+                    {
+                        // 第一页就没有
+                        string modeName = GetSelectedFilterText();
+                        // 「全部」时不写【全部】，文案更自然
+                        string msg = modeName == "全部"
+                            ? "没有匹配的比赛记录或玩家长时间未登录，所以暂时查不到..."
+                            : $"没有匹配的【{modeName}】比赛记录或玩家长时间未登录，所以暂时查不到...";
+
+                        ShowEmptyMessage(msg);
+                    }
+
+                    SafeSetEnabled(btnPrev, _currentPage > 1);
+                    SafeSetEnabled(btnNext, false);
+                    return;
+                }
+
                 await UpdateMatchList(matches);
+
+                // ★ 关键：本页数据 < 请求数量 → 已是最后一页
+                bool hasMore = matches.Count >= count && (startIndex + matches.Count) < 200;
+
                 SafeSetEnabled(btnPrev, _currentPage > 1);
-                SafeSetEnabled(btnNext, _currentPage < TotalPages);
+                SafeSetEnabled(btnNext, hasMore);
             }
             catch (Exception ex)
             {
-                Exception ex2 = ex;
-                Debug.WriteLine("[异常] " + ex2.GetType().Name + ": " + ex2.Message);
-                Debug.WriteLine(ex2.StackTrace);
-                ShowErrorMessage("加载失败: " + ex2.Message);
+                Debug.WriteLine("[异常] " + ex.GetType().Name + ": " + ex.Message);
+                Debug.WriteLine(ex.StackTrace);
+                ShowErrorMessage(
+                    "加载失败：战绩服务器异常\n" +
+                    "客户端头像处对局记录查不到，那么这里也查不到\n\n" +
+                    $"详情：{ex.Message}");
+                SafeSetEnabled(btnPrev, _currentPage > 1);
+                SafeSetEnabled(btnNext, false);
             }
             finally
             {
                 SetLoadingState(isLoading: false);
-                SafeInvoke(delegate
-                {
-                    //Debug.WriteLine("UI 安全回调检查通过。");
-                });
-                //Debug.WriteLine("界面更新结束");
+                // 注意：SetLoadingState(false) 可能会把按钮重新 Enable，
+                // 所以如果上面已经设过 Prev/Next，需要在 finally 里不要覆盖。
+                // 若你的 SetLoadingState 会强制 Enabled=true，见下面「修改 3」
                 _loadSemaphore.Release();
             }
         }
-
 
         private async Task UpdateMatchList(JArray matches)
         {
@@ -314,18 +379,17 @@ namespace League.Controls
             });
         }
 
-
-        public async Task SafeInitializeAsync(string puuid)
+        public async Task SafeInitializeAsync(string puuid, string? summonerId = null)
         {
             if (string.IsNullOrEmpty(puuid)) return;
 
             _puuid = puuid;
+            if (!string.IsNullOrEmpty(summonerId))
+                _summonerId = summonerId;
 
-            await Task.Delay(200); // 可选延迟，确保控件加载完
-
-            await LoadDataAsync();
+            await Task.Delay(200);
+            await LoadDataAsync();      //查段位
         }
-
 
         public async Task InitiaRank(string fullName, string profileIconId, string summonerLevel, string privacy, Dictionary<string, RankedStats> rankedStats)
         {
@@ -448,6 +512,10 @@ namespace League.Controls
         {
             // 重置页面状态
             _currentPage = 1;
+
+            // ★ 额外保险：强制刷新时清除该玩家所有分页缓存
+            MatchCache.ClearPlayer(puuid);
+            Debug.WriteLine($"[ForceRefreshDataInternal] 已清除玩家缓存: {puuid}");
 
             // 清理缓存
             if (_currentMatches != null)
@@ -640,35 +708,42 @@ namespace League.Controls
         // 你需要把这个事件委托保存为成员
         private EventHandler asyncComboPageChangedHandler;
 
-
         private void SetLoadingState(bool isLoading)
         {
-            SafeSetEnabled(btnPrev, !isLoading);
-            SafeSetEnabled(btnNext, !isLoading);
+            // 翻页按钮由 UpdateMatchesDisplay 根据数据量单独控制，这里不要动
             SafeSetEnabled(comboPage, !isLoading);
             SafeSetEnabled(comboFilter, !isLoading);
+
+            // 加载中时临时禁用翻页，防止连点
+            if (isLoading)
+            {
+                SafeSetEnabled(btnPrev, false);
+                SafeSetEnabled(btnNext, false);
+            }
         }
+        
 
         private void ShowErrorMessage(string message)
         {
-            Invoke((Action)(() =>
-            {
-                flowLayoutPanelRight.Controls.Clear();
-                flowLayoutPanelRight.Controls.Add(new Label
-                {
-                    Text = message,
-                    ForeColor = Color.Red,
-                    Dock = DockStyle.Fill,
-                    TextAlign = ContentAlignment.MiddleCenter
-                });
-            }));
+            ShowStatusMessage(message, isError: true);
         }
 
-        private void ShowEmptyMessage()
+        private void ShowEmptyMessage(string? customMessage = null)
+        {
+            string message = customMessage ??
+                "没有匹配的比赛记录或玩家长时间未登录，所以暂时查不到...";
+
+            ShowStatusMessage(message, isError: false);
+        }
+
+        /// <summary>
+        /// 统一状态提示（支持多行换行）
+        /// </summary>
+        private void ShowStatusMessage(string message, bool isError)
         {
             if (flowLayoutPanelRight.InvokeRequired)
             {
-                flowLayoutPanelRight.Invoke((Action)ShowEmptyMessage);
+                flowLayoutPanelRight.Invoke((Action)(() => ShowStatusMessage(message, isError)));
                 return;
             }
 
@@ -677,23 +752,26 @@ namespace League.Controls
             {
                 flowLayoutPanelRight.Controls.Clear();
 
-                // 创建标签并显式设置属性
+                int width = Math.Max(flowLayoutPanelRight.ClientSize.Width - 30, 200);
+
                 var label = new Label
                 {
-                    Text = "查询太快超时，或没有匹配的数据！",
+                    Text = message.Replace("\\n", "\n"),
                     TextAlign = ContentAlignment.MiddleCenter,
                     AutoSize = false,
-                    Size = new Size(flowLayoutPanelRight.ClientSize.Width, 50),
+                    Width = width,
+                    Height = 160,
+                    // ★ 不要 Dock，FlowLayoutPanel 里 Dock 容易导致不显示
+                    Margin = new Padding(10, 40, 10, 10),
                     BackColor = Color.White,
-                    ForeColor = Color.Red,
-                    Dock = DockStyle.Top // 确保标签占据顶部
+                    ForeColor = isError ? Color.Red : Color.DarkOrange,
+                    Padding = new Padding(12),
+                    Font = new Font("Microsoft YaHei UI", 10f)
                 };
 
                 flowLayoutPanelRight.Controls.Add(label);
-                label.BringToFront(); // 防止被其他控件覆盖
 
-                // 调试输出
-                Debug.WriteLine($"Label尺寸: {label.Width}x{label.Height}, 父容器尺寸: {flowLayoutPanelRight.Size}");
+                Debug.WriteLine($"[状态提示] {(isError ? "错误" : "空数据")}: {message}");
             }
             finally
             {

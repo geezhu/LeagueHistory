@@ -159,7 +159,7 @@
             groupBox1.Controls.Add(label2);
             groupBox1.Location = new Point(3, 127);
             groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(178, 226);
+            groupBox1.Size = new Size(178, 193);
             groupBox1.TabIndex = 34;
             groupBox1.TabStop = false;
             groupBox1.Text = "单双排位";
@@ -176,7 +176,7 @@
             // lblSoloLeaguePoints
             // 
             lblSoloLeaguePoints.AutoSize = true;
-            lblSoloLeaguePoints.Location = new Point(92, 193);
+            lblSoloLeaguePoints.Location = new Point(93, 158);
             lblSoloLeaguePoints.Name = "lblSoloLeaguePoints";
             lblSoloLeaguePoints.Size = new Size(32, 17);
             lblSoloLeaguePoints.TabIndex = 10;
@@ -185,7 +185,7 @@
             // lblSoloWinRate
             // 
             lblSoloWinRate.AutoSize = true;
-            lblSoloWinRate.Location = new Point(92, 160);
+            lblSoloWinRate.Location = new Point(93, 132);
             lblSoloWinRate.Name = "lblSoloWinRate";
             lblSoloWinRate.Size = new Size(32, 17);
             lblSoloWinRate.TabIndex = 9;
@@ -194,7 +194,7 @@
             // lblSoloLosses
             // 
             lblSoloLosses.AutoSize = true;
-            lblSoloLosses.Location = new Point(92, 127);
+            lblSoloLosses.Location = new Point(92, 106);
             lblSoloLosses.Name = "lblSoloLosses";
             lblSoloLosses.Size = new Size(32, 17);
             lblSoloLosses.TabIndex = 8;
@@ -203,7 +203,7 @@
             // lblSoloWins
             // 
             lblSoloWins.AutoSize = true;
-            lblSoloWins.Location = new Point(92, 94);
+            lblSoloWins.Location = new Point(93, 80);
             lblSoloWins.Name = "lblSoloWins";
             lblSoloWins.Size = new Size(32, 17);
             lblSoloWins.TabIndex = 7;
@@ -212,7 +212,7 @@
             // lblSoloGames
             // 
             lblSoloGames.AutoSize = true;
-            lblSoloGames.Location = new Point(92, 61);
+            lblSoloGames.Location = new Point(93, 54);
             lblSoloGames.Name = "lblSoloGames";
             lblSoloGames.Size = new Size(32, 17);
             lblSoloGames.TabIndex = 6;
@@ -221,7 +221,7 @@
             // label7
             // 
             label7.AutoSize = true;
-            label7.Location = new Point(22, 28);
+            label7.Location = new Point(18, 28);
             label7.Name = "label7";
             label7.Size = new Size(32, 17);
             label7.TabIndex = 5;
@@ -230,7 +230,7 @@
             // label6
             // 
             label6.AutoSize = true;
-            label6.Location = new Point(22, 193);
+            label6.Location = new Point(18, 158);
             label6.Name = "label6";
             label6.Size = new Size(32, 17);
             label6.TabIndex = 4;
@@ -239,7 +239,7 @@
             // label5
             // 
             label5.AutoSize = true;
-            label5.Location = new Point(22, 160);
+            label5.Location = new Point(18, 132);
             label5.Name = "label5";
             label5.Size = new Size(32, 17);
             label5.TabIndex = 3;
@@ -248,7 +248,7 @@
             // label4
             // 
             label4.AutoSize = true;
-            label4.Location = new Point(22, 127);
+            label4.Location = new Point(18, 106);
             label4.Name = "label4";
             label4.Size = new Size(32, 17);
             label4.TabIndex = 2;
@@ -257,7 +257,7 @@
             // label3
             // 
             label3.AutoSize = true;
-            label3.Location = new Point(22, 94);
+            label3.Location = new Point(18, 80);
             label3.Name = "label3";
             label3.Size = new Size(32, 17);
             label3.TabIndex = 1;
@@ -266,7 +266,7 @@
             // label2
             // 
             label2.AutoSize = true;
-            label2.Location = new Point(22, 61);
+            label2.Location = new Point(18, 54);
             label2.Name = "label2";
             label2.Size = new Size(32, 17);
             label2.TabIndex = 0;
@@ -288,7 +288,7 @@
             groupBox2.Controls.Add(label19);
             groupBox2.Location = new Point(3, 359);
             groupBox2.Name = "groupBox2";
-            groupBox2.Size = new Size(178, 226);
+            groupBox2.Size = new Size(178, 200);
             groupBox2.TabIndex = 35;
             groupBox2.TabStop = false;
             groupBox2.Text = "灵活排位";
@@ -305,7 +305,7 @@
             // lblFlexLeaguePoints
             // 
             lblFlexLeaguePoints.AutoSize = true;
-            lblFlexLeaguePoints.Location = new Point(92, 193);
+            lblFlexLeaguePoints.Location = new Point(93, 163);
             lblFlexLeaguePoints.Name = "lblFlexLeaguePoints";
             lblFlexLeaguePoints.Size = new Size(32, 17);
             lblFlexLeaguePoints.TabIndex = 10;
@@ -314,7 +314,7 @@
             // lblFlexWinRate
             // 
             lblFlexWinRate.AutoSize = true;
-            lblFlexWinRate.Location = new Point(92, 160);
+            lblFlexWinRate.Location = new Point(93, 136);
             lblFlexWinRate.Name = "lblFlexWinRate";
             lblFlexWinRate.Size = new Size(32, 17);
             lblFlexWinRate.TabIndex = 9;
@@ -323,7 +323,7 @@
             // lblFlexLosses
             // 
             lblFlexLosses.AutoSize = true;
-            lblFlexLosses.Location = new Point(92, 127);
+            lblFlexLosses.Location = new Point(93, 109);
             lblFlexLosses.Name = "lblFlexLosses";
             lblFlexLosses.Size = new Size(32, 17);
             lblFlexLosses.TabIndex = 8;
@@ -332,7 +332,7 @@
             // lblFlexWins
             // 
             lblFlexWins.AutoSize = true;
-            lblFlexWins.Location = new Point(92, 94);
+            lblFlexWins.Location = new Point(93, 82);
             lblFlexWins.Name = "lblFlexWins";
             lblFlexWins.Size = new Size(32, 17);
             lblFlexWins.TabIndex = 7;
@@ -341,7 +341,7 @@
             // lblFlexGames
             // 
             lblFlexGames.AutoSize = true;
-            lblFlexGames.Location = new Point(92, 61);
+            lblFlexGames.Location = new Point(93, 55);
             lblFlexGames.Name = "lblFlexGames";
             lblFlexGames.Size = new Size(32, 17);
             lblFlexGames.TabIndex = 6;
@@ -350,7 +350,7 @@
             // label14
             // 
             label14.AutoSize = true;
-            label14.Location = new Point(22, 28);
+            label14.Location = new Point(18, 28);
             label14.Name = "label14";
             label14.Size = new Size(32, 17);
             label14.TabIndex = 5;
@@ -359,7 +359,7 @@
             // label15
             // 
             label15.AutoSize = true;
-            label15.Location = new Point(22, 193);
+            label15.Location = new Point(18, 163);
             label15.Name = "label15";
             label15.Size = new Size(32, 17);
             label15.TabIndex = 4;
@@ -368,7 +368,7 @@
             // label16
             // 
             label16.AutoSize = true;
-            label16.Location = new Point(22, 160);
+            label16.Location = new Point(18, 136);
             label16.Name = "label16";
             label16.Size = new Size(32, 17);
             label16.TabIndex = 3;
@@ -377,7 +377,7 @@
             // label17
             // 
             label17.AutoSize = true;
-            label17.Location = new Point(22, 127);
+            label17.Location = new Point(18, 109);
             label17.Name = "label17";
             label17.Size = new Size(32, 17);
             label17.TabIndex = 2;
@@ -386,7 +386,7 @@
             // label18
             // 
             label18.AutoSize = true;
-            label18.Location = new Point(22, 94);
+            label18.Location = new Point(18, 82);
             label18.Name = "label18";
             label18.Size = new Size(32, 17);
             label18.TabIndex = 1;
@@ -395,7 +395,7 @@
             // label19
             // 
             label19.AutoSize = true;
-            label19.Location = new Point(22, 61);
+            label19.Location = new Point(18, 55);
             label19.Name = "label19";
             label19.Size = new Size(32, 17);
             label19.TabIndex = 0;

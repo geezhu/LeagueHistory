@@ -218,12 +218,12 @@ namespace League.Controls
                 await ((FormMain)this.ParentForm).ParseGameToPanelAsync(match, summonerId, gameName, tagLine, index);
 
             string fullName = $"{gameName}#{tagLine}";
-            tabContent.InitiaRank(fullName, profileIconId, summonerLevel, privacy, rankedStats);
+            _ = tabContent.InitiaRank(fullName, profileIconId, summonerLevel, privacy, rankedStats);
 
             // 异步加载数据
             Task.Run(async () =>
             {
-                try { await tabContent.SafeInitializeAsync(puuid); }
+                try { await tabContent.SafeInitializeAsync(puuid,summonerId); }
                 catch (Exception ex) { Debug.WriteLine($"Tab加载失败: {ex.Message}"); }
             });
 
