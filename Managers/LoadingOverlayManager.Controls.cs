@@ -1,4 +1,6 @@
+using League.Models;
 using League.Services;
+using Newtonsoft.Json.Linq;
 
 namespace League.Managers;
 
@@ -9,7 +11,37 @@ internal sealed partial class LoadingOverlayManager
     private readonly Dictionary<int, long> _controlRetry = new();
     private readonly HashSet<int> _controlRequests = new();
     private readonly Dictionary<int, SpellCooldown[]> _cooldowns = new();
+    private readonly Dictionary<int, (ControlSkill[] Controls, ChampionSpellFacts Facts, JObject Champion)> _spells =
+        new();
     private readonly ChampionSpellData _spellData = new();
+
+    // ARAM, Mayhem and other modes change some slows and cooldowns; 2999's mode wins over the queue's once a game runs.
+    private string _liveMode = "",
+        _controlsMode = "";
+
+    private string CurrentMode() => GameModes.Of(_liveMode, _roster?.Queue ?? 0);
+
+    // A game in another mode merges the slows again; the client's control skills do not depend on it.
+    private void RefreshModeControls()
+    {
+        string mode = CurrentMode();
+        if (mode == _controlsMode)
+        {
+            return;
+        }
+
+        _controlsMode = mode;
+        foreach (var (id, spell) in _spells)
+        {
+            _controls[id] = ChampionSlowSkills.Merge(spell.Controls, spell.Facts.SlowsFor(mode), spell.Champion);
+        }
+    }
+
+    private Dictionary<int, SpellCooldown[]> ModeCooldowns()
+    {
+        string mode = CurrentMode();
+        return _cooldowns.ToDictionary(entry => entry.Key, entry => entry.Value.Select(c => c.ForMode(mode)).ToArray());
+    }
 
     /// <summary>Starts reading the control skills of roster champions that have none yet.</summary>
     private void RequestControls()
@@ -19,6 +51,7 @@ internal sealed partial class LoadingOverlayManager
             return;
         }
 
+        RefreshModeControls();
         foreach (int id in _roster.Players.Select(p => p.ChampionId).Where(id => id > 0).Distinct())
         {
             _ = LoadControls(id);
@@ -72,15 +105,17 @@ internal sealed partial class LoadingOverlayManager
     }
 
     // Slow amounts and cooldowns come from CommunityDragon after the client's control skills are already shown.
-    private async Task LoadSpells(int id, ControlSkill[] controls, Newtonsoft.Json.Linq.JObject champion)
+    private async Task LoadSpells(int id, ControlSkill[] controls, JObject champion)
     {
         try
         {
             var facts = await _spellData.LoadAsync(champion, _life.Token);
             if (!_disposed)
             {
-                _controls[id] = ChampionSlowSkills.Merge(controls, facts.Slows, champion);
+                _spells[id] = (controls, facts, champion);
+                _controls[id] = ChampionSlowSkills.Merge(controls, facts.SlowsFor(_controlsMode), champion);
                 _cooldowns[id] = facts.Cooldowns;
+                RefreshModeControls();
                 SchedulePaint();
             }
         }

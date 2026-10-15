@@ -8,6 +8,11 @@ namespace League.Services;
 public sealed record ChampionSpellFacts(SlowSkill[] Slows, SpellCooldown[] Cooldowns)
 {
     public static readonly ChampionSpellFacts None = new([], []);
+
+    /// <summary>Slows a game mode changes, by lower-case mode; other modes use <see cref="Slows"/>.</summary>
+    public Dictionary<string, SlowSkill[]> ModeSlows { get; init; } = new();
+
+    public SlowSkill[] SlowsFor(string mode) => ModeSlows.GetValueOrDefault(mode.ToLowerInvariant()) ?? Slows;
 }
 
 /// <summary>
@@ -18,7 +23,7 @@ public sealed record ChampionSpellFacts(SlowSkill[] Slows, SpellCooldown[] Coold
 public sealed class ChampionSpellData
 {
     // Bumped whenever what is extracted changes, so results from older rules are not reused.
-    public const string RulesVersion = "5";
+    public const string RulesVersion = "7";
 
     private static readonly HttpClient Http = CreateClient();
     private readonly string _folder;
@@ -55,10 +60,11 @@ public sealed class ChampionSpellData
 
         string url = $"https://raw.communitydragon.org/{_patch}/game/data/characters/{alias}/{alias}.bin.json";
         var bin = JObject.Parse(await Http.GetStringAsync(url, token).ConfigureAwait(false));
-        var facts = new ChampionSpellFacts(
-            ChampionSlowSkills.Parse(bin, champion),
-            ChampionCooldowns.Parse(bin, champion)
-        );
+        var slows = ChampionSlowSkills.Parse(bin, champion);
+        var facts = new ChampionSpellFacts(slows, ChampionCooldowns.Parse(bin, champion))
+        {
+            ModeSlows = ChampionSlowSkills.ParseModes(bin, champion, slows),
+        };
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         await File.WriteAllTextAsync(temporary, JsonConvert.SerializeObject(facts), token).ConfigureAwait(false);

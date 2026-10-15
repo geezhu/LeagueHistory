@@ -11,6 +11,13 @@ public sealed record SpellCooldown(string Key, string Name, double[] Cooldowns)
     public double[] Recharge { get; init; } = [];
 
     public int[] Charges { get; init; } = [];
+
+    /// <summary>Cooldowns a game mode replaces, by lower-case mode ("aram", "kiwi", "urf", ...).</summary>
+    public Dictionary<string, double[]> Modes { get; init; } = new();
+
+    /// <summary>The ability as a game mode plays it: its own cooldowns there, or the usual ones.</summary>
+    public SpellCooldown ForMode(string mode) =>
+        Modes.TryGetValue(mode.ToLowerInvariant(), out var cooldowns) ? this with { Cooldowns = cooldowns } : this;
 }
 
 /// <summary>
@@ -22,6 +29,25 @@ public static class ChampionCooldowns
     // The extraction leaves out values equal to the game's default; a spell without cooldowns has 10 seconds, as
     // Data Dragon also lists (Morgana Q, Annie E).
     private const double DefaultCooldown = 10;
+
+    /// <summary>
+    /// The cooldowns the game uses: the "Cooldown" values where the spell has them, which match the Wiki, Data
+    /// Dragon and the game (Mordekaiser R 120/110/100); "cooldownTime" is an older field that some spells still
+    /// carry with outdated numbers (140/120/100), so it is only the fallback.
+    /// </summary>
+    // ARAM, Mayhem ("Kiwi"), URF, Swiftplay and Arena ("cherry") give some abilities their own cooldowns, in a field
+    // the extraction has not named: Hecarim E is 16/15/14/13/12 there instead of 20/19/18/17/16. Unnamed modes are
+    // skipped.
+    private static Dictionary<string, double[]> ModeCooldowns(JObject spell, int ranks) =>
+        (spell["{f9c2333e}"] as JObject ?? new())
+            .Properties()
+            .Where(mode => mode.Name != "__type" && !mode.Name.StartsWith('{') && mode.Value["value"] is JArray)
+            .ToDictionary(mode => mode.Name.ToLowerInvariant(), mode => Ranked(mode.Value["value"], ranks));
+
+    private static double[] Cooldowns(JObject spell, int ranks) =>
+        spell["Cooldown"]?["values"] is JArray current ? Ranked(current, ranks)
+        : spell["cooldownTime"] is JArray legacy ? Ranked(legacy, ranks)
+        : Enumerable.Repeat(DefaultCooldown, ranks).ToArray();
 
     public static SpellCooldown[] Parse(JObject bin, JObject champion)
     {
@@ -52,14 +78,14 @@ public static class ChampionCooldowns
             }
 
             int ranks = ChampionSlowSkills.Ranks(spell, key);
-            double[] recharge = Ranked(spell["mAmmoRechargeTime"], ranks);
-            double[] cooldowns =
-                spell["cooldownTime"] is JArray
-                    ? Ranked(spell["cooldownTime"], ranks)
-                    : Enumerable.Repeat(DefaultCooldown, ranks).ToArray();
+            // Ammo that haste does not shorten (Rakan E, Cho'Gath E, LeBlanc R) is a recast or passive mechanic, not
+            // the ability's cooldown.
+            double[] recharge =
+                (bool?)spell["mAmmoNotAffectedByCDR"] == true ? [] : Ranked(spell["mAmmoRechargeTime"], ranks);
             result.Add(
-                new(key, names.GetValueOrDefault(key, key), cooldowns)
+                new(key, names.GetValueOrDefault(key, key), Cooldowns(spell, ranks))
                 {
+                    Modes = ModeCooldowns(spell, ranks),
                     Recharge = recharge.Any(value => value > 0) ? recharge : [],
                     Charges = recharge.Any(value => value > 0)
                         ? Ranked(spell["mMaxAmmo"], ranks).Select(value => (int)value).ToArray()

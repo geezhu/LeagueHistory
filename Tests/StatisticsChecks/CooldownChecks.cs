@@ -63,6 +63,7 @@ internal static class CooldownChecks
         );
         CheckSection(now);
         HasteAndCoverage(cooldowns);
+        ModeOverrides();
         Task.Run(() => BridgeAsync(cooldowns)).GetAwaiter().GetResult();
         Console.WriteLine(
             "PASS: cooldowns per rank, defaults, charges, ability haste and the live tab's cooldown cards."
@@ -222,6 +223,63 @@ internal static class CooldownChecks
         );
     }
 
+    // ARAM and Mayhem replace some cooldowns and slow values (Hecarim E 16 there instead of 20, Teemo R slows 20%).
+    private static void ModeOverrides()
+    {
+        var bin = Bin();
+        bin["Characters/Test/Spells/TestEAbility/TestE"]!["mSpell"]!["{f9c2333e}"] = JObject.Parse(
+            """{"ARAM":{"value":[0,1,1,1,1,1]},"Kiwi":{"value":[0,0.3,0.3,0.3,0.3,0.3]},"{a110bc47}":{"value":[9]}}"""
+        );
+        var e = ChampionCooldowns.Parse(bin, Champion())[2];
+        Check(
+            e.ForMode("KIWI").Cooldowns.SequenceEqual([0.3, 0.3, 0.3, 0.3, 0.3])
+                && e.ForMode("aram").Cooldowns[0] == 1
+                && e.ForMode("").Cooldowns[0] == 0.4
+                && e.ForMode("CLASSIC").Cooldowns[0] == 0.4
+                && e.Modes.Keys.Order().SequenceEqual(["aram", "kiwi"]),
+            "A mode's own cooldowns replace the usual ones; unnamed modes are skipped"
+        );
+
+        var slowBin = new JObject
+        {
+            ["Characters/Test/CharacterRecords/Root"] = new JObject { ["spellNames"] = new JArray("TestQ") },
+            ["Characters/Test/Spells/TestQAbility/TestQ"] = Spell(
+                ("castRange", new JArray(0, 900, 900, 900, 900, 900)),
+                ("DataValues", JArray.Parse("""[{"name":"SlowAmount","values":[0,0.5,0.5,0.5,0.5,0.5]}]""")),
+                (
+                    "DataValuesModeOverride",
+                    JObject.Parse(
+                        """{"ARAM":{"SpellDataValues":[{"name":"SlowAmount","values":[0,0.2,0.2,0.2,0.2,0.2]}]},"Kiwi":{"SpellDataValues":[{"name":"SlowAmount","values":[0,0.2,0.2,0.2,0.2,0.2]}]},"URF":{"SpellDataValues":[{"name":"Unrelated","values":[0,1,1,1,1,1]}]}}"""
+                    )
+                )
+            ),
+        };
+        var champion = new JObject
+        {
+            ["alias"] = "Test",
+            ["spells"] = new JArray(new JObject { ["spellKey"] = "q", ["description"] = "减速敌人。" }),
+        };
+        var slows = ChampionSlowSkills.Parse(slowBin, champion);
+        var facts = new ChampionSpellFacts(slows, [])
+        {
+            ModeSlows = ChampionSlowSkills.ParseModes(slowBin, champion, slows),
+        };
+        Check(
+            facts.SlowsFor("").Single().Percent == 50
+                && facts.SlowsFor("KIWI").Single().Percent == 20
+                && facts.ModeSlows.Keys.Order().SequenceEqual(["aram", "kiwi"])
+                && facts.SlowsFor("urf").Single().Percent == 50,
+            "A mode's slow values are read; modes that leave the slows alone are not kept"
+        );
+        Check(
+            GameModes.Of("KIWI", 0) == "kiwi"
+                && GameModes.Of(null, 450) == "aram"
+                && GameModes.Of("CLASSIC", 480) == "swiftplay"
+                && GameModes.Of("CLASSIC", 420) == "",
+            "2999's mode wins; before a game, or for a classic-map queue, the queue tells it"
+        );
+    }
+
     private static JObject Spell(params (string Name, JToken Value)[] fields)
     {
         var spell = new JObject();
@@ -246,14 +304,23 @@ internal static class CooldownChecks
                 ("mClientData", JObject.Parse("{\"mTooltipData\":{\"mLists\":{\"LevelUp\":{\"levelCount\":6}}}}"))
             ),
             // The extraction leaves the default out; a sub-spell's own cooldown is not the ability's.
-            ["Characters/Test/Spells/TestWAbility/TestW"] = Spell(("mCastTime", 0.25)),
+            // No cooldown field at all: the default; ammo haste does not shorten is a recast, not a cooldown.
+            ["Characters/Test/Spells/TestWAbility/TestW"] = Spell(
+                ("mCastTime", 0.25),
+                ("mAmmoRechargeTime", new JArray(0, 22, 20, 18, 16, 14)),
+                ("mAmmoNotAffectedByCDR", true)
+            ),
             ["Characters/Test/Spells/TestWAbility/TestWMissile"] = Spell(("cooldownTime", new JArray(0, 12, 12))),
             ["Characters/Test/Spells/TestEAbility/TestE"] = Spell(
                 ("cooldownTime", new JArray(0.4000000059604645, 0.4000000059604645, 0.4, 0.4, 0.4, 0.4)),
                 ("mAmmoRechargeTime", new JArray(0, 18, 17, 16, 15, 14)),
                 ("mMaxAmmo", new JArray(2, 2, 2, 2, 3, 3))
             ),
-            ["Characters/Test/Spells/TestRAbility/TestR"] = Spell(("cooldownTime", new JArray(0, 80, 60, 40, 40))),
+            // The current "Cooldown" values win over the outdated "cooldownTime" (Mordekaiser R: 120 against 140).
+            ["Characters/Test/Spells/TestRAbility/TestR"] = Spell(
+                ("cooldownTime", new JArray(0, 90, 70, 50, 50)),
+                ("Cooldown", new JObject { ["values"] = new JArray(0, 80, 60, 40, 40) })
+            ),
         };
         return bin;
     }
