@@ -12,6 +12,12 @@ public sealed record ChampionBaseStats(
     double MagicResistPerLevel
 )
 {
+    /// <summary>Attack speed gained per level, in percent; it counts as bonus attack speed.</summary>
+    public double AttackSpeedPerLevel { get; init; }
+
+    /// <summary>The champion's default attack range; Draw Your Sword scales with it.</summary>
+    public double AttackRange { get; init; }
+
     /// <summary>The game's growth curve: each level adds a little more than the one before.</summary>
     public static double Grown(double value, double perLevel, int level)
     {
@@ -42,7 +48,16 @@ public sealed record ChampionBaseStats(
             ];
             if (values.All(value => value >= 0 && double.IsFinite(value)) && values[0] > 0)
             {
-                result[id] = new(values[0], values[1], values[2], values[3], values[4], values[5]);
+                double growth = stats["attackspeedperlevel"]?.Type is JTokenType.Integer or JTokenType.Float
+                    ? (double)stats["attackspeedperlevel"]!
+                    : 0;
+                result[id] = new(values[0], values[1], values[2], values[3], values[4], values[5])
+                {
+                    AttackSpeedPerLevel = double.IsFinite(growth) ? Math.Max(0, growth) : 0,
+                    AttackRange = stats["attackrange"]?.Type is JTokenType.Integer or JTokenType.Float
+                        ? Math.Max(0, (double)stats["attackrange"]!)
+                        : 0,
+                };
             }
         }
 

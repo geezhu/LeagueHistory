@@ -124,7 +124,8 @@ public sealed partial class GameBarBridge : IDisposable
                         entry => new JProperty(entry.Key, entry.Value)
                     )
                 ),
-                ["augmentStacks"] = enabled && active && live != null ? AugmentJson(live.AugmentStacks) : new JArray(),
+                ["augmentStacks"] =
+                    enabled && active && live != null ? AugmentJson(live.AugmentStacks, live.Effects) : new JArray(),
             }
         );
     }

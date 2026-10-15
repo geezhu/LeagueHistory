@@ -49,59 +49,62 @@ public sealed partial class GameBarBridge
         int level = live?.Insight.Players.GetValueOrDefault(player.Key)?.Level ?? 0;
         var haste = live?.Haste.GetValueOrDefault(player.Key);
         var options = live?.Effects.GetValueOrDefault(player.Key)?.Cooldown;
+        // A sealed ultimate (Back to Basics) cannot be cast, so neither its control nor its slow counts.
         row["controls"] = new JArray(
-            skills.Select(skill =>
-            {
-                var slow = ChampionSlowSkills.AtLevel(skill, level);
-                var coverage =
-                    slow != null
-                        ? SlowCoverage.Estimate(
-                            slow,
-                            cooldowns?.FirstOrDefault(c => c.Key == skill.Key),
-                            haste,
-                            options
-                        )
-                        : null;
-                var value = new JObject
+            skills
+                .Where(skill => !(skill.Key == "R" && options?.UltimateSealed == true))
+                .Select(skill =>
                 {
-                    ["key"] = skill.Key,
-                    ["name"] = skill.Name,
-                    ["effects"] = string.Join(
-                        "/",
-                        slow is { Slow: var at }
-                            ? skill.Effects.Append(
-                                $"减速{at.Percent}%{Seconds(at.Duration, " ")}"
-                                    + (coverage != null ? $" 覆盖{coverage.Share * 100:0}%" : "")
+                    var slow = ChampionSlowSkills.AtLevel(skill, level);
+                    var coverage =
+                        slow != null
+                            ? SlowCoverage.Estimate(
+                                slow,
+                                cooldowns?.FirstOrDefault(c => c.Key == skill.Key),
+                                haste,
+                                options
                             )
-                            : skill.Effects
-                    ),
-                    ["description"] = skill.Description,
-                };
-                // The widget reads these as numbers; a null would not parse, so they appear only with a slow.
-                if (slow != null && skill.Range is int range)
-                {
-                    value["slow"] = slow.Slow.Percent;
-                    value["range"] = range;
-                    value["slowNote"] = SlowNote(slow) + (coverage != null ? "\n" + coverage.Note : "");
-                }
+                            : null;
+                    var value = new JObject
+                    {
+                        ["key"] = skill.Key,
+                        ["name"] = skill.Name,
+                        ["effects"] = string.Join(
+                            "/",
+                            slow is { Slow: var at }
+                                ? skill.Effects.Append(
+                                    $"减速{at.Percent}%{Seconds(at.Duration, " ")}"
+                                        + (coverage != null ? $" 覆盖{coverage.Share * 100:0}%" : "")
+                                )
+                                : skill.Effects
+                        ),
+                        ["description"] = skill.Description,
+                    };
+                    // The widget reads these as numbers; a null would not parse, so they appear only with a slow.
+                    if (slow != null && skill.Range is int range)
+                    {
+                        value["slow"] = slow.Slow.Percent;
+                        value["range"] = range;
+                        value["slowNote"] = SlowNote(slow) + (coverage != null ? "\n" + coverage.Note : "");
+                    }
 
-                if (slow?.Slow.Duration > 0)
-                {
-                    value["slowDuration"] = slow.Slow.Duration;
-                }
+                    if (slow?.Slow.Duration > 0)
+                    {
+                        value["slowDuration"] = slow.Slow.Duration;
+                    }
 
-                if (slow?.Slow.Zone > 0)
-                {
-                    value["slowZone"] = slow.Slow.Zone;
-                }
+                    if (slow?.Slow.Zone > 0)
+                    {
+                        value["slowZone"] = slow.Slow.Zone;
+                    }
 
-                if (coverage != null)
-                {
-                    value["slowCoverage"] = Math.Round(coverage.Share, 3);
-                }
+                    if (coverage != null)
+                    {
+                        value["slowCoverage"] = Math.Round(coverage.Share, 3);
+                    }
 
-                return value;
-            })
+                    return value;
+                })
         );
     }
 
@@ -166,6 +169,7 @@ public sealed partial class GameBarBridge
             ["pursuitHaste"] = set.PursuitHaste > 0 ? set.PursuitHaste : 80,
             ["ultBot"] = set.UltBot,
             ["ultimateHaste"] = set.UltimateHaste,
+            ["ultimateSealed"] = set.UltimateSealed,
             ["summary"] = set.Summary(),
         };
     }

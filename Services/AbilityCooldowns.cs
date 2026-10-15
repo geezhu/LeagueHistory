@@ -10,6 +10,9 @@ public sealed record AbilityCooldown(string Key, string Name, int Rank, int Rank
 {
     /// <summary>Charges the ability holds at this rank; 0 for an ability without charges.</summary>
     public int Charges { get; init; }
+
+    /// <summary>Back to Basics sealed the ultimate: it cannot be cast, so it has no cooldown.</summary>
+    public bool Sealed { get; init; }
 }
 
 public static class AbilityCooldowns
@@ -28,6 +31,11 @@ public static class AbilityCooldowns
             .Select(spell =>
             {
                 int count = spell.Cooldowns.Length;
+                if (spell.Key == "R" && options?.UltimateSealed == true)
+                {
+                    return new AbilityCooldown(spell.Key, spell.Name, 0, count, 0, 0) { Sealed = true };
+                }
+
                 int rank = Math.Clamp(ranks.GetValueOrDefault(spell.Key), 0, count);
                 if (rank == 0)
                 {

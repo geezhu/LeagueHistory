@@ -48,7 +48,8 @@ internal sealed partial class LoadingOverlayManager
                 player =>
                     AugmentEffects.From(
                         stacks.Where(stack => stack.Selection.Player == player.Key),
-                        _ultimateHaste.GetValueOrDefault(player.Key)
+                        _ultimateHaste.GetValueOrDefault(player.Key),
+                        _baseStats?.GetValueOrDefault(player.ChampionId)?.AttackRange ?? 0
                     )
             );
 

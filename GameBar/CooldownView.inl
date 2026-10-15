@@ -20,6 +20,7 @@ struct CalcOptions
     double pursuitHaste = 80;
     double ultHaste = 0;
     bool ultBot = false;
+    bool ultimateSealed = false;
     hstring summary;
 };
 
@@ -68,6 +69,7 @@ static CalcOptions CalcOptionsFrom(JsonObject const &calc)
                 bread.GetArray().GetAt(i).ValueType() == JsonValueType::Boolean && bread.GetArray().GetBooleanAt(i);
     options.purist = flag(L"purist");
     options.ultBot = flag(L"ultBot");
+    options.ultimateSealed = flag(L"ultimateSealed");
     options.summary = AugmentText(echo, L"summary");
     options.pursuitHaste = number(L"pursuitHaste", 80);
     options.ultHaste = (std::max)(0.0, number(L"ultimateHaste", 0));
@@ -211,7 +213,12 @@ Grid CalcAbilityRow(JsonObject const &ability, size_t index, double haste, bool 
     Grid::SetColumn(steps, 1);
     row.Children().Append(steps);
     hstring baseText, resultText;
-    if (rank == 0)
+    if (options.ultimateSealed && slot == 3)
+    {
+        baseText = L"回归基本功";
+        resultText = L"已封印";
+    }
+    else if (rank == 0)
         resultText = L"未学";
     else
     {

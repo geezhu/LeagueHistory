@@ -91,6 +91,73 @@ internal static class CooldownOptionChecks
             haste is { Value: 145, Estimated: true } && haste.Details.Contains("装备 15 + 海克斯 130"),
             "Others' haste adds the recorded augments: " + haste.Details
         );
+        Purist();
+        Completed();
+    }
+
+    // Purist - Caster turns bonus attack speed, items' and the level's, into haste: 0.65 per 1%.
+    private static void Purist()
+    {
+        var items = ItemStats.Sum([
+            ItemStats.Parse("<stats><attention>40</attention>攻击力<br><attention>25%</attention>攻击速度</stats>"),
+            ItemStats.Parse("<stats><attention>30%</attention>攻击速度<br><attention>45</attention>移动速度</stats>"),
+        ]);
+        var champion = ChampionBaseStats.ParseAll(
+            JObject.Parse(
+                """{"data":{"Jinx":{"key":"222","stats":{"hp":630,"hpperlevel":105,"armor":26,"armorperlevel":4.7,"spellblock":30,"spellblockperlevel":1.3,"attackspeedperlevel":1}}}}"""
+            )
+        )[222];
+        double growth = ChampionBaseStats.Grown(0, champion.AttackSpeedPerLevel, 11);
+        var purist = AugmentEffects.From([Record(TrackedAugment.PuristCaster)], 0);
+        var haste = PlayerHaste.Describe(items, purist, null, items.AttackSpeed + growth);
+        var plain = PlayerHaste.Describe(items, AugmentEffects.None, null, items.AttackSpeed + growth);
+        Check(
+            items.AttackSpeed == 55
+                && Math.Abs(growth - 10 * (0.7025 + 0.0175 * 10)) < 1e-9
+                && Math.Abs(haste.Value - (55 + growth) * 0.65) < 1e-9
+                && haste.Details.Contains("纯粹主义者附加攻速")
+                && plain.Value == 0
+                && purist.Cooldown.Multiplier == 0.9,
+            "Purist turns items' and the level's attack speed into haste and cuts cooldowns by 10%: " + haste.Details
+        );
+    }
+
+    // Draw Your Sword scales with attack range, Stay Resolute adds 20 of both when not first, Back to Basics seals R.
+    private static void Completed()
+    {
+        var champion = ChampionBaseStats.ParseAll(
+            JObject.Parse(
+                """{"data":{"Ezreal":{"key":"81","stats":{"hp":600,"hpperlevel":102,"armor":24,"armorperlevel":4.7,"spellblock":30,"spellblockperlevel":1.3,"attackrange":550}}}}"""
+            )
+        )[81];
+        var sword = AugmentEffects.From([Record(TrackedAugment.DrawYourSword)], 0, champion.AttackRange);
+        Check(
+            champion.AttackRange == 550
+                && Math.Abs(sword.HealthMultiplier - 1.312) < 1e-9
+                && Math.Abs(AugmentEffects.DrawYourSwordShare(650) - 0.48) < 1e-9
+                && Math.Abs(AugmentEffects.DrawYourSwordShare(0) - 0.24) < 1e-9
+                && sword.Summary.Contains("生命 +31%（攻击距离 550）"),
+            "Draw Your Sword gains 10% per 15 range from 500, doubling at 650: " + sword.Summary
+        );
+        var resolute = AugmentEffects.From([Record(TrackedAugment.StayResolute, 12, "magic-later")], 0);
+        Check(
+            resolute is { Armor: 20, MagicResist: 32 } && resolute.Summary.Contains("魔抗 +12，另加护甲和魔抗各 20"),
+            "Stay Resolute's hits go to the chosen resistance and not being first adds 20 of both: " + resolute.Summary
+        );
+        var basics = AugmentEffects.From([Record(TrackedAugment.BackToBasics)], 0).Cooldown;
+        var cooldowns = AbilityCooldowns.Describe(
+            [new("Q", "Q", [8, 7, 6, 5, 4]), new("R", "R", [100, 80, 60])],
+            new Dictionary<string, int> { ["Q"] = 1, ["R"] = 1 },
+            0,
+            basics
+        );
+        Check(
+            basics.UltimateSealed
+                && cooldowns[1] is { Sealed: true, Current: 0 }
+                && !cooldowns[0].Sealed
+                && basics.Summary().Contains("大招已封印"),
+            "Back to Basics seals the ultimate: no cooldown for it"
+        );
     }
 
     private static JObject Row(string augment, string? choice = null)
@@ -211,7 +278,10 @@ internal static class CooldownOptionChecks
             AugmentStacks = [scientist],
             Effects = new Dictionary<string, AugmentEffects>
             {
-                ["self"] = AugmentEffects.From([Record(TrackedAugment.UltBot)], 30),
+                ["self"] = AugmentEffects.From(
+                    [Record(TrackedAugment.UltBot), Record(TrackedAugment.BackToBasics)],
+                    30
+                ),
             },
             UltimateHaste = new Dictionary<string, double> { ["self"] = 30 },
         };
@@ -240,7 +310,11 @@ internal static class CooldownOptionChecks
                 true,
                 true,
                 live: live,
-                cooldowns: new Dictionary<int, SpellCooldown[]> { [99] = [new("R", "R", [100, 80, 60])] }
+                cooldowns: new Dictionary<int, SpellCooldown[]> { [99] = [new("R", "R", [100, 80, 60])] },
+                controls: new Dictionary<int, ControlSkill[]>
+                {
+                    [99] = [new("Q", "Q", ["禁锢"], ""), new("R", "R", ["晕眩"], "")],
+                }
             );
             var snapshot = JObject.Parse(
                 await BridgeCheckFiles.ReadAsync(Path.Combine(folder, "snapshot.json"), "Records snapshot is written")
@@ -260,7 +334,9 @@ internal static class CooldownOptionChecks
                     && (string?)stack["bonus"] == "变小 · 技能急速 +70"
                     && (bool?)echo["ultBot"] == true
                     && (double?)echo["ultimateHaste"] == 30
-                    && (string?)echo["summary"] == "大招工具人、大招急速 30",
+                    && (string?)echo["summary"] == "大招工具人、大招急速 30、大招已封印（回归基本功）"
+                    && (bool?)echo["ultimateSealed"] == true
+                    && snapshot["players"]![0]!["controls"]!.Select(c => (string?)c["key"]).SequenceEqual(["Q"]),
                 "The snapshot carries the catalog, the records and the calculator's rules: " + stack + echo
             );
             await System.IO.File.WriteAllTextAsync(

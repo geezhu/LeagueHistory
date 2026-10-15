@@ -83,7 +83,10 @@ public sealed partial class GameBarBridge
         );
 
     // The anchor goes back to the widget, which starts its corrections from it and keeps it across its restarts.
-    private static JArray AugmentJson(IEnumerable<LiveAugmentStack> stacks) =>
+    private static JArray AugmentJson(
+        IEnumerable<LiveAugmentStack> stacks,
+        IReadOnlyDictionary<string, AugmentEffects> effects
+    ) =>
         new(
             stacks.Select(stack => new JObject
             {
@@ -98,7 +101,8 @@ public sealed partial class GameBarBridge
                 ["bonus"] = AugmentEffects.Bonus(
                     stack.Selection.Augment,
                     stack.State.Stacks,
-                    AugmentCatalog.Choice(stack.Selection.Augment, stack.Selection.Choice)
+                    AugmentCatalog.Choice(stack.Selection.Augment, stack.Selection.Choice),
+                    effects.GetValueOrDefault(stack.Selection.Player)?.AttackRange ?? 0
                 ),
                 ["approximate"] = stack.State.Deaths > 0 && stack.Selection.Augment != TrackedAugment.InfiniteRecursion,
                 ["complete"] = stack.State.Complete,

@@ -24,6 +24,9 @@ public sealed record CooldownOptions(
 
     public static readonly CooldownOptions None = new([false, false, false], false, "", 0, false, 0);
 
+    /// <summary>Back to Basics seals the ultimate for the rest of the game; it has no cooldown to show.</summary>
+    public bool UltimateSealed { get; init; }
+
     /// <summary>
     /// The haste one ability's cooldown uses. Ult Bot's 100 is in 2999's value already, so it is added only to an
     /// estimate; abilities' own haste (Bread, Pursuit) is kept under Ult Bot, which the Wiki does not say otherwise.
@@ -65,6 +68,11 @@ public sealed record CooldownOptions(
         if (Purist)
         {
             parts.Add("纯粹主义者 - 术师");
+        }
+
+        if (UltimateSealed)
+        {
+            parts.Add("大招已封印（回归基本功）");
         }
 
         return string.Join("、", parts);
