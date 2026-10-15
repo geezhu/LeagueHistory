@@ -24,6 +24,7 @@ internal static class SummonerTimerChecks
     public static void Run()
     {
         CheckSpells();
+        CheckModes();
         CheckTimerFile();
         CheckRefusedTimerFiles();
         CheckAlerts();
@@ -102,6 +103,46 @@ internal static class SummonerTimerChecks
                 && ControlSettings.Parse(JObject.Parse("""{"protocol":1,"survivalSound":true,"summonerSound":1}"""))
                     == null,
             "The ready chime is on unless the widget turns it off; a malformed setting is refused"
+        );
+    }
+
+    // The Howling Abyss aura's 70 haste (ARAM and Mayhem), URF's 300, and the game data's Exhaust 290 in ARAM.
+    private static void CheckModes()
+    {
+        var shared = JObject.Parse(
+            """
+            {
+              "Shared/Spells/SummonerExhaust": { "mSpell": { "{f9c2333e}": {
+                "ARAM": { "value": [290, 290], "__type": "SpellEffectAmount" }, "{12ab34cd}": { "value": [1] } } } },
+              "Shared/Spells/SummonerSmite": { "mSpell": { "{f9c2333e}": { "URF": { "value": [10.0] } } } },
+              "Shared/Spells/SummonerFlash": { "mSpell": { "cooldownTime": [300] } },
+              "Shared/Spells/HowlingAbyssAura": { "mSpell": { "{f9c2333e}": { "ARAM": { "value": [1] } } } }
+            }
+            """
+        );
+        var modes = SummonerSpellData.ParseModes(shared);
+        Check(
+            modes.Count == 2
+                && modes["SummonerExhaust"].SequenceEqual([new KeyValuePair<string, double>("aram", 290)])
+                && modes["SummonerSmite"]["urf"] == 10,
+            "Only summoner spells' named mode overrides are kept"
+        );
+        var exhaust = new SummonerSpellInfo("SummonerExhaust", "虚弱", 240, "SummonerExhaust.png");
+        bool Near(double value, double expected) => Math.Abs(value - expected) < 0.01;
+        Check(
+            Near(SummonerSpells.Cooldown(Flash, 0, "ARAM", modes), 176.47)
+                && Near(SummonerSpells.Cooldown(Flash, 0, "kiwi", modes), 176.47)
+                && Near(SummonerSpells.Cooldown(Flash, 10, "aram", modes), 166.67)
+                && Near(SummonerSpells.Cooldown(Mark, 0, "aram", modes), 47.06),
+            "The Howling Abyss aura gives 70 summoner haste in ARAM and Mayhem, on top of the player's"
+        );
+        Check(
+            Near(SummonerSpells.Cooldown(exhaust, 0, "aram", modes), 170.59)
+                && Near(SummonerSpells.Cooldown(exhaust, 0, "aram"), 141.18)
+                && Near(SummonerSpells.Cooldown(Flash, 0, "urf", modes), 75)
+                && SummonerSpells.Cooldown(Flash, 0, "", modes) == 300
+                && SummonerSpells.Cooldown(exhaust, 0, "cherry", modes) == 240,
+            "A mode's own base cooldown applies there; URF gives 300 haste; other modes keep the usual cooldown"
         );
     }
 
@@ -332,13 +373,18 @@ internal static class SummonerTimerChecks
             );
             byte[] png = [0x89, 0x50, 0x4e, 0x47];
             await System.IO.File.WriteAllBytesAsync(Path.Combine(folder, "16.20.1", "SummonerFlash.png"), png);
+            await System.IO.File.WriteAllTextAsync(
+                Path.Combine(folder, "16.20.1", "modes-r1.json"),
+                """{"SummonerExhaust":{"aram":290}}"""
+            );
             var data = new SummonerSpellData(folder, "16.20.1");
             var spells = await data.LoadAsync(CancellationToken.None);
             Check(
                 spells["SummonerFlash"] == Flash
                     && await data.IconAsync(Flash, CancellationToken.None) == Convert.ToBase64String(png)
-                    && await data.IconAsync(Flash with { Image = "../x.png" }, CancellationToken.None) == "",
-                "The cached list and icons are read without the network; an icon name with a path is refused"
+                    && await data.IconAsync(Flash with { Image = "../x.png" }, CancellationToken.None) == ""
+                    && (await data.LoadModesAsync(CancellationToken.None))["SummonerExhaust"]["aram"] == 290,
+                "The cached list, icons and mode cooldowns are read without the network; an icon name with a path is refused"
             );
         }
         finally

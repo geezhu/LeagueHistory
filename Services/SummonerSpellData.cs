@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using League.Models;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace League.Services;
@@ -7,10 +8,13 @@ namespace League.Services;
 /// <summary>
 /// Data Dragon's summoner spells for the client's version: cooldown, name and icon by internal name, which is what
 /// 2999 reports for each player. The list and icons are kept per version; the icons go to the widget as Base64.
+/// The cooldowns a mode changes come from CommunityDragon's extraction of the game data, kept as a small file.
 /// </summary>
 public sealed class SummonerSpellData
 {
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(20) };
+    // Bumped whenever what is extracted from the game data changes, so older results are not reused.
+    private const string ModesVersion = "1";
+    private static readonly HttpClient Http = CreateClient();
     private readonly string _folder;
     private readonly string? _version;
 
@@ -79,6 +83,65 @@ public sealed class SummonerSpellData
         return Convert.ToBase64String(await File.ReadAllBytesAsync(path, token).ConfigureAwait(false));
     }
 
+    /// <summary>
+    /// Base cooldowns a mode replaces, by spell and lower-case mode ("aram": Exhaust 290); empty when the client
+    /// version is unknown. The shared game data is several megabytes, so only the overrides are kept.
+    /// </summary>
+    public async Task<Dictionary<string, Dictionary<string, double>>> LoadModesAsync(CancellationToken token)
+    {
+        if (_version == null)
+        {
+            return [];
+        }
+
+        string path = Path.Combine(_folder, _version, $"modes-r{ModesVersion}.json");
+        if (File.Exists(path))
+        {
+            return JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, double>>>(
+                    await File.ReadAllTextAsync(path, token).ConfigureAwait(false)
+                ) ?? [];
+        }
+
+        // CommunityDragon keeps one folder per patch ("16.20").
+        string patch = string.Join('.', _version.Split('.').Take(2));
+        string text = await Http.GetStringAsync(
+                $"https://raw.communitydragon.org/{patch}/game/shared.cdtb.bin.json",
+                token
+            )
+            .ConfigureAwait(false);
+        var modes = ParseModes(JObject.Parse(text));
+        await SaveAsync(path, JsonConvert.SerializeObject(modes), token).ConfigureAwait(false);
+        return modes;
+    }
+
+    // The mode overrides sit in the same unnamed field as the champions' ("{f9c2333e}"); unnamed modes are skipped.
+    public static Dictionary<string, Dictionary<string, double>> ParseModes(JObject shared)
+    {
+        const string prefix = "Shared/Spells/";
+        var result = new Dictionary<string, Dictionary<string, double>>(StringComparer.Ordinal);
+        foreach (
+            var entry in shared
+                .Properties()
+                .Where(p => p.Name.StartsWith(prefix + "Summoner", StringComparison.Ordinal))
+        )
+        {
+            var modes = (entry.Value["mSpell"]?["{f9c2333e}"] as JObject ?? new())
+                .Properties()
+                .Where(mode => mode.Name != "__type" && !mode.Name.StartsWith('{'))
+                .Select(mode =>
+                    (Mode: mode.Name.ToLowerInvariant(), Value: (mode.Value["value"] as JArray)?.FirstOrDefault())
+                )
+                .Where(mode => mode.Value?.Type is JTokenType.Integer or JTokenType.Float && (double)mode.Value! > 0)
+                .ToDictionary(mode => mode.Mode, mode => (double)mode.Value!);
+            if (modes.Count > 0)
+            {
+                result[entry.Name[prefix.Length..]] = modes;
+            }
+        }
+
+        return result;
+    }
+
     public static Dictionary<string, SummonerSpellInfo> Parse(JObject list)
     {
         var result = new Dictionary<string, SummonerSpellInfo>(StringComparer.Ordinal);
@@ -110,6 +173,14 @@ public sealed class SummonerSpellData
         string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         await File.WriteAllTextAsync(temporary, text, token).ConfigureAwait(false);
         File.Move(temporary, path, overwrite: true);
+    }
+
+    private static HttpClient CreateClient()
+    {
+        // The shared game data is several megabytes; CommunityDragon refuses requests without a user agent.
+        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("LeagueHistory");
+        return client;
     }
 
     // Data Dragon folders are full versions ("16.20.1").
