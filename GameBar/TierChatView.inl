@@ -16,7 +16,7 @@ bool supportsChat = false, supportsMasteryChat = false, supportsDeathStreakChat 
      supportsPartyChat = false, supportsWaveChat = false, chatTeams = false, chatPending = false, chatWriting = false,
      chatReading = false, chatDismissed = false, chatCancelled = false, chatCleanup = false;
 hstring chatId, chatSession, chatTarget, chatKind, chatText, pendingChatWrite;
-int chatSlot = -1, chatHero = 0;
+int chatSlot = -1, chatHero = 0, chatSpell = -1;
 int64_t chatCreated = 0;
 
 void InitializeChat()
@@ -165,6 +165,9 @@ bool CanQueueChat(hstring const &target, hstring const &kind) const
         return false;
     if (kind == L"waves")
         return supportsWaveChat && HasWaves() && WaveChatAvailable(target);
+    if (kind == L"summoner")
+        return supportsSummonerChat && target == L"single" && summonerChatCard >= 0 && summonerChatCard < 5 &&
+               cards[summonerChatCard].hero > 0;
     if ((kind != L"tier" && kind != L"mastery" && kind != L"deathStreak" && kind != L"record" && kind != L"party" &&
          kind != L"voice") ||
         (kind == L"mastery" && !supportsMasteryChat) || (kind == L"deathStreak" && !supportsDeathStreakChat) ||
@@ -201,21 +204,23 @@ void QueueChat(hstring const &target, hstring const &kind)
     chatCreated = Now();
     chatCancelled = false;
     chatPending = true;
-    chatSlot = target == L"single" ? selectedCard : -1;
+    chatSlot = kind == L"summoner" ? summonerChatCard : target == L"single" ? selectedCard : -1;
     chatHero = chatSlot >= 0 ? cards[chatSlot].hero : 0;
+    chatSpell = kind == L"summoner" ? summonerChatSpell : -1;
     auto name = kind == L"waves"     ? L"兵线"
                 : kind == L"voice"   ? L"已确认的文字"
                 : target == L"own"   ? L"我方英雄"
                 : target == L"enemy" ? L"敌方英雄"
                                      : cards[chatSlot].champion.Text();
-    auto metric = kind == L"mastery"       ? L"熟练度"
-                  : kind == L"deathStreak" ? L"连死次数"
-                  : kind == L"record"      ? L"战绩"
-                  : kind == L"party"       ? L"疑似组排"
-                  : target == L"spawn"     ? L"出波与炮车"
-                  : target == L"super"     ? L"超级兵"
-                  : target == L"deaths"    ? L"阵亡代价"
-                                           : L"梯队";
+    hstring metric = kind == L"summoner" ? L" " + cards[chatSlot].summoners[chatSpell].name
+                                         : hstring(kind == L"mastery"       ? L"熟练度"
+                                                   : kind == L"deathStreak" ? L"连死次数"
+                                                   : kind == L"record"      ? L"战绩"
+                                                   : kind == L"party"       ? L"疑似组排"
+                                                   : target == L"spawn"     ? L"出波与炮车"
+                                                   : target == L"super"     ? L"超级兵"
+                                                   : target == L"deaths"    ? L"阵亡代价"
+                                                                            : L"梯队");
     chatStatus.Text(kind == L"voice" ? L"文字已确认。请在 20 秒内按 Win＋G 返回游戏，保持聊天输入框关闭；可取消发送。"
                                      : L"待发送：" + hstring(name) + metric +
                                            L"。请按 Win＋G 返回游戏，保持聊天输入框关闭（20 秒内）。");
@@ -244,6 +249,8 @@ JsonObject CreateChatRequest() const
         request.Insert(L"text", JsonValue::CreateStringValue(chatText));
         request.Insert(L"confirmed", JsonValue::CreateBooleanValue(true));
     }
+    if (chatKind == L"summoner")
+        request.Insert(L"spell", JsonValue::CreateNumberValue(chatSpell));
     request.Insert(L"slot", JsonValue::CreateNumberValue(chatSlot));
     request.Insert(L"championId", JsonValue::CreateNumberValue(chatHero));
     request.Insert(L"updatedAt", JsonValue::CreateNumberValue(double(chatCreated)));

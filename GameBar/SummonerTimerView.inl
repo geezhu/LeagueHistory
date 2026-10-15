@@ -8,7 +8,9 @@ std::map<std::wstring, double> summonerTimers;
 std::map<std::wstring, BitmapImage> summonerImages;
 std::set<std::wstring> summonerImageLoads;
 JsonObject summonerIconData, gameClock;
-bool summonerTimersWritten = false, summonerTimersWriting = false, summonerSound = true;
+bool summonerTimersWritten = false, summonerTimersWriting = false, summonerSound = true, supportsSummonerChat = false;
+// The ally card and spell a right-click sends; the send gate in TierChatView carries them into the request.
+int summonerChatCard = -1, summonerChatSpell = -1;
 hstring pendingSummonerTimers;
 Button summonerSoundButton{nullptr};
 static constexpr wchar_t const *SummonerSoundSetting = L"summonerReadySound";
@@ -45,6 +47,12 @@ StackPanel CreateCardSummoners(int index)
         face.Children().Append(summoner.countdown);
         summoner.button.Content(face);
         summoner.button.Click([this, index, slot](auto &&, auto &&) { ToggleSummonerTimer(index, slot); });
+        summoner.button.RightTapped(
+            [this, index, slot](auto &&, Windows::UI::Xaml::Input::RightTappedRoutedEventArgs const &e)
+            {
+                e.Handled(true);
+                QueueSummonerChat(index, slot);
+            });
         summoner.button.Visibility(Visibility::Collapsed);
         column.Children().Append(summoner.button);
     }
@@ -87,6 +95,21 @@ void ToggleSummonerTimer(int index, int slot)
     RenderSummoner(card, slot);
     SaveSummonerTimers();
 }
+// Only a running or finished timer is sent; the main program checks again that the player is an ally.
+void QueueSummonerChat(int index, int slot)
+{
+    auto &card = cards[index];
+    if (!supportsSummonerChat || !card.summoners[slot].timed || chatPending)
+        return;
+    if (!summonerTimers.count(SummonerTimerKey(card, slot)))
+    {
+        chatStatus.Text(L"先左键点击技能图标开始计时，再右键发送。");
+        return;
+    }
+    summonerChatCard = index;
+    summonerChatSpell = slot;
+    QueueChat(L"single", L"summoner");
+}
 void ApplySummonerData(JsonObject const &data)
 {
     auto clock = data.TryLookup(L"gameClock");
@@ -121,9 +144,12 @@ void UpdateCardSummoners(Card &card, JsonObject const &row)
         summoner.icon.Source(image == summonerImages.end() ? nullptr : image->second);
         ToolTipService::SetToolTip(
             summoner.button,
-            box_value(summoner.name + (summoner.timed ? L"：用掉时点击开始计时，再点取消；冷却 " +
-                                                            WaveClock(summoner.cooldown) + L"（已算召唤师技能急速）"
-                                                      : L"")));
+            box_value(
+                summoner.name +
+                (summoner.timed
+                     ? L"：用掉时左键开始计时，再点取消；右键发送计时到队伍聊天（只写技能名，可在 Tab 计分板点该英雄头像标明是谁）；冷却 " +
+                           WaveClock(summoner.cooldown) + L"（已算召唤师技能急速）"
+                     : L"")));
         RenderSummoner(card, slot);
     }
 }

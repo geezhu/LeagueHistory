@@ -14,7 +14,8 @@ public sealed record OverlayChatRequest(
     bool Cancelled,
     string Kind = "tier",
     string Text = "",
-    bool Confirmed = false
+    bool Confirmed = false,
+    int Spell = -1
 )
 {
     public bool IsVoice => Kind == "voice";
@@ -44,14 +45,7 @@ public sealed record OverlayChatRequest(
         }
 
         string target = (string)value["target"]!;
-        if (
-            value["kind"] != null
-            && (
-                value["kind"]!.Type != JTokenType.String
-                || (string?)value["kind"]
-                    is not ("tier" or "mastery" or "deathStreak" or "record" or "party" or "voice" or "waves")
-            )
-        )
+        if (value["kind"] != null && !KnownKind(value["kind"]!))
         {
             return null;
         }
@@ -62,6 +56,11 @@ public sealed record OverlayChatRequest(
             return ReadVoice(value, session, id, target, slot, hero, stamp);
         }
         if (value["text"] != null || value["confirmed"] != null)
+        {
+            return null;
+        }
+
+        if (ReadSpell(value, kind, target) is not int spell)
         {
             return null;
         }
@@ -92,8 +91,34 @@ public sealed record OverlayChatRequest(
             stamp,
             (bool)value["dismissed"]!,
             (bool)value["cancelled"]!,
-            kind
+            kind,
+            Spell: spell
         );
+    }
+
+    private static bool KnownKind(JToken kind) =>
+        kind.Type == JTokenType.String
+        && (string?)kind
+            is "tier"
+                or "mastery"
+                or "deathStreak"
+                or "record"
+                or "party"
+                or "voice"
+                or "waves"
+                or "summoner";
+
+    // A summoner spell names one of the selected hero's two spells (0 or 1); other requests carry none (-1).
+    private static int? ReadSpell(JObject value, string kind, string target)
+    {
+        if (kind != "summoner")
+        {
+            return value["spell"] == null ? -1 : null;
+        }
+
+        return target == "single" && value["spell"]?.Type == JTokenType.Integer && (int)value["spell"]! is 0 or 1
+            ? (int)value["spell"]!
+            : null;
     }
 
     private static Guid? ReadCommandId(JObject value, string session)
@@ -167,7 +192,8 @@ public sealed record OverlayChatRequest(
         && CreatedAt == other.CreatedAt
         && Kind == other.Kind
         && Text == other.Text
-        && Confirmed == other.Confirmed;
+        && Confirmed == other.Confirmed
+        && Spell == other.Spell;
 }
 
 public static class OverlayVoiceChatText

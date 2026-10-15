@@ -667,6 +667,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         supportsWaveChat = data.GetNamedBoolean(L"chatWaves", false);
         chatTeams = data.GetNamedBoolean(L"chatTeams", false);
         supportsVoiceChat = data.GetNamedBoolean(L"chatVoice", false);
+        supportsSummonerChat = data.GetNamedBoolean(L"chatSummoner", false);
         supportsVoiceRecording = data.GetNamedNumber(L"voiceProtocol", 0) == 2;
         if (!enabled || !active)
             CloseVoice();

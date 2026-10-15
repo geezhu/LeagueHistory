@@ -88,7 +88,7 @@ internal sealed partial class LoadingOverlayManager
                 return;
             }
             // Counts and countdowns change while the user is in Game Bar; use the latest polled data.
-            if (request.Kind is "deathStreak" or "waves")
+            if (request.Kind is "deathStreak" or "waves" or "summoner")
             {
                 messages = BuildChatMessages(roster, request);
             }
@@ -149,6 +149,13 @@ internal sealed partial class LoadingOverlayManager
                 _owner.GetAppConfig()?.UseChampionNameWhenSending ?? false
             ),
             "party" => OverlayPartyChatMessage.Build(roster!, request, CachedPlayers(), Champion),
+            "summoner" => SummonerChatMessage.Build(
+                OverlayTierChatMessage.Select(roster!, request).FirstOrDefault(),
+                roster!.Players.FirstOrDefault(p => p.Self)?.Team ?? 0,
+                _liveState,
+                request.Spell,
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            ),
             _ => OverlayTierChatMessage.Build(roster!, request, _ranks, Champion),
         };
 

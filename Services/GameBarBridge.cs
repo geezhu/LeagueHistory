@@ -93,6 +93,8 @@ public sealed partial class GameBarBridge : IDisposable
             ["chatVoice"] = true,
             ["voiceProtocol"] = 2,
             ["chatTeams"] = roster?.Players.Any(p => p.Self) ?? false,
+            // Right-clicking an ally's summoner spell sends its timer.
+            ["chatSummoner"] = true,
             ["queue"] = roster?.Queue ?? 0,
             ["protocol"] = 1,
             ["revision"] = _instance + ":" + (++_revision),
