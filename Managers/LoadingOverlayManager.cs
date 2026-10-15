@@ -598,7 +598,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
             OverlayPartyAnalysis.ForRoster(_roster, CachedPlayers()),
             _liveState,
             _controls,
-            _cooldowns
+            ModeCooldowns()
         );
     }
 

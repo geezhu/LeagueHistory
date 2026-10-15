@@ -1,3 +1,4 @@
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace League.Services;
@@ -190,6 +191,66 @@ public static class ChampionSlowSkills
         }
 
         return result.ToArray();
+    }
+
+    /// <summary>
+    /// The slows under each game mode whose value overrides change them (Teemo R slows 20% in ARAM), by lower-case
+    /// mode; modes that leave the slows as they are are left out.
+    /// </summary>
+    public static Dictionary<string, SlowSkill[]> ParseModes(JObject bin, JObject champion, SlowSkill[] slows)
+    {
+        string usual = JsonConvert.SerializeObject(slows);
+        var result = new Dictionary<string, SlowSkill[]>();
+        foreach (string mode in OverrideModes(bin))
+        {
+            var moded = Parse(ModeView(bin, mode), champion);
+            if (JsonConvert.SerializeObject(moded) != usual)
+            {
+                result[mode.ToLowerInvariant()] = moded;
+            }
+        }
+
+        return result;
+    }
+
+    private static IEnumerable<string> OverrideModes(JObject bin) =>
+        bin.Properties()
+            .Select(p => (p.Value as JObject)?["mSpell"]?["DataValuesModeOverride"])
+            .OfType<JObject>()
+            .SelectMany(overrides => overrides.Properties().Select(mode => mode.Name))
+            .Where(mode => mode != "__type" && !mode.StartsWith('{'))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    // A copy of the game data with each spell's values replaced by the mode's, so the usual parsing reads that mode.
+    private static JObject ModeView(JObject bin, string mode)
+    {
+        var view = (JObject)bin.DeepClone();
+        foreach (var spell in view.Properties().Select(p => (p.Value as JObject)?["mSpell"]).OfType<JObject>())
+        {
+            if (
+                spell["DataValuesModeOverride"]?[mode]?["SpellDataValues"] is not JArray overrides
+                || spell["DataValues"] is not JArray values
+            )
+            {
+                continue;
+            }
+
+            foreach (var value in overrides.OfType<JObject>())
+            {
+                var usual = values.OfType<JObject>().FirstOrDefault(v => (string?)v["name"] == (string?)value["name"]);
+                if (usual != null)
+                {
+                    usual["values"] = value["values"]?.DeepClone();
+                }
+                else
+                {
+                    values.Add(value.DeepClone());
+                }
+            }
+        }
+
+        return view;
     }
 
     /// <summary>Adds the ranged strong slows to the control skills, in ability order.</summary>

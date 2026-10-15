@@ -48,6 +48,7 @@ internal sealed partial class LoadingOverlayManager
         _respawnSounds.Reset();
         _augmentSelections = [];
         _ultimateHaste = new Dictionary<string, double>();
+        _liveMode = "";
         _survivalAlerts.Reset();
     }
 
@@ -70,6 +71,8 @@ internal sealed partial class LoadingOverlayManager
         }
 
         TrackAugments(snapshot);
+        _liveMode = snapshot.Mode;
+        RefreshModeControls();
         var waves = MinionWaveForecaster.Calculate(snapshot, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         if (waves != null)
         {
@@ -305,7 +308,9 @@ internal sealed partial class LoadingOverlayManager
         )
         {
             Cooldowns = AbilityCooldowns.Describe(
-                self != null ? _cooldowns.GetValueOrDefault(self.ChampionId) ?? [] : [],
+                self != null
+                    ? (_cooldowns.GetValueOrDefault(self.ChampionId) ?? []).Select(c => c.ForMode(CurrentMode()))
+                    : [],
                 snapshot.Active?.AbilityRanks ?? new Dictionary<string, int>(),
                 stats?.AbilityHaste ?? 0,
                 options
