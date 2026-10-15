@@ -93,7 +93,7 @@ static StackPanel RecordChips(JsonArray const &rows)
         Border chip;
         chip.Background(MakeBrush(0x143542));
         chip.BorderBrush(MakeBrush(color));
-        chip.BorderThickness({1});
+        chip.BorderThickness({1, 1, 1, 1});
         chip.CornerRadius({12, 12, 12, 12});
         chip.Padding({12, 3, 12, 4});
         chip.Margin({0, 0, 6, 0});

@@ -414,25 +414,32 @@ public sealed class OverlayChampionDetailService : IDisposable
         return data;
     }
 
+    /// <summary>The client's champion data, cached per champion; the skills tab and control recognition share it.</summary>
+    public async Task<JObject> ChampionDataAsync(int hero, CancellationToken token)
+    {
+        if (_skills.TryGetValue(hero, out var champion))
+        {
+            return champion;
+        }
+
+        var client = FormMain.Globals.lcuClient?.Client ?? throw new InvalidOperationException("客户端未连接。");
+        champion = JObject.Parse(await client.GetStringAsync($"/lol-game-data/assets/v1/champions/{hero}.json", token));
+        if ((int?)champion["id"] != hero)
+        {
+            throw new InvalidDataException();
+        }
+
+        _skills[hero] = champion;
+        return champion;
+    }
+
     // Each async helper retains the caller context for JSON mutation and preview delivery.
     private async Task<bool> LoadSkillsAsync(int hero, JObject data, CancellationToken token, Action<JObject> preview)
     {
         bool failed = false;
         try
         {
-            var client = FormMain.Globals.lcuClient?.Client ?? throw new InvalidOperationException();
-            if (!_skills.TryGetValue(hero, out var champion))
-            {
-                champion = JObject.Parse(
-                    await client.GetStringAsync($"/lol-game-data/assets/v1/champions/{hero}.json", token)
-                );
-                if ((int?)champion["id"] != hero)
-                {
-                    throw new InvalidDataException();
-                }
-
-                _skills[hero] = champion;
-            }
+            var champion = await ChampionDataAsync(hero, token);
             var skills = ChampionSelectAssistant.ParseSkills(champion);
             ((JArray)data["sections"]!).Insert(
                 0,

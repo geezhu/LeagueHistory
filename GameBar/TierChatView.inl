@@ -34,6 +34,10 @@ void InitializeChat()
     actions.Children().Append(voiceButton);
     waveButton.Margin({6, 0, 0, 0});
     actions.Children().Append(waveButton);
+    controlButton.Margin({6, 0, 0, 0});
+    actions.Children().Append(controlButton);
+    augmentButton.Margin({6, 0, 0, 0});
+    actions.Children().Append(augmentButton);
     MenuFlyout flyout;
     auto submenu =
         [this, &flyout](MenuFlyoutSubItem &sub, hstring title, std::array<MenuFlyoutItem, 3> &items, hstring kind)

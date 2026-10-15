@@ -18,6 +18,10 @@ internal static class DefaultStatisticsSuite
         ChampionTierChatChecks.Run();
         LiveChampionChecks.Run();
         LiveDeathStreakChecks.Run();
+        AugmentStackChecks.Run();
+        HealthEstimateChecks.Run();
+        CooldownChecks.Run();
+        CooldownOptionChecks.Run();
         MinionWaveChecks.Run();
         RespawnMarkChecks.Run();
         RoomPlayerChecks.Run();

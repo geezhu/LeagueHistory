@@ -10,6 +10,12 @@ public sealed record LivePlayerInsight(
 )
 {
     public string Score => Kills is int k && Deaths is int d && Assists is int a ? $"{k}/{d}/{a}" : "";
+
+    /// <summary>The inventory as the Tab scoreboard shows it.</summary>
+    public LiveMatchItem[] Items { get; init; } = [];
+
+    /// <summary>The champion level from 2999; 0 when it is not reported.</summary>
+    public int Level { get; init; }
 }
 
 public sealed record LiveTeamInsight(int Kills, int ItemGold, int Aces, int Multikills, int LargestMultikill);
@@ -75,7 +81,11 @@ public sealed record LiveMatchInsight(
                 live.Assists,
                 participation,
                 live.IsDead ? live.RespawnTimer : 0
-            );
+            )
+            {
+                Items = live.Items ?? [],
+                Level = live.Level,
+            };
         }
 
         var events = (snapshot.Events ?? []).OrderBy(e => e.Time).ThenBy(e => e.Id).ToArray();

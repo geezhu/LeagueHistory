@@ -44,7 +44,9 @@ public sealed partial class GameBarBridge : IDisposable
         IReadOnlyDictionary<string, PlayerChampionMastery>? masteries = null,
         IReadOnlyDictionary<string, LiveDeathStreak>? deathStreaks = null,
         IReadOnlyDictionary<string, OverlayPartyMarker>? parties = null,
-        OverlayLiveState? live = null
+        OverlayLiveState? live = null,
+        IReadOnlyDictionary<int, ControlSkill[]>? controls = null,
+        IReadOnlyDictionary<int, SpellCooldown[]>? cooldowns = null
     )
     {
         if (_disposed)
@@ -69,6 +71,9 @@ public sealed partial class GameBarBridge : IDisposable
             }
             var row = PlayerRow(p, ranks, icons, champion, details, masteries, deathStreaks, parties);
             AddLiveFields(row, p, live);
+            var spells = cooldowns?.GetValueOrDefault(p.ChampionId);
+            AddControls(row, p, controls, spells, live);
+            AddCalculator(row, p, spells, live);
             rows.Add(row);
         }
         _detailScope = new(
@@ -85,6 +90,7 @@ public sealed partial class GameBarBridge : IDisposable
                 ["chatWaves"] = true,
                 ["chatRecord"] = true,
                 ["chatParty"] = true,
+                ["controlProtocol"] = 1,
                 ["chatVoice"] = true,
                 ["voiceProtocol"] = 2,
                 ["chatTeams"] = roster?.Players.Any(p => p.Self) ?? false,
@@ -110,6 +116,15 @@ public sealed partial class GameBarBridge : IDisposable
                 ["liveRevision"] = enabled && active ? live?.Revision ?? "" : "",
                 ["liveSections"] = enabled && active ? live?.Sections.DeepClone() ?? new JArray() : new JArray(),
                 ["waves"] = enabled && active && live?.Waves is { } waves ? waves.ToJson() : null,
+                // 2: the augment page with the catalog, choices and hand-entered ultimate haste.
+                ["augmentProtocol"] = 2,
+                ["augmentCatalog"] = AugmentCatalogJson(),
+                ["ultimateHaste"] = new JObject(
+                    ((enabled && active ? live?.UltimateHaste : null) ?? new Dictionary<string, double>()).Select(
+                        entry => new JProperty(entry.Key, entry.Value)
+                    )
+                ),
+                ["augmentStacks"] = enabled && active && live != null ? AugmentJson(live.AugmentStacks) : new JArray(),
             }
         );
     }
@@ -144,6 +159,22 @@ public sealed partial class GameBarBridge : IDisposable
         }
 
         row["respawn"] = Math.Round(insight.Respawn, 1);
+        if (live.Health.GetValueOrDefault(player.Key) is { } health)
+        {
+            row["health"] = health.Text;
+            row["healthDetails"] = health.Details;
+        }
+
+        row["survival"] = new JArray(
+            SurvivalItems
+                .Find(insight.Items)
+                .Select(item => new JObject
+                {
+                    ["name"] = item.Name,
+                    ["effect"] = item.Effect,
+                    ["rule"] = item.Rule,
+                })
+        );
         // The Tab scoreboard already shows KDA; the card adds what it does not: participation and item value.
         row["liveStats"] =
             (insight.KillParticipation is double kp ? "参团 " + LivePanelSections.Percent(kp) + " · " : "")

@@ -140,6 +140,8 @@ void OpenWaves()
 {
     if (!HasWaves())
         return;
+    CloseControls();
+    CloseAugmentPage();
     waveReturnCard = selectedCard;
     if (selectedCard >= 0)
         detailRoot.Visibility(Visibility::Collapsed);

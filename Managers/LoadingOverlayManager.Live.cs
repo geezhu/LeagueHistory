@@ -46,6 +46,8 @@ internal sealed partial class LoadingOverlayManager
         _deadPlayers.Clear();
         _respawnChecks = 0;
         _respawnSounds.Reset();
+        _augmentSelections = [];
+        _ultimateHaste = new Dictionary<string, double>();
     }
 
     private static int ItemValue(LiveMatchItem item) =>
@@ -79,7 +81,19 @@ internal sealed partial class LoadingOverlayManager
         ReportUnknownStructures(waves);
         CheckRespawnFormula(snapshot);
         _ = UpdateRespawnSoundsAsync(roster, snapshot, _generation);
-        _liveState = new(insight, _liveSections, _liveRevision) { Waves = waves };
+        _ = ReadAugmentSelectionsAsync(_generation);
+        var augmentStacks = CountAugmentStacks(roster, snapshot);
+        var effects = SumAugmentEffects(roster, augmentStacks);
+        _liveState = new(insight, _liveSections, _liveRevision)
+        {
+            Waves = waves,
+            AugmentStacks = augmentStacks,
+            Health = DescribeHealth(roster, snapshot, insight, effects),
+            Haste = DescribeHaste(roster, snapshot, insight, effects),
+            AbilityRanks = snapshot.Active?.AbilityRanks ?? new Dictionary<string, int>(),
+            Effects = effects,
+            UltimateHaste = _ultimateHaste,
+        };
         _ = RefreshLivePanelAsync(roster, snapshot, insight, _generation);
     }
 
@@ -268,6 +282,11 @@ internal sealed partial class LoadingOverlayManager
             runeSource = "本模式游戏内不提供符文，显示客户端当前符文页。";
         }
 
+        // The panel is built after the live state, so the player's recorded augments are already summed there.
+        var options =
+            self != null && _liveState?.Effects.GetValueOrDefault(self.Key) is { } effects
+                ? effects.Cooldown
+                : CooldownOptions.None;
         return new(
             insight,
             self != null ? insight.Players.GetValueOrDefault(self.Key) : null,
@@ -277,7 +296,16 @@ internal sealed partial class LoadingOverlayManager
             owned,
             runes,
             runeSource
-        );
+        )
+        {
+            Cooldowns = AbilityCooldowns.Describe(
+                self != null ? _cooldowns.GetValueOrDefault(self.ChampionId) ?? [] : [],
+                snapshot.Active?.AbilityRanks ?? new Dictionary<string, int>(),
+                stats?.AbilityHaste ?? 0,
+                options
+            ),
+            CooldownOptions = options,
+        };
     }
 
     private async Task ReadEnemyShareAsync(LoadingRoster roster, CancellationToken token)
