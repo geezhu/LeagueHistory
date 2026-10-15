@@ -50,6 +50,8 @@ internal sealed partial class LoadingOverlayManager
         _ultimateHaste = new Dictionary<string, double>();
         _liveMode = "";
         _survivalAlerts.Reset();
+        _summonerAlerts.Reset();
+        _summonerTimers = [];
     }
 
     private static int ItemValue(LiveMatchItem item) =>
@@ -100,6 +102,10 @@ internal sealed partial class LoadingOverlayManager
             Health = DescribeHealth(roster, snapshot, insight, effects),
             Haste = DescribeHaste(roster, snapshot, insight, effects),
             AbilityRanks = snapshot.Active?.AbilityRanks ?? new Dictionary<string, int>(),
+            GameTime = snapshot.Time,
+            GameTimeAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            Summoners = DescribeSummoners(roster, snapshot, insight),
+            SummonerIcons = new Dictionary<string, string>(_summonerIcons),
             Effects = effects,
             UltimateHaste = _ultimateHaste,
         };

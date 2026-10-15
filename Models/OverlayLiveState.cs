@@ -25,6 +25,18 @@ public sealed record OverlayLiveState(LiveMatchInsight Insight, JArray Sections,
     public IReadOnlyDictionary<string, AugmentEffects> Effects { get; init; } =
         new Dictionary<string, AugmentEffects>();
 
+    /// <summary>Each player's summoner spells by roster player key: timed for allies, icons only for enemies.</summary>
+    public IReadOnlyDictionary<string, PlayerSummoner[]> Summoners { get; init; } =
+        new Dictionary<string, PlayerSummoner[]>();
+
+    /// <summary>The game time of this poll and when it was read (Unix milliseconds), for the widget's timers.</summary>
+    public double GameTime { get; init; }
+
+    public long GameTimeAt { get; init; }
+
+    /// <summary>Summoner spell icons as Base64 PNG, by internal name.</summary>
+    public IReadOnlyDictionary<string, string> SummonerIcons { get; init; } = new Dictionary<string, string>();
+
     /// <summary>Ultimate haste entered by hand on the augment page, by roster player key.</summary>
     public IReadOnlyDictionary<string, double> UltimateHaste { get; init; } = new Dictionary<string, double>();
 }

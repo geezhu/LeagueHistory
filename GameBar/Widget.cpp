@@ -27,6 +27,7 @@
 #include <vector>
 #include <functional>
 #include <map>
+#include <set>
 #include <cwctype>
 #include <cmath>
 
@@ -95,6 +96,17 @@ static void Trace(hstring const &message) noexcept
 
 struct WidgetView : std::enable_shared_from_this<WidgetView>
 {
+    // One of a card's two summoner spells; only allies' are timed.
+    struct CardSummoner
+    {
+        Button button;
+        Image icon;
+        Border shade;
+        TextBlock countdown{nullptr};
+        hstring spell, name;
+        bool timed = false;
+        double cooldown = 0;
+    };
     struct Card
     {
         Button button;
@@ -107,6 +119,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         uint32_t partyColor = 0;
         int64_t respawnUntil = 0, revivedAt = 0;
         bool self = false, marked = false, wasDead = false;
+        std::array<CardSummoner, 2> summoners;
     };
     Grid root;
     Grid list;
@@ -142,6 +155,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
 #include "RespawnMarkView.inl"
 #include "AugmentStackView.inl"
 #include "CooldownView.inl"
+#include "SummonerTimerView.inl"
 
     fire_and_forget CapturePreview()
     {
@@ -271,6 +285,12 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         card.stats = MakeText(L"胜率 —    选用率 —", 11, 0x6aa3ab);
         labels.Children().Append(card.stats);
         body.Children().Append(labels);
+        ColumnDefinition summonerColumn;
+        summonerColumn.Width({1, GridUnitType::Auto});
+        body.ColumnDefinitions().Append(summonerColumn);
+        auto summoners = CreateCardSummoners(i);
+        Grid::SetColumn(summoners, 2);
+        body.Children().Append(summoners);
         card.button.Content(body);
         card.button.Click([this, i](auto &&, auto &&) { OpenDetails(i); });
         Grid::SetRow(card.button, i % 5);
@@ -396,6 +416,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                     self->ReadVoiceStatus();
                     self->UpdateRespawns();
                     self->UpdateWaves();
+                    self->UpdateSummoners();
                 }
             });
         timer.Start();
@@ -559,6 +580,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         controlRows = JsonArray();
         ClearMarks();
         ClearAugments();
+        ClearSummoners();
         calcCard = -1;
         calcSignature = L"";
         CloseDetails(false);
@@ -674,6 +696,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         ApplyLive(data);
         ApplyWaves(data);
         ApplyAugments(data);
+        ApplySummonerData(data);
         auto rows = data.GetNamedArray(L"players", JsonArray());
         populatedCards = 0;
         bool marked = false;
@@ -776,6 +799,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         auto image = row.GetNamedString(L"icon", L"");
         if (card.imageData != image)
             SetImage(i, image);
+        UpdateCardSummoners(card, row);
     }
     void ApplyLive(JsonObject const &data)
     {

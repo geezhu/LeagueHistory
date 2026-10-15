@@ -16,6 +16,9 @@ public sealed record LivePlayerInsight(
 
     /// <summary>The champion level from 2999; 0 when it is not reported.</summary>
     public int Level { get; init; }
+
+    /// <summary>The summoner spells' internal names, in slot order.</summary>
+    public string[] SummonerSpells { get; init; } = [];
 }
 
 public sealed record LiveTeamInsight(int Kills, int ItemGold, int Aces, int Multikills, int LargestMultikill);
@@ -85,6 +88,7 @@ public sealed record LiveMatchInsight(
             {
                 Items = live.Items ?? [],
                 Level = live.Level,
+                SummonerSpells = live.SummonerSpells,
             };
         }
 
