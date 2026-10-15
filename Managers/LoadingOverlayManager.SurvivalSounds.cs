@@ -11,7 +11,6 @@ internal sealed partial class LoadingOverlayManager
     private readonly ItemSoundLibrary _itemSounds = new();
     private readonly SurvivalItemAlerts _survivalAlerts = new();
     private ControlSettings _controlSettings = ControlSettings.Default;
-    private long _survivalTest = -1;
     private bool _readingControlSettings,
         _itemSoundsFetched;
     private SoundPlayer? _survivalPlayer;
@@ -34,9 +33,16 @@ internal sealed partial class LoadingOverlayManager
                     : null
             )
             .OfType<SurvivalInventory>();
-        if (_survivalAlerts.Update(players) is int item)
+        if (_survivalAlerts.Update(players) is { } alert)
         {
-            _ = PlayItemSoundAsync(item);
+            var player = roster.Players.First(p => p.Key == alert.Key);
+            string item = FormMain.Globals.resLoading?.GetItemById(alert.Item)?.Name ?? alert.Item.ToString();
+            // Each sound is logged with whose purchase it was, so a sound nobody expected can be traced.
+            ChatSendDiagnostics.Shared.Report(
+                "item-sound",
+                $"保命提示音：{(player.Team == own ? "我方" : "敌方")} {Champion(player.ChampionId)} 做出 {item}"
+            );
+            _ = PlayItemSoundAsync(alert.Item);
         }
     }
 
@@ -56,13 +62,6 @@ internal sealed partial class LoadingOverlayManager
                 return;
             }
 
-            // Turning the sounds on asks for one sample; the first read only learns the counter.
-            if ((settings.EnemySound || settings.AllySound) && _survivalTest >= 0 && settings.Test != _survivalTest)
-            {
-                _ = PlayItemSoundAsync(3157);
-            }
-
-            _survivalTest = settings.Test;
             _controlSettings = settings;
         }
         finally

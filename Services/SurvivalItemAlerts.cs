@@ -3,6 +3,9 @@ namespace League.Services;
 /// <summary>A player's survival items on one 2999 poll, by base item id, and whether their purchases sound.</summary>
 public sealed record SurvivalInventory(string Key, int[] Items, bool Audible);
 
+/// <summary>The purchase to sound: whose and which base item.</summary>
+public sealed record SurvivalAlert(string Key, int Item);
+
 /// <summary>
 /// Announces players' new survival items with the item's own sound, for the teams the user chose. 2999 shows
 /// inventories but not item cooldowns or activations, so the alert is for getting the item, not for using it. A
@@ -13,10 +16,10 @@ public sealed class SurvivalItemAlerts
 {
     private readonly Dictionary<string, HashSet<int>> _seen = new(StringComparer.Ordinal);
 
-    /// <summary>The item to sound for this poll, or null; every inventory is remembered, audible or not.</summary>
-    public int? Update(IEnumerable<SurvivalInventory> players)
+    /// <summary>The purchase to sound for this poll, or null; every inventory is remembered, audible or not.</summary>
+    public SurvivalAlert? Update(IEnumerable<SurvivalInventory> players)
     {
-        int? play = null;
+        SurvivalAlert? play = null;
         foreach (var player in players)
         {
             if (!_seen.TryGetValue(player.Key, out var before))
@@ -29,9 +32,9 @@ public sealed class SurvivalItemAlerts
             // A sold or used-up item leaves; buying it again is a new purchase.
             before.IntersectWith(player.Items);
             before.UnionWith(player.Items);
-            if (player.Audible)
+            if (player.Audible && fresh is int item)
             {
-                play ??= fresh;
+                play ??= new(player.Key, item);
             }
         }
 
