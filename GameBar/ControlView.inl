@@ -8,12 +8,11 @@ JsonArray controlRows;
 bool controlOpen = false, supportsControls = false;
 int controlReturnCard = -1;
 // New survival items play the item's own sound for the teams chosen here (the own team includes the player); the
-// main program plays it, since Windows mutes this widget while the game has focus. Turning a team on bumps the test
-// counter, asking for one sample.
+// main program plays it, since Windows mutes this widget while the game has focus. Turning a team on plays nothing:
+// a sample in a real item's sound was mistaken for a purchase.
 Button survivalSoundButton;
 ToggleMenuFlyoutItem enemySoundItem, allySoundItem;
 bool enemySound = true, allySound = false, controlSettingsWritten = false, controlSettingsWriting = false;
-int64_t survivalSoundTest = 0;
 hstring pendingControlSettings;
 static constexpr wchar_t const *SurvivalSoundSetting = L"survivalItemSound";
 static constexpr wchar_t const *AllySoundSetting = L"survivalItemAllySound";
@@ -89,14 +88,10 @@ void InitializeSurvivalSound(StackPanel const &navigation)
     RefreshSurvivalSoundButton();
     navigation.Children().Append(survivalSoundButton);
 }
-// A team just turned on asks for one sample.
 void ChangeSurvivalSound()
 {
-    bool enemy = enemySoundItem.IsChecked(), ally = allySoundItem.IsChecked();
-    if ((enemy && !enemySound) || (ally && !allySound))
-        ++survivalSoundTest;
-    enemySound = enemy;
-    allySound = ally;
+    enemySound = enemySoundItem.IsChecked();
+    allySound = allySoundItem.IsChecked();
     auto values = ApplicationData::Current().LocalSettings().Values();
     values.Insert(SurvivalSoundSetting, box_value(enemySound));
     values.Insert(AllySoundSetting, box_value(allySound));
@@ -119,7 +114,6 @@ void SaveControlSettings()
     settings.Insert(L"protocol", JsonValue::CreateNumberValue(1));
     settings.Insert(L"survivalSound", JsonValue::CreateBooleanValue(enemySound));
     settings.Insert(L"allySound", JsonValue::CreateBooleanValue(allySound));
-    settings.Insert(L"test", JsonValue::CreateNumberValue(double(survivalSoundTest)));
     pendingControlSettings = settings.Stringify();
     WriteControlSettings();
 }

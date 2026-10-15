@@ -26,13 +26,13 @@ internal static class SurvivalSoundChecks
             "Items already held when a player is first seen are not announced"
         );
         Check(
-            alerts.Update([Enemy("a", 3157), Enemy("b", 3026)]) == 3026,
+            alerts.Update([Enemy("a", 3157), Enemy("b", 3026)]) == new SurvivalAlert("b", 3026),
             "A new survival item sounds with its own id"
         );
         Check(alerts.Update([Enemy("a", 3157), Enemy("b", 3026)]) == null, "An item sounds only once");
         Check(
             alerts.Update([Enemy("a"), Enemy("b", 3026)]) == null
-                && alerts.Update([Enemy("a", 3157), Enemy("b", 3026)]) == 3157,
+                && alerts.Update([Enemy("a", 3157), Enemy("b", 3026)]) == new SurvivalAlert("a", 3157),
             "A sold item bought again is a new purchase"
         );
         Check(
@@ -41,7 +41,7 @@ internal static class SurvivalSoundChecks
             "A team turned off is remembered, not played later when turned on"
         );
         Check(
-            alerts.Update([Quiet("a", 3157, 3102, 3053), Enemy("b", 3026, 3193)]) == 3193,
+            alerts.Update([Quiet("a", 3157, 3102, 3053), Enemy("b", 3026, 3193)]) == new SurvivalAlert("b", 3193),
             "Only the audible team's purchase sounds"
         );
         alerts.Reset();
@@ -49,12 +49,12 @@ internal static class SurvivalSoundChecks
 
         Check(
             ControlSettings.Parse(JObject.Parse("""{"protocol":1,"survivalSound":false,"allySound":true,"test":3}"""))
-                is { EnemySound: false, AllySound: true, Test: 3 }
-                && ControlSettings.Parse(JObject.Parse("""{"protocol":1,"survivalSound":true,"test":3}"""))
-                    is { EnemySound: true, AllySound: false }
-                && ControlSettings.Parse(JObject.Parse("""{"protocol":1,"survivalSound":"no","test":3}""")) == null
-                && ControlSettings.Default is { EnemySound: true, AllySound: false },
-            "Each team's setting is read; an older widget's file is the enemy setting; enemies sound by default"
+                == new ControlSettings(false, true)
+                && ControlSettings.Parse(JObject.Parse("""{"protocol":1,"survivalSound":true}"""))
+                    == new ControlSettings(true, false)
+                && ControlSettings.Parse(JObject.Parse("""{"protocol":1,"survivalSound":"no"}""")) == null
+                && ControlSettings.Default == new ControlSettings(true, false),
+            "Each team's setting is read; an older widget's file is the enemy setting and its sample counter is ignored"
         );
         Check(
             SurvivalItemsHaveSounds() && SurvivalItems.BaseId(223157) == 3157,
