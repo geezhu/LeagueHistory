@@ -2,7 +2,6 @@
 using League.Infrastructure;
 using League.UIHelpers;
 using System.Diagnostics;
-using System.Windows.Forms;
 
 namespace League.UIState
 {
@@ -250,7 +249,8 @@ namespace League.UIState
         {
             var labels = panel.Controls.OfType<Label>();
             if (labels.Any(l => l.Text.Contains("正在检测客户端连接") ||
-                               l.Text.Contains("正在等待加入游戏")))
+                   l.Text.Contains("正在重新连接") ||
+                   l.Text.Contains("正在等待加入游戏")))
             {
                 return true;
             }
@@ -381,7 +381,7 @@ namespace League.UIState
         private void ShowLcuNotConnectedMessage(Control parentControl)
         {
             parentControl.Controls.Clear();
-            var panel = CreateStatusPanel("正在检测客户端连接，请确保登录了游戏...", true);
+            var panel = CreateStatusPanel("正在检测/重新连接客户端，请确保已登录游戏...", true);
             panel.Left = (parentControl.Width - panel.Width) / 2;
             panel.Top = (parentControl.Height - panel.Height) / 2;
             panel.Anchor = AnchorStyles.None;
