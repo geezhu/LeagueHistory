@@ -27,6 +27,8 @@ internal static class SummonerTimerChecks
         CheckTimerFile();
         CheckRefusedTimerFiles();
         CheckAlerts();
+        CheckChatRequests();
+        CheckChatMessages();
         Task.Run(CacheAsync).GetAwaiter().GetResult();
         Task.Run(BridgeAsync).GetAwaiter().GetResult();
         Console.WriteLine(
@@ -207,6 +209,88 @@ internal static class SummonerTimerChecks
                     ""
                 ) == null,
             "Another session's file, a third slot, negative times and duplicates are refused"
+        );
+    }
+
+    private static JObject ChatRequest(object? spell, string target = "single", string kind = "summoner")
+    {
+        var request = new JObject
+        {
+            ["protocol"] = 1,
+            ["id"] = Guid.NewGuid().ToString("N"),
+            ["session"] = "s",
+            ["target"] = target,
+            ["kind"] = kind,
+            ["slot"] = target == "single" ? 1 : -1,
+            ["championId"] = target == "single" ? 22 : 0,
+            ["updatedAt"] = 1_000,
+            ["dismissed"] = false,
+            ["cancelled"] = false,
+        };
+        if (spell != null)
+        {
+            request["spell"] = JToken.FromObject(spell);
+        }
+
+        return request;
+    }
+
+    // A right-click names the hero's seat and one of its two spells; nothing else carries a spell.
+    private static void CheckChatRequests()
+    {
+        int[] heroes = [143, 22, 0, 0, 0, 0, 0, 0, 0, 0];
+        var parsed = OverlayChatRequest.Parse(ChatRequest(1), "s", heroes, 1_000);
+        Check(
+            parsed is { Kind: "summoner", Target: "single", Slot: 1, ChampionId: 22, Spell: 1, IsRosterFree: false }
+                && parsed.SameCommand(parsed)
+                && !parsed.SameCommand(parsed with { Spell = 0 }),
+            "A summoner request names the seat and the spell"
+        );
+        Check(
+            OverlayChatRequest.Parse(ChatRequest(2), "s", heroes, 1_000) == null
+                && OverlayChatRequest.Parse(ChatRequest(null), "s", heroes, 1_000) == null
+                && OverlayChatRequest.Parse(ChatRequest("0"), "s", heroes, 1_000) == null
+                && OverlayChatRequest.Parse(ChatRequest(0, "own"), "s", heroes, 1_000) == null
+                && OverlayChatRequest.Parse(ChatRequest(0, "own", "tier"), "s", heroes, 1_000) == null
+                && OverlayChatRequest.Parse(ChatRequest(null, "own", "tier"), "s", heroes, 1_000)?.Spell == -1,
+            "A third spell, a missing spell, a team target and a spell on another kind are refused"
+        );
+    }
+
+    // The message is built from the latest poll; enemies, stale data and untimed spells are not sent.
+    private static void CheckChatMessages()
+    {
+        var live = SampleLive();
+        LoadingPlayer self = new("self", "自己#1", "", 1, 143, 100, true),
+            enemy = new("enemy", "敌人#2", "", 2, 22, 200, false);
+        Check(
+            SummonerChatMessage.Build(self, 100, live, 0, 11_000) is ["召唤师技能：闪现 还有 3:44，约 5:54 转好"],
+            "A running timer sends what is left and when it is back, at the time of sending"
+        );
+        Check(
+            SummonerChatMessage.Build(self, 100, live with { GameTime = 400 }, 0, 1_000) is ["召唤师技能：闪现 已转好"],
+            "A finished timer sends that the spell is back"
+        );
+        bool Refused(Func<IReadOnlyList<string>> build)
+        {
+            try
+            {
+                build();
+                return false;
+            }
+            catch (InvalidOperationException)
+            {
+                return true;
+            }
+        }
+
+        Check(
+            Refused(() => SummonerChatMessage.Build(enemy, 100, live, 0, 1_000))
+                && Refused(() => SummonerChatMessage.Build(self, 0, live, 0, 1_000))
+                && Refused(() => SummonerChatMessage.Build(self, 100, live, 1, 1_000))
+                && Refused(() => SummonerChatMessage.Build(self, 100, live, 0, 17_000))
+                && Refused(() => SummonerChatMessage.Build(null, 100, live, 0, 1_000)),
+            "Enemies, an unknown team, an untimed spell, stale data and a changed seat are not sent"
         );
     }
 
