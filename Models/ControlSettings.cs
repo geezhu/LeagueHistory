@@ -12,11 +12,18 @@ public sealed record ControlSettings(bool EnemySound, bool AllySound)
 {
     public static readonly ControlSettings Default = new(true, false);
 
+    /// <summary>Whether an ally summoner timer chimes when the spell is back; on unless the widget turns it off.</summary>
+    public bool SummonerSound { get; init; } = true;
+
     public static ControlSettings? Parse(JObject value) =>
         value["protocol"]?.Type == JTokenType.Integer
         && value["protocol"]!.ToString() == "1"
         && value["survivalSound"]?.Type == JTokenType.Boolean
         && value["allySound"]?.Type is null or JTokenType.Boolean
+        && value["summonerSound"]?.Type is null or JTokenType.Boolean
             ? new((bool)value["survivalSound"]!, (bool?)value["allySound"] ?? false)
+            {
+                SummonerSound = (bool?)value["summonerSound"] ?? true,
+            }
             : null;
 }

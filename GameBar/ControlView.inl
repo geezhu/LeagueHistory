@@ -50,8 +50,10 @@ void InitializeControls()
                  L"生命：自己取 2999 的实际属性；其他玩家按等级基础属性 + 装备 + 已添加的坦克引擎估算，"
                  L"看不到其他海克斯、碎片和叠层装备，实际通常更高。\n"
                  L"海克斯：在「海克斯」页记录，这里只显示；生命和覆盖率按记录计算。\n"
-                 L"保命提示音：做出保命装备时播放该装备的游戏音效，可分别选择敌方、我方（含自己）。");
+                 L"保命提示音：做出保命装备时播放该装备的游戏音效，可分别选择敌方、我方（含自己）。 "
+                 L"召唤师提示音：我方卡片上手动开始的召唤师技能计时结束时提示；敌方召唤师技能只显示图标，不计时。");
     InitializeSurvivalSound(navigation);
+    InitializeSummonerSound(navigation);
     controlRoot.Children().Append(navigation);
     controlScroll.Content(controlBody);
     controlScroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
@@ -114,6 +116,7 @@ void SaveControlSettings()
     settings.Insert(L"protocol", JsonValue::CreateNumberValue(1));
     settings.Insert(L"survivalSound", JsonValue::CreateBooleanValue(enemySound));
     settings.Insert(L"allySound", JsonValue::CreateBooleanValue(allySound));
+    settings.Insert(L"summonerSound", JsonValue::CreateBooleanValue(summonerSound));
     pendingControlSettings = settings.Stringify();
     WriteControlSettings();
 }

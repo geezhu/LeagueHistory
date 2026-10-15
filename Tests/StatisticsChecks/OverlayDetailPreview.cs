@@ -16,6 +16,7 @@ internal static class OverlayDetailPreview
         var roster = CreateRoster(heroIcon);
         AddPlayerAnnotations(roster);
         AddLivePreview(roster);
+        AddSummonerPreview(roster, assetDirectory);
         PopulateIcons(roster, assetDirectory);
         File.WriteAllText(Path.Combine(destination, "detail-preview-content.json"), content.ToString());
         File.WriteAllText(Path.Combine(destination, "detail-preview-snapshot.json"), roster.ToString());
@@ -349,6 +350,49 @@ internal static class OverlayDetailPreview
 
     // The player's Shrink Engine added at 4:00 and counted since, and an enemy's Tank Engine on the control page;
     // the other augments show their add buttons.
+    // Two ally timers counting down and the rest idle; enemies show only their spells, untimed.
+    private static void AddSummonerPreview(JObject roster, string assetDirectory)
+    {
+        JObject Spell(int slot, string spell, string name, double? cooldown = null, double? started = null)
+        {
+            var value = new JObject
+            {
+                ["slot"] = slot,
+                ["spell"] = spell,
+                ["name"] = name,
+                ["timed"] = cooldown != null,
+            };
+            if (cooldown != null)
+            {
+                value["cooldown"] = cooldown;
+                value["started"] = started;
+            }
+
+            return value;
+        }
+
+        int seat = 0;
+        foreach (var row in ((JArray)roster["players"]!).OfType<JObject>())
+        {
+            bool ally = seat < 5;
+            row["summoners"] = new JArray(
+                Spell(0, "SummonerFlash", "闪现", ally ? 300 : null, seat == 0 ? 500 : null),
+                ally
+                    ? Spell(1, "SummonerSnowball", "雪球", 80, seat == 1 ? 590 : null)
+                    : Spell(1, "SummonerDot", "引燃")
+            );
+            seat++;
+        }
+
+        roster["gameClock"] = new JObject { ["gameTime"] = 612, ["clock"] = roster["updatedAt"] };
+        roster["summonerIcons"] = new JObject
+        {
+            ["SummonerFlash"] = Encode(Path.Combine(assetDirectory, "spell", "Summoner_flash.png")),
+            ["SummonerSnowball"] = Encode(Path.Combine(assetDirectory, "spell", "Summoner_Mark.png")),
+            ["SummonerDot"] = Encode(Path.Combine(assetDirectory, "spell", "SummonerIgnite.png")),
+        };
+    }
+
     private static void AddAugmentPreview(JObject roster)
     {
         var players = (JArray)roster["players"]!;

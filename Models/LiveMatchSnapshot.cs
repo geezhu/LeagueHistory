@@ -27,6 +27,9 @@ public sealed record LiveMatchPlayer(
     public bool IsBot { get; init; }
     public bool IsDead { get; init; }
     public double RespawnTimer { get; init; }
+
+    /// <summary>The two summoner spells' internal names ("SummonerFlash"); empty when 2999 does not report them.</summary>
+    public string[] SummonerSpells { get; init; } = [];
 }
 
 public sealed record LiveMatchSnapshot(string Mode, int Map, double Time, LiveMatchPlayer[] Players)
@@ -121,6 +124,11 @@ public sealed record LiveMatchSnapshot(string Mode, int Map, double Time, LiveMa
             IsDead = (bool?)row["isDead"] ?? false,
             RespawnTimer = Math.Max(0, (double?)row["respawnTimer"] ?? 0),
             RawChampionName = raw,
+            SummonerSpells = new[] { "summonerSpellOne", "summonerSpellTwo" }
+                .Select(slot =>
+                    League.Models.SummonerSpells.InternalName((string?)row["summonerSpells"]?[slot]?["rawDisplayName"])
+                )
+                .ToArray(),
         };
     }
 

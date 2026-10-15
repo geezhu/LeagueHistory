@@ -80,54 +80,61 @@ public sealed partial class GameBarBridge : IDisposable
             enabled && active ? _instance + ":" + session : "",
             rows.Select(r => (int?)r["championId"] ?? 0).ToArray()
         );
-        _pending.Writer.TryWrite(
-            new JObject
-            {
-                ["detailProtocol"] = 1,
-                ["chatProtocol"] = 1,
-                ["chatMastery"] = true,
-                ["chatDeathStreak"] = true,
-                ["chatWaves"] = true,
-                ["chatRecord"] = true,
-                ["chatParty"] = true,
-                ["controlProtocol"] = 1,
-                ["chatVoice"] = true,
-                ["voiceProtocol"] = 2,
-                ["chatTeams"] = roster?.Players.Any(p => p.Self) ?? false,
-                ["queue"] = roster?.Queue ?? 0,
-                ["protocol"] = 1,
-                ["revision"] = _instance + ":" + (++_revision),
-                ["command"] = _instance + ":" + _command,
-                ["session"] = _instance + ":" + session,
-                ["updatedAt"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                ["enabled"] = enabled,
-                ["active"] = active,
-                ["show"] = show,
-                // Prevent older widgets from falling back to their built-in keyboard watcher.
-                ["shortcutOwner"] = "main",
-                ["shortcut"] = "",
-                ["status"] = status,
-                ["teams"] = new JArray(teams.Select(t => roster?.TeamLabel(t) ?? (t == 100 ? "我方" : "对方"))),
-                ["players"] = rows,
-                ["liveProtocol"] = 1,
-                ["teamSummaries"] = new JArray(
-                    enabled && active && live != null ? TeamSummaries(live.Insight) : ["", ""]
-                ),
-                ["liveRevision"] = enabled && active ? live?.Revision ?? "" : "",
-                ["liveSections"] = enabled && active ? live?.Sections.DeepClone() ?? new JArray() : new JArray(),
-                ["waves"] = enabled && active && live?.Waves is { } waves ? waves.ToJson() : null,
-                // 2: the augment page with the catalog, choices and hand-entered ultimate haste.
-                ["augmentProtocol"] = 2,
-                ["augmentCatalog"] = AugmentCatalogJson(),
-                ["ultimateHaste"] = new JObject(
-                    ((enabled && active ? live?.UltimateHaste : null) ?? new Dictionary<string, double>()).Select(
-                        entry => new JProperty(entry.Key, entry.Value)
-                    )
-                ),
-                ["augmentStacks"] =
-                    enabled && active && live != null ? AugmentJson(live.AugmentStacks, live.Effects) : new JArray(),
-            }
+        var snapshot = new JObject
+        {
+            ["detailProtocol"] = 1,
+            ["chatProtocol"] = 1,
+            ["chatMastery"] = true,
+            ["chatDeathStreak"] = true,
+            ["chatWaves"] = true,
+            ["chatRecord"] = true,
+            ["chatParty"] = true,
+            ["controlProtocol"] = 1,
+            ["chatVoice"] = true,
+            ["voiceProtocol"] = 2,
+            ["chatTeams"] = roster?.Players.Any(p => p.Self) ?? false,
+            ["queue"] = roster?.Queue ?? 0,
+            ["protocol"] = 1,
+            ["revision"] = _instance + ":" + (++_revision),
+            ["command"] = _instance + ":" + _command,
+            ["session"] = _instance + ":" + session,
+            ["updatedAt"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            ["enabled"] = enabled,
+            ["active"] = active,
+            ["show"] = show,
+            // Prevent older widgets from falling back to their built-in keyboard watcher.
+            ["shortcutOwner"] = "main",
+            ["shortcut"] = "",
+            ["status"] = status,
+            ["teams"] = new JArray(teams.Select(t => roster?.TeamLabel(t) ?? (t == 100 ? "我方" : "对方"))),
+            ["players"] = rows,
+        };
+        // Hidden or inactive, the widget gets the live fields empty.
+        AddLiveSnapshot(snapshot, enabled && active ? live : null);
+        _pending.Writer.TryWrite(snapshot);
+    }
+
+    private static void AddLiveSnapshot(JObject snapshot, OverlayLiveState? live)
+    {
+        snapshot["liveProtocol"] = 1;
+        snapshot["teamSummaries"] = new JArray(live != null ? TeamSummaries(live.Insight) : ["", ""]);
+        snapshot["liveRevision"] = live?.Revision ?? "";
+        snapshot["liveSections"] = live?.Sections.DeepClone() ?? new JArray();
+        snapshot["waves"] = live?.Waves is { } waves ? waves.ToJson() : null;
+        // 2: the augment page with the catalog, choices and hand-entered ultimate haste.
+        snapshot["augmentProtocol"] = 2;
+        snapshot["augmentCatalog"] = AugmentCatalogJson();
+        snapshot["ultimateHaste"] = new JObject(
+            (live?.UltimateHaste ?? new Dictionary<string, double>()).Select(entry => new JProperty(
+                entry.Key,
+                entry.Value
+            ))
         );
+        snapshot["augmentStacks"] = live != null ? AugmentJson(live.AugmentStacks, live.Effects) : new JArray();
+        snapshot["summonerIcons"] = SummonerIconsJson(live);
+        // The game clock for the ally summoner timers; the wave clock is missing in modes without waves.
+        snapshot["gameClock"] =
+            live != null ? new JObject { ["gameTime"] = live.GameTime, ["clock"] = live.GameTimeAt } : null;
     }
 
     private static int[] Teams(LoadingRoster? roster) =>
@@ -176,6 +183,7 @@ public sealed partial class GameBarBridge : IDisposable
                     ["rule"] = item.Rule,
                 })
         );
+        AddSummonerFields(row, player.Key, live);
         // The Tab scoreboard already shows KDA; the card adds what it does not: participation and item value.
         row["liveStats"] =
             (insight.KillParticipation is double kp ? "参团 " + LivePanelSections.Percent(kp) + " · " : "")
