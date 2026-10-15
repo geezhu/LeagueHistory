@@ -14,10 +14,15 @@ internal sealed partial class LoadingOverlayManager
     private readonly Dictionary<string, string> _summonerIcons = new(StringComparer.Ordinal);
     private readonly HashSet<string> _summonerIconRequests = new(StringComparer.Ordinal);
     private Dictionary<string, SummonerSpellInfo>? _summonerSpells;
+
+    // Base cooldowns a mode changes; until they load (or when CommunityDragon fails) the spells' own are used.
+    private Dictionary<string, Dictionary<string, double>>? _summonerModes;
     private SummonerTimer[] _summonerTimers = [];
     private bool _loadingSummoners,
+        _loadingSummonerModes,
         _readingSummonerTimers;
-    private long _summonerRetry;
+    private long _summonerRetry,
+        _summonerModesRetry;
     private SoundPlayer? _summonerPlayer;
 
     private Dictionary<string, PlayerSummoner[]> DescribeSummoners(
@@ -27,7 +32,9 @@ internal sealed partial class LoadingOverlayManager
     )
     {
         _ = LoadSummonerSpellsAsync();
+        _ = LoadSummonerModesAsync();
         _ = ReadSummonerTimersAsync(_generation);
+        string mode = CurrentMode();
         var result = new Dictionary<string, PlayerSummoner[]>();
         int own = roster.Players.FirstOrDefault(p => p.Self)?.Team ?? 0;
         if (_summonerSpells == null || own == 0)
@@ -51,7 +58,7 @@ internal sealed partial class LoadingOverlayManager
                             ? new PlayerSummoner(
                                 slot,
                                 spell,
-                                ally ? SummonerSpells.Cooldown(spell, haste) : 0,
+                                ally ? SummonerSpells.Cooldown(spell, haste, mode, _summonerModes) : 0,
                                 ally
                                     ? _summonerTimers
                                         .FirstOrDefault(t => t.Player == player.Key && t.Slot == slot)
@@ -174,6 +181,46 @@ internal sealed partial class LoadingOverlayManager
         finally
         {
             _loadingSummoners = false;
+        }
+    }
+
+    private async Task LoadSummonerModesAsync()
+    {
+        if (
+            _summonerModes != null
+            || _loadingSummonerModes
+            || _disposed
+            || Environment.TickCount64 < _summonerModesRetry
+        )
+        {
+            return;
+        }
+
+        _loadingSummonerModes = true;
+        try
+        {
+            _summonerModes = await Task.Run(() => _summonerData.LoadModesAsync(_life.Token));
+        }
+        catch (OperationCanceledException) when (_life.IsCancellationRequested)
+        {
+            // Shutting down; nothing to keep.
+        }
+        catch (Exception e)
+            when (e
+                    is HttpRequestException
+                        or TaskCanceledException
+                        or IOException
+                        or UnauthorizedAccessException
+                        or Newtonsoft.Json.JsonException
+            )
+        {
+            // Timers keep the spells' own cooldowns (Exhaust 240 instead of 290 in ARAM) until the next try.
+            _summonerModesRetry = Environment.TickCount64 + 5 * 60_000;
+            ChatSendDiagnostics.Shared.Report("summoner-modes", e.GetType().Name + " " + e.Message);
+        }
+        finally
+        {
+            _loadingSummonerModes = false;
         }
     }
 

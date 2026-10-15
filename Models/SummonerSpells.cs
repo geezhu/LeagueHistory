@@ -4,7 +4,8 @@ namespace League.Models;
 
 /// <summary>
 /// A summoner spell from Data Dragon, keyed by the game's internal name ("SummonerFlash") that 2999 reports. Modes
-/// use their own spells (Mark in ARAM, Flee in Arena), each with its own cooldown, so the spell decides it.
+/// use their own spells (Mark in ARAM, Flee in Arena), each with its own cooldown; some modes also change a shared
+/// spell's cooldown or give everyone summoner haste (<see cref="SummonerSpells.Cooldown"/>).
 /// </summary>
 public sealed record SummonerSpellInfo(string Id, string Name, double Cooldown, string Image);
 
@@ -57,8 +58,35 @@ public static class SummonerSpells
         return haste + (runes.Contains(8347) ? 18 : 0);
     }
 
-    public static double Cooldown(SummonerSpellInfo spell, double haste) =>
-        spell.Cooldown * 100 / (100 + Math.Max(0, haste));
+    /// <summary>
+    /// Summoner haste every champion gets from the mode: the Howling Abyss aura gives 70 in ARAM and ARAM: Mayhem,
+    /// URF gives 300. The game applies both in script, so the numbers come from the Wiki, not the game data.
+    /// </summary>
+    public static double ModeHaste(string mode) =>
+        mode.ToLowerInvariant() switch
+        {
+            "aram" or "kiwi" => 70,
+            "urf" => 300,
+            _ => 0,
+        };
+
+    /// <summary>The spell's base cooldown in the mode: the game data's override (Exhaust 290 in ARAM), else its own.</summary>
+    public static double BaseCooldown(
+        SummonerSpellInfo spell,
+        string mode,
+        IReadOnlyDictionary<string, Dictionary<string, double>>? modes
+    ) =>
+        modes?.GetValueOrDefault(spell.Id)?.GetValueOrDefault(mode.ToLowerInvariant()) is double cooldown and > 0
+            ? cooldown
+            : spell.Cooldown;
+
+    /// <summary>The cooldown after the player's summoner haste and the mode's.</summary>
+    public static double Cooldown(
+        SummonerSpellInfo spell,
+        double haste,
+        string mode = "",
+        IReadOnlyDictionary<string, Dictionary<string, double>>? modes = null
+    ) => BaseCooldown(spell, mode, modes) * 100 / (100 + Math.Max(0, haste) + ModeHaste(mode));
 
     /// <summary>The widget's running timers for this session from <c>summoner-timers.json</c>; null when malformed.</summary>
     public static SummonerTimer[]? ParseTimers(JObject value, string session)
