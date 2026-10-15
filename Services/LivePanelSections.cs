@@ -169,6 +169,11 @@ public static class LivePanelSections
         {
             string title = $"{cooldown.Key} {cooldown.Name}";
             string rank = $"{cooldown.Rank}/{cooldown.Ranks} 级";
+            if (cooldown.Sealed)
+            {
+                return Tile(title, "已封印", "回归基本功");
+            }
+
             if (cooldown.Rank == 0)
             {
                 return Tile(title, "未学", "");

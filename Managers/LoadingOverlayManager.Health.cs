@@ -58,10 +58,17 @@ internal sealed partial class LoadingOverlayManager
         {
             if (insight.Players.GetValueOrDefault(player.Key) is { } live)
             {
+                var items = PlayerItems(live);
+                // Attack speed growth counts as bonus attack speed, as items' does; both feed Purist - Caster.
+                double growth =
+                    _baseStats?.GetValueOrDefault(player.ChampionId) is { } stats && live.Level > 0
+                        ? ChampionBaseStats.Grown(0, stats.AttackSpeedPerLevel, live.Level)
+                        : 0;
                 result[player.Key] = PlayerHaste.Describe(
-                    PlayerItems(live),
+                    items,
                     effects.GetValueOrDefault(player.Key) ?? AugmentEffects.None,
-                    player.Self ? snapshot.Active?.Stats : null
+                    player.Self ? snapshot.Active?.Stats : null,
+                    items.AttackSpeed + growth
                 );
             }
         }

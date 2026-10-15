@@ -91,8 +91,13 @@ public static class AugmentCatalog
             TrackedAugment.StayResolute,
             "保持坚定",
             AugmentKind.Manual,
-            "指定技能命中敌方英雄时永久获得 1~3 护甲或魔抗；层数按已获得的抗性总量记录",
-            [new("armor", "护甲"), new("magic", "魔抗")]
+            "指定技能命中敌方英雄时永久获得 1~3 护甲或魔抗；层数按已获得的抗性总量记录；不是第一个海克斯时另加 20 护甲和 20 魔抗",
+            [
+                new("armor", "护甲"),
+                new("magic", "魔抗"),
+                new("armor-later", "护甲·非第一个"),
+                new("magic-later", "魔抗·非第一个"),
+            ]
         ),
         new(TrackedAugment.Recursion, "循环往复", AugmentKind.Fixed, "技能急速 +60", []),
         new(TrackedAugment.BackToBasics, "回归基本功", AugmentKind.Fixed, "技能急速 +70，大招被封印", []),
@@ -110,7 +115,13 @@ public static class AugmentCatalog
             "大招急速 +30（重置技能为临时效果，不计）",
             []
         ),
-        new(TrackedAugment.PuristCaster, "纯粹主义者 - 术师", AugmentKind.Fixed, "技能总冷却 ×0.9", []),
+        new(
+            TrackedAugment.PuristCaster,
+            "纯粹主义者 - 术师",
+            AugmentKind.Fixed,
+            "附加攻速全部转为技能急速（每 1% 换 0.65），技能总冷却 ×0.9",
+            []
+        ),
         new(TrackedAugment.BreadAndButter, "面包和黄油", AugmentKind.Fixed, "Q 技能急速 +100", []),
         new(TrackedAugment.BreadAndJam, "面包和果酱", AugmentKind.Fixed, "W 技能急速 +100", []),
         new(TrackedAugment.BreadAndCheese, "面包和奶酪", AugmentKind.Fixed, "E 技能急速 +100", []),
@@ -127,7 +138,7 @@ public static class AugmentCatalog
             TrackedAugment.DrawYourSword,
             "亮出你的剑",
             AugmentKind.Fixed,
-            "变为近战，生命 +24% 等（远程英雄可选）",
+            "变为近战，生命 +24% 等，按默认攻击距离再提高 0~100%（500 起每 15 距离 +10%，650 封顶；远程英雄可选）",
             []
         ),
         new(TrackedAugment.GlassCannon, "玻璃大炮", AugmentKind.Fixed, "生命上限锁定为最大生命的 70%", []),
