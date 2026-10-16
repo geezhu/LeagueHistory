@@ -160,6 +160,14 @@ internal static class OverlayChampionDetailChecks
             "Mayhem does not present a real rune recommendation"
         );
         Check(((string)mayhem["source"]!).StartsWith("arammeta"), "Full source name remains visible");
+        var augmentRow = ((JArray)mayhem["sections"]!).First(s => (string?)s["tab"] == "augments")["rows"]![0]!;
+        Check(
+            (string?)augmentRow["search"] == ChineseInitials.Of((string?)augmentRow["icons"]![0]!["name"]),
+            "Augment rows carry pinyin initials for the widget's search"
+        );
+        Check(ChineseInitials.Of("坦克引擎") == "tkyq", "Initials of common characters");
+        Check(ChineseInitials.Of("Ult Bot 大招！") == "ultbotdz", "Letters stay, punctuation and spaces go");
+        Check(ChineseInitials.Of(null) == "" && ChineseInitials.Of("〇") == "", "Empty and unknown characters");
         Check(
             ((JArray)mayhem["sections"]!).Any(s => (string?)s["tab"] == "builds" && s["rows"]!.Any()),
             "Mayhem includes equipment recommendations"

@@ -255,6 +255,8 @@ public sealed class OverlayChampionDetailService : IDisposable
                             var row = Row("", icons: [icon], stats: Stats(r.WinRate, r.PickRate, r.Games, true));
                             row["winRateText"] = "胜率 " + Rate(r.WinRate);
                             row["pickRateText"] = "选取率 " + Rate(r.PickRate);
+                            // The widget's search matches the name, the description and these initials.
+                            row["search"] = ChineseInitials.Of(r.Name);
                             return row;
                         })
                 )
