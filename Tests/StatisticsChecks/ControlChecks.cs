@@ -22,10 +22,13 @@ internal static class ControlChecks
         Parsing();
         Survival();
         Slows();
+        ChatMessage();
+        ChatMessageSplits();
+        ChatRequest();
         Task.Run(SpellCacheAsync).GetAwaiter().GetResult();
         Task.Run(BridgeAsync).GetAwaiter().GetResult();
         Console.WriteLine(
-            "PASS: control recognition (synonyms, self effects, removal, passive triggers), ranged strong slows, survival items and Game Bar fields."
+            "PASS: control recognition (synonyms, self effects, removal, passive triggers), ranged strong slows, survival items, Game Bar fields and the control chat message."
         );
     }
 
@@ -307,6 +310,155 @@ internal static class ControlChecks
                 SlowRanks = [new(25, 1, 0), new(30, 1, 0), new(35, 1.25, 4), new(40, 1.5, 4), new(45, 1.5, 4)],
             },
         ];
+
+    private static readonly LoadingRoster ChatRoster = new(
+        "1",
+        450,
+        "ARAM",
+        [
+            new("self", "自己#1", "", 1, 143, 100, true),
+            new("ally", "队友#2", "", 2, 1, 100, false),
+            new("enemy", "对手#3", "", 3, 99, 200, false),
+            new("enemy2", "对手#4", "", 4, 7, 200, false),
+        ]
+    );
+
+    private static string Hero(int id) => "英雄" + id;
+
+    private static OverlayChatRequest ControlRequest(string target) =>
+        new("id", "1", target, -1, 0, 0, false, false, "controls");
+
+    // One side's champions with their control abilities; a sealed ultimate is left out as on the page.
+    private static void ChatMessage()
+    {
+        var roster = ChatRoster;
+        var controls = new Dictionary<int, ControlSkill[]>
+        {
+            [99] = EnemyControls(),
+            [143] = [new("Q", "缠绕", ["禁锢"], ""), new("R", "大招", ["击飞"], "")],
+            [7] = [],
+        };
+        Check(
+            OverlayControlChatMessage.Build(roster, ControlRequest("enemy"), controls, null, Hero).Single()
+                == "【控制·对方】英雄99 Q禁锢 E减速；英雄7 无硬控",
+            "Enemy controls list each champion with hard control and slows"
+        );
+
+        var sealedR = new OverlayLiveState(
+            new LiveMatchInsight(
+                0,
+                new(0, 0, 0, 0, 0),
+                new(0, 0, 0, 0, 0),
+                new Dictionary<string, LivePlayerInsight>(),
+                [],
+                ""
+            ),
+            new JArray(),
+            "rev"
+        )
+        {
+            Effects = new Dictionary<string, AugmentEffects>
+            {
+                ["self"] = AugmentEffects.None with { Cooldown = CooldownOptions.None with { UltimateSealed = true } },
+            },
+        };
+        Check(
+            OverlayControlChatMessage.Build(roster, ControlRequest("own"), controls, sealedR, Hero).Single()
+                == "【控制·我方】英雄143 Q禁锢；英雄1 读取中",
+            "A sealed ultimate is skipped and unread champions say so"
+        );
+        Check(
+            Rejected(() => OverlayControlChatMessage.Build(roster, ControlRequest("single"), controls, null, Hero))
+                && Rejected(() =>
+                    OverlayControlChatMessage.Build(
+                        roster,
+                        ControlRequest("enemy"),
+                        new Dictionary<int, ControlSkill[]>(),
+                        null,
+                        Hero
+                    )
+                ),
+            "Nothing is sent for a single hero or before any control skills are read"
+        );
+    }
+
+    // Five champions with many effects do not fit one chat message.
+    private static void ChatMessageSplits()
+    {
+        var roster = ChatRoster;
+        var many = Enumerable
+            .Range(0, 5)
+            .Select(i => new ControlSkill(
+                "Q",
+                "",
+                ["击飞", "晕眩", "禁锢", "拉拽", "沉默", "压制", "嘲讽", "恐惧", "魅惑", "沉睡"],
+                ""
+            ))
+            .ToArray();
+        var full = roster with
+        {
+            Players = Enumerable
+                .Range(0, 5)
+                .Select(i => new LoadingPlayer("e" + i, "", "", i, 10 + i, 200, false))
+                .Append(roster.Players[0])
+                .ToArray(),
+        };
+        var messages = OverlayControlChatMessage.Build(
+            full,
+            ControlRequest("enemy"),
+            Enumerable.Range(10, 5).ToDictionary(id => id, _ => many),
+            null,
+            Hero
+        );
+        Check(
+            messages.Count > 1 && messages.All(m => m.Length <= 180 && m.StartsWith("【控制·对方】")),
+            "Long lists continue in further messages"
+        );
+    }
+
+    private static bool Rejected(Func<IReadOnlyList<string>> build)
+    {
+        try
+        {
+            build();
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return true;
+        }
+    }
+
+    // The widget sends a side; a single hero is refused like the premade message.
+    private static void ChatRequest()
+    {
+        var json = JObject.FromObject(
+            new
+            {
+                protocol = 1,
+                id = Guid.NewGuid().ToString(),
+                session = "s",
+                target = "enemy",
+                kind = "controls",
+                slot = -1,
+                championId = 0,
+                updatedAt = 1000,
+                dismissed = false,
+                cancelled = false,
+            }
+        );
+        Check(
+            OverlayChatRequest.Parse(json, "s", new int[10], 2000)?.Kind == "controls",
+            "The widget's request parses"
+        );
+        json["target"] = "single";
+        json["slot"] = 0;
+        json["championId"] = 5;
+        Check(
+            OverlayChatRequest.Parse(json, "s", [5, 0, 0, 0, 0, 0, 0, 0, 0, 0], 2000) == null,
+            "A single hero is refused"
+        );
+    }
 
     private static async Task BridgeAsync()
     {

@@ -13,8 +13,9 @@ static constexpr wchar_t const *ChatIdleText =
 std::array<MenuFlyoutItem, 3> tierTargets, masteryTargets, deathStreakTargets, recordTargets;
 TextBlock chatStatus = MakeText(ChatIdleText, 12, 0x91acbb);
 bool supportsChat = false, supportsMasteryChat = false, supportsDeathStreakChat = false, supportsRecordChat = false,
-     supportsPartyChat = false, supportsWaveChat = false, chatTeams = false, chatPending = false, chatWriting = false,
-     chatReading = false, chatDismissed = false, chatCancelled = false, chatCleanup = false;
+     supportsPartyChat = false, supportsControlChat = false, supportsWaveChat = false, chatTeams = false,
+     chatPending = false, chatWriting = false, chatReading = false, chatDismissed = false, chatCancelled = false,
+     chatCleanup = false;
 hstring chatId, chatSession, chatTarget, chatKind, chatText, pendingChatWrite;
 int chatSlot = -1, chatHero = 0, chatSpell = -1;
 int64_t chatCreated = 0;
@@ -131,6 +132,10 @@ void UpdateChatButtons()
     partyMenu.Visibility(supportsPartyChat ? Visibility::Visible : Visibility::Collapsed);
     for (auto &item : partyTargets)
         item.IsEnabled(available && supportsPartyChat && chatTeams);
+    controlChatButton.Visibility(supportsControlChat ? Visibility::Visible : Visibility::Collapsed);
+    controlChatButton.IsEnabled(available && supportsControlChat && chatTeams);
+    for (auto &item : controlChatTargets)
+        item.IsEnabled(available && supportsControlChat && chatTeams);
     for (int i = 0; i < 3; ++i)
     {
         bool scope = i == 2 ? single : chatTeams;
@@ -169,9 +174,11 @@ bool CanQueueChat(hstring const &target, hstring const &kind) const
         return supportsSummonerChat && target == L"single" && summonerChatCard >= 0 && summonerChatCard < 5 &&
                cards[summonerChatCard].hero > 0;
     if ((kind != L"tier" && kind != L"mastery" && kind != L"deathStreak" && kind != L"record" && kind != L"party" &&
-         kind != L"voice") ||
+         kind != L"controls" && kind != L"voice") ||
         (kind == L"mastery" && !supportsMasteryChat) || (kind == L"deathStreak" && !supportsDeathStreakChat) ||
-        (kind == L"record" && !supportsRecordChat) || (kind == L"party" && (!supportsPartyChat || target == L"single")))
+        (kind == L"record" && !supportsRecordChat) ||
+        (kind == L"party" && (!supportsPartyChat || target == L"single")) ||
+        (kind == L"controls" && (!supportsControlChat || target == L"single")))
         return false;
     if (kind != L"voice" && target != L"own" && target != L"enemy" && target != L"single")
     {
@@ -217,6 +224,7 @@ void QueueChat(hstring const &target, hstring const &kind)
                                                    : kind == L"deathStreak" ? L"连死次数"
                                                    : kind == L"record"      ? L"战绩"
                                                    : kind == L"party"       ? L"疑似组排"
+                                                   : kind == L"controls"    ? L"控制技能"
                                                    : target == L"spawn"     ? L"出波与炮车"
                                                    : target == L"super"     ? L"超级兵"
                                                    : target == L"deaths"    ? L"阵亡代价"

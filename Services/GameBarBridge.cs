@@ -89,6 +89,7 @@ public sealed partial class GameBarBridge : IDisposable
             ["chatWaves"] = true,
             ["chatRecord"] = true,
             ["chatParty"] = true,
+            ["chatControls"] = true,
             ["controlProtocol"] = 1,
             ["chatVoice"] = true,
             ["voiceProtocol"] = 2,
