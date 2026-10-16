@@ -15,6 +15,14 @@ bool waveRenderPending = false;
 // Moves the wave dots every frame while the page is open; the page itself is rebuilt once a second.
 CompositionTarget::Rendering_revoker waveFrames;
 static constexpr int64_t WaveStaleMilliseconds = 5000;
+// The cannon-wave sound, played by the main program: off, as the wave before a cannon wave spawns, or as the cannon
+// wave spawns. Stored in the widget and sent with the control settings.
+Button cannonSoundButton;
+std::array<ToggleMenuFlyoutItem, 3> cannonSoundItems;
+hstring cannonSound = L"off";
+static constexpr wchar_t const *CannonSoundSetting = L"cannonWaveSound";
+static constexpr std::array<wchar_t const *, 3> CannonSoundKeys{L"off", L"next", L"spawn"};
+static constexpr std::array<wchar_t const *, 3> CannonSoundNames{L"关", L"下一波是炮车时", L"炮车波出兵时"};
 
 void InitializeWaves()
 {
@@ -39,6 +47,7 @@ void InitializeWaves()
     waveRules.VerticalAlignment(VerticalAlignment::Center);
     waveRules.Margin({16, 2, 0, 0});
     navigation.Children().Append(waveRules);
+    InitializeCannonSound(navigation);
     waveRoot.Children().Append(navigation);
     waveScroll.Content(waveBody);
     waveScroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
@@ -49,6 +58,50 @@ void InitializeWaves()
     Grid::SetRowSpan(waveRoot, 2);
     waveRoot.Visibility(Visibility::Collapsed);
     root.Children().Append(waveRoot);
+}
+void InitializeCannonSound(StackPanel const &navigation)
+{
+    auto stored = ApplicationData::Current().LocalSettings().Values().TryLookup(CannonSoundSetting);
+    auto value = stored ? unbox_value_or<hstring>(stored, L"off") : hstring(L"off");
+    cannonSound =
+        std::find(CannonSoundKeys.begin(), CannonSoundKeys.end(), std::wstring_view(value)) != CannonSoundKeys.end()
+            ? value
+            : hstring(L"off");
+    MenuFlyout menu;
+    for (size_t i = 0; i < cannonSoundItems.size(); ++i)
+    {
+        cannonSoundItems[i].Text(CannonSoundNames[i]);
+        cannonSoundItems[i].Click(
+            [this, key = hstring(CannonSoundKeys[i])](auto &&, auto &&)
+            {
+                cannonSound = key;
+                ApplicationData::Current().LocalSettings().Values().Insert(CannonSoundSetting, box_value(key));
+                RefreshCannonSoundButton();
+                SaveControlSettings();
+            });
+        menu.Items().Append(cannonSoundItems[i]);
+    }
+    cannonSoundButton = DetailButton(L"");
+    cannonSoundButton.Margin({16, 0, 0, 0});
+    cannonSoundButton.Flyout(menu);
+    ToolTipService::SetToolTip(
+        cannonSoundButton,
+        box_value(L"由 League 主程序播放两声低音：「下一波是炮车时」在炮车波的前一波出兵时提示，约提前一波；"
+                  L"「炮车波出兵时」在炮车波出兵时提示。选择时不试播。"));
+    RefreshCannonSoundButton();
+    navigation.Children().Append(cannonSoundButton);
+}
+void RefreshCannonSoundButton()
+{
+    hstring state = L"关";
+    for (size_t i = 0; i < cannonSoundItems.size(); ++i)
+    {
+        bool chosen = cannonSound == CannonSoundKeys[i];
+        cannonSoundItems[i].IsChecked(chosen);
+        if (chosen && i > 0)
+            state = i == 1 ? L"下一波" : L"出兵时";
+    }
+    cannonSoundButton.Content(MakeText(L"炮车提示音：" + state + L" ▾", 13));
 }
 bool HasWaves() const
 {
@@ -101,9 +154,13 @@ void UpdateWaves()
         next = NextWave(now);
     waveButton.IsEnabled(HasWaves());
     hstring label = L"兵线";
+    // A cannon wave counting down lights the button, so it can be seen without opening the page.
+    bool cannon = next && next.GetNamedNumber(L"siege", 0) > 0;
     if (next)
-        label = label + L" " + WaveCountdown(next.GetNamedNumber(L"time", 0) - now);
-    waveButton.Content(MakeText(label, 13));
+        label = label + (cannon ? L" 炮车 " : L" ") + WaveCountdown(next.GetNamedNumber(L"time", 0) - now);
+    waveButton.Content(MakeText(label, 13, cannon ? 0x1a1206 : 0xe2eef3));
+    waveButton.Background(MakeBrush(cannon ? 0xe0b25c : 0x143542));
+    waveButton.BorderBrush(MakeBrush(cannon ? 0xf3d48a : 0x315662));
     hstring tip = HasWaves() ? hstring(L"按游戏时间推算出波、炮车、超级兵和兵线到达防御塔的时间。")
                   : active   ? hstring(L"当前模式没有兵线。")
                              : hstring(L"进入对局后可用。");

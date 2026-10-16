@@ -118,6 +118,8 @@ dotnet run --project Tests/StatisticsChecks/StatisticsChecks.csproj -c Release -
 
 兵线：底部「兵线」按钮显示下一波倒计时，点击打开独立的「兵线」页，「返回」回到名单或原英雄详情。出波、炮车、每波价值、超级兵和到达防御塔时间由主程序按模式规则和推塔事件计算（`MinionWaveForecaster`），快照 `waves` 字段携带游戏时间与对应的本机时间，组件只做本地倒计时；超过 5 秒未更新时暂停。到达时间为无人干扰时的估计。每路的进度条显示双方塔与最新一波兵的理论位置、预计相遇时间，以及按建筑损失推测的兵线大致位置。页面下方「现在阵亡需等待」按等级与游戏时间列出双方现在阵亡的复活时间。「发送 ▾ → 兵线（发到队伍）」可把出波与炮车、超级兵或阵亡代价发到队伍聊天，内容在返回游戏、输入前按最新数据生成。规则与数据来源见 [docs/minion-wave-requirements-draft.md](../docs/minion-wave-requirements-draft.md)，回归检查 `--minion-wave-checks`。
 
+炮车波：下一波是炮车波时，底部兵线按钮变成金色并显示「兵线 炮车 0:23」，不打开兵线页也能看到。兵线页标题栏的「炮车提示音 ▾」可选「关」（默认）、「下一波是炮车时」（炮车波的前一波出兵时提示，约提前一波）或「炮车波出兵时」；提示音为两声低音，由主程序播放（游戏在前台时 Windows 会静音组件），选择时不试播。设置随 `control-settings.json` 的 `cannonSound`（off / next / spawn）传给主程序；主程序每次读到兵线预测时记住接下来的出兵时间，出兵时间在两次读取之间经过才提示，首次读取或两次读取相隔超过 5 秒（中途启动、重连）只记录不提示（`CannonWaveAlerts`），每次提示写入 `tier-chat` 日志。回归检查 `--minion-wave-checks`。
+
 详情布局检查：测试项目的 `--overlay-detail-fixture <输出目录> <已有 Assets 目录>` 导出明确标注的样例，复制其中两个 `detail-preview-*.json` 到组件 `LocalState` 后运行 `GameBar/Verify-Preview.ps1 -DetailTab skills`（或 `builds` / `augments` / `live` / `roster` / `waves`）。截图使用同一渲染代码，样例文件独立于真实快照与请求；默认检查 820×560，也可在样例快照中设置 `width` / `height` 检查最小 640×500。它不代替实际全屏交互验证。
 
 参考：[官方接入说明](https://learn.microsoft.com/en-us/xbox/game-bar/quickstart/introduction)、[组件激活](https://learn.microsoft.com/en-us/xbox/game-bar/guide/app-activation)。
