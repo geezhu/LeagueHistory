@@ -84,6 +84,7 @@ internal static class Program
         {
             Background(DiagnosticLogChecks.RunAsync);
             Background(AppLogChecks.RunAsync);
+            Background(DiagnosticReportChecks.RunAsync);
         };
         checks["--history-data-checks"] = HistoryDataChecks.Run;
         checks["--timeline-data-checks"] = TimelineDataChecks.Run;
