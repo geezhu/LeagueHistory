@@ -48,7 +48,7 @@ namespace League
         public Panel? _waitingPanel; // 添加这个字段
 
         // 读取预选英雄列表
-        private List<PreliminaryHero>? _preSelectedHeroes = null;
+        private PreliminaryConfig? _preliminaryConfig = null;
 
         // 战绩发送处理
         private ChatMessageBuilder? _chatMessageBuilder;
@@ -770,50 +770,29 @@ namespace League
         }
 
         /// <summary>
-        /// 读取预选列表的方法（异步版本，避免阻塞UI线程）
+        /// 读取预选列表配置（异步，避免阻塞 UI 线程）；关闭预选窗口后清除缓存重新读取。
         /// </summary>
-        public async Task<List<PreliminaryHero>> GetPreSelectedHeroesAsync()
+        public async Task<PreliminaryConfig?> GetPreliminaryConfigAsync()
         {
-            // 先检查缓存
-            if (_preSelectedHeroes != null)
+            if (_preliminaryConfig != null)
             {
-                //Debug.WriteLine($"[自动预选] 使用缓存的预选列表，共 {_preSelectedHeroes.Count} 个英雄");
-                return _preSelectedHeroes;
+                return _preliminaryConfig;
             }
 
             try
             {
                 // Use the same persistent settings as the settings page, regardless of launch directory.
                 var config = await Task.Run(LeagueConfigManager.Load);
-                if (
-                    config?.Preliminary == null
-                    || config.Preliminary.Heroes == null
-                    || config.Preliminary.Heroes.Count == 0
-                )
-                {
-                    //Debug.WriteLine("[自动预选] 配置中 Preliminary 或 Heroes 为空");
-                    _preSelectedHeroes = new List<PreliminaryHero>();
-                    return _preSelectedHeroes;
-                }
-
-                if (!config.Preliminary.EnableAutoPreliminary)
-                {
-                    //Debug.WriteLine("[自动预选] 配置中 EnableAutoPreliminary = false，已禁用自动预选");
-                    _preSelectedHeroes = new List<PreliminaryHero>();
-                    return _preSelectedHeroes;
-                }
-
-                _preSelectedHeroes = config.Preliminary.Heroes.OrderBy(h => h.Priority).ToList();
-
-                //Debug.WriteLine($"[自动预选] 成功加载预选列表，共 {_preSelectedHeroes.Count} 个英雄");
-                return _preSelectedHeroes;
+                _preliminaryConfig = config?.Preliminary ?? new PreliminaryConfig();
             }
             catch (Exception ex)
+                when (ex is IOException or UnauthorizedAccessException or Newtonsoft.Json.JsonException)
             {
                 AppLog.Shared.Warn(LogCategory.Ui, "[自动预选] 读取配置异常", ex);
-                _preSelectedHeroes = new List<PreliminaryHero>();
-                return _preSelectedHeroes;
+                _preliminaryConfig = new PreliminaryConfig();
             }
+
+            return _preliminaryConfig;
         }
 
         /// <summary>
@@ -920,7 +899,7 @@ namespace League
                 pre.ShowDialog();
             }
 
-            _preSelectedHeroes = null; // 清除缓存，下次自动预选会重新读取最新
+            _preliminaryConfig = null; // 清除缓存，下次自动预选会重新读取最新
             Debug.WriteLine("[自动预选] 预选配置已修改，缓存已清除");
         }
 
