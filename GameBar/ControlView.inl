@@ -16,6 +16,9 @@ bool enemySound = true, allySound = false, controlSettingsWritten = false, contr
 hstring pendingControlSettings;
 static constexpr wchar_t const *SurvivalSoundSetting = L"survivalItemSound";
 static constexpr wchar_t const *AllySoundSetting = L"survivalItemAllySound";
+// Sends one side's recognized control skills to game chat through the shared send gate.
+Button controlChatButton;
+std::array<MenuFlyoutItem, 2> controlChatTargets;
 
 void InitializeControls()
 {
@@ -54,6 +57,7 @@ void InitializeControls()
                  L"召唤师提示音：我方卡片上手动开始的召唤师技能计时结束时提示；敌方召唤师技能只显示图标，不计时。");
     InitializeSurvivalSound(navigation);
     InitializeSummonerSound(navigation);
+    InitializeControlChat(navigation);
     controlRoot.Children().Append(navigation);
     controlScroll.Content(controlBody);
     controlScroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
@@ -89,6 +93,27 @@ void InitializeSurvivalSound(StackPanel const &navigation)
                   L"2999 看不到装备冷却和使用，所以提示的是做出装备，不是使用装备。"));
     RefreshSurvivalSoundButton();
     navigation.Children().Append(survivalSoundButton);
+}
+void InitializeControlChat(StackPanel const &navigation)
+{
+    MenuFlyout menu;
+    std::array<hstring, 2> names{L"我方", L"敌方"};
+    std::array<hstring, 2> keys{L"own", L"enemy"};
+    for (size_t i = 0; i < controlChatTargets.size(); ++i)
+    {
+        controlChatTargets[i].Text(names[i]);
+        controlChatTargets[i].Click([this, target = keys[i]](auto &&, auto &&) { QueueChat(target, L"controls"); });
+        menu.Items().Append(controlChatTargets[i]);
+    }
+    controlChatButton = DetailButton(L"");
+    controlChatButton.Content(MakeText(L"发送控制 ▾", 13));
+    controlChatButton.Margin({12, 0, 0, 0});
+    controlChatButton.Flyout(menu);
+    ToolTipService::SetToolTip(controlChatButton,
+                               box_value(L"把我方或敌方每个英雄的控制技能（含远程强减速）发送到游戏聊天。\n"
+                                         L"需以管理员身份运行 League；点击后按 Win＋G 返回游戏。"));
+    controlChatButton.Visibility(Visibility::Collapsed);
+    navigation.Children().Append(controlChatButton);
 }
 void ChangeSurvivalSound()
 {
