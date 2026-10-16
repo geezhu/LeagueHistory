@@ -16,9 +16,68 @@ internal static class VoiceSettingsChecks
         DeviceSelectionAndRecovery();
         LateDeviceList();
         ModelCancellation();
+        ModelStateDisplay();
         Console.WriteLine(
-            "PASS: voice settings device selection, unavailable inputs, listing failure/recovery and cancelled model preparation. No microphone or network used."
+            "PASS: voice settings device selection, unavailable inputs, listing failure/recovery, cancelled model preparation and the ready-model summary. No microphone or network used."
         );
+    }
+
+    // A ready model shows what it is instead of the manual download links; a missing one offers them.
+    private static void ModelStateDisplay()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "voice-model-state-" + Guid.NewGuid().ToString("N"));
+        byte[] content = [1, 2, 3, 4];
+        var file = new VoiceModelFile(
+            "fixture.bin",
+            content.Length,
+            Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant()
+        );
+        try
+        {
+            (bool Links, bool Import, string Status) Show()
+            {
+                using var controller = (IDisposable)Controller(
+                    "",
+                    _ => { },
+                    new VoiceModelStore(root, null, [file]),
+                    () => []
+                );
+                using var form = new Form
+                {
+                    ShowInTaskbar = false,
+                    StartPosition = FormStartPosition.Manual,
+                    Location = new Point(-30000, -30000),
+                };
+                var flow = new FlowLayoutPanel { Dock = DockStyle.Fill };
+                flow.Controls.AddRange(Content(controller));
+                form.Controls.Add(flow);
+                form.Show();
+                var links = flow.Controls.Find("VoiceModelLinks", true).Single();
+                var import = flow.Controls.Find("VoiceModelImport", true).Single();
+                var status = flow.Controls.Find("VoiceModelStatus", true).Single();
+                return (links.Visible, import.Visible, status.Text);
+            }
+
+            var missing = Show();
+            Check(
+                missing.Links && missing.Import && missing.Status.Contains("尚未下载"),
+                "A missing model offers the links"
+            );
+            Directory.CreateDirectory(root);
+            File.WriteAllBytes(Path.Combine(root, file.Name), content);
+            var ready = Show();
+            Check(
+                !ready.Links && !ready.Import && ready.Status.Contains("SenseVoice 中文模型 · 2024-07-17 · int8"),
+                "A ready model shows its name and state instead of the links: " + ready.Status
+            );
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
     }
 
     private static object Controller(

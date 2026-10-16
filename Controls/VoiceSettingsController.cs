@@ -39,8 +39,7 @@ internal sealed class VoiceSettingsController : IDisposable
         _saveDevice = saveDevice;
         _store = store ?? VoiceModelStore.Shared;
         _listDevices = listDevices ?? VoiceMicrophoneDevices.List;
-        _status.Text = _store.AvailableDirectory == null ? "模型尚未下载 · 约 228 MiB" : "中文模型已准备 · 离线识别";
-        ResetPrepareButton();
+        ShowModelState();
         _microphone.SelectedIndexChanged += (_, _) => SaveSelection();
         _refresh.Click += async (_, _) => await LoadMicrophonesAsync();
         _prepare.Click += async (_, _) => await PrepareAsync();
@@ -85,6 +84,7 @@ internal sealed class VoiceSettingsController : IDisposable
         }
 
         _links.LinkClicked += (_, e) => OpenLink((string)e.Link!.LinkData!);
+        // Built once; ShowModelState decides whether a missing or broken model needs them.
         _tips.SetToolTip(
             _links,
             "下载后点「导入已下载的文件…」，选择 model.int8.onnx 和 tokens.txt；导入前校验 SHA-256。\n浏览器直接显示 tokens.txt 内容时，按 Ctrl+S 保存。"
@@ -213,7 +213,7 @@ internal sealed class VoiceSettingsController : IDisposable
             await EnsureModelAsync(source, Current);
             if (Current())
             {
-                _status.Text = "中文模型已准备 · 选人助手与 Game Bar 共用，识别时无需联网。";
+                ShowModelState("已校验完整");
             }
         }
         catch (OperationCanceledException)
@@ -246,6 +246,60 @@ internal sealed class VoiceSettingsController : IDisposable
     {
         _status.Text = $"{title}：{error.Message} 可用下方直链手动下载后导入。";
         _tips.SetToolTip(_status, error.InnerException?.Message ?? error.Message);
+        ShowManualDownload(true);
+    }
+
+    /// <summary>
+    /// A ready model shows what it is and where it lives; the manual download links and the import button appear
+    /// only while the model is missing, or after preparing it failed.
+    /// </summary>
+    private void ShowModelState(string? checkedNote = null)
+    {
+        string? directory = _store.AvailableDirectory;
+        ShowManualDownload(directory == null);
+        ResetPrepareButton();
+        if (directory == null)
+        {
+            _status.Text = $"模型尚未下载 · 约 {ModelMiB} MiB";
+            _tips.SetToolTip(_status, null);
+            return;
+        }
+
+        _status.Text =
+            $"SenseVoice 中文模型 · {ModelVersion} · {ModelMiB} MiB\n"
+            + $"{checkedNote ?? "已就绪"} · 离线识别，选人助手与 Game Bar 共用\n"
+            + "位置："
+            + Location(directory);
+        _tips.SetToolTip(_status, directory);
+    }
+
+    private void ShowManualDownload(bool visible) => _links.Visible = _import.Visible = visible;
+
+    // "SenseVoice-2024-07-17-int8" reads as "2024-07-17 · int8".
+    private static string ModelVersion
+    {
+        get
+        {
+            string version = VoiceModelStore.ModelId["SenseVoice-".Length..];
+            int split = version.LastIndexOf('-');
+            return split > 0 ? version[..split] + " · " + version[(split + 1)..] : version;
+        }
+    }
+
+    private static long ModelMiB => VoiceModelStore.Files.Sum(file => file.Size) / (1024 * 1024);
+
+    // The user's profile is shortened; a model shipped with the program says so.
+    private static string Location(string directory)
+    {
+        if (directory.StartsWith(AppContext.BaseDirectory, StringComparison.OrdinalIgnoreCase))
+        {
+            return "随程序附带";
+        }
+
+        string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        return directory.StartsWith(local, StringComparison.OrdinalIgnoreCase)
+            ? "%LOCALAPPDATA%" + directory[local.Length..]
+            : directory;
     }
 
     private async Task ImportAsync()
@@ -276,10 +330,14 @@ internal sealed class VoiceSettingsController : IDisposable
             string[] missing = _store.MissingFiles;
             if (!_disposed)
             {
-                _status.Text =
-                    missing.Length == 0
-                        ? "中文模型已导入 · 选人助手与 Game Bar 共用，识别时无需联网。"
-                        : $"已导入 {string.Join("、", imported)}，还缺少 {string.Join("、", missing)}。";
+                if (missing.Length == 0)
+                {
+                    ShowModelState("已导入");
+                }
+                else
+                {
+                    _status.Text = $"已导入 {string.Join("、", imported)}，还缺少 {string.Join("、", missing)}。";
+                }
             }
         }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException)
