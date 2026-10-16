@@ -108,6 +108,9 @@ internal static class Program
         checks["--core-utility-checks"] = CoreUtilityChecks.Run;
         checks["--utility-logic-checks"] = UtilityLogicChecks.Run;
         checks["--image-processor-checks"] = ImageProcessorChecks.Run;
+        checks["--augment-icon-checks"] = AugmentIconRendererChecks.Run;
+        checks["--champion-data-checks"] = ChampionDataChecks.Run;
+        checks["--voice-pcm-checks"] = VoicePcmBufferChecks.Run;
         checks["--update-support-checks"] = UpdateSupportChecks.Run;
         checks["--build-info-checks"] = BuildInfoChecks.Run;
         checks["--diagnostic-log-checks"] = () =>
