@@ -13,12 +13,18 @@
 **/*.axaml
 **/*.resx
 /Caching/MatchCache.cs
+/Caching/SkinBrowserImageCache.cs
+/ChampionSkin/ChampionSkinBrowser.Designer.cs
+/ChampionSkin/ChampionSkinBrowser.cs
+/ChampionSkin/ChampionSkinCard.Designer.cs
+/ChampionSkin/ChampionSkinCard.cs
 /Clients/ChampionSelectService.cs
 /Clients/ChatService.cs
 /Clients/GameflowService.cs
 /Clients/LcuClient.cs
 /Clients/LcuConnectionManager.cs
 /Clients/LcuConnector.cs
+/Clients/LcuManager.cs
 /Clients/LcuSession.cs
 /Clients/LcuWebSocketManager.cs
 /Clients/LcuWebSocketService.cs
@@ -66,6 +72,7 @@
 /Managers/PlayerCardValidator.cs
 /Managers/TableViewPlayerDetail.cs
 /Models/AugmentInfo.cs
+/Models/ChampionSkinCardModel.cs
 /Models/GameMod.cs
 /Models/GameModels.cs
 /Models/LeagueConfig.cs

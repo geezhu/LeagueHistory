@@ -110,7 +110,17 @@ namespace League.Clients
                 }
 
                 var content = await response.Content.ReadAsStringAsync(cancellationToken);
-                return JObject.Parse(content);
+                if (string.IsNullOrWhiteSpace(content))
+                    return null;
+
+                var obj = JObject.Parse(content);
+                // 必须有 puuid 才算真正登录完成
+                if (string.IsNullOrEmpty(obj["puuid"]?.ToString()))
+                {
+                    Debug.WriteLine("[LCU] current-summoner 无 puuid，视为未就绪");
+                    return null;
+                }
+                return obj;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (TaskCanceledException ex)

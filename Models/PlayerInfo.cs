@@ -3,6 +3,11 @@
     public class PlayerInfo
     {
         internal PlayerInfo Copy() => (PlayerInfo)MemberwiseClone();
+
+        /// <summary>
+        /// 完整玩家名称，格式：游戏名#标签  例如 "总有狗喜欢投降#65905"
+        /// 用于点击复制
+        /// </summary>
         public string FullName { get; set; } // 如 "总有狗喜欢投降#65905"
 
         public Image Avatar { get; set; }

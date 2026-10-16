@@ -89,10 +89,8 @@ namespace League.Clients
         public async Task<bool> LoadEntitlementsTokenAsync(CancellationToken cancellationToken = default)
         {
             using HttpResponseMessage resp = await _lcuClient.GetAsync("entitlements/v1/token", cancellationToken);
-            if (!resp.IsSuccessStatusCode)
-            {
-                return false;
-            }
+            if (!resp.IsSuccessStatusCode) return false;
+
             JObject obj = JObject.Parse(await resp.Content.ReadAsStringAsync(cancellationToken));
             _accessToken = obj["accessToken"]?.ToString();
             _entitlementsToken = obj["token"]?.ToString();
@@ -137,92 +135,24 @@ namespace League.Clients
             Debug.WriteLine("[SGP] 未能获取 SGP 地址");
             return null;
         }
-       
-        public async Task<JArray> SgpFetchLatestMatches(string puuid, int startIndex = 0, int count = 19, string tag = null, CancellationToken cancellationToken = default)
+
+        public async Task<JArray> SgpFetchLatestMatches(
+        string puuid,
+        int startIndex = 0,
+        int count = 19,
+        string tag = null,
+        CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(_sgpUrl))
             {
-                using (CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    cts.CancelAfter(TimeSpan.FromSeconds(30));
-                    try
-                    {
-                        using var handler = new HttpClientHandler
-                        {
-                            ServerCertificateCustomValidationCallback = (msg, cert, chain, err) => true
-                        };
-
-                        using HttpClient client = new HttpClient(handler);
-                        client.Timeout = TimeSpan.FromSeconds(30);   // 双重保险
-
-                        client.DefaultRequestHeaders.Clear();
-                        client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "LeagueOfLegendsClient/14.13.596.7996 (rcp-be-lol-match-history)");
-                        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
-                        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-                        client.DefaultRequestHeaders.TryAddWithoutValidation("X-Riot-ClientPlatform", "Windows");
-                        // client.DefaultRequestHeaders.TryAddWithoutValidation("X-Riot-ClientVersion", await GetClientVersionAsync());
-
-                        if (string.IsNullOrWhiteSpace(_sgpUrl))
-                        {
-                            Debug.WriteLine("❌ _sgpUrl 为空");
-                            return null;
-                        }
-
-                        string path = $"/match-history-query/v1/products/lol/player/{puuid}/SUMMARY";
-                        var queries = new List<string> { $"startIndex={startIndex}", $"count={count}" };
-                        if (!string.IsNullOrEmpty(tag)) queries.Add($"tag={tag}");
-
-                        string fullUrl = _sgpUrl.TrimEnd('/') + path + "?" + string.Join("&", queries);
-                        Debug.WriteLine($"SGP 请求地址: {fullUrl} (尝试 {attempt}/3)");
-
-                        Stopwatch watch = Stopwatch.StartNew();
-                        using HttpResponseMessage response = await client.GetAsync(fullUrl, cts.Token);
-                        watch.Stop();
-
-                        Debug.WriteLine($"SGP 查询状态: {response.StatusCode} 耗时: {watch.ElapsedMilliseconds}ms");
-
-                        if (response.IsSuccessStatusCode)
-                        {
-                            string content = await response.Content.ReadAsStringAsync();
-                            JObject json = JObject.Parse(content);
-                            //Debug.WriteLine(json);
-                            return json["games"] as JArray;
-                        }
-                        else
-                        {
-                            string errorContent = await response.Content.ReadAsStringAsync();
-                            Debug.WriteLine($"请求失败: {response.StatusCode} - {errorContent}");
-                        }
-                    }
-                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-                    catch (TaskCanceledException tce)
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        Debug.WriteLine($"SGP 查询超时（尝试 {attempt}/3）: {tce.Message}");
-                    }
-                    catch (HttpRequestException hre)
-                    {
-                        Debug.WriteLine($"HTTP 请求异常: {hre.Message} (Inner: {hre.InnerException?.Message})");
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"其他异常: {ex.Message}");
-                    }
-                }
-
-                if (!await LoadEntitlementsTokenAsync(cancellationToken))
-                {
-                    Debug.WriteLine("刷新 Token 失败");
-                    return null;
-                }
-                await Task.Delay(1500,cancellationToken);
+                Debug.WriteLine("❌ _sgpUrl 为空");
+                return null; // 配置/初始化失败，视为不可用
             }
 
             if (string.IsNullOrWhiteSpace(_accessToken))
             {
                 Debug.WriteLine("❌ accessToken 为空，尝试刷新");
-                if (!await LoadEntitlementsTokenAsync())
+                if (!await LoadEntitlementsTokenAsync(cancellationToken))
                     return null;
             }
 
@@ -233,7 +163,8 @@ namespace League.Clients
 
             for (int attempt = 1; attempt <= 3; attempt++)
             {
-                await _sgpLimiter.WaitAsync();
+                // Acquire before try: a cancelled wait must not release a slot it never took.
+                await _sgpLimiter.WaitAsync(cancellationToken);
                 try
                 {
                     using var request = new HttpRequestMessage(HttpMethod.Get, fullUrl);
@@ -242,7 +173,8 @@ namespace League.Clients
 
                     Debug.WriteLine($"SGP 请求地址: {fullUrl} (尝试 {attempt}/3)");
 
-                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(RequestTimeoutSeconds));
+                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    cts.CancelAfter(TimeSpan.FromSeconds(RequestTimeoutSeconds));
                     var watch = Stopwatch.StartNew();
                     using HttpResponseMessage response =
                         await _sharedSgpClient.SendAsync(request, cts.Token);
@@ -252,7 +184,7 @@ namespace League.Clients
 
                     if (response.IsSuccessStatusCode)
                     {
-                        string content = await response.Content.ReadAsStringAsync();
+                        string content = await response.Content.ReadAsStringAsync(cts.Token);
                         JObject json = JObject.Parse(content);
 
                         // ★ 成功：有 games 就返回，没有就返回空数组（不要返回 null）
@@ -260,13 +192,13 @@ namespace League.Clients
                         return games ?? new JArray();
                     }
 
-                    string errorContent = await response.Content.ReadAsStringAsync();
+                    string errorContent = await response.Content.ReadAsStringAsync(cts.Token);
                     Debug.WriteLine($"请求失败: {response.StatusCode} - {errorContent}");
 
                     // 401/403 再刷新 token
                     if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                     {
-                        if (!await LoadEntitlementsTokenAsync())
+                        if (!await LoadEntitlementsTokenAsync(cancellationToken))
                         {
                             Debug.WriteLine("刷新 Token 失败");
                             return null;
@@ -274,6 +206,7 @@ namespace League.Clients
                     }
                     // 5xx / 503 等服务器错误：继续重试，最后仍失败则返回 null
                 }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                 catch (TaskCanceledException tce)
                 {
                     Debug.WriteLine($"SGP 查询超时（尝试 {attempt}/3）: {tce.Message}");
@@ -293,8 +226,8 @@ namespace League.Clients
 
                 if (attempt < 3)
                 {
-                    await LoadEntitlementsTokenAsync();
-                    await Task.Delay(400 * attempt);
+                    await LoadEntitlementsTokenAsync(cancellationToken);
+                    await Task.Delay(400 * attempt, cancellationToken);
                 }
             }
 

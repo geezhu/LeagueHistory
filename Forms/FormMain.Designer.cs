@@ -654,5 +654,9 @@ namespace League
         private GroupBox groupBox3;
         private Label label8;
         private Button btnDodgeNow;
+        private CheckBox chkPickUrf;
+        private CheckBox chkUrf;
+        private LinkLabel labChampionSkinBrowser;
+        private CheckBox chkAutoSkinSelect;
     }
 }

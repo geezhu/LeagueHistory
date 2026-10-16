@@ -304,17 +304,24 @@ public partial class FormMain
                 (chkRanked, "排位"),
                 (chkAram, "大乱斗"),
                 (chkNexus, "海克斯"),
+                (chkUrf, "无限乱斗"),
+                (chkPickUrf, "无限火力"),
             }
         )
         {
             check.Text = name;
         }
 
+        labChampionSkinBrowser.Text = "浏览英雄与默认皮肤 ›";
+        chkAutoSkinSelect.Text = "";
+        chkAutoSkinSelect.AccessibleName = "选人时自动切换默认皮肤";
         SettingsCard(
             general,
             "英雄预选",
             new SettingRow("预选英雄", "分路信息来自英雄联盟攻略中心", lkbPreliminary),
-            new SettingRow("按模式启用", null, chkNormal, chkRanked, chkAram, chkNexus)
+            new SettingRow("按模式启用", null, chkNormal, chkRanked, chkAram, chkNexus, chkUrf, chkPickUrf),
+            new SettingRow("默认皮肤", "为每个已拥有的英雄设置默认皮肤", labChampionSkinBrowser),
+            new SettingRow("选人时自动切换默认皮肤", "仅限已拥有的皮肤", chkAutoSkinSelect)
         );
         groupBox1.Dispose();
     }

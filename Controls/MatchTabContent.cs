@@ -218,7 +218,7 @@ namespace League.Controls
                 await ((FormMain)this.ParentForm).ParseGameToPanelAsync(match, summonerId, gameName, tagLine, index);
 
             string fullName = $"{gameName}#{tagLine}";
-            tabContent.InitiaRank(fullName, profileIconId, summonerLevel, privacy, rankedStats,
+            _ = tabContent.InitiaRank(fullName, profileIconId, summonerLevel, privacy, rankedStats,
                 string.Equals(puuid, Globals.CurrentPuuid, StringComparison.OrdinalIgnoreCase));
 
             // 异步加载数据
