@@ -37,6 +37,8 @@ void InitializeChat()
     actions.Children().Append(waveButton);
     controlButton.Margin({6, 0, 0, 0});
     actions.Children().Append(controlButton);
+    compositionButton.Margin({6, 0, 0, 0});
+    actions.Children().Append(compositionButton);
     augmentButton.Margin({6, 0, 0, 0});
     actions.Children().Append(augmentButton);
     MenuFlyout flyout;
@@ -136,6 +138,11 @@ void UpdateChatButtons()
     controlChatButton.IsEnabled(available && supportsControlChat && chatTeams);
     for (auto &item : controlChatTargets)
         item.IsEnabled(available && supportsControlChat && chatTeams);
+    bool compositionChat = supportsCompositionChat && composition != nullptr;
+    compositionChatButton.Visibility(compositionChat ? Visibility::Visible : Visibility::Collapsed);
+    compositionChatButton.IsEnabled(available && compositionChat && chatTeams);
+    for (auto &item : compositionChatTargets)
+        item.IsEnabled(available && compositionChat && chatTeams);
     for (int i = 0; i < 3; ++i)
     {
         bool scope = i == 2 ? single : chatTeams;
@@ -174,11 +181,12 @@ bool CanQueueChat(hstring const &target, hstring const &kind) const
         return supportsSummonerChat && target == L"single" && summonerChatCard >= 0 && summonerChatCard < 5 &&
                cards[summonerChatCard].hero > 0;
     if ((kind != L"tier" && kind != L"mastery" && kind != L"deathStreak" && kind != L"record" && kind != L"party" &&
-         kind != L"controls" && kind != L"voice") ||
+         kind != L"controls" && kind != L"composition" && kind != L"voice") ||
         (kind == L"mastery" && !supportsMasteryChat) || (kind == L"deathStreak" && !supportsDeathStreakChat) ||
         (kind == L"record" && !supportsRecordChat) ||
         (kind == L"party" && (!supportsPartyChat || target == L"single")) ||
-        (kind == L"controls" && (!supportsControlChat || target == L"single")))
+        (kind == L"controls" && (!supportsControlChat || target == L"single")) ||
+        (kind == L"composition" && (!supportsCompositionChat || !composition || target == L"single")))
         return false;
     if (kind != L"voice" && target != L"own" && target != L"enemy" && target != L"single")
     {
@@ -225,6 +233,7 @@ void QueueChat(hstring const &target, hstring const &kind)
                                                    : kind == L"record"      ? L"战绩"
                                                    : kind == L"party"       ? L"疑似组排"
                                                    : kind == L"controls"    ? L"控制技能"
+                                                   : kind == L"composition" ? L"阵容能力"
                                                    : target == L"spawn"     ? L"出波与炮车"
                                                    : target == L"super"     ? L"超级兵"
                                                    : target == L"deaths"    ? L"阵亡代价"

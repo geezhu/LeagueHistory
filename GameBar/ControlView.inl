@@ -188,6 +188,7 @@ void OpenControls()
         return;
     CloseWaves();
     CloseAugmentPage();
+    CloseComposition();
     controlReturnCard = selectedCard;
     if (selectedCard >= 0)
         detailRoot.Visibility(Visibility::Collapsed);

@@ -167,6 +167,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
 #include "VoiceChatView.inl"
 #include "WaveView.inl"
 #include "ControlView.inl"
+#include "CompositionView.inl"
 #include "RespawnMarkView.inl"
 #include "AugmentStackView.inl"
 #include "CooldownView.inl"
@@ -211,6 +212,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         InitializeDetails();
         InitializeWaves();
         InitializeControls();
+        InitializeComposition();
         InitializeAugmentPage();
         InitializeChat();
         InitializeMarks();
@@ -592,6 +594,8 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         rosterMarked = false;
         CloseWaves();
         CloseControls();
+        CloseComposition();
+        composition = nullptr;
         controlRows = JsonArray();
         ClearMarks();
         ClearAugments();
@@ -728,6 +732,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         }
         rosterMarked = marked;
         ApplyControls(data, rows);
+        ApplyComposition(data);
         ApplyCalculator();
         RefreshAugmentPage();
         UpdateRespawns();
