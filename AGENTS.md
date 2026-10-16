@@ -22,6 +22,12 @@
 - 谁创建资源，谁负责释放。并行工作结束后再释放共享模型、缓冲区和互斥锁；取消后不得发布晚到的结果。
 - 不自动发送语音识别内容，不在测试中启用真实麦克风、发送真实聊天或运行关机计划。用已有模拟器验证这些行为。
 
+## 日志与诊断
+
+- 需要在用户机器上留下记录的结果和失败写 `AppLog.Shared`，不要只写 `Debug.WriteLine`：后者在 Release 版里会被去掉。吞掉异常的 catch 至少写一条 `Warn` 并附上异常。
+- 轮询类检查用 `State` 只记变化；不写玩家名、Riot ID、聊天正文、令牌和含玩家 ID 的请求地址。类别和格式见 [docs/diagnostics.md](docs/diagnostics.md)。
+- 新增日志文件放在 `LogRetention.LogsDirectory`，用 `LogFileWriter` 写入，诊断报告会自动收录并去敏。
+
 ## 工具与验证
 
 - C# 排版使用仓库固定版本的 CSharpier；Game Bar C++ 使用 `.clang-format`。

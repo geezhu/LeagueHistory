@@ -190,6 +190,7 @@
 - 客户端维护：大厅或选人界面卡顿时重启客户端界面（无需重新登录），退出游戏后清理残留客户端进程
 - 到点关机 · 防熬夜：每天到点自动关机；正在对局时等本局结束再关，关机前倒计时可在托盘取消本次；关闭联盟视界后计划仍然有效
 - 英雄联盟安装目录可自动识别或手动选择（官方 / WeGame）
+- 版本与诊断：「关于与交流」显示版本和构建 commit；遇到问题可导出诊断报告（版本、系统环境、程序状态和最近 7 天日志，已去掉令牌、玩家 ID 和自定义发送内容，不会上传），上次异常退出时启动后会提示导出
 
 ![设置 · 功能辅助](image/设置-功能辅助.png)
 *设置 · 功能辅助*
@@ -215,6 +216,7 @@
 - 编译：`dotnet build League.csproj -c Release`；Game Bar 组件见 [GameBar/README.md](GameBar/README.md)
 - 回归测试：编译 `Tests/StatisticsChecks/StatisticsChecks.csproj` 后直接运行，或用 `--settings-checks`、`--room-player-checks` 等参数运行单项；聊天发送、麦克风和关机计划均使用模拟器，不会产生真实操作
 - 代码规范：全部源码运行 `Scripts/Check-CodeQuality.ps1`，上游带来的文件也一样，详见 [AGENTS.md](AGENTS.md) 和 [docs/code-quality.md](docs/code-quality.md)
+- 诊断：用户导出的报告内容、日志类别和写日志的约定见 [docs/diagnostics.md](docs/diagnostics.md)
 - 设计文档：[docs](docs) 目录收录统计与时间线、历史筛选、到点关机、OP.GG / arammeta 需求与阵容分析等说明
 
 ---
