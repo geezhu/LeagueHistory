@@ -12,22 +12,25 @@ namespace League.Infrastructure
             _cts = new CancellationTokenSource();
             var token = _cts.Token;
 
-            Task.Run(async () =>
-            {
-                while (!token.IsCancellationRequested)
+            Task.Run(
+                async () =>
                 {
-                    try
+                    while (!token.IsCancellationRequested)
                     {
-                        await action();
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"轮询异常: {ex.Message}");
-                    }
+                        try
+                        {
+                            await action();
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"轮询异常: {ex.Message}");
+                        }
 
-                    await Task.Delay(intervalMs, token);
-                }
-            }, token);
+                        await Task.Delay(intervalMs, token);
+                    }
+                },
+                token
+            );
         }
 
         public void Stop()
@@ -35,5 +38,4 @@ namespace League.Infrastructure
             _cts?.Cancel();
         }
     }
-
 }

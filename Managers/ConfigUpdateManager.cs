@@ -1,9 +1,9 @@
-﻿using League.Models;
-using League.UIState;
-using League.Controls;
-using Newtonsoft.Json.Linq;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO.Compression;
+using League.Controls;
+using League.Models;
+using League.UIState;
+using Newtonsoft.Json.Linq;
 using static League.FormMain;
 
 namespace League.Managers
@@ -13,20 +13,22 @@ namespace League.Managers
     /// </summary>
     public class ConfigUpdateManager
     {
-        private readonly FormMain _mainForm;  // 新增：保存主窗体引用
+        private readonly FormMain _mainForm; // 新增：保存主窗体引用
 
         /// <summary>
         /// 增加超时时间（连接 + 整体）
         /// </summary>
-        private static readonly HttpClient http = new HttpClient(new SocketsHttpHandler
+        private static readonly HttpClient http = new HttpClient(
+            new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+                KeepAlivePingDelay = TimeSpan.FromSeconds(30),
+                KeepAlivePingTimeout = TimeSpan.FromSeconds(10),
+                EnableMultipleHttp2Connections = true,
+            }
+        )
         {
-            PooledConnectionLifetime = TimeSpan.FromMinutes(10),
-            KeepAlivePingDelay = TimeSpan.FromSeconds(30),
-            KeepAlivePingTimeout = TimeSpan.FromSeconds(10),
-            EnableMultipleHttp2Connections = true
-        })
-        {
-            Timeout = TimeSpan.FromSeconds(120)
+            Timeout = TimeSpan.FromSeconds(120),
         };
 
         private LeagueConfig? _config;
@@ -56,7 +58,8 @@ namespace League.Managers
 
                 // 调用 GitHub API 获取 latest release
                 string json = await http.GetStringAsync(
-                    "https://api.github.com/repos/mizi6654/LeagueHistory/releases/latest");
+                    "https://api.github.com/repos/mizi6654/LeagueHistory/releases/latest"
+                );
 
                 var release = JObject.Parse(json);
 
@@ -91,18 +94,26 @@ namespace League.Managers
 
                 if (string.IsNullOrEmpty(zipUrl))
                 {
-                    MessageBox.Show("检测到新版本，但未找到 zip 下载地址，请手动更新。", "更新提示",
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(
+                        "检测到新版本，但未找到 zip 下载地址，请手动更新。",
+                        "更新提示",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information
+                    );
                     return;
                 }
 
                 // 弹窗确认
-                string msg = $"发现新版本：{releaseName}\n\n" +
-                             $"当前版本：{localVerStr}\n" +
-                             $"更新内容：\n{changelog}\n\n" +
-                             $"是否立即下载并自动更新？（更新后程序将自动重启）";
+                string msg =
+                    $"发现新版本：{releaseName}\n\n"
+                    + $"当前版本：{localVerStr}\n"
+                    + $"更新内容：\n{changelog}\n\n"
+                    + $"是否立即下载并自动更新？（更新后程序将自动重启）";
 
-                if (MessageBox.Show(msg, "软件更新", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                if (
+                    MessageBox.Show(msg, "软件更新", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
+                    != DialogResult.Yes
+                )
                 {
                     Debug.WriteLine("[自动更新] 用户取消更新");
                     return;
@@ -138,7 +149,11 @@ namespace League.Managers
                     // 清空并创建临时目录
                     if (Directory.Exists(tempDir))
                     {
-                        try { Directory.Delete(tempDir, true); } catch { }
+                        try
+                        {
+                            Directory.Delete(tempDir, true);
+                        }
+                        catch { }
                     }
                     Directory.CreateDirectory(tempDir);
                     Directory.CreateDirectory(extractPath);
@@ -159,15 +174,23 @@ namespace League.Managers
                             request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
                             {
                                 NoCache = true,
-                                NoStore = true
+                                NoStore = true,
                             };
 
-                            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+                            using var response = await http.SendAsync(
+                                request,
+                                HttpCompletionOption.ResponseHeadersRead
+                            );
                             response.EnsureSuccessStatusCode();
 
                             var totalBytes = response.Content.Headers.ContentLength.GetValueOrDefault(-1L);
                             using var remoteStream = await response.Content.ReadAsStreamAsync();
-                            using var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                            using var fileStream = new FileStream(
+                                zipPath,
+                                FileMode.Create,
+                                FileAccess.Write,
+                                FileShare.None
+                            );
 
                             byte[] buffer = new byte[81920];
                             long downloadedBytes = 0;
@@ -181,9 +204,13 @@ namespace League.Managers
                                 if (totalBytes > 0)
                                 {
                                     int percent = (int)((downloadedBytes * 100L) / totalBytes);
-                                    progressForm.Invoke(() => progressForm.UpdateStatus(
-                                        $"从 GitHub 下载中... {percent}% ({downloadedBytes / 1024 / 1024} MB)\r\n" +
-                                        "（速度受网络影响，可能较慢，请勿关闭窗口）", percent));
+                                    progressForm.Invoke(() =>
+                                        progressForm.UpdateStatus(
+                                            $"从 GitHub 下载中... {percent}% ({downloadedBytes / 1024 / 1024} MB)\r\n"
+                                                + "（速度受网络影响，可能较慢，请勿关闭窗口）",
+                                            percent
+                                        )
+                                    );
                                 }
                             }
                             downloadSuccess = true;
@@ -191,9 +218,14 @@ namespace League.Managers
                         catch (Exception ex) when (ex is HttpRequestException || ex is IOException)
                         {
                             retryCount++;
-                            if (retryCount >= maxDownloadRetries) throw;
-                            progressForm.Invoke(() => progressForm.UpdateStatus(
-                                $"下载失败，正在第 {retryCount}/{maxDownloadRetries} 次重试...\r\n", null));
+                            if (retryCount >= maxDownloadRetries)
+                                throw;
+                            progressForm.Invoke(() =>
+                                progressForm.UpdateStatus(
+                                    $"下载失败，正在第 {retryCount}/{maxDownloadRetries} 次重试...\r\n",
+                                    null
+                                )
+                            );
                             await Task.Delay(3000 * retryCount);
                         }
                     }
@@ -209,9 +241,12 @@ namespace League.Managers
                     {
                         foreach (var entry in archive.Entries)
                         {
-                            if (string.IsNullOrEmpty(entry.Name)) continue;
+                            if (string.IsNullOrEmpty(entry.Name))
+                                continue;
 
-                            string destPath = Path.GetFullPath(Path.Combine(extractPath, entry.FullName.Replace('/', Path.DirectorySeparatorChar)));
+                            string destPath = Path.GetFullPath(
+                                Path.Combine(extractPath, entry.FullName.Replace('/', Path.DirectorySeparatorChar))
+                            );
                             // 拒绝 ../ 等指向解压目录之外的条目
                             if (!destPath.StartsWith(extractRoot, StringComparison.OrdinalIgnoreCase))
                                 throw new InvalidDataException("更新包包含解压目录之外的路径：" + entry.FullName);
@@ -234,7 +269,8 @@ namespace League.Managers
                     string appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
                     string exeName = Path.GetFileName(Application.ExecutablePath);
 
-                    string batContent = $@"
+                    string batContent =
+                        $@"
 @echo off
 title 更新中，请勿关闭...
 timeout /t 2 /nobreak >nul
@@ -267,13 +303,15 @@ exit";
                     await File.WriteAllTextAsync(batPath, batContent, new System.Text.UTF8Encoding(false));
 
                     // 启动 BAT 并退出当前程序
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = batPath,
-                        UseShellExecute = true,
-                        CreateNoWindow = true,
-                        WindowStyle = ProcessWindowStyle.Hidden
-                    });
+                    Process.Start(
+                        new ProcessStartInfo
+                        {
+                            FileName = batPath,
+                            UseShellExecute = true,
+                            CreateNoWindow = true,
+                            WindowStyle = ProcessWindowStyle.Hidden,
+                        }
+                    );
 
                     progressForm.Invoke(() =>
                     {

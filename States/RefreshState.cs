@@ -2,8 +2,7 @@ namespace League.States
 {
     public static class RefreshState
     {
-        // ÊÇ·ñÇ¿ÖÆË¢ÐÂÕ½¼¨£¨Ä¬ÈÏfalse£©
+        // ï¿½Ç·ï¿½Ç¿ï¿½ï¿½Ë¢ï¿½ï¿½Õ½ï¿½ï¿½ï¿½ï¿½Ä¬ï¿½ï¿½falseï¿½ï¿½
         public static bool ForceMatchRefresh { get; set; } = false;
     }
-
 }

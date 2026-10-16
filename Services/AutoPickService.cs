@@ -1,5 +1,5 @@
-﻿using Newtonsoft.Json.Linq;
-using System.Diagnostics;
+﻿using System.Diagnostics;
+using Newtonsoft.Json.Linq;
 using static League.FormMain;
 
 namespace League.Services
@@ -15,8 +15,8 @@ namespace League.Services
         private bool _hasAutoPreliminated = false;
         private bool _hasSwappedInAram = false;
         private TeamCardDisplayService? _cardDisplayService;
-        private int _lastSkinChampionId = 0;  // 上次处理的英雄
-        private int _lastAppliedSkinId = 0;   // 上次成功/尝试的皮肤
+        private int _lastSkinChampionId = 0; // 上次处理的英雄
+        private int _lastAppliedSkinId = 0; // 上次成功/尝试的皮肤
 
         public AutoPickService(FormMain form)
         {
@@ -36,56 +36,49 @@ namespace League.Services
             _hasAutoPreliminated = false;
             _hasSwappedInAram = false;
 
-            // 循环体，预选优先、一进选人就预选（卡片并行/后置）
-            await Task.Run(async () =>
-            {
-                while (!token.IsCancellationRequested)
+            await Task.Run(
+                async () =>
                 {
-                    try
+                    while (!token.IsCancellationRequested)
                     {
-                        var currentPhase = await Globals.lcuClient.GetGameflowPhase();
-                        if (currentPhase != "ChampSelect") break;
-
-                        // 我方队伍卡片显示
-                        await _cardDisplayService.ShowMyTeamCards(token);
-
-                        // 自动预选抢英雄
-                        await TryAutoPreliminaryAsync();
-
-                        // 2) 皮肤（可选，很快）
-                        await TryAutoSkinAsync();
-
-                        // 3) 卡片/战绩：不要挡住预选；可并行，失败也不影响
-                        _ = Task.Run(async () =>
+                        try
                         {
-                            try
-                            {
-                                await _cardDisplayService.ShowMyTeamCards();
-                            }
-                            catch (Exception ex)
-                            {
-                                Debug.WriteLine($"[AutoPickService] 卡片更新异常: {ex.Message}");
-                            }
-                        }, token);
+                            var currentPhase = await Globals.lcuClient.GetGameflowPhase();
+                            if (currentPhase != "ChampSelect")
+                                break;
 
-                        var session = await Globals.lcuClient.GetChampSelectSession();
-                        int queueId = session?["queueId"]?.Value<int>() ?? 0;
+                            // 我方队伍卡片显示
+                            await _cardDisplayService.ShowMyTeamCards(token);
 
-                        // 预选未成功前轮询更快；成功后可放慢
-                        int delay = !_hasAutoPreliminated
-                            ? 200   // 未预选：200ms 再试，接近「秒选」
-                            : (queueId is 450 or 2400 or 900 ? 500 : 800);
+                            // 自动预选抢英雄
+                            await TryAutoPreliminaryAsync();
 
-                        await Task.Delay(delay, token);
+                            // 自动配置皮肤
+                            await TryAutoSkinAsync();
+
+                            var session = await Globals.lcuClient.GetChampSelectSession();
+                            int queueId = session?["queueId"]?.Value<int>() ?? 0;
+
+                            // 乱斗类轮询更快，其它模式 1 秒
+                            int delay = (queueId == 450 || queueId == 2400 || queueId == 900) ? 500 : 1000;
+                            await Task.Delay(delay, token);
+                        }
+                        catch (OperationCanceledException) when (token.IsCancellationRequested)
+                        {
+                            break;
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            RoomLoadDiagnostics.Shared.Report(0, "selection-timeout");
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"[AutoPickService] 异常: {ex.Message}");
+                        }
                     }
-                    catch (OperationCanceledException) when (token.IsCancellationRequested) { break; }
-                    catch (OperationCanceledException) { RoomLoadDiagnostics.Shared.Report(0, "selection-timeout"); }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"[AutoPickService] 异常: {ex.Message}");
-                    }
-                }
-            }, token);
+                },
+                token
+            );
         }
 
         public void Stop()
@@ -126,17 +119,13 @@ namespace League.Services
             // 根据 queueId 和用户配置决定是否执行
             bool shouldExecute = queueId switch
             {
-                400 or 430 => _form.GetAppConfig().EnablePreliminaryInNormal,   // 匹配
-                420 or 440 => _form.GetAppConfig().EnablePreliminaryInRanked,   // 排位
-                450 => _form.GetAppConfig().EnablePreliminaryInAram,            // 大乱斗
-                2400 => _form.GetAppConfig().EnablePreliminaryInNexusBlitz,     // 海克斯
-                900 => _form.GetAppConfig().EnablePreliminaryInUrf,             // 无限乱斗
-                1900 => _form.GetAppConfig().EnablePreliminaryInPickUrf,        // 无限火力
-                4310 or 4320 => _form.GetAppConfig().EnablePreliminaryInClassic,// 经典峡谷（含人机）
-                                                                                
-                830 or 840 or 850 or 870 or 880 or 890                          // 普通人机（召唤师峡谷 vs AI）
-                    => _form.GetAppConfig().EnablePreliminaryInBot,
-                _ => false
+                400 or 430 => _form.GetAppConfig().EnablePreliminaryInNormal, // 匹配
+                420 or 440 => _form.GetAppConfig().EnablePreliminaryInRanked, // 排位
+                450 => _form.GetAppConfig().EnablePreliminaryInAram, // 大乱斗
+                2400 => _form.GetAppConfig().EnablePreliminaryInNexusBlitz, // 海克斯
+                900 => _form.GetAppConfig().EnablePreliminaryInUrf, // 无限乱斗（随机）
+                1900 => _form.GetAppConfig().EnablePreliminaryInPickUrf, // 无限火力（自选）
+                _ => false,
             };
 
             if (!shouldExecute)
@@ -149,8 +138,9 @@ namespace League.Services
                 return;
             }
 
-            // 普通自选模式：匹配、排位、无限火力、经典模式、普通人机 → 只预选一次
-            if (_hasAutoPreliminated) return;
+            // 普通自选模式：匹配、排位、无限火力 → 只预选一次
+            if (_hasAutoPreliminated)
+                return;
 
             bool success = await Globals.lcuClient.AutoDeclareIntentAsync(preList);
             if (success)
@@ -175,14 +165,17 @@ namespace League.Services
             try
             {
                 var session = await Globals.lcuClient.GetChampSelectSession();
-                if (session == null) return;
+                if (session == null)
+                    return;
 
                 int cellId = session["localPlayerCellId"]?.Value<int>() ?? -1;
-                if (cellId < 0) return;
+                if (cellId < 0)
+                    return;
 
                 var myTeam = session["myTeam"] as JArray;
                 var me = myTeam?.FirstOrDefault(p => p["cellId"]?.Value<int>() == cellId);
-                if (me == null) return;
+                if (me == null)
+                    return;
 
                 // 已锁定/已选 > 悬停意图
                 int championId = me["championId"]?.Value<int>() ?? 0;
@@ -198,9 +191,11 @@ namespace League.Services
                     _lastAppliedSkinId = 0;
                 }
 
-                if (!cfg.PreferredChampionSkins.TryGetValue(championId, out int wantSkin)
+                if (
+                    !cfg.PreferredChampionSkins.TryGetValue(championId, out int wantSkin)
                     || wantSkin <= 0
-                    || wantSkin % 1000 == 0)
+                    || wantSkin % 1000 == 0
+                )
                     return;
 
                 int currentSkin = me["selectedSkinId"]?.Value<int>() ?? 0;
@@ -213,8 +208,7 @@ namespace League.Services
                 if (_lastAppliedSkinId == wantSkin)
                     return;
 
-                bool ok = await Globals.lcuClient.TryApplyPreferredSkinAsync(
-                    championId, wantSkin, _lastAppliedSkinId);
+                bool ok = await Globals.lcuClient.TryApplyPreferredSkinAsync(championId, wantSkin, _lastAppliedSkinId);
 
                 // 无论成功与否先记下，避免失败时每秒刷屏；若要失败重试可只在 ok 时赋值
                 _lastAppliedSkinId = wantSkin;
@@ -227,7 +221,5 @@ namespace League.Services
                 Debug.WriteLine($"[自动皮肤] TryAutoSkinAsync: {ex.Message}");
             }
         }
-
-        
     }
 }

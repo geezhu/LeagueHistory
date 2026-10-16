@@ -1,8 +1,8 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using League.Managers;
 using League.Models;
 using Newtonsoft.Json.Linq;
-using System.Collections.Concurrent;
-using System.Diagnostics;
 using static League.FormMain;
 
 namespace League.Parsers
@@ -26,7 +26,8 @@ namespace League.Parsers
         public void SetMatchHistoryCount(int count)
         {
             int valid = count is 10 or 20 or 30 or 50 ? count : 20;
-            if (_matchHistoryCount == valid) return;
+            if (_matchHistoryCount == valid)
+                return;
             _matchHistoryCount = valid;
             ClearPlayerMatchCache();
         }
@@ -77,7 +78,7 @@ namespace League.Parsers
                 {
                     ["puuid"] = puuid,
                     ["championId"] = cid,
-                    ["summonerId"] = 0
+                    ["summonerId"] = 0,
                 };
 
                 return await FetchPlayerMatchInfoAsync(tempData);
@@ -89,8 +90,10 @@ namespace League.Parsers
                 try
                 {
                     var info = await FetchPlayerMatchInfoAsync(playerData);
-                    if (info?.Player != null &&
-                        (!string.IsNullOrEmpty(info.Player.Puuid) || info.Player.SummonerId != 0))
+                    if (
+                        info?.Player != null
+                        && (!string.IsNullOrEmpty(info.Player.Puuid) || info.Player.SummonerId != 0)
+                    )
                     {
                         return info;
                     }
@@ -108,11 +111,16 @@ namespace League.Parsers
             return _factory.CreateFailedPlayerInfo(sid, cid);
         }
 
-        public async Task<PlayerMatchInfo> FetchPlayerMatchInfoAsync(JToken playerData, CancellationToken cancellationToken = default,
-            string? queueOverride = null, Action<string>? stage = null)
+        public async Task<PlayerMatchInfo> FetchPlayerMatchInfoAsync(
+            JToken playerData,
+            CancellationToken cancellationToken = default,
+            string? queueOverride = null,
+            Action<string>? stage = null
+        )
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (playerData == null) throw new ArgumentNullException(nameof(playerData));
+            if (playerData == null)
+                throw new ArgumentNullException(nameof(playerData));
 
             EnsureFactoryInitialized(); // 确保 Factory 已初始化
 
@@ -121,11 +129,12 @@ namespace League.Parsers
             int championId = playerData["championId"]?.Value<int>() ?? 0;
 
             string nameVisibility = playerData["nameVisibilityType"]?.ToString() ?? "UNHIDDEN";
-            bool isHidden = nameVisibility == "HIDDEN" ||
-                           string.IsNullOrEmpty(puuid) ||
-                           summonerId == 0 ||
-                           puuid.StartsWith("OBFUSCATED_") ||
-                           puuid.StartsWith("HIDDEN_");
+            bool isHidden =
+                nameVisibility == "HIDDEN"
+                || string.IsNullOrEmpty(puuid)
+                || summonerId == 0
+                || puuid.StartsWith("OBFUSCATED_")
+                || puuid.StartsWith("HIDDEN_");
 
             if (isHidden)
                 return _factory.CreateHiddenPlayerInfo(summonerId, championId);
@@ -133,14 +142,21 @@ namespace League.Parsers
             // 缓存检查
             stage?.Invoke("queue");
             string queueId = queueOverride ?? await _fetcher.GetCurrentQueueIdAsync(cancellationToken);
-            int count=_matchHistoryCount;
-            string historyFilter = PlayerMatchDataFetcher.GetQueueFilter(queueId)+":"+count;
-            if (summonerId != 0 && _cacheManager.TryGetPlayerMatch(summonerId, historyFilter, out var cached) && cached.Player.Puuid == puuid)
+            int count = _matchHistoryCount;
+            string historyFilter = PlayerMatchDataFetcher.GetQueueFilter(queueId) + ":" + count;
+            if (
+                summonerId != 0
+                && _cacheManager.TryGetPlayerMatch(summonerId, historyFilter, out var cached)
+                && cached.Player.Puuid == puuid
+            )
             {
                 cached = cached.CopyForChampion(championId);
                 cached.Player.ChampionId = championId;
                 cached.Player.ChampionName = Globals.resLoading.GetChampionById(championId)?.Name ?? "Unknown";
-                if (queueOverride == null) cached.Player.Avatar = await Globals.resLoading.GetChampionIconAsync(championId).WaitAsync(cancellationToken);
+                if (queueOverride == null)
+                    cached.Player.Avatar = await Globals
+                        .resLoading.GetChampionIconAsync(championId)
+                        .WaitAsync(cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 stage?.Invoke("cache-hit");
                 return cached;
@@ -148,16 +164,19 @@ namespace League.Parsers
 
             // 正常查询流程...
             stage?.Invoke("profile");
-            var summonerInfo = summonerId != 0
-                ? await _fetcher.GetGameNameBySummonerIdAsync(summonerId.ToString(), cancellationToken)
-                : null;
-            if (summonerInfo == null && summonerId != 0) throw new HttpRequestException("Player profile unavailable");
+            var summonerInfo =
+                summonerId != 0
+                    ? await _fetcher.GetGameNameBySummonerIdAsync(summonerId.ToString(), cancellationToken)
+                    : null;
+            if (summonerInfo == null && summonerId != 0)
+                throw new HttpRequestException("Player profile unavailable");
 
             string gameName = summonerInfo?["gameName"]?.ToString() ?? "未知玩家";
             string tagLine = summonerInfo?["tagLine"]?.ToString() ?? "";
-            int summonerLevel = summonerInfo?["summonerLevel"]?.Value<int>() ?? 0;
-            string privacyStatus = summonerInfo?["privacy"]?.ToString().Equals("PUBLIC", StringComparison.OrdinalIgnoreCase) == true
-                ? "公开" : "隐藏";
+            string privacyStatus =
+                summonerInfo?["privacy"]?.ToString().Equals("PUBLIC", StringComparison.OrdinalIgnoreCase) == true
+                    ? "公开"
+                    : "隐藏";
             puuid = summonerInfo?["puuid"]?.ToString() ?? puuid;
 
             // 拼接完整名称
@@ -184,14 +203,15 @@ namespace League.Parsers
                 SummonerId = summonerId,
                 ChampionId = championId,
                 ChampionName = Globals.resLoading.GetChampionById(championId)?.Name ?? "Unknown",
-                Avatar = queueOverride == null ? await Globals.resLoading.GetChampionIconAsync(championId).WaitAsync(cancellationToken) : null!,
-                GameName = gameName,          // 短名字（显示用）
-                FullName = fullName,          // 完整名字（复制用）  ← 关键
+                Avatar =
+                    queueOverride == null
+                        ? await Globals.resLoading.GetChampionIconAsync(championId).WaitAsync(cancellationToken)
+                        : null!,
+                GameName = gameName, // 短名字（显示用）
+                FullName = fullName, // 完整名字（复制用）  ← 关键
                 SoloRank = soloRank,
                 FlexRank = flexRank,
                 IsPublic = privacyStatus,
-                TopMasteries = topMasteries,
-                SummonerLevel = summonerLevel
             };
 
             // 计算玩家是否压力怪
@@ -256,16 +276,20 @@ namespace League.Parsers
             var tags = new List<string>();
 
             // 投降
-            if (b.SurrenderRate >= 35)
+            if (b.SurrenderRate >= 38)
                 tags.Add("爱投降");
-            else if (b.SurrenderRate >= 22)
+            else if (b.SurrenderRate >= 25)
                 tags.Add("容易投降");
 
             // 单个信号
-            if (b.AvgMissingPings >= 2.6) tags.Add("爱发问号");
-            if (b.AvgVisionPings >= 2.2) tags.Add("爱发提醒");
-            if (b.AvgGetBackPings >= 3.0) tags.Add("爱发撤退");
-            if (b.AvgDangerPings >= 2.2) tags.Add("爱发危险");
+            if (b.AvgMissingPings >= 3.0)
+                tags.Add("爱发问号");
+            if (b.AvgVisionPings >= 2.5)
+                tags.Add("爱发提醒");
+            if (b.AvgGetBackPings >= 3.5)
+                tags.Add("爱发撤退");
+            if (b.AvgDangerPings >= 2.5)
+                tags.Add("爱发危险");
 
             double total = b.AvgMissingPings + b.AvgVisionPings + b.AvgGetBackPings + b.AvgDangerPings;
 

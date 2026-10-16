@@ -1,6 +1,6 @@
-﻿using League.Models;
+﻿using System.Collections.Concurrent;
 using League.Controls;
-using System.Collections.Concurrent;
+using League.Models;
 
 namespace League.Managers
 {
@@ -15,7 +15,8 @@ namespace League.Managers
 
         public void AddOrUpdateCache(long summonerId, PlayerMatchInfo info)
         {
-            if (summonerId <= 0) return;
+            if (summonerId <= 0)
+                return;
             lock (_cachedPlayerMatchInfos)
             {
                 _cachedPlayerMatchInfos[summonerId] = info;
@@ -35,7 +36,8 @@ namespace League.Managers
             lock (_cachedPlayerMatchInfos)
             {
                 _cachedPlayerMatchInfos.Clear();
-                foreach (var info in infos) _cachedPlayerMatchInfos[info.Player.SummonerId] = info;
+                foreach (var info in infos)
+                    _cachedPlayerMatchInfos[info.Player.SummonerId] = info;
             }
         }
 
@@ -52,7 +54,7 @@ namespace League.Managers
 
         public void UpdateCurrentChampion(long summonerId, int championId, int column)
         {
-            if (summonerId > 0 || championId > 0)  // 隐藏玩家也允许更新 championId
+            if (summonerId > 0 || championId > 0) // 隐藏玩家也允许更新 championId
             {
                 _currentChampBySummoner[summonerId] = championId;
                 _summonerToColMap[summonerId] = column;
@@ -66,7 +68,8 @@ namespace League.Managers
         {
             playerMatchCache.Clear();
             playerCache.Clear();
-            lock (_cachedPlayerMatchInfos) _cachedPlayerMatchInfos.Clear();
+            lock (_cachedPlayerMatchInfos)
+                _cachedPlayerMatchInfos.Clear();
             _currentChampBySummoner.Clear();
             _summonerToColMap.Clear();
             _cardBySummonerId.Clear();
@@ -76,7 +79,8 @@ namespace League.Managers
         {
             _currentChampBySummoner.Clear();
             _summonerToColMap.Clear();
-            lock (_cachedPlayerMatchInfos) _cachedPlayerMatchInfos.Clear();
+            lock (_cachedPlayerMatchInfos)
+                _cachedPlayerMatchInfos.Clear();
             playerMatchCache.Clear();
             _cardBySummonerId.Clear();
         }

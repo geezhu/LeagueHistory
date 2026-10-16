@@ -70,7 +70,7 @@ public static class GameChatInputSender
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
     [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();  // 新增：确认焦点
+    private static extern IntPtr GetForegroundWindow(); // 新增：确认焦点
     #endregion
 
     #region Clipboard Imports (unchanged)
@@ -129,14 +129,14 @@ public static class GameChatInputSender
                 SetForegroundWindow(hwnd);
                 Thread.Sleep(100);
             }
-            Thread.Sleep(200);  // 等待焦点稳定
+            Thread.Sleep(200); // 等待焦点稳定
 
             // 确认焦点（日志）
             IntPtr fgWnd = GetForegroundWindow();
             Debug.WriteLine($"[GameChat] 当前前台窗口: {fgWnd} (目标: {hwnd})");
 
             // ESC 清状态（防残留）
-            PressKey(VK_ESCAPE, 0, true);  // down
+            PressKey(VK_ESCAPE, 0, true); // down
             Thread.Sleep(20);
             PressKey(VK_ESCAPE, 0, false); // up
             Thread.Sleep(100);
@@ -147,7 +147,7 @@ public static class GameChatInputSender
                 PressKey(VK_RETURN, SC_RETURN, true);
                 Thread.Sleep(30);
                 PressKey(VK_RETURN, SC_RETURN, false);
-                Thread.Sleep(300);  // 关键：UI 响应延迟
+                Thread.Sleep(300); // 关键：UI 响应延迟
             }
 
             // 等待聊天框稳定
@@ -164,7 +164,7 @@ public static class GameChatInputSender
             PressKey(VK_V, SC_V, false);
             Thread.Sleep(40);
             PressKey(VK_CONTROL, SC_CONTROL, false);
-            Thread.Sleep(200);  // 关键：等待游戏解析文本
+            Thread.Sleep(200); // 关键：等待游戏解析文本
 
             // 发送 Enter
             Thread.Sleep(100);
@@ -177,7 +177,8 @@ public static class GameChatInputSender
         }
         finally
         {
-            if (attached) AttachThreadInput(curThread, gameThread, false);
+            if (attached)
+                AttachThreadInput(curThread, gameThread, false);
         }
     }
 
@@ -185,7 +186,8 @@ public static class GameChatInputSender
     private static void PressKey(ushort vk, ushort scan, bool down)
     {
         uint flags = down ? 0u : KEYEVENTF_KEYUP;
-        if (scan != 0) flags |= KEYEVENTF_SCANCODE;
+        if (scan != 0)
+            flags |= KEYEVENTF_SCANCODE;
 
         var input = new INPUT
         {
@@ -198,9 +200,9 @@ public static class GameChatInputSender
                     wScan = scan,
                     dwFlags = flags,
                     time = 0,
-                    dwExtraInfo = IntPtr.Zero
-                }
-            }
+                    dwExtraInfo = IntPtr.Zero,
+                },
+            },
         };
         SendInput(1, new[] { input }, Marshal.SizeOf<INPUT>());
     }
@@ -208,13 +210,15 @@ public static class GameChatInputSender
     // Clipboard (unchanged, but add error check)
     private static void SetClipboardText(string text)
     {
-        if (!OpenClipboard(IntPtr.Zero)) return;
+        if (!OpenClipboard(IntPtr.Zero))
+            return;
         try
         {
             EmptyClipboard();
             byte[] bytes = Encoding.Unicode.GetBytes(text + "\0");
             IntPtr hMem = GlobalAlloc(0x0042, (UIntPtr)bytes.Length);
-            if (hMem == IntPtr.Zero) return;
+            if (hMem == IntPtr.Zero)
+                return;
             IntPtr ptr = GlobalLock(hMem);
             Marshal.Copy(bytes, 0, ptr, bytes.Length);
             GlobalUnlock(hMem);

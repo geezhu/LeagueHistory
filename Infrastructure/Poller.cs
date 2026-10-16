@@ -40,5 +40,4 @@ namespace League.Infrastructure
             }
         }
     }
-
 }

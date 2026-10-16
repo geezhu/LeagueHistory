@@ -18,6 +18,6 @@ namespace League.Models
         public string CurrentFlexRank { get; set; }
         public bool HasAvatar { get; set; }
 
-        public int RetryCount { get; set; } = 0;   // 新增：防止无限重试
+        public int RetryCount { get; set; } = 0; // 新增：防止无限重试
     }
 }

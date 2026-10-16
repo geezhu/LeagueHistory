@@ -1,7 +1,7 @@
-﻿using League.Extensions;
+﻿using System.Diagnostics;
+using League.Extensions;
 using League.Models;
 using Newtonsoft.Json.Linq;
-using System.Diagnostics;
 using static League.FormMain;
 
 namespace League.Services
@@ -27,8 +27,12 @@ namespace League.Services
             Debug.WriteLine("[GameChatSender] ChatMessageBuilder 已成功设置");
         }
 
-        public async Task HandleTierAsync(Func<CancellationToken, Task<IReadOnlyList<string>>> build,
-            Action<string, string>? progress = null, Func<bool>? stillCurrent = null, CancellationToken cancellationToken = default)
+        public async Task HandleTierAsync(
+            Func<CancellationToken, Task<IReadOnlyList<string>>> build,
+            Action<string, string>? progress = null,
+            Func<bool>? stillCurrent = null,
+            CancellationToken cancellationToken = default
+        )
         {
             var diagnostics = ChatSendDiagnostics.Shared;
             void Report(string stage, string message)
@@ -37,7 +41,8 @@ namespace League.Services
                 progress?.Invoke(stage, message);
             }
 
-            if (_mainForm.IsDisposed) return;
+            if (_mainForm.IsDisposed)
+                return;
             if (cancellationToken.IsCancellationRequested || stillCurrent?.Invoke() == false)
             {
                 Report("cancelled", "未发送：对局或发送请求已变化。");
@@ -67,7 +72,8 @@ namespace League.Services
             {
                 Report("loading", "正在读取对局和统计数据，最长等待 25 秒。");
                 var messages = await build(timeout.Token);
-                if (messages.Count == 0 || _mainForm.IsDisposed) return;
+                if (messages.Count == 0 || _mainForm.IsDisposed)
+                    return;
                 string phase = await GetGameflowPhaseSafeAsync();
                 if (phase != "InProgress")
                 {
@@ -93,21 +99,28 @@ namespace League.Services
                 string? stopped = null;
                 var input = new GameInputService();
                 Report("input", $"正在输入 {messages.Count} 条消息，请保持游戏窗口在前台。");
-                bool completed = await input.SendInGameMessageAsync(string.Join("\n", messages), () =>
-                {
-                    var current = GameInputService.GetGameForegroundState();
-                    stopped = _mainForm.IsDisposed ? "程序正在关闭"
-                        : timeout.IsCancellationRequested ? "发送超时"
-                        : stillCurrent?.Invoke() == false ? "对局或发送请求已变化"
-                        : !current.IsGame ? current.Reason
-                        : !GameInputService.ModifiersReleased() ? "发送时按下了 Ctrl、Shift、Alt 或 Win"
-                        : null;
-                    return stopped == null;
-                });
+                bool completed = await input.SendInGameMessageAsync(
+                    string.Join("\n", messages),
+                    () =>
+                    {
+                        var current = GameInputService.GetGameForegroundState();
+                        stopped =
+                            _mainForm.IsDisposed ? "程序正在关闭"
+                            : timeout.IsCancellationRequested ? "发送超时"
+                            : stillCurrent?.Invoke() == false ? "对局或发送请求已变化"
+                            : !current.IsGame ? current.Reason
+                            : !GameInputService.ModifiersReleased() ? "发送时按下了 Ctrl、Shift、Alt 或 Win"
+                            : null;
+                        return stopped == null;
+                    }
+                );
                 if (completed)
                     Report("input-complete", "键盘输入已完成，请查看游戏聊天（无法确认服务器是否接收）。");
                 else
-                    Report("input-stopped", "发送未完成，可能已输入部分内容：" + (stopped ?? input.LastFailureReason ?? "输入未完成"));
+                    Report(
+                        "input-stopped",
+                        "发送未完成，可能已输入部分内容：" + (stopped ?? input.LastFailureReason ?? "输入未完成")
+                    );
             }
             catch (OperationCanceledException)
             {
@@ -119,7 +132,10 @@ namespace League.Services
             }
             catch (Exception ex)
             {
-                Report("error", "快捷发送失败：" + ex.GetType().Name + $"（HRESULT {ex.HResult:X8}）。请查看失败前的日志阶段。");
+                Report(
+                    "error",
+                    "快捷发送失败：" + ex.GetType().Name + $"（HRESULT {ex.HResult:X8}）。请查看失败前的日志阶段。"
+                );
             }
             finally
             {
@@ -131,7 +147,8 @@ namespace League.Services
         public async Task HandleChampSelectF7Async()
         {
             string phase = await GetGameflowPhaseSafeAsync();
-            if (phase != "ChampSelect") return;
+            if (phase != "ChampSelect")
+                return;
 
             var (isCustomMode, msg) = await GetUiSendStateAsync();
 
@@ -141,11 +158,13 @@ namespace League.Services
                 if (myTeam == null || myTeam.Count == 0)
                 {
                     var session = await Globals.lcuClient.GetChampSelectSession();
-                    if (session != null) _mainForm._cachedMyTeam = session["myTeam"] as JArray;
+                    if (session != null)
+                        _mainForm._cachedMyTeam = session["myTeam"] as JArray;
                     myTeam = _mainForm._cachedMyTeam;
                 }
 
-                if (myTeam == null || myTeam.Count == 0) return;
+                if (myTeam == null || myTeam.Count == 0)
+                    return;
 
                 // 选人阶段强制使用玩家名称（英雄未锁定）
                 msg = _chatMessageBuilder?.BuildMyTeamSummary(myTeam, useChampionName: false) ?? "";
@@ -156,7 +175,8 @@ namespace League.Services
 
         public async Task HandleMyTeamAsync()
         {
-            if (_isSendingMessage) return;
+            if (_isSendingMessage)
+                return;
             await SendTeamDataAsync(isFullTeam: false);
         }
 
@@ -167,10 +187,12 @@ namespace League.Services
 
         private async Task SendTeamDataAsync(bool isFullTeam)
         {
-            if (_isSendingMessage) return;
+            if (_isSendingMessage)
+                return;
 
             string phase = await GetGameflowPhaseSafeAsync();
-            if (phase != "InProgress") return;
+            if (phase != "InProgress")
+                return;
 
             var (isCustomMode, msg) = await GetUiSendStateAsync();
             if (isCustomMode)
@@ -192,7 +214,8 @@ namespace League.Services
                 ? _chatMessageBuilder?.BuildFullTeamSummary(myTeam, enemyTeam, useChampionName) ?? ""
                 : _chatMessageBuilder?.BuildMyTeamSummary(myTeam, useChampionName) ?? "";
 
-            if (string.IsNullOrWhiteSpace(msg)) return;
+            if (string.IsNullOrWhiteSpace(msg))
+                return;
 
             try
             {
@@ -212,11 +235,14 @@ namespace League.Services
                 var session = await Globals.lcuClient.GetGameSession();
                 if (session != null)
                 {
-                    team = isMyTeam ? session["gameData"]?["teamOne"] as JArray : session["gameData"]?["teamTwo"] as JArray;
+                    team = isMyTeam
+                        ? session["gameData"]?["teamOne"] as JArray
+                        : session["gameData"]?["teamTwo"] as JArray;
                 }
             }
 
-            if (team == null || team.Count == 0) return null;
+            if (team == null || team.Count == 0)
+                return null;
 
             var start = DateTime.Now;
             int attempt = 0;
@@ -225,7 +251,8 @@ namespace League.Services
             while ((DateTime.Now - start).TotalMilliseconds < MaxWaitMs)
             {
                 attempt++;
-                var infos = _mainForm._playerCardManager?.GetAllCachedPlayerInfos() ?? new Dictionary<long, PlayerMatchInfo>();
+                var infos =
+                    _mainForm._playerCardManager?.GetAllCachedPlayerInfos() ?? new Dictionary<long, PlayerMatchInfo>();
 
                 readyCount = 0;
                 foreach (var p in team)
@@ -267,7 +294,8 @@ namespace League.Services
 
         private async Task SendMessageAsync(string msg, bool isChampSelect)
         {
-            if (string.IsNullOrWhiteSpace(msg)) return;
+            if (string.IsNullOrWhiteSpace(msg))
+                return;
 
             bool success = isChampSelect
                 ? await Globals.lcuClient.SendChampSelectMessageAsync(msg)
@@ -281,7 +309,7 @@ namespace League.Services
             try
             {
                 return await Task.Run(async () => await Globals.lcuClient.GetGameflowPhase())
-                                 .WaitAsync(TimeSpan.FromSeconds(3));
+                    .WaitAsync(TimeSpan.FromSeconds(3));
             }
             catch
             {

@@ -24,19 +24,20 @@ namespace League.Infrastructure
             SummonerSpells.Clear();
             foreach (var s in list)
             {
-                SummonerSpells.Add(new SummonerSpell
-                {
-                    Id = Convert.ToInt64(s.id),
-                    Name = s.name?.ToString() ?? "",
-                    Description = s.description?.ToString(),
-                    IconPath = s.iconPath?.ToString() ?? "",
-                    IconFileName = Path.GetFileName(s.iconPath?.ToString() ?? "")
-                });
+                SummonerSpells.Add(
+                    new SummonerSpell
+                    {
+                        Id = Convert.ToInt64(s.id),
+                        Name = s.name?.ToString() ?? "",
+                        Description = s.description?.ToString(),
+                        IconPath = s.iconPath?.ToString() ?? "",
+                        IconFileName = Path.GetFileName(s.iconPath?.ToString() ?? ""),
+                    }
+                );
             }
         }
 
-        public SummonerSpell? GetById(int spellId) =>
-            SummonerSpells.FirstOrDefault(s => s.Id == spellId);
+        public SummonerSpell? GetById(int spellId) => SummonerSpells.FirstOrDefault(s => s.Id == spellId);
 
         public async Task<(Image? image, string name, string description)> GetInfoAsync(int spellId)
         {
@@ -50,11 +51,14 @@ namespace League.Infrastructure
 
         public async Task<Image?> GetIconAsync(string iconPath)
         {
-            if (string.IsNullOrEmpty(iconPath)) return null;
-            if (!iconPath.StartsWith("/")) iconPath = "/" + iconPath;
+            if (string.IsNullOrEmpty(iconPath))
+                return null;
+            if (!iconPath.StartsWith("/"))
+                iconPath = "/" + iconPath;
 
             string fileName = Path.GetFileName(iconPath);
-            if (string.IsNullOrEmpty(fileName)) return null;
+            if (string.IsNullOrEmpty(fileName))
+                return null;
 
             return await _imageCache.GetOrDownloadImageAsync(iconPath, "spell", fileName);
         }

@@ -1,4 +1,6 @@
-﻿using League.Caching;
+﻿using System.Diagnostics;
+using League.Caching;
+using League.ChampionSkin;
 using League.Clients;
 using League.Controls;
 using League.Extensions;
@@ -12,13 +14,11 @@ using League.States;
 using League.UIState;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System.Diagnostics;
 
 namespace League
 {
     public partial class FormMain : Form
     {
-
         // 管理器实例
         private FormUiStateManager? _uiManager;
         private GameFlowWatcher? _gameFlowWatcher;
@@ -26,9 +26,10 @@ namespace League
         private MatchQueryProcessor? _matchQueryProcessor;
         private ConfigUpdateManager? _configUpdateManager;
         private MatchDetailManager? _matchDetailManager;
+
         // 英雄管理器（用于预加载所有英雄数据）
         private ChampionManager? _championManager;
-        private ClientUtilityService? _clientUtility;   //客户端辅助
+        private ClientUtilityService? _clientUtility; //客户端辅助
 
         // 原有字段
         private AsyncPoller _lcuPoller = new AsyncPoller();
@@ -40,6 +41,7 @@ namespace League
         public JArray? _cachedMyTeam;
         public JArray? _cachedEnemyTeam;
         private LeagueConfig? _appConfig;
+
         public LeagueConfig GetAppConfig() => _appConfig;
 
         // UI控件引用
@@ -74,7 +76,7 @@ namespace League
 
             // 预选英雄管理器
             _championManager = new ChampionManager(
-                new HttpClient(),           // 直接新建，不依赖 LCU
+                new HttpClient(), // 直接新建，不依赖 LCU
                 Globals.resLoading
             );
 
@@ -93,17 +95,17 @@ namespace League
             // 初始化按键消息预处理
             //_chatMessageBuilder = new ChatMessageBuilder(_playerCardManager.GetAllCachedPlayerInfos, null!);
             // ★★★ 修改为先传 null ★★★
-            _chatMessageBuilder = null;  // 或者 new ChatMessageBuilder(..., null!) 但建议直接 null
+            _chatMessageBuilder = null; // 或者 new ChatMessageBuilder(..., null!) 但建议直接 null
 
             // 热键管理
             _hotkeyManager = new HotkeyManager(this);
             _loadingOverlay = new LoadingOverlayManager(this);
-            Disposed+=(_,_)=>_loadingOverlay?.Dispose();
+            Disposed += (_, _) => _loadingOverlay?.Dispose();
 
             // 新增：业务处理管理器
             _chatSender = new GameChatSender(this, _chatMessageBuilder);
 
-            _clientUtility = new ClientUtilityService();    // 初始化客户端辅助
+            _clientUtility = new ClientUtilityService(); // 初始化客户端辅助
 
             // 订阅热键
             _hotkeyManager.OnMyTeamHotkey += async () => await _chatSender.HandleMyTeamAsync();
@@ -111,8 +113,14 @@ namespace League
             _hotkeyManager.OnChampSelectF7 += async () => await _chatSender.HandleChampSelectF7Async();
         }
 
-        internal Task SendOverlayTiersAsync(IReadOnlyList<string> messages,Action<string,string> progress,Func<bool> current,CancellationToken token)
-            =>_chatSender?.HandleTierAsync(_=>Task.FromResult(messages),progress,current,token)??Task.CompletedTask;
+        internal Task SendOverlayTiersAsync(
+            IReadOnlyList<string> messages,
+            Action<string, string> progress,
+            Func<bool> current,
+            CancellationToken token
+        ) =>
+            _chatSender?.HandleTierAsync(_ => Task.FromResult(messages), progress, current, token)
+            ?? Task.CompletedTask;
 
         public void SaveAppConfig()
         {
@@ -138,32 +146,30 @@ namespace League
                 imageTabControl1.TabPages[2].Tag = img3;
 
                 // 绑定事件
-                imageTabControl1.MouseMove += (s, ev) =>
-                    _uiManager!.HandleImageTabControlMouseMove(s, ev);
+                imageTabControl1.MouseMove += (s, ev) => _uiManager!.HandleImageTabControlMouseMove(s, ev);
 
                 // 读取配置
                 _appConfig = _configUpdateManager!.LoadConfig();
                 ConfigureAramMetaSettings();
                 ConfigureSettingsLayout();
-                var assistant=new ChampionSelectAssistant(this);
-                Disposed+=(_,_)=>assistant.Dispose();
+                var assistant = new ChampionSelectAssistant(this);
+                Disposed += (_, _) => assistant.Dispose();
 
                 // 恢复复选框状态（新增）
-                chkNormal.Checked = _appConfig.EnablePreliminaryInNormal;   //匹配
-                chkRanked.Checked = _appConfig.EnablePreliminaryInRanked;   //排位
-                chkAram.Checked = _appConfig.EnablePreliminaryInAram;       //大乱斗
-                chkNexus.Checked = _appConfig.EnablePreliminaryInNexusBlitz;    //海克斯乱斗
-                chkAutoAccept.Checked = _appConfig.EnableAutoAcceptQueue;   // 自动接受对局
-                chkUrf.Checked = _appConfig.EnablePreliminaryInUrf;             // 无限乱斗（900）
-                chkPickUrf.Checked = _appConfig.EnablePreliminaryInPickUrf;     // 无限火力（1900）
-                chkClassic.Checked = _appConfig.EnablePreliminaryInClassic; // 经典模式（4310/4320）
-                chkBot.Checked = _appConfig.EnablePreliminaryInBot;
+                chkNormal.Checked = _appConfig.EnablePreliminaryInNormal; //匹配
+                chkRanked.Checked = _appConfig.EnablePreliminaryInRanked; //排位
+                chkAram.Checked = _appConfig.EnablePreliminaryInAram; //大乱斗
+                chkNexus.Checked = _appConfig.EnablePreliminaryInNexusBlitz; //海克斯乱斗
+                chkAutoAccept.Checked = _appConfig.EnableAutoAcceptQueue; // 自动接受对局
+                chkUrf.Checked = _appConfig.EnablePreliminaryInUrf; // 无限乱斗（900）
+                chkPickUrf.Checked = _appConfig.EnablePreliminaryInPickUrf; // 无限火力（1900）
 
-                chkHideSelf.Checked = _appConfig.HideSelfWhenSending;   //发送战绩时是否隐藏自己
+                chkHideSelf.Checked = _appConfig.HideSelfWhenSending; //发送战绩时是否隐藏自己
                 chkUseChampionName.Checked = _appConfig.UseChampionNameWhenSending; //发送战绩时是否使用英雄名称
-                chkSkipHonor.Checked = _appConfig.EnableSkipHonor;  //自动跳过点赞界面
-                chkSkipEndOfGameStats.Checked = _appConfig.EnableSkipEndOfGameStats;    //自动跳过结算统计界面
-                chkAutoSkinSelect.Checked = _appConfig.EnableAutoSkinSelect;    // 是否自动配置皮肤
+                chkSkipHonor.Checked = _appConfig.EnableSkipHonor; //自动跳过点赞界面
+                chkSkipEndOfGameStats.Checked = _appConfig.EnableSkipEndOfGameStats; //自动跳过结算统计界面
+
+                chkAutoSkinSelect.Checked = _appConfig.EnableAutoSkinSelect; // 是否自动配置皮肤
 
                 // 消息发送恢复快捷键显示
                 if (txtHotkeyChampSelect != null && txtHotkeyMyTeam != null && txtHotkeyFullTeam != null)
@@ -253,24 +259,27 @@ namespace League
         {
             _uiManager!.SetLcuUiState(connected: false, inGame: false);
 
-            _lcuPoller.Start(async delegate
-            {
-                if (!_uiManager!.LcuReady)
+            _lcuPoller.Start(
+                async delegate
                 {
-                    if (await Globals.lcuClient.InitializeAsync())
+                    if (!_uiManager!.LcuReady)
                     {
-                        _uiManager!.LcuReady = true;
-                        _lcuPoller.Stop();
+                        if (await Globals.lcuClient.InitializeAsync())
+                        {
+                            _uiManager!.LcuReady = true;
+                            _lcuPoller.Stop();
 
-                        // 初始化英雄资源，及查询SGP服务
-                        await InitializeAfterLcuConnected();
+                            // 初始化英雄资源，及查询SGP服务
+                            await InitializeAfterLcuConnected();
+                        }
+                        else
+                        {
+                            Debug.WriteLine("[LCU检测中] 未找到 LCU 客户端");
+                        }
                     }
-                    else
-                    {
-                        Debug.WriteLine("[LCU检测中] 未找到 LCU 客户端");
-                    }
-                }
-            }, 5000);
+                },
+                5000
+            );
         }
 
         /// <summary>
@@ -287,8 +296,7 @@ namespace League
                 try
                 {
                     var summoner = await Globals.lcuClient.GetCurrentSummoner();
-                    bool summonerOk = summoner != null
-                        && !string.IsNullOrEmpty(summoner["puuid"]?.ToString());
+                    bool summonerOk = summoner != null && !string.IsNullOrEmpty(summoner["puuid"]?.ToString());
 
                     bool sgpOk = false;
                     if (summonerOk)
@@ -463,14 +471,17 @@ namespace League
         /// </summary>
         private void InitializeMatchTabContent()
         {
-            FormUiStateManager.SafeInvoke(panelMatchList, delegate
-            {
-                panelMatchList.Controls.Clear();
-                _matchTabContent = new MatchTabContent();
-                _matchTabContent.Dock = DockStyle.Fill;
-                panelMatchList.Controls.Add(_matchTabContent);
-                AttachSearchToPlayerTabs();
-            });
+            FormUiStateManager.SafeInvoke(
+                panelMatchList,
+                delegate
+                {
+                    panelMatchList.Controls.Clear();
+                    _matchTabContent = new MatchTabContent();
+                    _matchTabContent.Dock = DockStyle.Fill;
+                    panelMatchList.Controls.Add(_matchTabContent);
+                    AttachSearchToPlayerTabs();
+                }
+            );
         }
 
         #endregion
@@ -501,7 +512,9 @@ namespace League
             var rankedStats = await GetRankedStatsAsync(puuid);
             string privacyStatus = GetPrivacyStatus(summoner);
 
-            //Debug.WriteLine($"[InitializeDefaultTab] 调用 CreateNewTab，ForceMatchRefresh={RefreshState.ForceMatchRefresh}");
+            Debug.WriteLine(
+                $"[InitializeDefaultTab] 调用 CreateNewTab，ForceMatchRefresh={RefreshState.ForceMatchRefresh}"
+            );
 
             _matchTabContent?.CreateNewTab(
                 summoner["summonerId"]?.ToString() ?? "",
@@ -516,11 +529,50 @@ namespace League
 
             Debug.WriteLine("[InitializeDefaultTab] 完成");
         }
-        
+
+        //public async Task InitializeDefaultTab()
+        //{
+        //    Debug.WriteLine($"[InitializeDefaultTab] 开始，ForceMatchRefresh={RefreshState.ForceMatchRefresh}");
+
+        //    var summoner = await Globals.lcuClient.GetCurrentSummoner();
+        //    if (summoner == null)
+        //    {
+        //        Debug.WriteLine("[InitializeDefaultTab] 获取当前召唤师失败");
+        //        return;
+        //    }
+
+        //    Globals.CurrentPuuid = summoner["puuid"]?.ToString() ?? "";
+        //    Globals.CurrentSummonerName = summoner["gameName"]?.ToString();
+
+        //    // 把自己的PUUID告诉消息构建器，用来过滤自己
+        //    _chatMessageBuilder?.SetMyPuuid(Globals.CurrentPuuid);
+
+        //    Debug.WriteLine($"[InitializeDefaultTab] 当前玩家 PUUID: {Globals.CurrentPuuid}");
+
+        //    var rankedStats = await GetRankedStatsAsync(summoner["puuid"]?.ToString() ?? "");
+        //    string privacyStatus = GetPrivacyStatus(summoner);
+
+        //    // 记录调用 CreateNewTab 前的状态
+        //    Debug.WriteLine($"[InitializeDefaultTab] 调用 CreateNewTab，ForceMatchRefresh={RefreshState.ForceMatchRefresh}");
+
+        //    _matchTabContent?.CreateNewTab(
+        //        summoner["summonerId"]?.ToString() ?? "",
+        //        summoner["gameName"]?.ToString() ?? "",
+        //        summoner["tagLine"]?.ToString() ?? "",
+        //        summoner["puuid"]?.ToString() ?? "",
+        //        summoner["profileIconId"]?.ToString() ?? "",
+        //        summoner["summonerLevel"]?.ToString() ?? "",
+        //        privacyStatus,
+        //        rankedStats
+        //    );
+
+        //    Debug.WriteLine("[InitializeDefaultTab] 完成");
+        //}
 
         private async Task SubmitPlayerSearchAsync()
         {
-            if (_searchInProgress) return;
+            if (_searchInProgress)
+                return;
             _searchInProgress = true;
             txtGameName.Enabled = false;
             _uiManager!.ShowLoadingIndicator();
@@ -566,15 +618,22 @@ namespace League
             RefreshState.ForceMatchRefresh = true;
             string historyName = summoner["gameName"]?.ToString() ?? "";
             string historyTag = summoner["tagLine"]?.ToString() ?? "";
-            _searchHistory.Add(!string.IsNullOrWhiteSpace(historyName) && !string.IsNullOrWhiteSpace(historyTag)
-                ? $"{historyName}#{historyTag}" : playerName);
+            _searchHistory.Add(
+                !string.IsNullOrWhiteSpace(historyName) && !string.IsNullOrWhiteSpace(historyTag)
+                    ? $"{historyName}#{historyTag}"
+                    : playerName
+            );
             RefreshSearchHistory();
             var rankedStats = await GetRankedStatsAsync(summoner["puuid"]?.ToString() ?? "");
             string privacyStatus = GetPrivacyStatus(summoner);
 
             // 检查是否是当前玩家
             string summonerPuuid = summoner["puuid"]?.ToString() ?? "";
-            bool isCurrentPlayer = string.Equals(summonerPuuid, Globals.CurrentPuuid, StringComparison.OrdinalIgnoreCase);
+            bool isCurrentPlayer = string.Equals(
+                summonerPuuid,
+                Globals.CurrentPuuid,
+                StringComparison.OrdinalIgnoreCase
+            );
 
             // 如果是当前玩家，提示用户
             if (isCurrentPlayer)
@@ -602,7 +661,13 @@ namespace League
         /// <summary>
         /// 查询数据（保留原有方法）
         /// </summary>
-        public async Task<JArray?> LoadFullMatchDataAsync(string puuid, int begIndex, int pageSize, string? queueId = null, bool? forceRefresh = null)
+        public async Task<JArray?> LoadFullMatchDataAsync(
+            string puuid,
+            int begIndex,
+            int pageSize,
+            string? queueId = null,
+            bool? forceRefresh = null
+        )
         {
             bool refreshFlag = forceRefresh ?? RefreshState.ForceMatchRefresh;
 
@@ -635,9 +700,16 @@ namespace League
         /// <summary>
         /// 数据解析（保留原有方法）
         /// </summary>
-        public async Task<Panel?> ParseGameToPanelAsync(JObject? gameObj, string summonerId, string gameName, string tagLine, int index)
+        public async Task<Panel?> ParseGameToPanelAsync(
+            JObject? gameObj,
+            string summonerId,
+            string gameName,
+            string tagLine,
+            int index
+        )
         {
-            if (gameObj == null) return null;
+            if (gameObj == null)
+                return null;
 
             MatchParserSgp _parser = new MatchParserSgp();
             _parser.PlayerIconClicked += Panel_PlayerIconClicked;
@@ -645,7 +717,7 @@ namespace League
 
             if (panel is MatchListPanel matchPanel)
             {
-                matchPanel.ReplayClicked += async delegate (MatchInfo matchInfo)
+                matchPanel.ReplayClicked += async delegate(MatchInfo matchInfo)
                 {
                     await _matchDetailManager!.HandleReplayClick(matchInfo, matchPanel);
                 };
@@ -708,7 +780,11 @@ namespace League
             {
                 // Use the same persistent settings as the settings page, regardless of launch directory.
                 var config = await Task.Run(LeagueConfigManager.Load);
-                if (config?.Preliminary == null || config.Preliminary.Heroes == null || config.Preliminary.Heroes.Count == 0)
+                if (
+                    config?.Preliminary == null
+                    || config.Preliminary.Heroes == null
+                    || config.Preliminary.Heroes.Count == 0
+                )
                 {
                     //Debug.WriteLine("[自动预选] 配置中 Preliminary 或 Heroes 为空");
                     _preSelectedHeroes = new List<PreliminaryHero>();
@@ -722,9 +798,7 @@ namespace League
                     return _preSelectedHeroes;
                 }
 
-                _preSelectedHeroes = config.Preliminary.Heroes
-                    .OrderBy(h => h.Priority)
-                    .ToList();
+                _preSelectedHeroes = config.Preliminary.Heroes.OrderBy(h => h.Priority).ToList();
 
                 //Debug.WriteLine($"[自动预选] 成功加载预选列表，共 {_preSelectedHeroes.Count} 个英雄");
                 return _preSelectedHeroes;
@@ -826,17 +900,22 @@ namespace League
         {
             if (!_uiManager!.LcuReady)
             {
-                MessageBox.Show("请先登录英雄联盟客户端并等待连接成功！", "客户端未连接", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(
+                    "请先登录英雄联盟客户端并等待连接成功！",
+                    "客户端未连接",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
                 return;
             }
 
-            using (Preliminary pre = new Preliminary(_appConfig!))  // 传入主配置实例
+            using (Preliminary pre = new Preliminary(_appConfig!)) // 传入主配置实例
             {
-                pre.Owner = this;  // 重要！这样 Preliminary_FormClosing 里能找到 mainForm
+                pre.Owner = this; // 重要！这样 Preliminary_FormClosing 里能找到 mainForm
                 pre.ShowDialog();
             }
 
-            _preSelectedHeroes = null;  // 清除缓存，下次自动预选会重新读取最新
+            _preSelectedHeroes = null; // 清除缓存，下次自动预选会重新读取最新
             Debug.WriteLine("[自动预选] 预选配置已修改，缓存已清除");
         }
 
@@ -849,8 +928,12 @@ namespace League
         {
             if (!_uiManager!.LcuReady)
             {
-                MessageBox.Show("请先登录英雄联盟客户端并等待连接成功！", "客户端未连接",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(
+                    "请先登录英雄联盟客户端并等待连接成功！",
+                    "客户端未连接",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
                 return;
             }
 
@@ -861,16 +944,15 @@ namespace League
 
         private void ModeCheckBox_CheckedChanged(object sender, EventArgs e)
         {
-            if (_appConfig == null) return;
+            if (_appConfig == null)
+                return;
 
-            _appConfig.EnablePreliminaryInNormal = chkNormal.Checked;     // 匹配
-            _appConfig.EnablePreliminaryInRanked = chkRanked.Checked;     // 排位，单双/灵活
-            _appConfig.EnablePreliminaryInAram = chkAram.Checked;         // 大乱斗
-            _appConfig.EnablePreliminaryInNexusBlitz = chkNexus.Checked;  // 海克斯乱斗
-            _appConfig.EnablePreliminaryInUrf = chkUrf.Checked;           // 无限乱斗
-            _appConfig.EnablePreliminaryInPickUrf = chkPickUrf.Checked;   // 无限火力
-            _appConfig.EnablePreliminaryInClassic = chkClassic.Checked;   // 经典模式
-            _appConfig.EnablePreliminaryInBot = chkBot.Checked;           // 峡谷人机
+            _appConfig.EnablePreliminaryInNormal = chkNormal.Checked; // 匹配
+            _appConfig.EnablePreliminaryInRanked = chkRanked.Checked; // 排位，单双/灵活
+            _appConfig.EnablePreliminaryInAram = chkAram.Checked; // 大乱斗
+            _appConfig.EnablePreliminaryInNexusBlitz = chkNexus.Checked; // 海克斯乱斗
+            _appConfig.EnablePreliminaryInUrf = chkUrf.Checked; // 无限乱斗
+            _appConfig.EnablePreliminaryInPickUrf = chkPickUrf.Checked; // 无限火力
 
             SaveAppConfig(); // 立即保存到 LeagueConfig.json
 
@@ -902,13 +984,15 @@ namespace League
         /// </summary>
         private void SaveAutoAcceptConfig()
         {
-            if (_appConfig == null) return;
+            if (_appConfig == null)
+                return;
 
             _appConfig.EnableAutoAcceptQueue = chkAutoAccept.Checked;
 
-
             SaveAppConfig();
-            Debug.WriteLine($"[自动接受] 开关={_appConfig.EnableAutoAcceptQueue}, 延迟={_appConfig.AutoAcceptDelaySeconds}秒");
+            Debug.WriteLine(
+                $"[自动接受] 开关={_appConfig.EnableAutoAcceptQueue}, 延迟={_appConfig.AutoAcceptDelaySeconds}秒"
+            );
         }
 
         /// <summary>
@@ -918,7 +1002,8 @@ namespace League
         /// <param name="e"></param>
         private void SendMode_CheckedChanged(object sender, EventArgs e)
         {
-            if (rbModeCustom == null || txtCustomContent == null || _appConfig == null) return;
+            if (rbModeCustom == null || txtCustomContent == null || _appConfig == null)
+                return;
 
             // 联动控制文本框的显示与隐藏
             txtCustomContent.Visible = rbModeCustom.Checked;
@@ -940,7 +1025,8 @@ namespace League
         /// <param name="e"></param>
         private void TxtCustomContent_Leave(object sender, EventArgs e)
         {
-            if (txtCustomContent == null || _appConfig == null) return;
+            if (txtCustomContent == null || _appConfig == null)
+                return;
 
             // 将当前文本框的内容同步到配置中
             _appConfig.CustomSendContent = txtCustomContent.Text;
@@ -956,7 +1042,8 @@ namespace League
         /// <param name="e"></param>
         private void HideSelf_CheckedChanged(object sender, EventArgs e)
         {
-            if (_appConfig == null) return;
+            if (_appConfig == null)
+                return;
             _appConfig.HideSelfWhenSending = chkHideSelf.Checked;
             SaveAppConfig();
             Debug.WriteLine($"[发送配置] 隐藏自己 已更新: {_appConfig.HideSelfWhenSending}");
@@ -969,7 +1056,8 @@ namespace League
         /// <param name="e"></param>
         private void UseChampionName_CheckedChanged(object sender, EventArgs e)
         {
-            if (_appConfig == null) return;
+            if (_appConfig == null)
+                return;
             _appConfig.UseChampionNameWhenSending = chkUseChampionName.Checked;
             SaveAppConfig();
             Debug.WriteLine($"[发送配置] 使用英雄名称 已更新: {_appConfig.UseChampionNameWhenSending}");
@@ -982,7 +1070,8 @@ namespace League
         /// <param name="e"></param>
         private void ChkSkipHonor_CheckedChanged(object? sender, EventArgs e)
         {
-            if (_appConfig == null) return;
+            if (_appConfig == null)
+                return;
             _appConfig.EnableSkipHonor = chkSkipHonor.Checked;
             SaveAppConfig();
             Debug.WriteLine($"[游戏结束配置] 跳过点赞界面 已更新: {_appConfig.EnableSkipHonor}");
@@ -995,7 +1084,8 @@ namespace League
         /// <param name="e"></param>
         private void ChkSkipEndOfGameStats_CheckedChanged(object? sender, EventArgs e)
         {
-            if (_appConfig == null) return;
+            if (_appConfig == null)
+                return;
             _appConfig.EnableSkipEndOfGameStats = chkSkipEndOfGameStats.Checked;
             SaveAppConfig();
             Debug.WriteLine($"[游戏结束配置] 跳过结算界面 已更新: {_appConfig.EnableSkipEndOfGameStats}");
@@ -1008,7 +1098,8 @@ namespace League
         /// <param name="e"></param>
         private void chkAutoSkinSelect_CheckedChanged(object? sender, EventArgs e)
         {
-            if (_appConfig == null) return;
+            if (_appConfig == null)
+                return;
             _appConfig.EnableAutoSkinSelect = chkAutoSkinSelect.Checked;
             SaveAppConfig();
             Debug.WriteLine($"[英雄皮肤自动配置] 自动配置皮肤 已更新: {_appConfig.EnableAutoSkinSelect}");
@@ -1063,41 +1154,38 @@ namespace League
 
             try
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = url,
-                    UseShellExecute = true
-                });
+                System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo { FileName = url, UseShellExecute = true }
+                );
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"无法打开链接：{ex.Message}", "错误",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"无法打开链接：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         // 添加第二个 LinkLabel 控件（假设命名为 lk_QQGroup）
         private void lk_QQGroup_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            string groupNumber = lk_QQGroup.Text;   // 例如：123456789
+            string groupNumber = lk_QQGroup.Text; // 例如：123456789
 
-            string url = $"http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=D6PkzL9J67rjSKOFjH7FuLBNFlsE_GVe&authKey=tms7jm6kh844bBlq0fx4y3lUbHhwssJ75XbuvJK%2BBALqEKiua0%2FMG%2BXCyQSLDMvU&noverify=0&group_code={groupNumber}";
+            string url =
+                $"http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=D6PkzL9J67rjSKOFjH7FuLBNFlsE_GVe&authKey=tms7jm6kh844bBlq0fx4y3lUbHhwssJ75XbuvJK%2BBALqEKiua0%2FMG%2BXCyQSLDMvU&noverify=0&group_code={groupNumber}";
 
             try
             {
                 ProcessStartInfo psi = new ProcessStartInfo
                 {
                     FileName = url,
-                    UseShellExecute = true,        // ← 关键！必须设为 true
-                    Verb = "open"
+                    UseShellExecute = true, // ← 关键！必须设为 true
+                    Verb = "open",
                 };
 
                 Process.Start(psi);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("打开QQ群失败：\n" + ex.Message +
-                               "\n\n请确认已安装QQ客户端并登录！");
+                MessageBox.Show("打开QQ群失败：\n" + ex.Message + "\n\n请确认已安装QQ客户端并登录！");
             }
         }
 
@@ -1118,15 +1206,18 @@ namespace League
             {
                 var (ok, msg) = await _clientUtility.RestartUxAsync();
                 // 游戏内会直接返回说明文字；其它情况可按需弹窗
-                MessageBox.Show(msg, "重启界面", MessageBoxButtons.OK,
-                    ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+                MessageBox.Show(
+                    msg,
+                    "重启界面",
+                    MessageBoxButtons.OK,
+                    ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning
+                );
             }
             finally
             {
                 btnRestartUx.Enabled = true;
             }
         }
-
 
         /// <summary>
         /// 强制结束所有相关客户端进程（解决残留进程问题）
@@ -1136,20 +1227,27 @@ namespace League
             if (_clientUtility == null)
                 _clientUtility = new ClientUtilityService();
 
-            if (MessageBox.Show(
-                    "确定强制关闭所有客户端相关进程吗？\n" +
-                    "会结束 LeagueClient / LeagueClientUx 等（不依赖是否已登录 LCU）。",
+            if (
+                MessageBox.Show(
+                    "确定强制关闭所有客户端相关进程吗？\n"
+                        + "会结束 LeagueClient / LeagueClientUx 等（不依赖是否已登录 LCU）。",
                     "确认关闭客户端",
                     MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question) != DialogResult.Yes)
+                    MessageBoxIcon.Question
+                ) != DialogResult.Yes
+            )
                 return;
 
             btnCloseClients.Enabled = false;
             try
             {
                 var (anyKilled, msg) = _clientUtility.CloseAllClients();
-                MessageBox.Show(msg, "关闭客户端", MessageBoxButtons.OK,
-                    anyKilled ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+                MessageBox.Show(
+                    msg,
+                    "关闭客户端",
+                    MessageBoxButtons.OK,
+                    anyKilled ? MessageBoxIcon.Information : MessageBoxIcon.Warning
+                );
             }
             finally
             {

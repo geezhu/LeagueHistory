@@ -10,38 +10,49 @@
 
         public Image? GetOrLoad(string key, Func<Image?> loader)
         {
-            if (_disposed) return null;
-            if (_map.TryGetValue(key, out var existing)) return existing;
+            if (_disposed)
+                return null;
+            if (_map.TryGetValue(key, out var existing))
+                return existing;
             var img = loader();
-            if (img == null) return null;
+            if (img == null)
+                return null;
             _map[key] = img;
             return img;
         }
 
-        public Image? Get(string key)
-            => _map.TryGetValue(key, out var img) ? img : null;
+        public Image? Get(string key) => _map.TryGetValue(key, out var img) ? img : null;
 
         public void Dispose()
         {
-            if (_disposed) return;
+            if (_disposed)
+                return;
             _disposed = true;
             foreach (var img in _map.Values)
             {
-                try { img.Dispose(); } catch { }
+                try
+                {
+                    img.Dispose();
+                }
+                catch { }
             }
             _map.Clear();
         }
 
         public static Image? LoadScaledFromFile(string path, int maxW, int maxH)
         {
-            if (!File.Exists(path)) return null;
+            if (!File.Exists(path))
+                return null;
             try
             {
                 using var fs = File.OpenRead(path);
                 using var src = Image.FromStream(fs);
                 return Scale(src, maxW, maxH);
             }
-            catch { return null; }
+            catch
+            {
+                return null;
+            }
         }
 
         public static Image Scale(Image src, int maxW, int maxH)

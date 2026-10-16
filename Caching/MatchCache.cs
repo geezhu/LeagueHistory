@@ -5,7 +5,8 @@ namespace League.Caching
 {
     public static class MatchCache
     {
-        private static readonly Dictionary<string, Dictionary<string, Dictionary<string, string>>> _cache = new Dictionary<string, Dictionary<string, Dictionary<string, string>>>();
+        private static readonly Dictionary<string, Dictionary<string, Dictionary<string, string>>> _cache =
+            new Dictionary<string, Dictionary<string, Dictionary<string, string>>>();
 
         private static string MakePageKey(string tag, int begIndex, int pageSize)
         {
@@ -39,7 +40,11 @@ namespace League.Caching
         public static JArray Get(string puuid, string tag, int begIndex, int pageSize)
         {
             string pageKey = MakePageKey(tag, begIndex, pageSize);
-            if (_cache.TryGetValue(puuid, out Dictionary<string, Dictionary<string, string>> modeCache) && modeCache.TryGetValue(tag ?? "all", out var pageCache) && pageCache.TryGetValue(pageKey, out var json))
+            if (
+                _cache.TryGetValue(puuid, out Dictionary<string, Dictionary<string, string>> modeCache)
+                && modeCache.TryGetValue(tag ?? "all", out var pageCache)
+                && pageCache.TryGetValue(pageKey, out var json)
+            )
             {
                 return JArray.Parse(json);
             }

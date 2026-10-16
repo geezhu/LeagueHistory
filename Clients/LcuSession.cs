@@ -1,8 +1,6 @@
-﻿using League.Models;
+﻿using System.Diagnostics;
 using League.PrimaryElection;
 using Newtonsoft.Json.Linq;
-using System.Diagnostics;
-using static League.FormMain;
 
 namespace League.Clients
 {
@@ -122,7 +120,10 @@ namespace League.Clients
         /// <summary>
         /// 根据summonerId查询玩家的名称等信息
         /// </summary>
-        public async Task<JObject> GetGameNameBySummonerId(string summonerId, CancellationToken cancellationToken = default)
+        public async Task<JObject> GetGameNameBySummonerId(
+            string summonerId,
+            CancellationToken cancellationToken = default
+        )
         {
             return await _summonerService.GetSummonerByIdAsync(summonerId, cancellationToken);
         }
@@ -138,7 +139,10 @@ namespace League.Clients
         /// <summary>
         /// 获取当前排位统计数据
         /// </summary>
-        public async Task<JObject> GetCurrentRankedStatsAsync(string puuid, CancellationToken cancellationToken = default)
+        public async Task<JObject> GetCurrentRankedStatsAsync(
+            string puuid,
+            CancellationToken cancellationToken = default
+        )
         {
             return await _rankedService.GetCurrentRankedStatsAsync(puuid, cancellationToken);
         }
@@ -258,7 +262,7 @@ namespace League.Clients
         /// <summary>
         /// 选人阶段按偏好切换皮肤
         /// </summary>
-        public Task<bool> TryApplyPreferredSkinAsync(int championId,int skinId,int? lastAppliedSkinId = null)
+        public Task<bool> TryApplyPreferredSkinAsync(int championId, int skinId, int? lastAppliedSkinId = null)
         {
             return _championSelectService.TryApplyPreferredSkinAsync(championId, skinId, lastAppliedSkinId);
         }
@@ -274,7 +278,12 @@ namespace League.Clients
         /// <summary>
         /// 查询历史战绩，带分页
         /// </summary>
-        public async Task<JArray> FetchMatchesWithRetry(string puuid, int begIndex, int endIndex, bool isPreheat = false)
+        public async Task<JArray> FetchMatchesWithRetry(
+            string puuid,
+            int begIndex,
+            int endIndex,
+            bool isPreheat = false
+        )
         {
             return await _matchService.FetchMatchesWithRetryAsync(puuid, begIndex, endIndex, isPreheat);
         }

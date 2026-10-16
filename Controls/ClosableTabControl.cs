@@ -1,5 +1,5 @@
-﻿using League.Controls;
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
+using League.Controls;
 using static League.FormMain;
 
 namespace League.Controls
@@ -13,9 +13,13 @@ namespace League.Controls
         private const int CloseButtonMargin = 5;
 
         private Dictionary<int, Rectangle> _closeButtonBounds = new Dictionary<int, Rectangle>();
+
         public ClosableTabControl()
         {
-            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            SetStyle(
+                ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer,
+                true
+            );
             DrawMode = TabDrawMode.OwnerDrawFixed;
             SizeMode = TabSizeMode.Normal;
             Appearance = TabAppearance.Normal;
@@ -39,10 +43,17 @@ namespace League.Controls
                     var page = TabPages[i];
                     string? pagePuuid = page.Tag as string;
 
-                    if (pagePuuid != null &&
-                        string.Equals(pagePuuid, Globals.CurrentPuuid, StringComparison.OrdinalIgnoreCase))
+                    if (
+                        pagePuuid != null
+                        && string.Equals(pagePuuid, Globals.CurrentPuuid, StringComparison.OrdinalIgnoreCase)
+                    )
                     {
-                        MessageBox.Show("此选项卡为自己数据，不能关闭", "提示", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
+                        MessageBox.Show(
+                            "此选项卡为自己数据，不能关闭",
+                            "提示",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Asterisk
+                        );
                     }
                     else
                     {
@@ -117,18 +128,47 @@ namespace League.Controls
 
                 // 绘制文字
                 string tabText = TabPages[i].Text;
-                Rectangle textRect = new Rectangle(tabRect.X + 5, tabRect.Y + 4, tabRect.Width - CloseButtonSize - 10, tabRect.Height - 8);
-                TextRenderer.DrawText(e.Graphics, tabText, Font, textRect, Color.Black, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+                Rectangle textRect = new Rectangle(
+                    tabRect.X + 5,
+                    tabRect.Y + 4,
+                    tabRect.Width - CloseButtonSize - 10,
+                    tabRect.Height - 8
+                );
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    tabText,
+                    Font,
+                    textRect,
+                    Color.Black,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter
+                );
 
                 // 绘制关闭按钮
-                Rectangle closeRect = new Rectangle(tabRect.Right - CloseButtonSize - 4, tabRect.Top + (tabRect.Height - CloseButtonSize) / 2, CloseButtonSize, CloseButtonSize);
+                Rectangle closeRect = new Rectangle(
+                    tabRect.Right - CloseButtonSize - 4,
+                    tabRect.Top + (tabRect.Height - CloseButtonSize) / 2,
+                    CloseButtonSize,
+                    CloseButtonSize
+                );
                 _closeButtonBounds[i] = closeRect;
 
                 using (Pen pen = new Pen(Color.DarkGray, 2))
                 {
                     e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                    e.Graphics.DrawLine(pen, closeRect.Left + 3, closeRect.Top + 3, closeRect.Right - 3, closeRect.Bottom - 3);
-                    e.Graphics.DrawLine(pen, closeRect.Right - 3, closeRect.Top + 3, closeRect.Left + 3, closeRect.Bottom - 3);
+                    e.Graphics.DrawLine(
+                        pen,
+                        closeRect.Left + 3,
+                        closeRect.Top + 3,
+                        closeRect.Right - 3,
+                        closeRect.Bottom - 3
+                    );
+                    e.Graphics.DrawLine(
+                        pen,
+                        closeRect.Right - 3,
+                        closeRect.Top + 3,
+                        closeRect.Left + 3,
+                        closeRect.Bottom - 3
+                    );
                 }
             }
 
@@ -140,15 +180,23 @@ namespace League.Controls
                 Rectangle pageBounds = TabPages[SelectedIndex].Bounds;
                 using (Pen borderPen = new Pen(Color.Gray))
                 {
-                    e.Graphics.DrawRectangle(borderPen,
+                    e.Graphics.DrawRectangle(
+                        borderPen,
                         pageBounds.X - 2,
                         pageBounds.Y - 2,
                         pageBounds.Width + 3,
-                        pageBounds.Height + 3);
+                        pageBounds.Height + 3
+                    );
                 }
                 using (Pen borderPen = new Pen(Color.Gray))
                 {
-                    e.Graphics.DrawRectangle(borderPen, pageBounds.X - 2, pageBounds.Y - 2, pageBounds.Width + 3, pageBounds.Height + 3);
+                    e.Graphics.DrawRectangle(
+                        borderPen,
+                        pageBounds.X - 2,
+                        pageBounds.Y - 2,
+                        pageBounds.Width + 3,
+                        pageBounds.Height + 3
+                    );
                 }
             }
         }
@@ -167,13 +215,26 @@ namespace League.Controls
                 Font,
                 tabRect,
                 tabPage.ForeColor,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter
+            );
 
             // 绘制关闭按钮
             Rectangle closeRect = GetCloseButtonRect(tabRect);
             e.Graphics.DrawRectangle(Pens.DarkGray, closeRect);
-            e.Graphics.DrawLine(Pens.Black, closeRect.Left + 3, closeRect.Top + 3, closeRect.Right - 3, closeRect.Bottom - 3);
-            e.Graphics.DrawLine(Pens.Black, closeRect.Right - 3, closeRect.Top + 3, closeRect.Left + 3, closeRect.Bottom - 3);
+            e.Graphics.DrawLine(
+                Pens.Black,
+                closeRect.Left + 3,
+                closeRect.Top + 3,
+                closeRect.Right - 3,
+                closeRect.Bottom - 3
+            );
+            e.Graphics.DrawLine(
+                Pens.Black,
+                closeRect.Right - 3,
+                closeRect.Top + 3,
+                closeRect.Left + 3,
+                closeRect.Bottom - 3
+            );
         }
 
         private Rectangle GetCloseButtonRect(Rectangle tabRect)
@@ -182,7 +243,8 @@ namespace League.Controls
                 tabRect.Right - CloseButtonSize - CloseButtonMargin,
                 tabRect.Top + (tabRect.Height - CloseButtonSize) / 2,
                 CloseButtonSize,
-                CloseButtonSize);
+                CloseButtonSize
+            );
         }
     }
 }

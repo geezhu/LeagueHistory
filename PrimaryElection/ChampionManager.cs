@@ -1,6 +1,6 @@
-﻿using League.Infrastructure;
+﻿using System.Diagnostics;
+using League.Infrastructure;
 using Newtonsoft.Json;
-using System.Diagnostics;
 
 namespace League.PrimaryElection
 {
@@ -15,7 +15,11 @@ namespace League.PrimaryElection
         private bool _isInitialized = false;
 
         private readonly string _cacheFilePath = "primary_champion_cache.json";
-        private readonly string _versionFilePath = Path.Combine(AppContext.BaseDirectory, "Assets", "ddragon_version.txt");
+        private readonly string _versionFilePath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Assets",
+            "ddragon_version.txt"
+        );
 
         public event EventHandler ChampionsLoaded;
         public event EventHandler<string> LoadError;
@@ -145,12 +149,13 @@ namespace League.PrimaryElection
                 using var handler = new HttpClientHandler();
                 using var httpClient = new HttpClient(handler)
                 {
-                    Timeout = TimeSpan.FromSeconds(60)  // 60秒超时，足够宽松
+                    Timeout = TimeSpan.FromSeconds(60), // 60秒超时，足够宽松
                 };
 
                 // 添加常见 User-Agent，避免被某些 CDN 限流（可选但推荐）
                 httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                );
 
                 const string ddragonUrl = "https://ddragon.leagueoflegends.com/cdn/15.24.1/data/zh_CN/champion.json";
 
@@ -174,7 +179,7 @@ namespace League.PrimaryElection
                         Alias = champData.Id,
                         Description = champData.Blurb ?? string.Empty,
                         Tags = champData.Tags ?? new List<string>(),
-                        IsActive = true
+                        IsActive = true,
                     };
                     _allChampions.Add(champion);
                 }
@@ -212,7 +217,9 @@ namespace League.PrimaryElection
                 // 版本不匹配则视为缓存无效
                 if (!string.Equals(cachedData.DataVersion, localVersion, StringComparison.OrdinalIgnoreCase))
                 {
-                    Debug.WriteLine($"[ChampionManager] 缓存版本 {cachedData.DataVersion} 与本地 {localVersion} 不匹配，需刷新");
+                    Debug.WriteLine(
+                        $"[ChampionManager] 缓存版本 {cachedData.DataVersion} 与本地 {localVersion} 不匹配，需刷新"
+                    );
                     return false;
                 }
 
@@ -239,7 +246,7 @@ namespace League.PrimaryElection
                 {
                     DataVersion = currentVersion,
                     CacheTime = DateTime.Now,
-                    Champions = _allChampions
+                    Champions = _allChampions,
                 };
 
                 var json = JsonConvert.SerializeObject(cacheData, Formatting.Indented);
@@ -309,11 +316,11 @@ namespace League.PrimaryElection
     /// </summary>
     public class DDragonChampionData
     {
-        public string Key { get; set; }     // 英雄ID（如 "72"）
-        public string Id { get; set; }      // 英文名（如 "Skarner"）
-        public string Name { get; set; }    // 中文名（如 "上古领主"）
-        public string Title { get; set; }   // 称号（如 "斯卡纳"）
-        public string Blurb { get; set; }   // 简述
+        public string Key { get; set; } // 英雄ID（如 "72"）
+        public string Id { get; set; } // 英文名（如 "Skarner"）
+        public string Name { get; set; } // 中文名（如 "上古领主"）
+        public string Title { get; set; } // 称号（如 "斯卡纳"）
+        public string Blurb { get; set; } // 简述
         public List<string> Tags { get; set; }
     }
 }

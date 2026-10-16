@@ -1,12 +1,13 @@
-﻿using League.Models;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
+using League.Models;
 
 namespace League.Parsers
 {
     public class PlayerMatchCacheManager
     {
-        private readonly ConcurrentDictionary<(long SummonerId, string Filter), PlayerMatchInfo> _playerMatchCache = new();
+        private readonly ConcurrentDictionary<(long SummonerId, string Filter), PlayerMatchInfo> _playerMatchCache =
+            new();
 
         public bool TryGetPlayerMatch(long summonerId, string filter, out PlayerMatchInfo info)
         {

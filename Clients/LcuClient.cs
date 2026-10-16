@@ -58,17 +58,14 @@ namespace League.Clients
                 AllowAutoRedirect = false,
                 SslOptions = new SslClientAuthenticationOptions
                 {
-                    RemoteCertificateValidationCallback = (sender, cert, chain, errors) => true
-                }
+                    RemoteCertificateValidationCallback = (sender, cert, chain, errors) => true,
+                },
             };
 
             _httpClient = new HttpClient(handler)
             {
                 DefaultRequestVersion = HttpVersion.Version11,
                 DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact,
-                // 请求总超时：避免心跳/探测无限挂起（默认 100 秒太长）
-                // LcuManager 里还会用 Task.WhenAny 做更短的 4 秒探测超时
-                Timeout = TimeSpan.FromSeconds(8)
             };
 
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
@@ -93,10 +90,7 @@ namespace League.Clients
         /// </summary>
         public async Task<HttpResponseMessage> PatchAsync(string requestUri, HttpContent content)
         {
-            var request = new HttpRequestMessage(new HttpMethod("PATCH"), requestUri)
-            {
-                Content = content
-            };
+            var request = new HttpRequestMessage(new HttpMethod("PATCH"), requestUri) { Content = content };
             return await SendAsync(request);
         }
 
@@ -111,7 +105,10 @@ namespace League.Clients
         /// <summary>
         /// 发送GET请求
         /// </summary>
-        public async Task<HttpResponseMessage> GetAsync(string requestUri, CancellationToken cancellationToken = default)
+        public async Task<HttpResponseMessage> GetAsync(
+            string requestUri,
+            CancellationToken cancellationToken = default
+        )
         {
             return await _httpClient.GetAsync(requestUri, cancellationToken);
         }

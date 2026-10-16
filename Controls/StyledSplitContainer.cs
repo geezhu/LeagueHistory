@@ -11,13 +11,22 @@ namespace League.Controls
         public Color SplitterColor
         {
             get { return _splitterColor; }
-            set { _splitterColor = value; Invalidate(); }
+            set
+            {
+                _splitterColor = value;
+                Invalidate();
+            }
         }
 
         public StyledSplitContainer()
         {
-            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint |
-                          ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true);
+            SetStyle(
+                ControlStyles.OptimizedDoubleBuffer
+                    | ControlStyles.AllPaintingInWmPaint
+                    | ControlStyles.ResizeRedraw
+                    | ControlStyles.UserPaint,
+                true
+            );
         }
 
         protected override void OnPaint(PaintEventArgs e)

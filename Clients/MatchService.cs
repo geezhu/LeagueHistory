@@ -1,5 +1,5 @@
-﻿using Newtonsoft.Json.Linq;
-using System.Diagnostics;
+﻿using System.Diagnostics;
+using Newtonsoft.Json.Linq;
 
 namespace League.Clients
 {
@@ -21,7 +21,12 @@ namespace League.Clients
         /// <summary>
         /// 分页查询历史战绩
         /// </summary>
-        public async Task<JArray> FetchMatchesWithRetryAsync(string puuid, int begIndex, int endIndex, bool isPreheat = false)
+        public async Task<JArray> FetchMatchesWithRetryAsync(
+            string puuid,
+            int begIndex,
+            int endIndex,
+            bool isPreheat = false
+        )
         {
             int maxRetries = isPreheat ? 1 : 3;
             int attempt = 0;
@@ -38,7 +43,8 @@ namespace League.Clients
                     var timeoutSeconds = attempt == 1 ? 2 : 4;
                     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
 
-                    var path = $"/lol-match-history/v1/products/lol/{puuid}/matches?begIndex={begIndex}&endIndex={endIndex}";
+                    var path =
+                        $"/lol-match-history/v1/products/lol/{puuid}/matches?begIndex={begIndex}&endIndex={endIndex}";
                     Debug.WriteLine($"[正常请求] {path}");
 
                     var watch = Stopwatch.StartNew();
@@ -64,7 +70,8 @@ namespace League.Clients
                 catch (TaskCanceledException)
                 {
                     Debug.WriteLine($"第{attempt}次请求超时");
-                    if (isPreheat) break;
+                    if (isPreheat)
+                        break;
                 }
                 catch (Exception ex)
                 {
@@ -93,7 +100,10 @@ namespace League.Clients
                 try
                 {
                     using var cts = new CancellationTokenSource(timeout);
-                    var response = await _client.GetAsync($"/lol-match-history/v1/products/lol/{puuid}/matches", cts.Token);
+                    var response = await _client.GetAsync(
+                        $"/lol-match-history/v1/products/lol/{puuid}/matches",
+                        cts.Token
+                    );
 
                     response.EnsureSuccessStatusCode();
 
@@ -167,7 +177,8 @@ namespace League.Clients
         /// </summary>
         public double GetAverageResponseTime()
         {
-            if (_responseTimeHistory.Count == 0) return 0;
+            if (_responseTimeHistory.Count == 0)
+                return 0;
             return _responseTimeHistory.Average();
         }
     }

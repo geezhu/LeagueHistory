@@ -1,7 +1,7 @@
-﻿using League.Clients;
+﻿using System.Diagnostics;
+using League.Clients;
 using League.Models;
 using League.PrimaryElection;
-using System.Diagnostics;
 
 namespace League.Infrastructure
 {
@@ -70,22 +70,36 @@ namespace League.Infrastructure
 
         // 兼容原有调用方式
         public Champion? GetChampionById(int champId) => Champions.GetById(champId);
-        public Task<(Image? image, string name, string description)> GetChampionInfoAsync(int champId) => Champions.GetInfoAsync(champId);
+
+        public Task<(Image? image, string name, string description)> GetChampionInfoAsync(int champId) =>
+            Champions.GetInfoAsync(champId);
+
         public Task<Image?> GetChampionIconAsync(int champId) => Champions.GetIconAsync(champId);
 
         public Item? GetItemById(int itemId) => Items.GetById(itemId);
-        public Task<(Image? image, string name, string description)> GetItemInfoAsync(int itemId) => Items.GetInfoAsync(itemId);
+
+        public Task<(Image? image, string name, string description)> GetItemInfoAsync(int itemId) =>
+            Items.GetInfoAsync(itemId);
+
         public Task<Image?> GetItemIconAsync(string iconPath) => Items.GetIconAsync(iconPath);
 
         public SummonerSpell? GetSpellById(int spellId) => SummonerSpells.GetById(spellId);
-        public Task<(Image? image, string name, string description)> GetSpellInfoAsync(int spellId) => SummonerSpells.GetInfoAsync(spellId);
+
+        public Task<(Image? image, string name, string description)> GetSpellInfoAsync(int spellId) =>
+            SummonerSpells.GetInfoAsync(spellId);
+
         public Task<Image?> GetSummonerSpellIconAsync(string iconPath) => SummonerSpells.GetIconAsync(iconPath);
 
         public RuneInfo? GetRuneById(int runeId) => Runes.GetById(runeId);
-        public Task<(Image? image, string name, string description)> GetRuneInfoAsync(int runeId) => Runes.GetInfoAsync(runeId);
+
+        public Task<(Image? image, string name, string description)> GetRuneInfoAsync(int runeId) =>
+            Runes.GetInfoAsync(runeId);
+
         public Task<Image?> GetRuneIconAsync(string iconPath) => Runes.GetIconAsync(iconPath);
 
         public AugmentInfo? GetAugmentById(int id) => Augments.GetById(id);
-        public Task<(Image? image, string name, string description)> GetAugmentInfoAsync(int id) => Augments.GetInfoAsync(id);
+
+        public Task<(Image? image, string name, string description)> GetAugmentInfoAsync(int id) =>
+            Augments.GetInfoAsync(id);
     }
 }

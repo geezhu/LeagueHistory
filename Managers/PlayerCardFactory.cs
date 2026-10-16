@@ -26,15 +26,15 @@ namespace League.Managers
                 SoloRank = summonerId == 0 ? "隐藏" : "加载中...",
                 FlexRank = summonerId == 0 ? "隐藏" : "加载中...",
                 IsPublic = summonerId == 0 ? "隐藏" : "[查询中]",
-                Avatar = avatar,                    
-                NameColor = summonerId == 0 ? Color.Gray : Color.White
+                Avatar = avatar,
+                NameColor = summonerId == 0 ? Color.Gray : Color.White,
             };
 
             return new PlayerMatchInfo
             {
                 Player = playerInfo,
                 MatchItems = new List<ListViewItem>(),
-                HeroIcons = new ImageList()
+                HeroIcons = new ImageList(),
             };
         }
 
@@ -56,10 +56,10 @@ namespace League.Managers
                     SoloRank = "隐藏",
                     FlexRank = "隐藏",
                     IsPublic = "隐藏",
-                    NameColor = Color.Gray
+                    NameColor = Color.Gray,
                 },
                 MatchItems = new List<ListViewItem>(),
-                HeroIcons = new ImageList()
+                HeroIcons = new ImageList(),
             };
         }
 
@@ -85,10 +85,10 @@ namespace League.Managers
                     SoloRank = "失败",
                     FlexRank = "失败",
                     Avatar = championIcon,
-                    NameColor = Color.DarkRed
+                    NameColor = Color.DarkRed,
                 },
                 MatchItems = new List<ListViewItem>(),
-                HeroIcons = new ImageList()
+                HeroIcons = new ImageList(),
             };
         }
 

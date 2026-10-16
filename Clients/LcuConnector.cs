@@ -10,10 +10,11 @@ public class LcuConnector
         {
             var result = await Task.Run(() =>
             {
-                bool success = LcuProcessDiscovery.TryFind(out var port,out var token);
-                return (success,port,token);
+                bool success = LcuProcessDiscovery.TryFind(out var port, out var token);
+                return (success, port, token);
             });
-            if (result.success) return result;
+            if (result.success)
+                return result;
             await Task.Delay(1000);
         }
         return (false, "", "");

@@ -1,7 +1,7 @@
-﻿using League.PrimaryElection;
-using Newtonsoft.Json.Linq;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text;
+using League.PrimaryElection;
+using Newtonsoft.Json.Linq;
 
 namespace League.Clients
 {
@@ -92,14 +92,10 @@ namespace League.Clients
                 var myPickAction = actions
                     .SelectMany(g => g as JArray ?? new JArray())
                     .FirstOrDefault(a =>
-                    {
-                        long actor = a["actorCellId"]?.Value<long>()
-                                  ?? a["actorCellId"]?.Value<int>()
-                                  ?? -999;
-                        return actor == localCellId
-                            && a["type"]?.ToString() == "pick"
-                            && a["completed"]?.Value<bool>() != true;
-                    });
+                        a["actorCellId"]?.Value<long>() == session["localPlayerCellId"]?.Value<long>()
+                        && a["type"]?.ToString() == "pick"
+                        && a["completed"]?.Value<bool>() != true
+                    );
 
                 if (myPickAction == null)
                 {
@@ -114,12 +110,8 @@ namespace League.Clients
                 // session 里已禁/已选是「会话 ID」（经典为 600xx）
                 var bannedSessionIds = GetBannedAndSelectedChampions(session);
 
-                // 预选列表是现代 ID → 转成会话 ID 再判断是否被占
-                bool IsUnavailable(int modernId)
-                {
-                    int sid = ToSessionChampionId(modernId, queueId);
-                    return bannedSessionIds.Contains(sid) || bannedSessionIds.Contains(modernId);
-                }
+                // 找第一个可用英雄
+                var availableHero = preSelectedHeroes.FirstOrDefault(h => !bannedChampIds.Contains(h.ChampionId));
 
                 var availableHero = preSelectedHeroes.FirstOrDefault(h => !IsUnavailable(h.ChampionId));
                 if (availableHero == null)
@@ -131,56 +123,20 @@ namespace League.Clients
                 int sessionChampId = ToSessionChampionId(availableHero.ChampionId, queueId);
                 int currentHoverId = myPickAction["championId"]?.Value<int>() ?? 0;
 
-                if (currentHoverId == sessionChampId)
-                {
-                    Debug.WriteLine($"[自动预选] 已 hover: {availableHero.ChampionName} (sessionId={sessionChampId})");
-                    return false;
-                }
-
-                // 关键：经典模式发 60000+现代ID，其它模式发现代 ID
-                var patchBody = new JObject { ["championId"] = sessionChampId };
+                // 执行预选
+                var patchBody = new JObject { ["championId"] = availableHero.ChampionId };
                 var jsonContent = new StringContent(patchBody.ToString(), Encoding.UTF8, "application/json");
-                var url = $"{apiPrefix}/session/actions/{actionId}";
 
-                var response = await _client.PatchAsync(url, jsonContent);
-                var body = await response.Content.ReadAsStringAsync();
-                Debug.WriteLine(
-                    $"[自动预选] PATCH {url} modernId={availableHero.ChampionId} sessionId={sessionChampId} " +
-                    $"({availableHero.ChampionName}) => {(int)response.StatusCode} {response.StatusCode}, body={body}");
+                var response = await _client.PatchAsync(
+                    $"/lol-champ-select/v1/session/actions/{actionId}",
+                    jsonContent
+                );
 
-                // 回读会话确认是否真的换上（不单信 HTTP 状态码）
-                await Task.Delay(150);
-                var (session2, _) = await ResolveChampSelectSessionAsync();
-                var me2 = (session2?["myTeam"] as JArray)?.FirstOrDefault(p =>
+                if (response.IsSuccessStatusCode)
                 {
-                    long cell = p["cellId"]?.Value<long>() ?? p["cellId"]?.Value<int>() ?? -999;
-                    return cell == localCellId;
-                });
-
-                int intent = me2?["championPickIntent"]?.Value<int>() ?? 0;
-                int locked = me2?["championId"]?.Value<int>() ?? 0;
-                // 也看 action 上的 championId
-                int actionChamp = 0;
-                try
-                {
-                    var actions2 = session2?["actions"] as JArray;
-                    var act2 = actions2?
-                        .SelectMany(g => g as JArray ?? new JArray())
-                        .FirstOrDefault(a => (a["id"]?.Value<int>() ?? -1) == actionId);
-                    actionChamp = act2?["championId"]?.Value<int>() ?? 0;
-                }
-                catch { /* ignore */ }
-
-                bool reallyOk =
-                    intent == sessionChampId || locked == sessionChampId || actionChamp == sessionChampId ||
-                    intent == availableHero.ChampionId || locked == availableHero.ChampionId || actionChamp == availableHero.ChampionId;
-
-                Debug.WriteLine(
-                    $"[自动预选] 回读 intent={intent}, locked={locked}, actionChamp={actionChamp}, 目标sessionId={sessionChampId}, reallyOk={reallyOk}");
-
-                if (reallyOk)
-                {
-                    Debug.WriteLine($"[自动预选] 会话已确认换上: {availableHero.ChampionName}");
+                    Debug.WriteLine(
+                        $"[自动预选] 成功预选: {availableHero.ChampionName} (ID: {availableHero.ChampionId})"
+                    );
                     return true;
                 }
 
@@ -312,25 +268,28 @@ namespace League.Clients
             try
             {
                 var session = await _gameflowService.GetChampSelectSessionAsync();
-                if (session == null) return;
+                if (session == null)
+                    return;
 
                 var queueId = session["queueId"]?.Value<int>() ?? 0;
 
                 // 只有非ARAM模式才返回，450=大乱斗、2400=海克斯乱斗、900=无限乱斗
-                if (queueId != 450 && queueId != 2400 && queueId != 900) return; 
+                if (queueId != 450 && queueId != 2400 && queueId != 900)
+                    return;
 
                 var myCellId = session["localPlayerCellId"]?.Value<int>() ?? -1;
-                if (myCellId == -1) return;
+                if (myCellId == -1)
+                    return;
 
                 var myTeam = session["myTeam"] as JArray ?? new JArray();
                 var myPlayer = myTeam.FirstOrDefault(p => p["cellId"]?.Value<int>() == myCellId);
                 var currentChampId = myPlayer?["championId"]?.Value<int>() ?? 0;
 
-                if (currentChampId == 0) return;
+                if (currentChampId == 0)
+                    return;
 
-                var currentPriority = preSelectedHeroes
-                    .FirstOrDefault(h => h.ChampionId == currentChampId)
-                    ?.Priority ?? int.MaxValue;
+                var currentPriority =
+                    preSelectedHeroes.FirstOrDefault(h => h.ChampionId == currentChampId)?.Priority ?? int.MaxValue;
 
                 // bench 中所有可用英雄
                 var benchChampions = session["benchChampions"] as JArray ?? new JArray();
@@ -339,7 +298,8 @@ namespace League.Clients
                 foreach (var item in benchChampions)
                 {
                     var id = item["championId"]?.Value<int>() ?? 0;
-                    if (id > 0) availableChampIds.Add(id);
+                    if (id > 0)
+                        availableChampIds.Add(id);
                 }
 
                 // 找出 bench 中优先级最高的预选英雄
@@ -348,12 +308,15 @@ namespace League.Clients
                     .OrderBy(h => h.Priority)
                     .FirstOrDefault();
 
-                if (bestAvailable == null) return;
+                if (bestAvailable == null)
+                    return;
 
                 // 只有当 bench 中的最高优先级严格高于当前持有，才抢
                 if (bestAvailable.Priority < currentPriority)
                 {
-                    var response = await _client.PostAsync($"/lol-champ-select/v1/session/bench/swap/{bestAvailable.ChampionId}");
+                    var response = await _client.PostAsync(
+                        $"/lol-champ-select/v1/session/bench/swap/{bestAvailable.ChampionId}"
+                    );
 
                     if (response.IsSuccessStatusCode)
                     {
@@ -381,7 +344,8 @@ namespace League.Clients
             foreach (var ban in myTeamBans.Concat(theirTeamBans))
             {
                 var champId = ban.Value<int>();
-                if (champId > 0) bannedChampIds.Add(champId);
+                if (champId > 0)
+                    bannedChampIds.Add(champId);
             }
 
             // 获取我方已选英雄
@@ -389,7 +353,8 @@ namespace League.Clients
             foreach (var player in myTeam)
             {
                 var champId = player["championId"]?.Value<int>() ?? 0;
-                if (champId > 0) bannedChampIds.Add(champId);
+                if (champId > 0)
+                    bannedChampIds.Add(champId);
             }
 
             return bannedChampIds;
@@ -398,10 +363,7 @@ namespace League.Clients
         /// <summary>
         /// 选人阶段切换皮肤：PATCH /lol-champ-select/v1/session/my-selection
         /// </summary>
-        public async Task<bool> TryApplyPreferredSkinAsync(
-            int championId,
-            int skinId,
-            int? lastAppliedSkinId = null)
+        public async Task<bool> TryApplyPreferredSkinAsync(int championId, int skinId, int? lastAppliedSkinId = null)
         {
             if (championId <= 0 || skinId <= 0 || skinId % 1000 == 0)
                 return false;
@@ -412,8 +374,7 @@ namespace League.Clients
             {
                 var body = new JObject { ["selectedSkinId"] = skinId };
                 var content = new StringContent(body.ToString(), Encoding.UTF8, "application/json");
-                var resp = await _client.PatchAsync(
-                    "/lol-champ-select/v1/session/my-selection", content);
+                var resp = await _client.PatchAsync("/lol-champ-select/v1/session/my-selection", content);
 
                 Debug.WriteLine($"[自动皮肤] champ={championId} skin={skinId} status={resp.StatusCode}");
                 return resp.IsSuccessStatusCode;

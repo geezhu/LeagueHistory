@@ -17,22 +17,30 @@ namespace League.Managers
         {
             _mainForm = mainForm ?? throw new ArgumentNullException(nameof(mainForm));
             _hotkeyWindow = new GameHotkeyWindow(QueueHotkey);
-            Services.ChatSendDiagnostics.Shared.Report("permission", Services.GameInputService.HasInputPermission()
-                ? "管理员权限已就绪。快捷键使用 Windows 事件接收，无键盘钩子或按键轮询。发送前请关闭聊天输入框。"
-                : "当前没有管理员权限，请以管理员身份重新启动程序。");
+            Services.ChatSendDiagnostics.Shared.Report(
+                "permission",
+                Services.GameInputService.HasInputPermission()
+                    ? "管理员权限已就绪。快捷键使用 Windows 事件接收，无键盘钩子或按键轮询。发送前请关闭聊天输入框。"
+                    : "当前没有管理员权限，请以管理员身份重新启动程序。"
+            );
         }
 
         private void QueueHotkey(Keys shortcut)
         {
-            if (_disposed || _mainForm.IsDisposed || !_mainForm.IsHandleCreated) return;
+            if (_disposed || _mainForm.IsDisposed || !_mainForm.IsHandleCreated)
+                return;
             try
             {
                 // Always leave the native message callback before starting application work.
-                _mainForm.BeginInvoke((Action)(async () =>
-                {
-                    if (!_disposed)
-                        await HandleHotkeyAsync(shortcut & Keys.KeyCode, (shortcut & Keys.Control) != 0);
-                }));
+                _mainForm.BeginInvoke(
+                    (Action)(
+                        async () =>
+                        {
+                            if (!_disposed)
+                                await HandleHotkeyAsync(shortcut & Keys.KeyCode, (shortcut & Keys.Control) != 0);
+                        }
+                    )
+                );
             }
             // The window handle can be destroyed between the check above and BeginInvoke while closing; the hotkey is dropped.
             catch (InvalidOperationException) { }
@@ -83,7 +91,7 @@ namespace League.Managers
             try
             {
                 return await Task.Run(async () => await Globals.lcuClient.GetGameflowPhase())
-                                 .WaitAsync(TimeSpan.FromSeconds(3));
+                    .WaitAsync(TimeSpan.FromSeconds(3));
             }
             catch
             {
@@ -93,7 +101,8 @@ namespace League.Managers
 
         public void Dispose()
         {
-            if (_disposed) return;
+            if (_disposed)
+                return;
             _disposed = true;
             _hotkeyWindow.Dispose();
             OnMyTeamHotkey = null;

@@ -1,6 +1,6 @@
-﻿using League.Models;
+﻿using System.Diagnostics;
+using League.Models;
 using Newtonsoft.Json.Linq;
-using System.Diagnostics;
 using static League.FormMain;
 
 namespace League.Parsers
@@ -10,7 +10,11 @@ namespace League.Parsers
     /// </summary>
     public class MatchDataParser
     {
-        public async Task<PlayerMatchInfo> ParsePlayerMatchInfo(string puuid, JArray matches, CancellationToken cancellationToken = default)
+        public async Task<PlayerMatchInfo> ParsePlayerMatchInfo(
+            string puuid,
+            JArray matches,
+            CancellationToken cancellationToken = default
+        )
         {
             var result = new PlayerMatchInfo();
             if (matches == null || matches.Count == 0)
@@ -29,12 +33,16 @@ namespace League.Parsers
                         continue;
 
                     var participant = FindParticipant(gameJson, puuid);
-                    if (participant == null) continue;
+                    if (participant == null)
+                        continue;
 
                     await ProcessMatchData(result, gameJson, participant, cancellationToken);
                 }
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 Debug.WriteLine($"解析比赛数据异常: {ex.Message}");
@@ -43,7 +51,12 @@ namespace League.Parsers
             return result;
         }
 
-        private async Task ProcessMatchData(PlayerMatchInfo result, JObject gameJson, JObject participant, CancellationToken cancellationToken)
+        private async Task ProcessMatchData(
+            PlayerMatchInfo result,
+            JObject gameJson,
+            JObject participant,
+            CancellationToken cancellationToken
+        )
         {
             long gameId = gameJson["gameId"]?.Value<long>() ?? 0;
             int championId = participant["championId"]?.Value<int>() ?? 0;
@@ -53,17 +66,15 @@ namespace League.Parsers
             int assists = participant["assists"]?.Value<int>() ?? 0;
             bool isWin = participant["win"]?.Value<bool>() ?? false;
 
-            string gameMode = ExtractGameMode(gameJson);   // ← 关键调用
+            string gameMode = ExtractGameMode(gameJson); // ← 关键调用
 
-            long gameStart = gameJson["gameStartTimestamp"]?.Value<long>() ??
-                            gameJson["gameCreation"]?.Value<long>() ?? 0;
-            string gameDate = gameStart > 0
-                ? DateTimeOffset.FromUnixTimeMilliseconds(gameStart).ToString("yyyy-MM-dd")
-                : "未知";
+            long gameStart =
+                gameJson["gameStartTimestamp"]?.Value<long>() ?? gameJson["gameCreation"]?.Value<long>() ?? 0;
+            string gameDate =
+                gameStart > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(gameStart).ToString("yyyy-MM-dd") : "未知";
 
-            int gameDurationSeconds = gameJson["gameDuration"]?.Value<int>()
-                       ?? gameJson["gameLength"]?.Value<int>()
-                       ?? 0;
+            int gameDurationSeconds =
+                gameJson["gameDuration"]?.Value<int>() ?? gameJson["gameLength"]?.Value<int>() ?? 0;
 
             int durationMinutes = gameDurationSeconds > 0 ? gameDurationSeconds / 60 : 0;
             bool gameEndedInSurrender = gameJson["gameEndedInSurrender"]?.Value<bool>() ?? false;
@@ -85,29 +96,38 @@ namespace League.Parsers
             //    $"Danger: {dangerPings}"
             //);
 
-            result.RecentMatches.Add(new MatchStat
-            {
-                Kills = kills,
-                Deaths = deaths,
-                Assists = assists,
+            result.RecentMatches.Add(
+                new MatchStat
+                {
+                    Kills = kills,
+                    Deaths = deaths,
+                    Assists = assists,
 
-                GameEndedInSurrender = gameEndedInSurrender,
-                GameEndedInEarlySurrender = gameEndedInEarlySurrender,
-                GameDurationMinutes = durationMinutes,
+                    GameEndedInSurrender = gameEndedInSurrender,
+                    GameEndedInEarlySurrender = gameEndedInEarlySurrender,
+                    GameDurationMinutes = durationMinutes,
 
-                EnemyMissingPings = missingPings,
-                EnemyVisionPings = visionPings,
-                GetBackPings = getBackPings,
-                DangerPings = dangerPings
-            });
+                    EnemyMissingPings = missingPings,
+                    EnemyVisionPings = visionPings,
+                    GetBackPings = getBackPings,
+                    DangerPings = dangerPings,
+                }
+            );
             result.WinHistory.Add(isWin);
 
             var item = new ListViewItem
             {
                 ImageKey = championName.Replace(" ", "").Replace("'", ""),
-                ForeColor = MatchResult.IsRemake(gameJson) ? MatchResult.RemakeColor : isWin ? Color.Green : Color.Red,
-                Tag = new MatchMetadata { GameId = gameId, TeamId = participant["teamId"]?.Value<int>() ?? -1,
-                    GameData = (JObject)gameJson.DeepClone() }
+                ForeColor =
+                    MatchResult.IsRemake(gameJson) ? MatchResult.RemakeColor
+                    : isWin ? Color.Green
+                    : Color.Red,
+                Tag = new MatchMetadata
+                {
+                    GameId = gameId,
+                    TeamId = participant["teamId"]?.Value<int>() ?? -1,
+                    GameData = (JObject)gameJson.DeepClone(),
+                },
             };
 
             item.SubItems.AddRange(new[] { gameMode, $"{kills}/{deaths}/{assists}", gameDate });
@@ -120,13 +140,13 @@ namespace League.Parsers
         private JObject FindParticipant(JObject gameJson, string puuid)
         {
             var participants = gameJson["participants"] as JArray;
-            return participants?.Cast<JObject>()
-                .FirstOrDefault(p => p["puuid"]?.ToString() == puuid);
+            return participants?.Cast<JObject>().FirstOrDefault(p => p["puuid"]?.ToString() == puuid);
         }
 
         private string ExtractGameMode(JObject gameJson)
         {
-            if (gameJson == null) return "未知模式";
+            if (gameJson == null)
+                return "未知模式";
 
             // 1. 优先尝试 metadata.tags（原始逻辑）
             var tags = gameJson["metadata"]?["tags"] as JArray;
@@ -224,7 +244,7 @@ namespace League.Parsers
                 950 => "末日人机",
                 960 => "末日人机",
 
-                _ => ""
+                _ => "",
             };
         }
 
@@ -235,70 +255,117 @@ namespace League.Parsers
         /// <returns></returns>
         private string MapGameTags(JArray tags)
         {
-            if (tags == null || tags.Count == 0) return "未知模式";
+            if (tags == null || tags.Count == 0)
+                return "未知模式";
             var tagList = tags.Select(t => t.ToString()).ToList();
 
-            if (tagList.Contains("q_420")) return "单双排";
-            if (tagList.Contains("q_440")) return "灵活排位";
-            if (tagList.Contains("q_400")) return "匹配征召";
-            if (tagList.Contains("q_430")) return "匹配盲选";
-            if (tagList.Contains("q_450")) return "大乱斗";
-            if (tagList.Contains("q_900")) return "无限乱斗";
-            if (tagList.Contains("q_1900")) return "自选无限火力";
-            if (tagList.Contains("q_480")) return "快速模式";
-            if (tagList.Contains("q_1700")) return "斗魂竞技场";
-            if (tagList.Contains("q_2400")) return "海克斯乱斗";
-            if (tagList.Contains("q_2450")) return "经典海克斯乱斗";
-            if (tagList.Contains("q_1020")) return "克隆大作战";
-            if (tagList.Contains("q_1300")) return "极限闪击";
-            if (tagList.Contains("q_1400")) return "终极魔典";
-            if (tagList.Contains("q_700")) return "冠军杯赛";
+            if (tagList.Contains("q_420"))
+                return "单双排";
+            if (tagList.Contains("q_440"))
+                return "灵活排位";
+            if (tagList.Contains("q_400"))
+                return "匹配征召";
+            if (tagList.Contains("q_430"))
+                return "匹配盲选";
+            if (tagList.Contains("q_450"))
+                return "大乱斗";
+            if (tagList.Contains("q_900"))
+                return "无限乱斗";
+            if (tagList.Contains("q_1900"))
+                return "自选无限火力";
+            if (tagList.Contains("q_480"))
+                return "快速模式";
+            if (tagList.Contains("q_1700"))
+                return "斗魂竞技场";
+            if (tagList.Contains("q_2400"))
+                return "海克斯乱斗";
+            if (tagList.Contains("q_2450"))
+                return "经典海克斯乱斗";
+            if (tagList.Contains("q_1020"))
+                return "克隆大作战";
+            if (tagList.Contains("q_1300"))
+                return "极限闪击";
+            if (tagList.Contains("q_1400"))
+                return "终极魔典";
+            if (tagList.Contains("q_700"))
+                return "冠军杯赛";
 
             // 人机
-            if (tagList.Contains("q_830")) return "人机入门";
-            if (tagList.Contains("q_840")) return "人机新手";
-            if (tagList.Contains("q_850")) return "人机中等";
-            if (tagList.Contains("q_870")) return "人机入门";
-            if (tagList.Contains("q_880")) return "人机新手";
-            if (tagList.Contains("q_890")) return "人机中等";
+            if (tagList.Contains("q_830"))
+                return "人机入门";
+            if (tagList.Contains("q_840"))
+                return "人机新手";
+            if (tagList.Contains("q_850"))
+                return "人机中等";
+            if (tagList.Contains("q_870"))
+                return "人机入门";
+            if (tagList.Contains("q_880"))
+                return "人机新手";
+            if (tagList.Contains("q_890"))
+                return "人机中等";
 
             // 教程
-            if (tagList.Contains("q_2000")) return "新手教程1";
-            if (tagList.Contains("q_2010")) return "新手教程2";
-            if (tagList.Contains("q_2020")) return "新手教程3";
+            if (tagList.Contains("q_2000"))
+                return "新手教程1";
+            if (tagList.Contains("q_2010"))
+                return "新手教程2";
+            if (tagList.Contains("q_2020"))
+                return "新手教程3";
 
             // 云顶
-            if (tagList.Contains("q_1090")) return "云顶匹配";
-            if (tagList.Contains("q_1100")) return "云顶排位";
-            if (tagList.Contains("q_1130")) return "云顶疾速";
-            if (tagList.Contains("q_1160")) return "云顶双人";
+            if (tagList.Contains("q_1090"))
+                return "云顶匹配";
+            if (tagList.Contains("q_1100"))
+                return "云顶排位";
+            if (tagList.Contains("q_1130"))
+                return "云顶疾速";
+            if (tagList.Contains("q_1160"))
+                return "云顶双人";
 
             // 自定义/经典
-            if (tagList.Contains("q_3100")) return "自定义峡谷";
-            if (tagList.Contains("q_3140")) return "训练模式";
-            if (tagList.Contains("q_3270")) return "自定义海克斯";
-            if (tagList.Contains("q_4310")) return "经典峡谷";
-            if (tagList.Contains("q_4320")) return "经典人机";
+            if (tagList.Contains("q_3100"))
+                return "自定义峡谷";
+            if (tagList.Contains("q_3140"))
+                return "训练模式";
+            if (tagList.Contains("q_3270"))
+                return "自定义海克斯";
+            if (tagList.Contains("q_4310"))
+                return "经典峡谷";
+            if (tagList.Contains("q_4320"))
+                return "经典人机";
 
-            if (tagList.Contains("q_950") || tagList.Contains("q_960")) return "末日人机";
+            if (tagList.Contains("q_950") || tagList.Contains("q_960"))
+                return "末日人机";
 
-            if (tagList.Contains("mode_practicetool")) return "训练模式";
-            if (tagList.Contains("mode_classic")) return "自定义峡谷";
-            if (tagList.Contains("mode_aram")) return "自定义大乱斗";
-            if (tagList.Contains("mode_cherry") || tagList.Contains("mode_kiwi")) return "自定义海克斯";
-            if (tagList.Contains("type_CUSTOM_GAME")) return "自定义";
-            if (tagList.Contains("mode_jade") || tagList.Contains("mdoe_jade")) return "经典峡谷";
+            if (tagList.Contains("mode_practicetool"))
+                return "训练模式";
+            if (tagList.Contains("mode_classic"))
+                return "自定义峡谷";
+            if (tagList.Contains("mode_aram"))
+                return "自定义大乱斗";
+            if (tagList.Contains("mode_cherry") || tagList.Contains("mode_kiwi"))
+                return "自定义海克斯";
+            if (tagList.Contains("type_CUSTOM_GAME"))
+                return "自定义";
+            if (tagList.Contains("mode_jade") || tagList.Contains("mdoe_jade"))
+                return "经典峡谷";
 
             return $"未知({string.Join(",", tagList)})";
         }
 
-        private async Task CacheChampionIcon(string championName, int championId, ImageList heroIcons, CancellationToken cancellationToken)
+        private async Task CacheChampionIcon(
+            string championName,
+            int championId,
+            ImageList heroIcons,
+            CancellationToken cancellationToken
+        )
         {
             string cleanName = championName.Replace(" ", "").Replace("'", "");
             if (!MatchQueryProcessor._imageCache.TryGetValue(cleanName, out var image))
             {
                 image = await Globals.resLoading.GetChampionIconAsync(championId).WaitAsync(cancellationToken);
-                if (image != null) MatchQueryProcessor._imageCache.TryAdd(cleanName, image);
+                if (image != null)
+                    MatchQueryProcessor._imageCache.TryAdd(cleanName, image);
             }
 
             if (image != null && !heroIcons.Images.ContainsKey(cleanName))

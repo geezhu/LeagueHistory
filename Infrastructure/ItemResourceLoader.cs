@@ -25,16 +25,19 @@ namespace League.Infrastructure
             foreach (var i in list)
             {
                 string iconPath = (string?)i.iconPath;
-                if (string.IsNullOrEmpty(iconPath)) continue;
+                if (string.IsNullOrEmpty(iconPath))
+                    continue;
 
-                Items.Add(new Item
-                {
-                    Id = i.id,
-                    Name = i.name,
-                    Description = i.description,
-                    IconFileName = iconPath,
-                    PriceTotal = (int?)i.priceTotal ?? 0
-                });
+                Items.Add(
+                    new Item
+                    {
+                        Id = i.id,
+                        Name = i.name,
+                        Description = i.description,
+                        IconFileName = iconPath,
+                        PriceTotal = (int?)i.priceTotal ?? 0,
+                    }
+                );
             }
         }
 
@@ -53,7 +56,8 @@ namespace League.Infrastructure
         public async Task<Image?> GetIconAsync(string iconPath)
         {
             string fileName = Path.GetFileName(iconPath);
-            if (string.IsNullOrEmpty(fileName)) return null;
+            if (string.IsNullOrEmpty(fileName))
+                return null;
 
             return await _imageCache.GetOrDownloadImageAsync(iconPath, "item", fileName);
         }

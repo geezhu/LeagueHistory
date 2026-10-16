@@ -1,7 +1,7 @@
-﻿using Newtonsoft.Json.Linq;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Net;
 using System.Text;
+using Newtonsoft.Json.Linq;
 
 namespace League.Clients
 {
@@ -63,9 +63,11 @@ namespace League.Clients
                 var response = await _client.PostAsync($"/lol-replays/v1/rofls/{gameId}/download", postContent);
                 Debug.WriteLine($"[回放] 下载请求响应: {response.StatusCode}");
 
-                if (!response.IsSuccessStatusCode &&
-                    response.StatusCode != HttpStatusCode.NoContent &&
-                    response.StatusCode != HttpStatusCode.Accepted)
+                if (
+                    !response.IsSuccessStatusCode
+                    && response.StatusCode != HttpStatusCode.NoContent
+                    && response.StatusCode != HttpStatusCode.Accepted
+                )
                 {
                     Debug.WriteLine("[回放] 下载请求失败");
                     return ReplayDownloadResult.RequestError;
