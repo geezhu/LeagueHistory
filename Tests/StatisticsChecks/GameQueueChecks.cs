@@ -44,6 +44,18 @@ internal static class GameQueueChecks
             (int)sessionQueue.Invoke(null, [new JObject { ["gameData"] = Data(-1, "KIWI") }])! == 2400,
             "The assistant reads a custom Mayhem game as Mayhem"
         );
-        Console.WriteLine("PASS: custom games and queue 3270 map to the queue whose statistics apply.");
+        // The profile overview names custom queues instead of showing "模式 3270".
+        Check(
+            League.Models.CareerStatistics.QueueName(3270) == "自定义海克斯大乱斗"
+                && League.Models.CareerStatistics.QueueName(3100) == "自定义峡谷"
+                && League.Models.CareerStatistics.QueueName(2400) == "海克斯大乱斗",
+            "Custom Mayhem and custom Rift have their own names"
+        );
+        Check(
+            League.Models.CareerStatistics.QueueName(1300) == MatchParserSgp.QueueModeName(1300)
+                && League.Models.CareerStatistics.QueueName(987654) == "模式 987654",
+            "Other queues use the history list's names; unknown ones keep the number"
+        );
+        Console.WriteLine("PASS: custom games and queue 3270 map to the queue whose statistics apply, and are named.");
     }
 }
