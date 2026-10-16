@@ -17,6 +17,12 @@ public sealed record LoadingRoster(string GameId, int Queue, string Mode, Loadin
 {
     public static bool CanDisplay(string phase) => phase is "GameStart" or "InProgress" or "Reconnect";
 
+    /// <summary>
+    /// The client's session listed an account more than once, which happens when players from an earlier game are
+    /// left in it. The roster keeps one entry per account; the live game's own list should replace it.
+    /// </summary>
+    public bool Conflicted { get; init; }
+
     public static string WaitingStatus(string phase) =>
         phase switch
         {
@@ -84,13 +90,28 @@ public sealed record LoadingRoster(string GameId, int Queue, string Mode, Loadin
             }
         }
 
+        // One account plays once: keep the entry whose champion matches its own pick, else the first one.
+        var kept = players
+            .GroupBy(p => p.Key)
+            .ToDictionary(group => group.Key, group => Preferred(group.ToArray(), selections));
+        var unique = players.Where(p => ReferenceEquals(kept[p.Key], p)).ToArray();
         return new(
             (string?)data["gameId"] ?? "",
             (int?)data["queue"]?["id"] ?? 0,
             (string?)data["queue"]?["gameMode"] ?? (string?)data["gameMode"] ?? "",
-            players.ToArray()
-        );
+            unique
+        )
+        {
+            Conflicted = unique.Length < players.Count,
+        };
     }
+
+    private static LoadingPlayer Preferred(LoadingPlayer[] entries, JObject[] selections) =>
+        entries.Length == 1
+            ? entries[0]
+            : entries.FirstOrDefault(p =>
+                selections.Any(s => (string?)s["puuid"] == p.Puuid && (int?)s["championId"] == p.ChampionId)
+            ) ?? entries[0];
 
     public LoadingRoster FromLive(LiveMatchSnapshot live, Func<LiveMatchPlayer, int> championId) =>
         this with

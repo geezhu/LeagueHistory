@@ -178,6 +178,16 @@ public sealed class TeamCardDisplayService
 
         bool inOne = one.Any(p => p.Value<string>("puuid") == puuid);
         bool inTwo = two.Any(p => p.Value<string>("puuid") == puuid);
+        if (inOne && inTwo)
+        {
+            // Leftovers from an earlier game put the user on both sides; the live game tells which players are real.
+            data = await KeepLivePlayersAsync((JObject)data!, generation, deadline.Token);
+            one = data?["teamOne"] as JArray ?? new();
+            two = data?["teamTwo"] as JArray ?? new();
+            inOne = one.Any(p => p.Value<string>("puuid") == puuid);
+            inTwo = two.Any(p => p.Value<string>("puuid") == puuid);
+        }
+
         if (inOne == inTwo)
         {
             return RosterAttempt.Unavailable;
@@ -202,6 +212,37 @@ public sealed class TeamCardDisplayService
         return ours.Count == 5 && theirs.Count == 5 && supplemented == 0
             ? RosterAttempt.Complete
             : RosterAttempt.Partial;
+    }
+
+    /// <summary>The session with only the players whose champions are in the live game; null when 2999 is unavailable.</summary>
+    private static async Task<JObject?> KeepLivePlayersAsync(JObject data, long generation, CancellationToken token)
+    {
+        HashSet<int> champions;
+        try
+        {
+            using var live = new Clients.LiveMatchClient();
+            var snapshot = await live.GetAsync(token);
+            var known = Globals.resLoading?.Champions.Champions ?? [];
+            champions = snapshot
+                .Players.Select(p => Models.LiveChampionIdentity.Resolve(p, known)?.Id ?? 0)
+                .Where(id => id > 0)
+                .ToHashSet();
+        }
+        catch (Exception e)
+            when (e is HttpRequestException or Newtonsoft.Json.JsonException
+                || (e is OperationCanceledException && !token.IsCancellationRequested)
+            )
+        {
+            AppLog.Shared.Warn(LogCategory.Game, "对局玩家：客户端名单含上一局残留，游戏内名单读取失败", e);
+            return null;
+        }
+
+        RoomLoadDiagnostics.Shared.Report(
+            generation,
+            "session-conflict",
+            detail: $"one={(data["teamOne"] as JArray)?.Count ?? 0} two={(data["teamTwo"] as JArray)?.Count ?? 0} live={champions.Count}"
+        );
+        return champions.Count > 0 ? GameSessionTeams.KeepLive(data, champions) : null;
     }
 
     // Known identities must never appear on both sides.

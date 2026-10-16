@@ -326,8 +326,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
         {
             // Shutdown cancels the poll without reporting a connection failure.
         }
-        catch
+        catch (Exception e)
         {
+            // Every step of the poll can fail while the client restarts; the reason is kept for diagnosis.
+            AppLog.Shared.Warn(LogCategory.Game, "对局速览：读取对局失败", e);
             HandlePollFailure();
         }
         finally
@@ -400,7 +402,17 @@ internal sealed partial class LoadingOverlayManager : IDisposable
             {
                 var live = await _live.GetAsync(token);
                 snapshot = live;
-                if (live.Players.Length >= roster.Players.Length)
+                // A session with leftovers from an earlier game is replaced by the players actually in this one.
+                if (roster.Conflicted && live.Players.Length > 0)
+                {
+                    AppLog.Shared.State(
+                        LogCategory.Game,
+                        "overlay-roster",
+                        $"对局速览：客户端名单含上一局残留（{roster.Players.Length} 人），改用游戏内名单（{live.Players.Length} 人）"
+                    );
+                }
+
+                if (live.Players.Length >= roster.Players.Length || (roster.Conflicted && live.Players.Length > 0))
                 {
                     roster = await _rosterIdentity.MergeAsync(
                         roster,

@@ -6,7 +6,7 @@ namespace League.Managers
     public class LeagueConfigManager
     {
         private static readonly LeagueConfigStore Store = new(
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LeagueHistory"),
+            Path.Combine(Services.AppDataPaths.LocalData, "LeagueHistory"),
             AppContext.BaseDirectory,
             Environment.CurrentDirectory
         );

@@ -11,8 +11,7 @@ public static class LogRetention
 
     private static readonly string[] Patterns = { "*.log", "*.log.previous", "*.txt" };
 
-    public static string LogsDirectory { get; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "League", "Logs");
+    public static string LogsDirectory { get; } = Path.Combine(AppDataPaths.LocalData, "League", "Logs");
 
     /// <summary>返回删除的文件数。正在被别的进程写的文件删不掉时跳过，下次再清。</summary>
     public static int Clean(
