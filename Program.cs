@@ -28,6 +28,11 @@
             // To customize application configuration such as set high DPI settings or default font,
             // see https://aka.ms/applicationconfiguration.
             ApplicationConfiguration.Initialize();
+            if (args is [Services.GameBarSetupCommand.Argument])
+            {
+                Environment.ExitCode = Services.GameBarSetupCommand.Run();
+                return;
+            }
             Services.LogRetention.CleanInBackground();
             Services.AppLog.Shared.Info(Services.LogCategory.App, "程序启动");
             Application.Run(new FormMain());
