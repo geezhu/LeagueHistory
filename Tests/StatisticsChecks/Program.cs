@@ -80,6 +80,7 @@ internal static class Program
         checks["--shutdown-checks"] = ShutdownSettingsChecks.Run;
         checks["--core-utility-checks"] = CoreUtilityChecks.Run;
         checks["--build-info-checks"] = BuildInfoChecks.Run;
+        checks["--diagnostic-log-checks"] = () => Background(DiagnosticLogChecks.RunAsync);
         checks["--history-data-checks"] = HistoryDataChecks.Run;
         checks["--timeline-data-checks"] = TimelineDataChecks.Run;
     }

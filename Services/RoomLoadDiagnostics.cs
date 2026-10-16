@@ -7,22 +7,16 @@ namespace League.Services;
 public sealed class RoomLoadDiagnostics
 {
     public static RoomLoadDiagnostics Shared { get; } =
-        new(
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "League",
-                "Logs",
-                "room-players.log"
-            )
-        );
-    private readonly object _gate = new();
-    private readonly Queue<string> _pending = new();
-    private Task _writer = Task.CompletedTask;
+        new(Path.Combine(LogRetention.LogsDirectory, "room-players.log"));
     private readonly string _salt = Guid.NewGuid().ToString("N");
-    private bool _writing;
+    private readonly LogFileWriter _log;
     public string LogPath { get; }
 
-    public RoomLoadDiagnostics(string path) => LogPath = path;
+    public RoomLoadDiagnostics(string path)
+    {
+        LogPath = path;
+        _log = new LogFileWriter(path, 512 * 1024, 500);
+    }
 
     public void Report(long generation, string stage, string? key = null, string detail = "")
     {
@@ -35,75 +29,10 @@ public sealed class RoomLoadDiagnostics
             identity == null
                 ? "-"
                 : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(_salt + identity)))[..10];
-        string line =
-            $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} pid={Environment.ProcessId} generation={generation} stage={stage} team={team} player={player} {detail}";
-        lock (_gate)
-        {
-            if (_pending.Count >= 500)
-            {
-                _pending.Dequeue();
-            }
-
-            _pending.Enqueue(line.Replace('\r', ' ').Replace('\n', ' '));
-            if (!_writing)
-            {
-                _writing = true;
-                _writer = Task.Run(WritePending);
-            }
-        }
+        _log.Write(
+            $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} pid={Environment.ProcessId} generation={generation} stage={stage} team={team} player={player} {detail}"
+        );
     }
 
-    private void WritePending()
-    {
-        while (true)
-        {
-            string[] lines;
-            lock (_gate)
-            {
-                if (_pending.Count == 0)
-                {
-                    _writing = false;
-                    return;
-                }
-                lines = _pending.ToArray();
-                _pending.Clear();
-            }
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
-                if (File.Exists(LogPath) && new FileInfo(LogPath).Length > 512 * 1024)
-                {
-                    File.Move(LogPath, LogPath + ".previous", true);
-                }
-
-                File.AppendAllLines(LogPath, lines, Encoding.UTF8);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // Diagnostics are optional; a locked log must not interrupt player loading.
-                System.Diagnostics.Debug.WriteLine("room log write: " + ex.GetType().Name);
-            }
-        }
-    }
-
-    public async Task FlushAsync()
-    {
-        while (true)
-        {
-            Task writer;
-            lock (_gate)
-            {
-                writer = _writer;
-            }
-
-            await writer;
-            lock (_gate)
-            {
-                if (!_writing)
-                {
-                    return;
-                }
-            }
-        }
-    }
+    public Task FlushAsync() => _log.FlushAsync();
 }
