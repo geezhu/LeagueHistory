@@ -11,6 +11,7 @@ public static class LcuProcessDiscovery
     {
         port = token = "";
         var processes = Process.GetProcessesByName("LeagueClientUx");
+        string failure = "";
         try
         {
             foreach (var process in processes)
@@ -20,10 +21,15 @@ public static class LcuProcessDiscovery
                     && TryParse(commandLine, out port, out token)
                 )
                 {
+                    Services.AppLog.Shared.State(
+                        Services.LogCategory.Connection,
+                        "lcu-discovery",
+                        "已读取客户端连接参数"
+                    );
                     return true;
                 }
 
-                Debug.WriteLine($"[LCU] PID={process.Id} 原生参数读取未成功，状态={error}，尝试 WMI");
+                failure = $"原生读取={error}";
                 try
                 {
                     using var searcher = new ManagementObjectSearcher(
@@ -36,6 +42,11 @@ public static class LcuProcessDiscovery
                         {
                             if (TryParse(obj["CommandLine"]?.ToString() ?? "", out port, out token))
                             {
+                                Services.AppLog.Shared.State(
+                                    Services.LogCategory.Connection,
+                                    "lcu-discovery",
+                                    "已读取客户端连接参数（WMI）"
+                                );
                                 return true;
                             }
                         }
@@ -43,13 +54,15 @@ public static class LcuProcessDiscovery
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[LCU] WMI 参数读取失败：{ex.GetType().Name}，HRESULT={ex.HResult:X8}");
+                    failure += $"，WMI={ex.GetType().Name} HRESULT={ex.HResult:X8}";
                 }
             }
-            Debug.WriteLine(
+            Services.AppLog.Shared.State(
+                Services.LogCategory.Connection,
+                "lcu-discovery",
                 processes.Length == 0
-                    ? "[LCU] 客户端尚未启动"
-                    : "[LCU] 客户端已启动，但无法读取连接参数（权限受限或启动尚未完成）"
+                    ? "客户端尚未启动"
+                    : $"客户端已启动，但无法读取连接参数（权限受限或启动尚未完成）：{failure}"
             );
             return false;
         }

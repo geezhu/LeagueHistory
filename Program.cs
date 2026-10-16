@@ -23,10 +23,13 @@
                     .GetResult();
                 return;
             }
+            // Before any window exists: the unhandled-exception mode cannot change afterwards.
+            Services.CrashReporter.Install();
             // To customize application configuration such as set high DPI settings or default font,
             // see https://aka.ms/applicationconfiguration.
             ApplicationConfiguration.Initialize();
             Services.LogRetention.CleanInBackground();
+            Services.AppLog.Shared.Info(Services.LogCategory.App, "程序启动");
             Application.Run(new FormMain());
         }
     }

@@ -69,31 +69,21 @@ namespace League.Managers
                 // 没有新版本
                 if (remoteVer <= localVer)
                 {
-                    Debug.WriteLine("[自动更新] 当前已是最新版本：" + localVerStr);
+                    Services.AppLog.Shared.Info(
+                        Services.LogCategory.Update,
+                        $"已是最新版本：本机 {localVerStr}，上游 {tag}"
+                    );
                     return;
                 }
 
                 string changelog = release["body"]?.ToString()?.Replace("\r\n", "\n") ?? "无更新日志";
                 string releaseName = release["name"]?.ToString() ?? tag;
 
-                // 找 zip 资源（你每次只上传一个 zip，名字随意，只要后缀是 .zip）
-                string zipUrl = null;
-                var assets = release["assets"] as JArray;
-                if (assets != null)
-                {
-                    foreach (var asset in assets)
-                    {
-                        string name = asset["name"]?.ToString() ?? "";
-                        if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                        {
-                            zipUrl = asset["browser_download_url"]?.ToString();
-                            break;
-                        }
-                    }
-                }
+                string zipUrl = FindZipAsset(release);
 
                 if (string.IsNullOrEmpty(zipUrl))
                 {
+                    Services.AppLog.Shared.Warn(Services.LogCategory.Update, $"上游 {tag} 没有 zip 发布包");
                     MessageBox.Show(
                         "检测到新版本，但未找到 zip 下载地址，请手动更新。",
                         "更新提示",
@@ -115,18 +105,39 @@ namespace League.Managers
                     != DialogResult.Yes
                 )
                 {
-                    Debug.WriteLine("[自动更新] 用户取消更新");
+                    Services.AppLog.Shared.Info(Services.LogCategory.Update, $"发现上游 {tag}，用户选择不更新");
                     return;
                 }
 
                 // 开始更新
+                Services.AppLog.Shared.Info(Services.LogCategory.Update, $"开始更新：{localVerStr} → {tag}");
                 await PerformAutoUpdate(zipUrl, tag.TrimStart('v', 'V'));
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("[自动更新检查失败] " + ex.Message);
-                // 不打扰用户，只在调试输出里看得到
+                // 不打扰用户，只写进日志
+                Services.AppLog.Shared.Warn(Services.LogCategory.Update, "检查更新失败", ex);
             }
+        }
+
+        // 找 zip 资源（你每次只上传一个 zip，名字随意，只要后缀是 .zip）
+        private static string FindZipAsset(JObject release)
+        {
+            var assets = release["assets"] as JArray;
+            if (assets == null)
+            {
+                return null;
+            }
+
+            foreach (var asset in assets)
+            {
+                string name = asset["name"]?.ToString() ?? "";
+                if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    return asset["browser_download_url"]?.ToString();
+                }
+            }
+            return null;
         }
 
         private async Task PerformAutoUpdate(string zipUrl, string newVersion)
@@ -154,6 +165,11 @@ namespace League.Managers
 
                     progressForm.Invoke(() => progressForm.UpdateStatus("解压完成，正在生成更新脚本..."));
                     await StartUpdateScriptAsync(tempDir, extractPath, newVersion);
+                    Services.AppLog.Shared.Info(
+                        Services.LogCategory.Update,
+                        $"更新包已解压，启动更新脚本：{newVersion}"
+                    );
+                    await Services.AppLog.Shared.FlushAsync();
 
                     progressForm.Invoke(() =>
                     {
@@ -165,7 +181,7 @@ namespace League.Managers
             catch (Exception ex)
             {
                 progressForm?.Invoke(() => progressForm.Complete($"更新失败: {ex.Message}"));
-                Debug.WriteLine("[自动更新失败] " + ex);
+                Services.AppLog.Shared.Error(Services.LogCategory.Update, "自动更新失败", ex);
             }
         }
 
@@ -206,6 +222,11 @@ namespace League.Managers
                 catch (Exception ex) when (ex is HttpRequestException || ex is IOException)
                 {
                     retryCount++;
+                    Services.AppLog.Shared.Warn(
+                        Services.LogCategory.Update,
+                        $"下载更新包失败（第 {retryCount}/{maxDownloadRetries} 次）",
+                        ex
+                    );
                     if (retryCount >= maxDownloadRetries)
                     {
                         throw;
