@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- dotnet-coverage settings for Scripts/Run-Coverage.ps1: measure the app, not the checks or libraries. -->
+<Configuration>
+  <CodeCoverage>
+    <ModulePaths>
+      <Include>
+        <ModulePath>.*\\League\.dll$</ModulePath>
+      </Include>
+    </ModulePaths>
+    <Attributes>
+      <Exclude>
+        <Attribute>^System\.CodeDom\.Compiler\.GeneratedCodeAttribute$</Attribute>
+        <Attribute>^System\.Diagnostics\.CodeAnalysis\.ExcludeFromCodeCoverageAttribute$</Attribute>
+      </Exclude>
+    </Attributes>
+  </CodeCoverage>
+</Configuration>

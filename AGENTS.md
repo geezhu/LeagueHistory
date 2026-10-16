@@ -33,5 +33,6 @@
 - C# 排版使用仓库固定版本的 CSharpier；Game Bar C++ 使用 `.clang-format`。
 - 运行 `powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Check-CodeQuality.ps1`。默认检查全部源码；`-Fix` 修复选中源码的排版；`-BaseRef` 只检查某个提交以来改动的源码。编译分析输出到 `bin/code-quality/build`，不影响正在运行的 `bin/Release`。
 - 编译检查中的 Meziantou 规则对选中的源码形成检查门槛；不向主项目永久添加分析器依赖。
+- 测试覆盖率运行 `powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Run-Coverage.ps1`；`-Checks` 只跑指定检查，`-Open` 打开报告。结果输出到 `bin/coverage`，只统计 `League.dll`。
 - 语音改动编译 `Tests/StatisticsChecks/StatisticsChecks.csproj`，然后运行 `--sensevoice-checks`、`--assistant-voice-checks`、`--gamebar-voice-checks`。
 - 格式整理与行为改变分开审查。保留已有测试，必要时补充取消、错误和资源释放的回归验证。用户要求提交时再提交。
