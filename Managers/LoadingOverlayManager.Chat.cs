@@ -150,6 +150,7 @@ internal sealed partial class LoadingOverlayManager
             ),
             "party" => OverlayPartyChatMessage.Build(roster!, request, CachedPlayers(), Champion),
             "controls" => OverlayControlChatMessage.Build(roster!, request, _controls, _liveState, Champion),
+            "composition" => GameBarComposition.ChatMessage(CurrentComposition(), request),
             "summoner" => SummonerChatMessage.Build(
                 OverlayTierChatMessage.Select(roster!, request).FirstOrDefault(),
                 roster!.Players.FirstOrDefault(p => p.Self)?.Team ?? 0,

@@ -66,7 +66,7 @@ public sealed record OverlayChatRequest(
         }
 
         // Premades and control lists describe a side; a single hero is not offered.
-        if (kind is "party" or "controls" && target == "single")
+        if (kind is "party" or "controls" or "composition" && target == "single")
         {
             return null;
         }
@@ -105,6 +105,7 @@ public sealed record OverlayChatRequest(
                 or "record"
                 or "party"
                 or "controls"
+                or "composition"
                 or "voice"
                 or "waves"
                 or "summoner";

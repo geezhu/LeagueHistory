@@ -605,6 +605,7 @@ void OpenAugmentPage()
         return;
     CloseWaves();
     CloseControls();
+    CloseComposition();
     augmentReturnCard = selectedCard;
     if (selectedCard >= 0)
         detailRoot.Visibility(Visibility::Collapsed);

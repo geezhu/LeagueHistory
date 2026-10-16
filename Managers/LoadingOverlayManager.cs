@@ -580,6 +580,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
     private void PublishGameBar(bool? enabled = null)
     {
         RequestControls();
+        RequestComposition();
         _gameBar.Publish(
             _roster,
             _ranks,
@@ -598,7 +599,8 @@ internal sealed partial class LoadingOverlayManager : IDisposable
             OverlayPartyAnalysis.ForRoster(_roster, CachedPlayers()),
             _liveState,
             _controls,
-            ModeCooldowns()
+            ModeCooldowns(),
+            CurrentComposition()?.Json
         );
     }
 

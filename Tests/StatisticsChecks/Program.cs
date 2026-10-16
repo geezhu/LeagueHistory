@@ -178,6 +178,7 @@ internal static class Program
         checks["--overlay-party-checks"] = () => Ui(OverlayPartyChecks.Run);
         checks["--skin-browser-checks"] = () => Ui(SkinBrowserChecks.Run);
         checks["--preliminary-checks"] = () => Ui(PreliminaryChecks.Run);
+        checks["--gamebar-composition-checks"] = () => Background(GameBarCompositionChecks.Run);
         checks["--minion-wave-checks"] = MinionWaveChecks.Run;
         checks["--death-timing-checks"] = DeathTimingChecks.Run;
         checks["--turret-checks"] = TurretChecks.Run;
@@ -215,6 +216,7 @@ internal static class Program
         OverlayTierChatChecks.Run();
         OverlayRecordChecks.Run();
         ControlChecks.Run();
+        GameBarCompositionChecks.Run();
         OverlayVoiceChatChecks.Run();
     }
 

@@ -46,7 +46,8 @@ public sealed partial class GameBarBridge : IDisposable
         IReadOnlyDictionary<string, OverlayPartyMarker>? parties = null,
         OverlayLiveState? live = null,
         IReadOnlyDictionary<int, ControlSkill[]>? controls = null,
-        IReadOnlyDictionary<int, SpellCooldown[]>? cooldowns = null
+        IReadOnlyDictionary<int, SpellCooldown[]>? cooldowns = null,
+        JObject? composition = null
     )
     {
         if (_disposed)
@@ -90,6 +91,8 @@ public sealed partial class GameBarBridge : IDisposable
             ["chatRecord"] = true,
             ["chatParty"] = true,
             ["chatControls"] = true,
+            ["chatComposition"] = true,
+            ["compositionProtocol"] = 1,
             ["controlProtocol"] = 1,
             ["chatVoice"] = true,
             ["voiceProtocol"] = 2,
@@ -114,6 +117,12 @@ public sealed partial class GameBarBridge : IDisposable
         };
         // Hidden or inactive, the widget gets the live fields empty.
         AddLiveSnapshot(snapshot, enabled && active ? live : null);
+        // Present only for ARAM-type games once arammeta's statistics are read; the widget hides the page otherwise.
+        if (composition != null && enabled && active)
+        {
+            snapshot["composition"] = composition.DeepClone();
+        }
+
         _pending.Writer.TryWrite(snapshot);
     }
 

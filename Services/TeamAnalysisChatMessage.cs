@@ -90,13 +90,19 @@ public static class TeamAnalysisChatMessage
     }
 
     /// <summary>Each capability as a grade among random teams, D marking a gap, then the damage mix and front line.</summary>
-    public static string Grades(AramTeamEvaluation evaluation, AramCapabilityGrades grades, bool mayhem)
+    /// <param name="side">我方 / 对方 in game, where both teams can be sent; empty in champion select.</param>
+    public static string Grades(
+        AramTeamEvaluation evaluation,
+        AramCapabilityGrades grades,
+        bool mayhem,
+        string side = ""
+    )
     {
         int size = evaluation.Team.Length;
         var levels = evaluation.Capabilities.Select(capability =>
             capability.Name + " " + grades.Grade(capability, size)
         );
-        string prefix = mayhem ? "【海克斯大乱斗·阵容能力】" : "【大乱斗·阵容能力】";
+        string prefix = $"【{(mayhem ? "海克斯大乱斗" : "大乱斗")}·{side}阵容能力】";
         return Fit(
             prefix
                 + string.Join(" · ", levels)
