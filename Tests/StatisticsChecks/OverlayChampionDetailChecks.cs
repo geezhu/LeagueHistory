@@ -165,7 +165,19 @@ internal static class OverlayChampionDetailChecks
             (string?)augmentRow["search"] == ChineseInitials.Of((string?)augmentRow["icons"]![0]!["name"]),
             "Augment rows carry pinyin initials for the widget's search"
         );
+        // The client renames arammeta's wording (天降熊 → 空投熊); the search follows the shown name and keeps the old one.
+        var renamed = JObject.Parse("""{"icons":[{"kind":"augment","id":1,"name":"天降熊","sourceName":"天降熊"}]}""");
+        OverlayChampionDetailService.UpdateAugmentSearch(renamed);
+        Check((string?)renamed["search"] == "tjx", "Before the client names arrive, the search uses arammeta's name");
+        renamed["icons"]![0]!["name"] = "空投熊";
+        OverlayChampionDetailService.UpdateAugmentSearch(renamed);
+        OverlayChampionDetailService.UpdateAugmentSearch(renamed);
+        Check(
+            (string?)renamed["search"] == "ktx 天降熊 tjx",
+            "After renaming, the shown name's initials lead and repeating gives the same text: " + renamed["search"]
+        );
         Check(ChineseInitials.Of("坦克引擎") == "tkyq", "Initials of common characters");
+        Check(ChineseInitials.Of("终极刷新") == "zjsx", "Initials of the augment that was reported");
         Check(ChineseInitials.Of("Ult Bot 大招！") == "ultbotdz", "Letters stay, punctuation and spaces go");
         Check(ChineseInitials.Of(null) == "" && ChineseInitials.Of("〇") == "", "Empty and unknown characters");
         Check(
