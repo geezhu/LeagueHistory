@@ -188,7 +188,7 @@
 
 本分支发布包：`League-<版本>-win-x64.zip`，由 `Scripts/Publish-Release.ps1 -Version <版本>` 生成（1.1.4 约 77.7 MB）。同一命令还生成一键安装程序 `League-<版本>-setup.exe`（约 57 MB，需要本机装有 Inno Setup 6：`winget install JRSoftware.InnoSetup`）。
 
-> **安装程序**：默认装到 C 盘以外第一个本地硬盘的 `Program Files\LeagueHistory`，没有其他硬盘时装到 `C:\Program Files\LeagueHistory`，可在安装时修改。默认勾选「安装 Game Bar 组件」，装完后以当前用户运行 `League.exe --install-gamebar`，与设置页的「安装组件」相同，失败时可在设置页重试。安装目录对普通用户可写，以便不以管理员身份运行时也能自动更新。卸载时同时移除 Game Bar 组件。安装程序没有代码签名，Windows SmartScreen 会提示「未知发布者」。
+> **安装程序**：默认装到 C 盘以外第一个本地硬盘的 `Program Files\LeagueHistory`，没有其他硬盘时装到 `C:\Program Files\LeagueHistory`，可在安装时修改。默认勾选「安装 Game Bar 组件」，装完后以当前用户运行 `League.exe --install-gamebar`，与设置页的「安装组件」相同，失败时可在设置页重试。安装目录对普通用户可写，以便不以管理员身份运行时也能自动更新。卸载时同时移除 Game Bar 组件；卸载前可勾选「同时删除本程序产生的所有数据」（默认不勾）：`%LOCALAPPDATA%\LeagueHistory`（设置、搜索记录、关机计划）、`%LOCALAPPDATA%\League` 下的 `Logs`、`Cache`、`VoiceModels`、安装目录的剩余文件（目录名为 LeagueHistory 时）、带本程序标记的定时关机任务和 `CN=LeagueHistory` 本机签名证书。静默卸载保留数据。安装程序没有代码签名，Windows SmartScreen 会提示「未知发布者」。
 
 > 压缩包内文件直接位于根目录，与上游发布包相同；解压到一个文件夹后运行 `League.exe` 即可，发布包自带 .NET 运行时，无需另外安装。游戏内快捷键和 Game Bar 发送需要以管理员身份运行。
 >

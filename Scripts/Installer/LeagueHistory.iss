@@ -84,3 +84,104 @@ begin
   end;
   Result := ExpandConstant('{autopf}\LeagueHistory');
 end;
+
+var
+  RemoveData: Boolean;
+
+// Asks once before uninstalling whether to remove everything the program wrote. Off by default: settings and the
+// downloaded voice model survive a reinstall. A silent uninstall keeps the data.
+function InitializeUninstall(): Boolean;
+var
+  Form: TSetupForm;
+  Intro, Detail: TNewStaticText;
+  Check: TNewCheckBox;
+  Uninstall, Cancel: TNewButton;
+begin
+  Result := True;
+  RemoveData := False;
+  if UninstallSilent then
+    exit;
+
+  Form := CreateCustomForm(ScaleX(440), ScaleY(196), False, False);
+  try
+    Form.Caption := '卸载 LeagueHistory';
+    Intro := TNewStaticText.Create(Form);
+    Intro.Parent := Form;
+    Intro.Left := ScaleX(16);
+    Intro.Top := ScaleY(16);
+    Intro.Caption := '将卸载 LeagueHistory 和 Game Bar 组件。';
+    Check := TNewCheckBox.Create(Form);
+    Check.Parent := Form;
+    Check.Left := ScaleX(16);
+    Check.Top := ScaleY(44);
+    Check.Width := Form.ClientWidth - ScaleX(32);
+    Check.Height := ScaleY(20);
+    Check.Caption := '同时删除本程序产生的所有数据（不可恢复）';
+    Detail := TNewStaticText.Create(Form);
+    Detail.Parent := Form;
+    Detail.Left := ScaleX(34);
+    Detail.Top := ScaleY(68);
+    Detail.Width := Form.ClientWidth - ScaleX(50);
+    Detail.AutoSize := False;
+    Detail.WordWrap := True;
+    Detail.Height := ScaleY(76);
+    Detail.Caption := '设置、搜索记录、日志、缓存、已下载的语音模型、安装目录里的剩余文件、' +
+      '本程序创建的定时关机任务，以及 Game Bar 组件的本机签名证书。';
+    Uninstall := TNewButton.Create(Form);
+    Uninstall.Parent := Form;
+    Uninstall.Caption := '卸载';
+    Uninstall.ModalResult := mrOk;
+    Uninstall.Default := True;
+    Uninstall.Width := ScaleX(80);
+    Uninstall.Height := ScaleY(26);
+    Uninstall.Left := Form.ClientWidth - ScaleX(184);
+    Uninstall.Top := Form.ClientHeight - ScaleY(40);
+    Cancel := TNewButton.Create(Form);
+    Cancel.Parent := Form;
+    Cancel.Caption := '取消';
+    Cancel.ModalResult := mrCancel;
+    Cancel.Cancel := True;
+    Cancel.Width := ScaleX(80);
+    Cancel.Height := ScaleY(26);
+    Cancel.Left := Form.ClientWidth - ScaleX(96);
+    Cancel.Top := Uninstall.Top;
+    Result := Form.ShowModal() = mrOk;
+    RemoveData := Check.Checked;
+  finally
+    Form.Free();
+  end;
+end;
+
+// Only folders and items this program names as its own: the shared %LOCALAPPDATA%\League folder loses just the
+// program's subfolders, the install folder is removed only when it is the LeagueHistory folder, and the scheduled
+// task only when it carries the program's marker. The uninstaller runs elevated, so the per-user folders are those of
+// the account that approved the prompt, normally the signed-in user.
+procedure RemoveUserData();
+var
+  Shared, App: String;
+  ResultCode: Integer;
+begin
+  DelTree(ExpandConstant('{localappdata}\LeagueHistory'), True, True, True);
+  Shared := ExpandConstant('{localappdata}\League');
+  DelTree(Shared + '\Logs', True, True, True);
+  DelTree(Shared + '\Cache', True, True, True);
+  DelTree(Shared + '\VoiceModels', True, True, True);
+  RemoveDir(Shared);
+  App := RemoveBackslash(ExpandConstant('{app}'));
+  if CompareText(ExtractFileName(App), 'LeagueHistory') = 0 then
+    DelTree(App, True, True, True);
+  Exec('powershell.exe',
+    '-NoProfile -NonInteractive -Command "' +
+    'Get-ScheduledTask -TaskName ''ShutdownAfterLoL_2300'' -ErrorAction SilentlyContinue | ' +
+    'Where-Object { $_.Description -eq ''LeagueHistory.ScheduledShutdown.v1'' } | ' +
+    'Unregister-ScheduledTask -Confirm:$false; ' +
+    'Get-ChildItem Cert:\CurrentUser\My, Cert:\LocalMachine\TrustedPeople | ' +
+    'Where-Object { $_.Subject -eq ''CN=LeagueHistory'' } | Remove-Item"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if (CurUninstallStep = usPostUninstall) and RemoveData then
+    RemoveUserData();
+end;
