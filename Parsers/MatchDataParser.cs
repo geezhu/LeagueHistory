@@ -30,11 +30,15 @@ namespace League.Parsers
                     cancellationToken.ThrowIfCancellationRequested();
                     JObject gameJson = match["json"] as JObject ?? match;
                     if (gameJson == null || gameJson["gameId"]?.Value<long>() == 0)
+                    {
                         continue;
+                    }
 
                     var participant = FindParticipant(gameJson, puuid);
                     if (participant == null)
+                    {
                         continue;
+                    }
 
                     await ProcessMatchData(result, gameJson, participant, cancellationToken);
                 }
@@ -146,7 +150,9 @@ namespace League.Parsers
         private string ExtractGameMode(JObject gameJson)
         {
             if (gameJson == null)
+            {
                 return "未知模式";
+            }
 
             // 1. 优先尝试 metadata.tags（原始逻辑）
             var tags = gameJson["metadata"]?["tags"] as JArray;
@@ -154,7 +160,9 @@ namespace League.Parsers
             {
                 string mode = MapGameTags(tags);
                 if (!mode.StartsWith("未知("))
+                {
                     return mode;
+                }
             }
 
             // 2. 尝试直接从顶层 queueId 获取（SUMMARY 接口常用）
@@ -163,7 +171,9 @@ namespace League.Parsers
             {
                 string modeFromQueue = GetModeFromQueueId(queueId);
                 if (!string.IsNullOrEmpty(modeFromQueue))
+                {
                     return modeFromQueue;
+                }
             }
 
             // 3. 尝试 gameMode 字段
@@ -256,99 +266,215 @@ namespace League.Parsers
         private string MapGameTags(JArray tags)
         {
             if (tags == null || tags.Count == 0)
+            {
                 return "未知模式";
+            }
+
             var tagList = tags.Select(t => t.ToString()).ToList();
 
             if (tagList.Contains("q_420"))
+            {
                 return "单双排";
+            }
+
             if (tagList.Contains("q_440"))
+            {
                 return "灵活排位";
+            }
+
             if (tagList.Contains("q_400"))
+            {
                 return "匹配征召";
+            }
+
             if (tagList.Contains("q_430"))
+            {
                 return "匹配盲选";
+            }
+
             if (tagList.Contains("q_450"))
+            {
                 return "大乱斗";
+            }
+
             if (tagList.Contains("q_900"))
+            {
                 return "无限乱斗";
+            }
+
             if (tagList.Contains("q_1900"))
+            {
                 return "自选无限火力";
+            }
+
             if (tagList.Contains("q_480"))
+            {
                 return "快速模式";
+            }
+
             if (tagList.Contains("q_1700"))
+            {
                 return "斗魂竞技场";
+            }
+
             if (tagList.Contains("q_2400"))
+            {
                 return "海克斯乱斗";
+            }
+
             if (tagList.Contains("q_2450"))
+            {
                 return "经典海克斯乱斗";
+            }
+
             if (tagList.Contains("q_1020"))
+            {
                 return "克隆大作战";
+            }
+
             if (tagList.Contains("q_1300"))
+            {
                 return "极限闪击";
+            }
+
             if (tagList.Contains("q_1400"))
+            {
                 return "终极魔典";
+            }
+
             if (tagList.Contains("q_700"))
+            {
                 return "冠军杯赛";
+            }
 
             // 人机
             if (tagList.Contains("q_830"))
+            {
                 return "人机入门";
+            }
+
             if (tagList.Contains("q_840"))
+            {
                 return "人机新手";
+            }
+
             if (tagList.Contains("q_850"))
+            {
                 return "人机中等";
+            }
+
             if (tagList.Contains("q_870"))
+            {
                 return "人机入门";
+            }
+
             if (tagList.Contains("q_880"))
+            {
                 return "人机新手";
+            }
+
             if (tagList.Contains("q_890"))
+            {
                 return "人机中等";
+            }
 
             // 教程
             if (tagList.Contains("q_2000"))
+            {
                 return "新手教程1";
+            }
+
             if (tagList.Contains("q_2010"))
+            {
                 return "新手教程2";
+            }
+
             if (tagList.Contains("q_2020"))
+            {
                 return "新手教程3";
+            }
 
             // 云顶
             if (tagList.Contains("q_1090"))
+            {
                 return "云顶匹配";
+            }
+
             if (tagList.Contains("q_1100"))
+            {
                 return "云顶排位";
+            }
+
             if (tagList.Contains("q_1130"))
+            {
                 return "云顶疾速";
+            }
+
             if (tagList.Contains("q_1160"))
+            {
                 return "云顶双人";
+            }
 
             // 自定义/经典
             if (tagList.Contains("q_3100"))
+            {
                 return "自定义峡谷";
+            }
+
             if (tagList.Contains("q_3140"))
+            {
                 return "训练模式";
+            }
+
             if (tagList.Contains("q_3270"))
+            {
                 return "自定义海克斯";
+            }
+
             if (tagList.Contains("q_4310"))
+            {
                 return "经典峡谷";
+            }
+
             if (tagList.Contains("q_4320"))
+            {
                 return "经典人机";
+            }
 
             if (tagList.Contains("q_950") || tagList.Contains("q_960"))
+            {
                 return "末日人机";
+            }
 
             if (tagList.Contains("mode_practicetool"))
+            {
                 return "训练模式";
+            }
+
             if (tagList.Contains("mode_classic"))
+            {
                 return "自定义峡谷";
+            }
+
             if (tagList.Contains("mode_aram"))
+            {
                 return "自定义大乱斗";
+            }
+
             if (tagList.Contains("mode_cherry") || tagList.Contains("mode_kiwi"))
+            {
                 return "自定义海克斯";
+            }
+
             if (tagList.Contains("type_CUSTOM_GAME"))
+            {
                 return "自定义";
+            }
+
             if (tagList.Contains("mode_jade") || tagList.Contains("mdoe_jade"))
+            {
                 return "经典峡谷";
+            }
 
             return $"未知({string.Join(",", tagList)})";
         }
@@ -365,7 +491,9 @@ namespace League.Parsers
             {
                 image = await Globals.resLoading.GetChampionIconAsync(championId).WaitAsync(cancellationToken);
                 if (image != null)
+                {
                     MatchQueryProcessor._imageCache.TryAdd(cleanName, image);
+                }
             }
 
             if (image != null && !heroIcons.Images.ContainsKey(cleanName))

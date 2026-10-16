@@ -49,7 +49,9 @@ namespace League.Parsers
             {
                 var path = AppDomain.CurrentDomain.BaseDirectory + "Assets\\Defaults\\Profile.png";
                 if (File.Exists(path))
+                {
                     return Image.FromFile(path);
+                }
             }
             catch { }
             return new Bitmap(64, 64);

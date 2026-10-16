@@ -35,9 +35,13 @@ namespace League.Controls
 
             Rectangle rect;
             if (Orientation == Orientation.Horizontal)
+            {
                 rect = new Rectangle(0, SplitterDistance, Width, SplitterWidth);
+            }
             else
+            {
                 rect = new Rectangle(SplitterDistance, 0, SplitterWidth, Height);
+            }
 
             using (SolidBrush brush = new SolidBrush(SplitterColor))
             {

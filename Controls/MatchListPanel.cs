@@ -69,7 +69,9 @@ namespace League.Controls
         public void TrackImage(Image image)
         {
             if (image != null)
+            {
                 _matchImages.Add(image);
+            }
         }
 
         // 清理所有图片资源
@@ -218,7 +220,9 @@ namespace League.Controls
             _playerRegions.Clear();
             _detailsRect = _replayRect = Rectangle.Empty;
             if (MatchInfo == null)
+            {
                 return;
+            }
 
             if (Compact)
             {
@@ -226,9 +230,15 @@ namespace League.Controls
                 e.Graphics.Clear(SelectedMatch ? Color.FromArgb(232, 241, 253) : Color.White);
                 using var stripe = new SolidBrush(color);
                 if (SelectedMatch)
+                {
                     e.Graphics.FillRectangle(stripe, 0, 0, 3, Height);
+                }
+
                 if (MatchInfo.HeroIcon != null)
+                {
                     e.Graphics.DrawImage(MatchInfo.HeroIcon, new Rectangle(6, 11, 40, 40));
+                }
+
                 void Draw(string text, int x, int y, int width, Color ink) =>
                     TextRenderer.DrawText(
                         e.Graphics,
@@ -300,9 +310,14 @@ namespace League.Controls
                     using var fill = new SolidBrush(dark ? Color.FromArgb(40, 49, 63) : Color.FromArgb(239, 243, 248));
                     g.FillRectangle(fill, x, y, size, size);
                     if (image != null)
+                    {
                         g.DrawImage(image, x, y, size, size);
+                    }
+
                     if (!string.IsNullOrWhiteSpace(hint))
+                    {
                         _imageHints.Add((ScreenRect(x, y, size, size), hint));
+                    }
                 }
 
                 Text(MatchInfo.ResultText, strong, result, 16, 18, 64);
@@ -326,6 +341,7 @@ namespace League.Controls
                     );
                 }
                 for (int i = 0; i < 2; i++)
+                {
                     Icon(
                         MatchInfo.SummonerSpells?.ElementAtOrDefault(i),
                         488 + i * 28,
@@ -335,6 +351,8 @@ namespace League.Controls
                             + "\n"
                             + StripHtmlTags(MatchInfo.SpellDescriptions?.ElementAtOrDefault(i))
                     );
+                }
+
                 bool augments = MatchInfo.Mode?.Contains("海克斯") == true || MatchInfo.QueueId == "q_2400";
                 for (int i = 0; i < 6; i++)
                 {
@@ -370,12 +388,18 @@ namespace League.Controls
                     {
                         var team = row == 0 ? MatchInfo.RedTeam : MatchInfo.BlueTeam;
                         if (team == null)
+                        {
                             continue;
+                        }
+
                         for (int i = 0; i < Math.Min(5, team.Count); i++)
                         {
                             var player = team[i];
                             if (player == null)
+                            {
                                 continue;
+                            }
+
                             int x = teamX + i * 27,
                                 y = 18 + row * 34;
                             Icon(player.Avatar, x, y, 24, player.FullName);

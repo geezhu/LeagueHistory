@@ -46,7 +46,9 @@ namespace League.Clients
             {
                 var chatId = await _chatService.FindConversationIdAsync("championSelect");
                 if (string.IsNullOrEmpty(chatId))
+                {
                     return false;
+                }
 
                 string[] lines = message.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
 
@@ -70,7 +72,10 @@ namespace League.Clients
         public async Task<bool> SendInGameMessageAsync(string message)
         {
             if (_gameInputService == null)
+            {
                 return false;
+            }
+
             return await _gameInputService.SendInGameMessageAsync(message);
         }
     }

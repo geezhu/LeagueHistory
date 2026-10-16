@@ -274,7 +274,9 @@ namespace League
                     Debug.WriteLine($"[就绪检查] 第 {i}/{maxAttempts} 次 → summoner={summonerOk}, sgp={sgpOk}");
 
                     if (summonerOk && sgpOk)
+                    {
                         return true;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -419,14 +421,18 @@ namespace League
 
                 string? currentPhase = await Globals.lcuClient.GetGameflowPhase();
                 if (!string.IsNullOrEmpty(currentPhase))
+                {
                     await _gameFlowWatcher!.OnGameflowPhaseChanged(currentPhase, null);
+                }
 
                 _gameFlowWatcher!.StartGameflowWatcher();
 
                 _uiManager!.SetLcuUiState(_uiManager.LcuReady, _uiManager.IsGame);
 
                 if (_uiManager.IsGame && imageTabControl1.TabPages.Count > 1)
+                {
                     imageTabControl1.SelectedIndex = 1;
+                }
             });
 
             _uiManager!.SetLcuUiState(_uiManager!.LcuReady, _uiManager!.IsGame);
@@ -535,7 +541,10 @@ namespace League
         private async Task SubmitPlayerSearchAsync()
         {
             if (_searchInProgress)
+            {
                 return;
+            }
+
             _searchInProgress = true;
             txtGameName.Enabled = false;
             _uiManager!.ShowLoadingIndicator();
@@ -645,7 +654,9 @@ namespace League
                 // 非强制刷新时优先读缓存
                 var cached = MatchCache.Get(puuid, queueId, begIndex, pageSize);
                 if (cached != null)
+                {
                     return cached;
+                }
             }
 
             // 发起网络请求
@@ -672,7 +683,9 @@ namespace League
         )
         {
             if (gameObj == null)
+            {
                 return null;
+            }
 
             MatchParserSgp _parser = new MatchParserSgp();
             _parser.PlayerIconClicked += Panel_PlayerIconClicked;
@@ -710,7 +723,9 @@ namespace League
         private async Task<Dictionary<string, RankedStats>> GetRankedStatsAsync(string puuid)
         {
             if (string.IsNullOrEmpty(puuid))
+            {
                 return new Dictionary<string, RankedStats>();
+            }
 
             var rankedJson = await Globals.lcuClient.GetCurrentRankedStatsAsync(puuid);
             return RankedStats.FromJson(rankedJson) ?? new Dictionary<string, RankedStats>();
@@ -835,7 +850,9 @@ namespace League
         private void ModeCheckBox_CheckedChanged(object sender, EventArgs e)
         {
             if (_appConfig == null)
+            {
                 return;
+            }
 
             _appConfig.EnablePreliminaryInNormal = chkNormal.Checked; // 匹配
             _appConfig.EnablePreliminaryInRanked = chkRanked.Checked; // 排位，单双/灵活
@@ -875,7 +892,9 @@ namespace League
         private void SaveAutoAcceptConfig()
         {
             if (_appConfig == null)
+            {
                 return;
+            }
 
             _appConfig.EnableAutoAcceptQueue = chkAutoAccept.Checked;
 
@@ -893,7 +912,9 @@ namespace League
         private void SendMode_CheckedChanged(object sender, EventArgs e)
         {
             if (rbModeCustom == null || txtCustomContent == null || _appConfig == null)
+            {
                 return;
+            }
 
             // 联动控制文本框的显示与隐藏
             txtCustomContent.Visible = rbModeCustom.Checked;
@@ -916,7 +937,9 @@ namespace League
         private void TxtCustomContent_Leave(object sender, EventArgs e)
         {
             if (txtCustomContent == null || _appConfig == null)
+            {
                 return;
+            }
 
             // 将当前文本框的内容同步到配置中
             _appConfig.CustomSendContent = txtCustomContent.Text;
@@ -933,7 +956,10 @@ namespace League
         private void HideSelf_CheckedChanged(object sender, EventArgs e)
         {
             if (_appConfig == null)
+            {
                 return;
+            }
+
             _appConfig.HideSelfWhenSending = chkHideSelf.Checked;
             SaveAppConfig();
             Debug.WriteLine($"[发送配置] 隐藏自己 已更新: {_appConfig.HideSelfWhenSending}");
@@ -947,7 +973,10 @@ namespace League
         private void UseChampionName_CheckedChanged(object sender, EventArgs e)
         {
             if (_appConfig == null)
+            {
                 return;
+            }
+
             _appConfig.UseChampionNameWhenSending = chkUseChampionName.Checked;
             SaveAppConfig();
             Debug.WriteLine($"[发送配置] 使用英雄名称 已更新: {_appConfig.UseChampionNameWhenSending}");
@@ -961,7 +990,10 @@ namespace League
         private void ChkSkipHonor_CheckedChanged(object? sender, EventArgs e)
         {
             if (_appConfig == null)
+            {
                 return;
+            }
+
             _appConfig.EnableSkipHonor = chkSkipHonor.Checked;
             SaveAppConfig();
             Debug.WriteLine($"[游戏结束配置] 跳过点赞界面 已更新: {_appConfig.EnableSkipHonor}");
@@ -975,7 +1007,10 @@ namespace League
         private void ChkSkipEndOfGameStats_CheckedChanged(object? sender, EventArgs e)
         {
             if (_appConfig == null)
+            {
                 return;
+            }
+
             _appConfig.EnableSkipEndOfGameStats = chkSkipEndOfGameStats.Checked;
             SaveAppConfig();
             Debug.WriteLine($"[游戏结束配置] 跳过结算界面 已更新: {_appConfig.EnableSkipEndOfGameStats}");
@@ -989,7 +1024,10 @@ namespace League
         private void chkAutoSkinSelect_CheckedChanged(object? sender, EventArgs e)
         {
             if (_appConfig == null)
+            {
                 return;
+            }
+
             _appConfig.EnableAutoSkinSelect = chkAutoSkinSelect.Checked;
             SaveAppConfig();
             Debug.WriteLine($"[英雄皮肤自动配置] 自动配置皮肤 已更新: {_appConfig.EnableAutoSkinSelect}");
@@ -1115,7 +1153,9 @@ namespace League
         private void btnCloseClients_Click(object sender, EventArgs e)
         {
             if (_clientUtility == null)
+            {
                 _clientUtility = new ClientUtilityService();
+            }
 
             if (
                 MessageBox.Show(
@@ -1126,7 +1166,9 @@ namespace League
                     MessageBoxIcon.Question
                 ) != DialogResult.Yes
             )
+            {
                 return;
+            }
 
             btnCloseClients.Enabled = false;
             try

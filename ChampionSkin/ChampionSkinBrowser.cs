@@ -54,11 +54,15 @@ namespace League.ChampionSkin
             _config = config ?? throw new ArgumentNullException(nameof(config));
 
             if (txtSearch != null)
+            {
                 txtSearch.PlaceholderText = "搜索英雄（中文/称号/英文）";
+            }
 
             chkOwnedOnly.Checked = _config.SkinBrowserOwnedOnly;
             if (chkHasSkinOnly != null)
+            {
                 chkHasSkinOnly.Checked = _config.SkinBrowserHasSkinOnly;
+            }
 
             BindUiEvents();
             Load += async (_, _) => await InitializeAsync();
@@ -139,7 +143,10 @@ namespace League.ChampionSkin
             txtSearch.Enabled = !busy;
             chkOwnedOnly.Enabled = !busy;
             if (chkHasSkinOnly != null)
+            {
                 chkHasSkinOnly.Enabled = !busy;
+            }
+
             BtnClearPrefs.Enabled = !busy;
         }
 
@@ -201,7 +208,9 @@ namespace League.ChampionSkin
                         && pref > 0
                         && pref % 1000 != 0
                     )
+                    {
                         preferred = pref;
+                    }
 
                     _allModels.Add(
                         new ChampionSkinCardModel
@@ -258,21 +267,33 @@ namespace League.ChampionSkin
                 string body = await resp.Content.ReadAsStringAsync();
                 Debug.WriteLine($"[ChampionSkinBrowser] skins-minimal status={resp.StatusCode} len={body?.Length}");
                 if (!resp.IsSuccessStatusCode)
+                {
                     return result;
+                }
 
                 foreach (var t in JArray.Parse(body))
                 {
                     if (t is not JObject o)
+                    {
                         continue;
+                    }
+
                     if (!(o["ownership"]?["owned"]?.Value<bool>() ?? false))
+                    {
                         continue;
+                    }
 
                     int skinId = o["id"]?.Value<int>() ?? 0;
                     int champId = o["championId"]?.Value<int>() ?? 0;
                     if (champId <= 0 && skinId > 0)
+                    {
                         champId = skinId / 1000;
+                    }
+
                     if (champId <= 0)
+                    {
                         continue;
+                    }
 
                     bool isBase = o["isBase"]?.Value<bool>() ?? (skinId % 1000 == 0);
                     string name = o["name"]?.ToString() ?? (isBase ? "默认" : skinId.ToString());
@@ -285,7 +306,9 @@ namespace League.ChampionSkin
                         result[champId] = list;
                     }
                     if (list.Any(x => x.SkinId == skinId))
+                    {
                         continue;
+                    }
 
                     list.Add(
                         new SkinThumbItem
@@ -315,7 +338,9 @@ namespace League.ChampionSkin
         private void EnsureCardPool()
         {
             if (_cardPool.Count > 0)
+            {
                 return;
+            }
 
             flpCards.SuspendLayout();
             try
@@ -340,7 +365,10 @@ namespace League.ChampionSkin
         private void ApplyFilterAndRender()
         {
             if (!_dataReady || _isRendering)
+            {
                 return;
+            }
+
             _isRendering = true;
             try
             {
@@ -361,9 +389,15 @@ namespace League.ChampionSkin
                     });
                 }
                 if (ownedOnly)
+                {
                     q = q.Where(m => m.IsOwned);
+                }
+
                 if (hasSkinOnly)
+                {
                     q = q.Where(m => m.Skins.Any(s => !s.IsBase && s.SkinId % 1000 != 0));
+                }
+
                 if (!string.IsNullOrEmpty(keyword))
                 {
                     q = q.Where(m =>
@@ -379,13 +413,18 @@ namespace League.ChampionSkin
                 try
                 {
                     foreach (var card in _cardPool.Values)
+                    {
                         card.Visible = false;
+                    }
 
                     int index = 0;
                     foreach (var model in list)
                     {
                         if (!_cardPool.TryGetValue(model.ChampionId, out var card))
+                        {
                             continue;
+                        }
+
                         card.Visible = true;
                         flpCards.Controls.SetChildIndex(card, index++);
                     }
@@ -416,16 +455,27 @@ namespace League.ChampionSkin
             foreach (Control c in flpCards.Controls)
             {
                 if (c is not ChampionSkinCard card || !card.Visible)
+                {
                     continue;
+                }
+
                 if (card.Tag is not int champId)
+                {
                     continue;
+                }
+
                 if (card.HasHeroImage)
+                {
                     continue;
+                }
+
                 try
                 {
                     var img = await Globals.resLoading.GetChampionIconAsync(champId);
                     if (img != null && !card.IsDisposed)
+                    {
                         card.SetHeroImage(img);
+                    }
                 }
                 catch { }
             }
@@ -456,26 +506,40 @@ namespace League.ChampionSkin
         {
             string jpg = SkinJpgPath(cacheDir, skinId);
             if (IsValidSkinFile(jpg))
+            {
                 return jpg;
+            }
+
             string png = Path.Combine(cacheDir, $"{skinId}.png");
             if (IsValidSkinFile(png))
+            {
                 return png;
+            }
+
             return null;
         }
 
         private static void CleanupCorruptSkinCache(string cacheDir)
         {
             if (!Directory.Exists(cacheDir))
+            {
                 return;
+            }
+
             foreach (var f in Directory.GetFiles(cacheDir, "*.*"))
             {
                 try
                 {
                     string ext = Path.GetExtension(f).ToLowerInvariant();
                     if (ext is not (".png" or ".jpg" or ".jpeg" or ".tmp"))
+                    {
                         continue;
+                    }
+
                     if (new FileInfo(f).Length < 256)
+                    {
                         File.Delete(f);
+                    }
                 }
                 catch { }
             }
@@ -489,7 +553,9 @@ namespace League.ChampionSkin
         {
             var http = Globals.lcuClient.Client;
             if (http == null)
+            {
                 return;
+            }
 
             string cacheDir = SkinCacheDir;
             Directory.CreateDirectory(cacheDir);
@@ -497,18 +563,27 @@ namespace League.ChampionSkin
             foreach (Control c in flpCards.Controls)
             {
                 if (c is not ChampionSkinCard card || !card.Visible)
+                {
                     continue;
+                }
+
                 if (card.Tag is not int champId)
+                {
                     continue;
+                }
 
                 var model = _allModels.FirstOrDefault(m => m.ChampionId == champId);
                 if (model == null)
+                {
                     continue;
+                }
 
                 foreach (var skin in model.Skins)
                 {
                     if (skin.IsBase || skin.SkinId % 1000 == 0)
+                    {
                         continue;
+                    }
 
                     string? path = ResolveSkinFile(cacheDir, skin.SkinId);
                     if (path == null)
@@ -518,7 +593,9 @@ namespace League.ChampionSkin
                     }
 
                     if (path == null || card.IsDisposed)
+                    {
                         continue;
+                    }
 
                     void apply()
                     {
@@ -530,11 +607,18 @@ namespace League.ChampionSkin
                     }
 
                     if (card.IsDisposed)
+                    {
                         continue;
+                    }
+
                     if (card.InvokeRequired)
+                    {
                         card.BeginInvoke(apply);
+                    }
                     else
+                    {
                         apply();
+                    }
                 }
             }
         }
@@ -542,14 +626,18 @@ namespace League.ChampionSkin
         private void ApplySkinFileToCard(ChampionSkinCard card, int skinId, string path)
         {
             if (card.IsDisposed || !IsValidSkinFile(path))
+            {
                 return;
+            }
 
             var img = _imgCache.GetOrLoad(
                 $"skin:{skinId}:31",
                 () => SkinBrowserImageCache.LoadScaledFromFile(path, 31, 31)
             );
             if (img != null)
+            {
                 card.SetSkinImage(skinId, img);
+            }
         }
 
         private async Task PreloadAllOwnedSkinImagesAsync(
@@ -559,7 +647,9 @@ namespace League.ChampionSkin
         {
             var http = Globals.lcuClient.Client;
             if (http == null)
+            {
                 return;
+            }
 
             string cacheDir = SkinCacheDir;
             Directory.CreateDirectory(cacheDir);
@@ -570,13 +660,21 @@ namespace League.ChampionSkin
             foreach (var (champId, list) in owned)
             {
                 if (token.IsCancellationRequested)
+                {
                     break;
+                }
+
                 foreach (var s in list)
                 {
                     if (token.IsCancellationRequested)
+                    {
                         break;
+                    }
+
                     if (s.IsBase || s.SkinId % 1000 == 0)
+                    {
                         continue;
+                    }
 
                     if (ResolveSkinFile(cacheDir, s.SkinId) != null)
                     {
@@ -588,9 +686,13 @@ namespace League.ChampionSkin
                     {
                         bool ok = await EnsureSkinFileCachedAsync(http, cacheDir, champId, s.SkinId, s.TilePath);
                         if (ok)
+                        {
                             done++;
+                        }
                         else
+                        {
                             fail++;
+                        }
                     }
                     catch
                     {
@@ -625,7 +727,9 @@ namespace League.ChampionSkin
         {
             // 已有有效文件直接成功
             if (ResolveSkinFile(cacheDir, skinId) != null)
+            {
                 return true;
+            }
 
             var idLock = _skinIdLocks.GetOrAdd(skinId, _ => new SemaphoreSlim(1, 1));
             await idLock.WaitAsync().ConfigureAwait(false);
@@ -633,13 +737,17 @@ namespace League.ChampionSkin
             {
                 // 双检：等锁期间可能已被别的任务写好
                 if (ResolveSkinFile(cacheDir, skinId) != null)
+                {
                     return true;
+                }
 
                 await _skinDownloadLock.WaitAsync().ConfigureAwait(false);
                 try
                 {
                     if (ResolveSkinFile(cacheDir, skinId) != null)
+                    {
                         return true;
+                    }
 
                     string cachePath = SkinJpgPath(cacheDir, skinId);
                     int baseSkinId = championId * 1000;
@@ -649,7 +757,10 @@ namespace League.ChampionSkin
                     {
                         var p = tilePathFromApi.Trim();
                         if (!p.StartsWith("/"))
+                        {
                             p = "/" + p;
+                        }
+
                         lcuPaths.Add(p);
                     }
 
@@ -657,18 +768,27 @@ namespace League.ChampionSkin
                     lcuPaths.Add($"/lol-game-data/assets/v1/champion-splashes/{skinId}.jpg");
                     lcuPaths.Add($"/lol-game-data/assets/v1/champion-splashes/uncentered/{skinId}.jpg");
                     if (skinId != baseSkinId)
+                    {
                         lcuPaths.Add($"/lol-game-data/assets/v1/champion-tiles/{championId}/{baseSkinId}.jpg");
+                    }
 
                     foreach (var path in lcuPaths.Distinct(StringComparer.OrdinalIgnoreCase))
                     {
                         var bytes = await TryGetBytesFromLcuAsync(lcuHttp, path).ConfigureAwait(false);
                         if (bytes == null)
+                        {
                             continue;
+                        }
+
                         if (SaveBytesAsCachedJpeg(bytes, cachePath))
+                        {
                             return true;
+                        }
                         // 写失败但文件已出现（别的线程写完）也算成功
                         if (ResolveSkinFile(cacheDir, skinId) != null)
+                        {
                             return true;
+                        }
                     }
 
                     // 兜底：英雄头占位（可选，避免黑格）
@@ -688,7 +808,9 @@ namespace League.ChampionSkin
                     }
 
                     if (ResolveSkinFile(cacheDir, skinId) != null)
+                    {
                         return true;
+                    }
 
                     Debug.WriteLine($"[皮肤图] 全部失败 skin={skinId} champ={championId}");
                     return false;
@@ -710,7 +832,10 @@ namespace League.ChampionSkin
             {
                 using var resp = await http.GetAsync(path).ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode)
+                {
                     return null;
+                }
+
                 var bytes = await resp.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
                 return bytes.Length >= 256 ? bytes : null;
             }
@@ -725,7 +850,9 @@ namespace League.ChampionSkin
             int w = src.Width,
                 h = src.Height;
             if (w <= maxEdge && h <= maxEdge)
+            {
                 return new Bitmap(src);
+            }
 
             double r = Math.Min((double)maxEdge / w, (double)maxEdge / h);
             int nw = Math.Max(1, (int)(w * r));
@@ -743,11 +870,15 @@ namespace League.ChampionSkin
         private static bool SaveBytesAsCachedJpeg(byte[] bytes, string cachePath)
         {
             if (bytes == null || bytes.Length < 256)
+            {
                 return false;
+            }
 
             string? dir = Path.GetDirectoryName(cachePath);
             if (!string.IsNullOrEmpty(dir))
+            {
                 Directory.CreateDirectory(dir);
+            }
 
             string tmp = Path.Combine(
                 dir ?? Path.GetTempPath(),
@@ -765,7 +896,9 @@ namespace League.ChampionSkin
                     .GetImageEncoders()
                     .FirstOrDefault(c => c.FormatID == ImageFormat.Jpeg.Guid);
                 if (jpegCodec == null)
+                {
                     return false;
+                }
 
                 using (var ep = new EncoderParameters(1))
                 {
@@ -790,7 +923,10 @@ namespace League.ChampionSkin
                     try
                     {
                         if (File.Exists(cachePath))
+                        {
                             File.Delete(cachePath);
+                        }
+
                         File.Move(tmp, cachePath);
                         break;
                     }
@@ -815,7 +951,9 @@ namespace League.ChampionSkin
                     try
                     {
                         if (File.Exists(tmp))
+                        {
                             File.Delete(tmp);
+                        }
                     }
                     catch { }
                     return false;
@@ -837,12 +975,17 @@ namespace League.ChampionSkin
             {
                 // 竞态下目标已写好 → 成功
                 if (IsValidSkinFile(cachePath))
+                {
                     return true;
+                }
+
                 Debug.WriteLine($"[皮肤图] JPEG 写盘失败: {ex.Message}");
                 try
                 {
                     if (File.Exists(tmp))
+                    {
                         File.Delete(tmp);
+                    }
                 }
                 catch { }
                 return false;
@@ -869,19 +1012,29 @@ namespace League.ChampionSkin
         {
             _config.PreferredChampionSkins ??= new Dictionary<int, int>();
             if (skinId <= 0 || skinId % 1000 == 0)
+            {
                 _config.PreferredChampionSkins.Remove(championId);
+            }
             else
+            {
                 _config.PreferredChampionSkins[championId] = skinId;
+            }
 
             var m = _allModels.FirstOrDefault(x => x.ChampionId == championId);
             if (m != null)
+            {
                 m.PreferredSkinId = (skinId <= 0 || skinId % 1000 == 0) ? 0 : skinId;
+            }
 
             if (_cardPool.TryGetValue(championId, out var card))
+            {
                 card.RefreshPreference(m?.PreferredSkinId ?? 0);
+            }
 
             if (Owner is FormMain main)
+            {
                 main.SaveAppConfig();
+            }
 
             Debug.WriteLine($"[ChampionSkinBrowser] 偏好 champ={championId} skin={skinId}");
         }
@@ -896,17 +1049,27 @@ namespace League.ChampionSkin
                     MessageBoxIcon.Question
                 ) != DialogResult.Yes
             )
+            {
                 return;
+            }
 
             _config.PreferredChampionSkins ??= new Dictionary<int, int>();
             _config.PreferredChampionSkins.Clear();
             foreach (var m in _allModels)
+            {
                 m.PreferredSkinId = 0;
+            }
+
             foreach (var card in _cardPool.Values)
+            {
                 card.RefreshPreference(0);
+            }
 
             if (Owner is FormMain main)
+            {
                 main.SaveAppConfig();
+            }
+
             ApplyFilterAndRender();
         }
 
@@ -920,10 +1083,14 @@ namespace League.ChampionSkin
             ShowInTaskbar = false;
 
             if (Owner is FormMain main)
+            {
                 main.SaveAppConfig();
+            }
 
             foreach (var card in _cardPool.Values)
+            {
                 card.PreferredSkinChanged -= OnPreferredSkinChanged;
+            }
 
             _cardPool.Clear();
             flpCards.Controls.Clear();

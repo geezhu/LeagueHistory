@@ -46,14 +46,18 @@ namespace League.Models
                 var url = "https://api.github.com/repos/mizi6654/LeagueHistory/releases/latest";
                 var response = await client.GetAsync(url);
                 if (!response.IsSuccessStatusCode)
+                {
                     return null;
+                }
 
                 var jsonStr = await response.Content.ReadAsStringAsync();
                 var json = JObject.Parse(jsonStr);
 
                 string tag = json["tag_name"]?.ToString()?.TrimStart('v') ?? "";
                 if (string.IsNullOrEmpty(tag))
+                {
                     return null;
+                }
 
                 var assets = json["assets"] as JArray;
                 var zip = assets?.FirstOrDefault(a =>

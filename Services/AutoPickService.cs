@@ -45,7 +45,9 @@ namespace League.Services
                         {
                             var currentPhase = await Globals.lcuClient.GetGameflowPhase();
                             if (currentPhase != "ChampSelect")
+                            {
                                 break;
+                            }
 
                             // 我方队伍卡片显示
                             await _cardDisplayService.ShowMyTeamCards(token);
@@ -104,15 +106,21 @@ namespace League.Services
         {
             var preConfig = _form.GetAppConfig()?.Preliminary;
             if (preConfig == null || !preConfig.EnableAutoPreliminary)
+            {
                 return;
+            }
 
             var preList = await _form.GetPreSelectedHeroesAsync();
             if (!preList.Any())
+            {
                 return;
+            }
 
             var session = await Globals.lcuClient.GetChampSelectSession();
             if (session == null)
+            {
                 return;
+            }
 
             int queueId = session["queueId"]?.Value<int>() ?? 0;
 
@@ -129,7 +137,9 @@ namespace League.Services
             };
 
             if (!shouldExecute)
+            {
                 return;
+            }
 
             // 有板凳席的乱斗类模式：大乱斗、海克斯、无限乱斗 → 抢英雄
             if (queueId == 450 || queueId == 2400 || queueId == 900)
@@ -140,7 +150,9 @@ namespace League.Services
 
             // 普通自选模式：匹配、排位、无限火力 → 只预选一次
             if (_hasAutoPreliminated)
+            {
                 return;
+            }
 
             bool success = await Globals.lcuClient.AutoDeclareIntentAsync(preList);
             if (success)
@@ -157,32 +169,47 @@ namespace League.Services
         {
             var cfg = _form.GetAppConfig();
             if (cfg == null || !cfg.EnableAutoSkinSelect)
+            {
                 return;
+            }
 
             if (cfg.PreferredChampionSkins == null || cfg.PreferredChampionSkins.Count == 0)
+            {
                 return;
+            }
 
             try
             {
                 var session = await Globals.lcuClient.GetChampSelectSession();
                 if (session == null)
+                {
                     return;
+                }
 
                 int cellId = session["localPlayerCellId"]?.Value<int>() ?? -1;
                 if (cellId < 0)
+                {
                     return;
+                }
 
                 var myTeam = session["myTeam"] as JArray;
                 var me = myTeam?.FirstOrDefault(p => p["cellId"]?.Value<int>() == cellId);
                 if (me == null)
+                {
                     return;
+                }
 
                 // 已锁定/已选 > 悬停意图
                 int championId = me["championId"]?.Value<int>() ?? 0;
                 if (championId <= 0)
+                {
                     championId = me["championPickIntent"]?.Value<int>() ?? 0;
+                }
+
                 if (championId <= 0)
+                {
                     return;
+                }
 
                 // 换英雄了：允许再切一次皮
                 if (championId != _lastSkinChampionId)
@@ -196,7 +223,9 @@ namespace League.Services
                     || wantSkin <= 0
                     || wantSkin % 1000 == 0
                 )
+                {
                     return;
+                }
 
                 int currentSkin = me["selectedSkinId"]?.Value<int>() ?? 0;
                 if (currentSkin == wantSkin)
@@ -206,7 +235,9 @@ namespace League.Services
                 }
 
                 if (_lastAppliedSkinId == wantSkin)
+                {
                     return;
+                }
 
                 bool ok = await Globals.lcuClient.TryApplyPreferredSkinAsync(championId, wantSkin, _lastAppliedSkinId);
 
@@ -214,7 +245,9 @@ namespace League.Services
                 _lastAppliedSkinId = wantSkin;
 
                 if (ok)
+                {
                     Debug.WriteLine($"[自动皮肤] 已请求切换 champ={championId} skin={wantSkin}");
+                }
             }
             catch (Exception ex)
             {

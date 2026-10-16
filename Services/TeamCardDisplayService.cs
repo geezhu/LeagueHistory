@@ -43,7 +43,10 @@ public sealed class TeamCardDisplayService
         var session = await Globals.lcuClient.GetChampSelectSession(deadline.Token);
         token.ThrowIfCancellationRequested();
         if (generation != _cards.Generation || session?["myTeam"] is not JArray team || team.Count == 0)
+        {
             return;
+        }
+
         string queue = session.Value<string>("queueId") ?? _selectionQueue;
         if (string.IsNullOrEmpty(queue) || queue == "0")
         {
@@ -52,7 +55,10 @@ public sealed class TeamCardDisplayService
         }
         token.ThrowIfCancellationRequested();
         if (generation != _cards.Generation)
+        {
             return;
+        }
+
         _selectionQueue = queue;
         _form._cachedMyTeam = RoomPlayerLoader.Normalize(team);
         // Reconcile every snapshot. The loader keeps completed and in-flight players unchanged.
@@ -83,7 +89,10 @@ public sealed class TeamCardDisplayService
             await _cards._uiManager.DispatchAsync(() =>
             {
                 if (token.IsCancellationRequested || generation != _cards.Generation)
+                {
                     return;
+                }
+
                 _form._waitingPanel?.Dispose();
                 _form._waitingPanel = null;
                 League.Controls.PlayerTeamsLayout.Show(_form.tableLayoutPanel1, _form.penalGameMatchData);
@@ -100,7 +109,10 @@ public sealed class TeamCardDisplayService
                     var session = await Globals.lcuClient.GetGameSession(deadline.Token);
                     token.ThrowIfCancellationRequested();
                     if (generation != _cards.Generation)
+                    {
                         return;
+                    }
+
                     string puuid = summoner?.Value<string>("puuid") ?? "";
                     var data = session?["gameData"];
                     var one = data?["teamOne"] as JArray;
@@ -145,7 +157,9 @@ public sealed class TeamCardDisplayService
                             hadRoster = true;
                             // Allow a later complete team list to replace a provisional hidden profile.
                             if (ours.Count == 5 && theirs.Count == 5 && supplemented == 0)
+                            {
                                 return;
+                            }
                         }
                     }
                 }

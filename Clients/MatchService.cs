@@ -71,7 +71,9 @@ namespace League.Clients
                 {
                     Debug.WriteLine($"第{attempt}次请求超时");
                     if (isPreheat)
+                    {
                         break;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -178,7 +180,10 @@ namespace League.Clients
         public double GetAverageResponseTime()
         {
             if (_responseTimeHistory.Count == 0)
+            {
                 return 0;
+            }
+
             return _responseTimeHistory.Average();
         }
     }

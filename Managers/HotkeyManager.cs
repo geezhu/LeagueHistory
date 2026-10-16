@@ -28,7 +28,10 @@ namespace League.Managers
         private void QueueHotkey(Keys shortcut)
         {
             if (_disposed || _mainForm.IsDisposed || !_mainForm.IsHandleCreated)
+            {
                 return;
+            }
+
             try
             {
                 // Always leave the native message callback before starting application work.
@@ -37,7 +40,9 @@ namespace League.Managers
                         async () =>
                         {
                             if (!_disposed)
+                            {
                                 await HandleHotkeyAsync(shortcut & Keys.KeyCode, (shortcut & Keys.Control) != 0);
+                            }
                         }
                     )
                 );
@@ -105,7 +110,10 @@ namespace League.Managers
         public void Dispose()
         {
             if (_disposed)
+            {
                 return;
+            }
+
             _disposed = true;
             _hotkeyWindow.Dispose();
             OnMyTeamHotkey = null;

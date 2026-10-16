@@ -63,11 +63,19 @@ namespace League.Clients
         {
             _lcuClient = lcu;
             if (!await LoadSessionAsync())
+            {
                 return false;
+            }
+
             if (!await LoadEntitlementsTokenAsync())
+            {
                 return false;
+            }
+
             if (string.IsNullOrEmpty(_puuid) || string.IsNullOrEmpty(_accessToken))
+            {
                 return false;
+            }
 
             _sgpUrl = await LoadSgpEndpointAsync();
             return !string.IsNullOrEmpty(_sgpUrl);
@@ -77,7 +85,9 @@ namespace League.Clients
         {
             HttpResponseMessage resp = await _lcuClient.GetAsync("lol-login/v1/session");
             if (!resp.IsSuccessStatusCode)
+            {
                 return false;
+            }
 
             JObject obj = JObject.Parse(await resp.Content.ReadAsStringAsync());
             _puuid = obj["puuid"]?.ToString();
@@ -91,7 +101,9 @@ namespace League.Clients
         {
             using HttpResponseMessage resp = await _lcuClient.GetAsync("entitlements/v1/token", cancellationToken);
             if (!resp.IsSuccessStatusCode)
+            {
                 return false;
+            }
 
             JObject obj = JObject.Parse(await resp.Content.ReadAsStringAsync(cancellationToken));
             _accessToken = obj["accessToken"]?.ToString();
@@ -106,7 +118,9 @@ namespace League.Clients
             {
                 HttpResponseMessage resp = await _lcuClient.GetAsync("lol-platform-config/v1/namespaces");
                 if (!resp.IsSuccessStatusCode)
+                {
                     return null;
+                }
 
                 string json = await resp.Content.ReadAsStringAsync();
                 JObject obj = JObject.Parse(json);
@@ -120,7 +134,9 @@ namespace League.Clients
                     {
                         var match = Regex.Match(capUrl, @"(https?://[^/]+)");
                         if (match.Success)
+                        {
                             sgpUrl = match.Groups[1].Value;
+                        }
                     }
                 }
 
@@ -157,13 +173,18 @@ namespace League.Clients
             {
                 Debug.WriteLine("❌ accessToken 为空，尝试刷新");
                 if (!await LoadEntitlementsTokenAsync(cancellationToken))
+                {
                     return null;
+                }
             }
 
             string path = $"/match-history-query/v1/products/lol/player/{puuid}/SUMMARY";
             var queries = new List<string> { $"startIndex={startIndex}", $"count={count}" };
             if (!string.IsNullOrEmpty(tag))
+            {
                 queries.Add($"tag={tag}");
+            }
+
             string fullUrl = _sgpUrl.TrimEnd('/') + path + "?" + string.Join("&", queries);
 
             for (int attempt = 1; attempt <= 3; attempt++)

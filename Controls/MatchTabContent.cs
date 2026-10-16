@@ -32,13 +32,17 @@ namespace League.Controls
         private bool IsSelfTab(TabPage tab)
         {
             if (tab?.Tag == null)
+            {
                 return false;
+            }
 
             string? tabPuuid = tab.Tag as string;
             string? currentPuuid = Globals.CurrentPuuid;
 
             if (string.IsNullOrWhiteSpace(tabPuuid) || string.IsNullOrWhiteSpace(currentPuuid))
+            {
                 return false;
+            }
 
             return string.Equals(tabPuuid, currentPuuid, StringComparison.OrdinalIgnoreCase);
         }
@@ -70,7 +74,9 @@ namespace League.Controls
         private void PerformCloseTab(TabPage tab, bool force = false)
         {
             if (tab == null)
+            {
                 return;
+            }
 
             string? puuid = tab.Tag as string;
             Debug.WriteLine($"[CloseTab] 执行关闭 -> Tab: {tab.Text} | PUUID: {puuid} | Force: {force}");
@@ -84,8 +90,13 @@ namespace League.Controls
 
             // 清理子控件
             foreach (Control c in tab.Controls)
+            {
                 if (c is IDisposable d)
+                {
                     d.Dispose();
+                }
+            }
+
             tab.Controls.Clear();
 
             // 移除并释放
@@ -208,7 +219,9 @@ namespace League.Controls
                 var oldestNonSelf = MainTabControl.TabPages.Cast<TabPage>().FirstOrDefault(t => !IsSelfTab(t));
 
                 if (oldestNonSelf != null)
+                {
                     CloseTab(oldestNonSelf);
+                }
                 else
                 {
                     MessageBox.Show(

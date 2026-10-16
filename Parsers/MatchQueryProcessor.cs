@@ -27,7 +27,10 @@ namespace League.Parsers
         {
             int valid = count is 10 or 20 or 30 or 50 ? count : 20;
             if (_matchHistoryCount == valid)
+            {
                 return;
+            }
+
             _matchHistoryCount = valid;
             ClearPlayerMatchCache();
         }
@@ -102,7 +105,9 @@ namespace League.Parsers
                 {
                     Debug.WriteLine($"[SafeFetch] 第{attempt}次失败: {ex.Message}");
                     if (attempt <= retryTimes)
+                    {
                         await Task.Delay(800);
+                    }
                 }
             }
 
@@ -120,7 +125,9 @@ namespace League.Parsers
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (playerData == null)
+            {
                 throw new ArgumentNullException(nameof(playerData));
+            }
 
             EnsureFactoryInitialized(); // 确保 Factory 已初始化
 
@@ -137,7 +144,9 @@ namespace League.Parsers
                 || puuid.StartsWith("HIDDEN_");
 
             if (isHidden)
+            {
                 return _factory.CreateHiddenPlayerInfo(summonerId, championId);
+            }
 
             // 缓存检查
             stage?.Invoke("queue");
@@ -154,9 +163,12 @@ namespace League.Parsers
                 cached.Player.ChampionId = championId;
                 cached.Player.ChampionName = Globals.resLoading.GetChampionById(championId)?.Name ?? "Unknown";
                 if (queueOverride == null)
+                {
                     cached.Player.Avatar = await Globals
                         .resLoading.GetChampionIconAsync(championId)
                         .WaitAsync(cancellationToken);
+                }
+
                 cancellationToken.ThrowIfCancellationRequested();
                 stage?.Invoke("cache-hit");
                 return cached;
@@ -169,7 +181,9 @@ namespace League.Parsers
                     ? await _fetcher.GetGameNameBySummonerIdAsync(summonerId.ToString(), cancellationToken)
                     : null;
             if (summonerInfo == null && summonerId != 0)
+            {
                 throw new HttpRequestException("Player profile unavailable");
+            }
 
             string gameName = summonerInfo?["gameName"]?.ToString() ?? "未知玩家";
             string tagLine = summonerInfo?["tagLine"]?.ToString() ?? "";
@@ -225,7 +239,9 @@ namespace League.Parsers
         private void CalculatePlayerBehavior(PlayerMatchInfo info)
         {
             if (info?.RecentMatches == null || info.RecentMatches.Count == 0)
+            {
                 return;
+            }
 
             int surrenderCount = 0;
             int totalMissing = 0;
@@ -237,10 +253,14 @@ namespace League.Parsers
             foreach (var m in info.RecentMatches)
             {
                 if (m.GameEndedInSurrender || m.GameEndedInEarlySurrender)
+                {
                     surrenderCount++;
+                }
 
                 if (m.GameDurationMinutes < 18)
+                {
                     shortCount++;
+                }
 
                 totalMissing += m.EnemyMissingPings;
                 totalVision += m.EnemyVisionPings;
@@ -270,30 +290,51 @@ namespace League.Parsers
 
             // 投降
             if (b.SurrenderRate >= 38)
+            {
                 tags.Add("爱投降");
+            }
             else if (b.SurrenderRate >= 25)
+            {
                 tags.Add("容易投降");
+            }
 
             // 单个信号
             if (b.AvgMissingPings >= 3.0)
+            {
                 tags.Add("爱发问号");
+            }
+
             if (b.AvgVisionPings >= 2.5)
+            {
                 tags.Add("爱发提醒");
+            }
+
             if (b.AvgGetBackPings >= 3.5)
+            {
                 tags.Add("爱发撤退");
+            }
+
             if (b.AvgDangerPings >= 2.5)
+            {
                 tags.Add("爱发危险");
+            }
 
             // 综合性格（优先级最高）
             double totalPressure = b.AvgMissingPings + b.AvgVisionPings + b.AvgGetBackPings + b.AvgDangerPings;
 
             if (totalPressure >= 13 || b.AvgGetBackPings >= 4)
+            {
                 tags.Add("玻璃心");
+            }
             else if (totalPressure >= 9)
+            {
                 tags.Add("心态容易崩");
+            }
 
             if (b.AvgGetBackPings >= 4.5 && totalPressure >= 11)
+            {
                 tags.Add("爱抱怨");
+            }
 
             var uniqueTags = tags.Distinct().ToList();
             return uniqueTags.Count > 0 ? $"[{string.Join("、", uniqueTags)}]" : "";
@@ -307,7 +348,9 @@ namespace League.Parsers
             if (_factory == null)
             {
                 if (_playerCardManager == null)
+                {
                     throw new InvalidOperationException("PlayerCardManager 未注入，请先调用 SetPlayerCardManager 方法");
+                }
 
                 _factory = new PlayerInfoFactory(_playerCardManager);
             }

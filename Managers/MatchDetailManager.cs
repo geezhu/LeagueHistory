@@ -167,7 +167,9 @@ namespace League.Managers
         public bool IsSummonersRiftOrAram(string queueTag)
         {
             if (string.IsNullOrEmpty(queueTag))
+            {
                 return false;
+            }
 
             string[] allowed = new[]
             {

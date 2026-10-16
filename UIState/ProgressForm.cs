@@ -53,7 +53,9 @@
         private void CenterToOwner()
         {
             if (Owner == null)
+            {
                 return;
+            }
 
             int x = Owner.Location.X + (Owner.Width - this.Width) / 2;
             int y = Owner.Location.Y + (Owner.Height - this.Height) / 2;
@@ -75,7 +77,9 @@
 
             // 每条消息都带 GitHub 前缀（防止丢失信息）
             if (!message.Contains("GitHub"))
+            {
                 message = "从 GitHub " + message;
+            }
 
             lblStatus.Text = message;
 
@@ -100,9 +104,13 @@
                     if (!this.IsDisposed)
                     {
                         if (this.InvokeRequired)
+                        {
                             this.Invoke(new Action(() => this.Close()));
+                        }
                         else
+                        {
                             this.Close();
+                        }
                     }
                 });
         }

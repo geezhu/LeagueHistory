@@ -218,7 +218,9 @@ namespace League.Parsers
                         int[] augmentIds = ExtractAugments(participant);
                         var augments = await LoadAugmentsAsync(augmentIds);
                         lock (allAugments)
+                        {
                             allAugments[puuid] = augments;
+                        }
                     }
                 }
                 finally
@@ -235,7 +237,10 @@ namespace League.Parsers
         private async Task<RuneInfo[]> LoadAugmentsAsync(int[] augmentIds)
         {
             if (augmentIds == null || augmentIds.Length == 0)
+            {
                 return Array.Empty<RuneInfo>();
+            }
+
             using var semaphore = new SemaphoreSlim(3);
             var tasks = augmentIds
                 .Where(id => id > 0)
@@ -512,7 +517,9 @@ namespace League.Parsers
                     return ("自定义海克斯", queueId);
                 }
                 if (string.Equals(gameMode, "PRACTICETOOL", StringComparison.OrdinalIgnoreCase))
+                {
                     return ("训练模式", queueId);
+                }
 
                 return gameMode?.ToLower() switch
                 {
@@ -626,7 +633,9 @@ namespace League.Parsers
              * 3️⃣ queue = 0 且非自定义
              * ========================= */
             if (queue == 0)
+            {
                 return ("未知模式", queueId);
+            }
 
             /* =========================
              * 4️⃣ gameMode 最终兜底

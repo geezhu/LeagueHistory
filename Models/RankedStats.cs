@@ -83,7 +83,9 @@ namespace League.Models
         private static RankedStats CreateFromQueueData(JToken queueData)
         {
             if (queueData == null || !queueData.HasValues)
+            {
                 return new RankedStats { Tier = "未定级" };
+            }
 
             return new RankedStats
             {
@@ -117,7 +119,9 @@ namespace League.Models
         private string FormatTierDisplay()
         {
             if (string.IsNullOrEmpty(Tier) || Tier == "NONE" || Tier == "未定级")
+            {
                 return "未定级";
+            }
 
             var tierMap = new Dictionary<string, string>
             {
@@ -134,7 +138,9 @@ namespace League.Models
             };
 
             if (!tierMap.TryGetValue(Tier, out var chineseTier))
+            {
                 chineseTier = "未知";
+            }
 
             // 大师以上无小段
             var isHighTier = Tier is "MASTER" or "GRANDMASTER" or "CHALLENGER";
@@ -148,7 +154,10 @@ namespace League.Models
         private static string FormatHistoricalTier(string? tier, string? division)
         {
             if (string.IsNullOrWhiteSpace(tier) || tier == "NONE")
+            {
                 return "—";
+            }
+
             return new RankedStats { Tier = tier, Division = division ?? "" }.FormattedTier;
         }
 

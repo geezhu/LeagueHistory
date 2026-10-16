@@ -11,7 +11,9 @@
         public static Image ResizeImage(Image originalImage, int width, int height, Color? bgColor = null)
         {
             if (originalImage == null)
+            {
                 return CreateDefaultImage(width, height, bgColor ?? Color.Transparent);
+            }
 
             try
             {
@@ -66,7 +68,9 @@
         public static Image ResizeImageForTableView(Image originalImage, int width, int height)
         {
             if (originalImage == null)
+            {
                 return CreateDefaultImage(width, height, Color.FromArgb(180, 0, 0, 0));
+            }
 
             try
             {
@@ -101,7 +105,10 @@
         {
             var bitmap = new Bitmap(width, height);
             using (var g = Graphics.FromImage(bitmap))
+            {
                 g.Clear(color);
+            }
+
             return bitmap;
         }
 
@@ -112,7 +119,9 @@
             {
                 g.Clear(Color.FromArgb(30, 128, 128, 128));
                 using (var pen = new Pen(Color.LightGray, 1))
+                {
                     g.DrawRectangle(pen, 0, 0, width - 1, height - 1);
+                }
             }
             return bitmap;
         }

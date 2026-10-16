@@ -42,7 +42,9 @@ namespace League.PrimaryElection
             try
             {
                 if (_isInitialized && !forceRefresh)
+                {
                     return;
+                }
 
                 Debug.WriteLine("[ChampionManager] 开始加载英雄数据...");
 
@@ -164,7 +166,9 @@ namespace League.PrimaryElection
                 var ddragonData = JsonConvert.DeserializeObject<DDragonChampionRoot>(json);
 
                 if (ddragonData?.Data == null)
+                {
                     throw new Exception("DDragon 数据为空");
+                }
 
                 _allChampions.Clear();
 
@@ -206,13 +210,17 @@ namespace League.PrimaryElection
             try
             {
                 if (!File.Exists(_cacheFilePath))
+                {
                     return false;
+                }
 
                 var json = await File.ReadAllTextAsync(_cacheFilePath);
                 var cachedData = JsonConvert.DeserializeObject<PrimaryChampionCacheDto>(json);
 
                 if (cachedData == null || cachedData.Champions == null || cachedData.Champions.Count == 0)
+                {
                     return false;
+                }
 
                 // 版本不匹配则视为缓存无效
                 if (!string.Equals(cachedData.DataVersion, localVersion, StringComparison.OrdinalIgnoreCase))
@@ -266,7 +274,9 @@ namespace League.PrimaryElection
         public List<PrimaryChampion> GetChampionsByPosition(ChampionPosition position)
         {
             if (position == ChampionPosition.All)
+            {
                 return _allChampions.Where(c => c.IsActive).ToList();
+            }
 
             return _allChampions
                 .Where(c => c.IsActive && c.GetPositions().Contains(position))

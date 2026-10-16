@@ -48,7 +48,9 @@ namespace League.ChampionSkin
             try
             {
                 if (File.Exists(jpg) && new FileInfo(jpg).Length >= 256)
+                {
                     return jpg;
+                }
             }
             catch { }
 
@@ -56,7 +58,9 @@ namespace League.ChampionSkin
             try
             {
                 if (File.Exists(png) && new FileInfo(png).Length >= 256)
+                {
                     return png;
+                }
             }
             catch { }
 
@@ -70,7 +74,10 @@ namespace League.ChampionSkin
         public void Bind(ChampionSkinCardModel model)
         {
             if (model == null)
+            {
                 return;
+            }
+
             if (picHero == null)
             {
                 Debug.WriteLine("[ChampionSkinCard] picHero 为 null，检查 Designer");
@@ -110,7 +117,9 @@ namespace League.ChampionSkin
         private void LoadHeroIcon(ChampionSkinCardModel model)
         {
             if (picHero == null || _cache == null)
+            {
                 return;
+            }
 
             var img = _cache.GetOrLoad(
                 $"hero:{model.ChampionId}",
@@ -128,14 +137,19 @@ namespace League.ChampionSkin
                     {
                         var scaled = SkinBrowserImageCache.LoadScaledFromFile(p, 150, 150);
                         if (scaled != null)
+                        {
                             return scaled;
+                        }
                     }
                     return null;
                 }
             );
 
             if (img == null)
+            {
                 return;
+            }
+
             picHero.SizeMode = PictureBoxSizeMode.Zoom;
             picHero.Image = img;
         }
@@ -143,14 +157,19 @@ namespace League.ChampionSkin
         public void SetHeroImage(Image? image)
         {
             if (IsDisposed || image == null || picHero == null)
+            {
                 return;
+            }
+
             if (InvokeRequired)
             {
                 BeginInvoke(() => SetHeroImage(image));
                 return;
             }
             if (picHero.Image != null)
+            {
                 return;
+            }
 
             if (_cache != null)
             {
@@ -165,13 +184,17 @@ namespace League.ChampionSkin
             }
 
             if (_selectedSkinId % 1000 == 0)
+            {
                 ApplyHeroPreview();
+            }
         }
 
         private void ApplyHeroPreview()
         {
             if (picHero == null)
+            {
                 return;
+            }
 
             bool useSkin = _selectedSkinId > 0 && _selectedSkinId % 1000 != 0;
             if (useSkin && _cache != null)
@@ -203,7 +226,9 @@ namespace League.ChampionSkin
         {
             ClearSkinFrames();
             if (skins == null || skins.Count == 0)
+            {
                 return;
+            }
 
             string champDir = Path.Combine(Application.StartupPath, "Assets", "champion");
             var tip = new ToolTip
@@ -245,7 +270,10 @@ namespace League.ChampionSkin
                         {
                             var full = _cache.Get($"hero:{_championId}");
                             if (full != null)
+                            {
                                 return SkinBrowserImageCache.Scale(full, 31, 31);
+                            }
+
                             return SkinBrowserImageCache.LoadScaledFromFile(
                                 Path.Combine(champDir, $"{_championId}.png"),
                                 31,
@@ -281,32 +309,49 @@ namespace League.ChampionSkin
             foreach (Control c in flpSkins.Controls)
             {
                 if (c is not Panel frame || frame.Tag is not SkinThumbItem item)
+                {
                     continue;
+                }
+
                 frame.BackColor = SkinFrameNormal;
                 frame.Padding = new Padding(1);
                 if (item.SkinId == _selectedSkinId)
+                {
                     target = frame;
+                }
+
                 if (item.IsBase || item.SkinId % 1000 == 0)
+                {
                     baseFrame = frame;
+                }
             }
 
             target ??= baseFrame;
             if (target == null)
+            {
                 return;
+            }
 
             _selectedFrame = target;
             target.Padding = new Padding(3); // 加粗
             target.BackColor = SkinFrameSelected; // 亮红
             if (target.Tag is SkinThumbItem it)
+            {
                 _selectedSkinId = it.SkinId;
+            }
         }
 
         private void SkinBox_Click(object? sender, EventArgs e)
         {
             if (sender is not PictureBox box)
+            {
                 return;
+            }
+
             if (box.Tag is not SkinThumbItem item)
+            {
                 return;
+            }
 
             _selectedSkinId = item.SkinId;
 
@@ -350,7 +395,10 @@ namespace League.ChampionSkin
         public void SetSkinImage(int skinId, Image? image)
         {
             if (IsDisposed || image == null)
+            {
                 return;
+            }
+
             if (InvokeRequired)
             {
                 BeginInvoke(() => SetSkinImage(skinId, image));
@@ -365,12 +413,19 @@ namespace League.ChampionSkin
             foreach (Control c in flpSkins.Controls)
             {
                 if (c is not Panel frame || frame.Tag is not SkinThumbItem item)
+                {
                     continue;
+                }
+
                 if (item.SkinId != skinId)
+                {
                     continue;
+                }
 
                 if (frame.Controls.Count > 0 && frame.Controls[0] is PictureBox pb)
+                {
                     pb.Image = thumb;
+                }
 
                 if (_selectedSkinId == skinId && _cache != null)
                 {
@@ -383,7 +438,9 @@ namespace League.ChampionSkin
                             {
                                 var fromFile = SkinBrowserImageCache.LoadScaledFromFile(path, 150, 150);
                                 if (fromFile != null)
+                                {
                                     return fromFile;
+                                }
                             }
                             return SkinBrowserImageCache.Scale(image, 150, 150);
                         }
@@ -400,7 +457,10 @@ namespace League.ChampionSkin
         private void ClearSkinFrames()
         {
             foreach (Control c in flpSkins.Controls.Cast<Control>().ToList())
+            {
                 DisposeSkinFrame(c);
+            }
+
             flpSkins.Controls.Clear();
             _selectedFrame = null;
         }
@@ -412,7 +472,10 @@ namespace League.ChampionSkin
                 foreach (Control child in frame.Controls)
                 {
                     if (child is PictureBox pb)
+                    {
                         pb.Image = null;
+                    }
+
                     child.Dispose();
                 }
             }
@@ -422,7 +485,10 @@ namespace League.ChampionSkin
         public void ReleaseResources()
         {
             if (picHero != null)
+            {
                 picHero.Image = null;
+            }
+
             ClearSkinFrames();
         }
 

@@ -10,7 +10,9 @@
             {
                 string queueKey = queueId.Value.ToString();
                 if (_modeTranslations.TryGetValue(queueKey, out string name))
+                {
                     return name;
+                }
             }
 
             // 其次尝试用 gameMode 映射（通常为 CLASSIC、ARAM 等）
@@ -18,7 +20,9 @@
             {
                 string modeKey = gameMode.ToUpperInvariant();
                 if (_modeTranslations.TryGetValue(modeKey, out string name))
+                {
                     return name;
+                }
             }
 
             //return $"未知模式{queueId}|{gameMode}";

@@ -17,7 +17,9 @@ namespace League.Parsers
         public void CachePlayerMatch(long summonerId, string filter, PlayerMatchInfo info)
         {
             if (summonerId != 0)
+            {
                 _playerMatchCache[(summonerId, filter)] = info;
+            }
         }
 
         public void ClearCache()

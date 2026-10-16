@@ -20,7 +20,10 @@ public class LOLHelper
     public static LolInstallation? ResolveInstallation(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
+        {
             return null;
+        }
+
         try
         {
             var directory = new DirectoryInfo(File.Exists(path) ? Path.GetDirectoryName(path)! : path);
@@ -31,13 +34,18 @@ public class LOLHelper
                     !File.Exists(Path.Combine(root, "LeagueClient", "LeagueClient.exe"))
                     || !File.Exists(Path.Combine(root, "LeagueClient", "LeagueClientUx.exe"))
                 )
+                {
                     continue;
+                }
+
                 string? Find(params string[] relatives) =>
                     relatives.Select(p => Path.Combine(root, p)).FirstOrDefault(File.Exists);
                 var official = Find(@"Launcher\startup_runner.exe", @"Launcher\Client.exe", @"TCLS\Client.exe");
                 var wegame = Find(@"WeGameLauncher\launcher.exe", @"Launcher\WeGameLauncher\launcher.exe");
                 if (official != null || wegame != null)
+                {
                     return new(root, official, wegame);
+                }
             }
         }
         catch (Exception ex)
@@ -53,16 +61,25 @@ public class LOLHelper
         try
         {
             if (!File.Exists(_configPath))
+            {
                 return null;
+            }
+
             var config = JObject.Parse(File.ReadAllText(_configPath));
             foreach (var field in new[] { "InstallRoot", "OfficialPath", "WeGamePath", "LastLOLPath" })
             {
                 string? path = config[field]?.ToString();
                 var installation = ResolveInstallation(path);
                 if (installation == null)
+                {
                     continue;
+                }
+
                 if (field != "InstallRoot" && !IsLauncher(installation, path))
+                {
                     continue;
+                }
+
                 return installation;
             }
         }
@@ -128,7 +145,9 @@ public class LOLHelper
                 try
                 {
                     if (ResolveInstallation(process.MainModule?.FileName) is { } running)
+                    {
                         return running;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -139,27 +158,41 @@ public class LOLHelper
         finally
         {
             foreach (var process in processes)
+            {
                 process.Dispose();
+            }
         }
         if (ReadSavedInstallation() is { } saved)
-            return saved;
-        foreach (var hive in new[] { RegistryHive.CurrentUser, RegistryHive.LocalMachine })
-        foreach (var view in new[] { RegistryView.Registry32, RegistryView.Registry64 })
-        foreach (var key in new[] { @"SOFTWARE\Tencent\LOL", @"SOFTWARE\Tencent\英雄联盟" })
         {
-            try
+            return saved;
+        }
+
+        foreach (var hive in new[] { RegistryHive.CurrentUser, RegistryHive.LocalMachine })
+        {
+            foreach (var view in new[] { RegistryView.Registry32, RegistryView.Registry64 })
             {
-                using var registry = RegistryKey.OpenBaseKey(hive, view);
-                using var entry = registry.OpenSubKey(key);
-                foreach (var field in new[] { "Path", "InstallPath", "InstallLocation" })
-                    if (ResolveInstallation(entry?.GetValue(field)?.ToString()) is { } installation)
-                        return installation;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"LOL registry: {ex.GetType().Name}");
+                foreach (var key in new[] { @"SOFTWARE\Tencent\LOL", @"SOFTWARE\Tencent\英雄联盟" })
+                {
+                    try
+                    {
+                        using var registry = RegistryKey.OpenBaseKey(hive, view);
+                        using var entry = registry.OpenSubKey(key);
+                        foreach (var field in new[] { "Path", "InstallPath", "InstallLocation" })
+                        {
+                            if (ResolveInstallation(entry?.GetValue(field)?.ToString()) is { } installation)
+                            {
+                                return installation;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"LOL registry: {ex.GetType().Name}");
+                    }
+                }
             }
         }
+
         return null;
     }
 
@@ -167,7 +200,10 @@ public class LOLHelper
     {
         var installation = ResolveInstallation(path);
         if (installation == null || !IsLauncher(installation, path) || !File.Exists(path))
+        {
             throw new InvalidOperationException("英雄联盟启动路径已失效，请重新选择安装目录。");
+        }
+
         Process.Start(
             new ProcessStartInfo(path) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(path) }
         );

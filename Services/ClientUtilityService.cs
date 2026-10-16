@@ -17,11 +17,15 @@ namespace League.Services
             {
                 var client = Globals.lcuClient?.Client;
                 if (client == null)
+                {
                     return (false, "LCU 未连接");
+                }
 
                 string? phase = await Globals.lcuClient.GetGameflowPhase();
                 if (phase == "InProgress")
+                {
                     return (false, "游戏进行中无法重启大厅 UX。");
+                }
 
                 var response = await client.PostAsync("/riotclient/kill-and-restart-ux", null);
                 return response.IsSuccessStatusCode

@@ -26,7 +26,9 @@ namespace League.Infrastructure
             {
                 string iconPath = (string?)i.iconPath;
                 if (string.IsNullOrEmpty(iconPath))
+                {
                     continue;
+                }
 
                 Items.Add(
                     new Item
@@ -47,7 +49,9 @@ namespace League.Infrastructure
         {
             var item = GetById(itemId);
             if (item == null)
+            {
                 return (null, "未知装备", "未找到该装备的描述");
+            }
 
             var image = await GetIconAsync(item.IconFileName);
             return (image, item.Name, item.Description);
@@ -57,7 +61,9 @@ namespace League.Infrastructure
         {
             string fileName = Path.GetFileName(iconPath);
             if (string.IsNullOrEmpty(fileName))
+            {
                 return null;
+            }
 
             return await _imageCache.GetOrDownloadImageAsync(iconPath, "item", fileName);
         }

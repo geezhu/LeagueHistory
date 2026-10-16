@@ -161,7 +161,9 @@ namespace League.Models
         private static Image? LoadImageSafe(string path)
         {
             if (!File.Exists(path))
+            {
                 return null;
+            }
 
             try
             {

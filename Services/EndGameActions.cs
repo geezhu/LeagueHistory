@@ -24,7 +24,9 @@ namespace League.Services
             {
                 var client = _lcuSession.Client;
                 if (client == null)
+                {
                     return;
+                }
 
                 string jsonBody = body == null ? "{}" : JsonConvert.SerializeObject(body);
                 var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");

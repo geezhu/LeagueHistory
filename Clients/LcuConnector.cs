@@ -14,7 +14,10 @@ public class LcuConnector
                 return (success, port, token);
             });
             if (result.success)
+            {
                 return result;
+            }
+
             await Task.Delay(1000);
         }
         return (false, "", "");

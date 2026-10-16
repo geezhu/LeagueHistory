@@ -304,10 +304,14 @@
                 foreach (var hero in heroes)
                 {
                     if (!map.ContainsKey(hero))
+                    {
                         map[hero] = new List<ChampionPosition>();
+                    }
 
                     if (!map[hero].Contains(pos))
+                    {
                         map[hero].Add(pos);
+                    }
                 }
             }
         }
