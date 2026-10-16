@@ -18,7 +18,7 @@
 | 消息发送 | 快捷键改用 Windows 事件接收，移除全局键盘钩子与轮询；梯队、熟练度、连死等聊天内容；发送状态诊断日志 |
 | 设置与自动化 | 设置页按使用顺序重排；自动接受延迟；到点关机（等本局结束再关）；英雄联盟安装目录与数据缓存设置；标题栏显示实际版本 |
 | 发布 | 发布包自带 .NET 运行时；Game Bar 组件随包附带，在设置中安装并用本机生成的证书签名；语音模型改为按需下载（镜像 / 官方直链 / 手动导入） |
-| 工程 | 新增源码规范（CSharpier、clang-format、Meziantou 规则）与 `Scripts/Check-CodeQuality.ps1`；上游文件新增行检查 `Scripts/Check-UpstreamChanges.ps1`；`Tests/StatisticsChecks` 回归测试，聊天、麦克风和关机均用模拟器验证 |
+| 工程 | 全部源码统一规范（CSharpier、clang-format、Meziantou 规则）与 `Scripts/Check-CodeQuality.ps1`，上游带来的文件也一样；`Tests/StatisticsChecks` 回归测试，聊天、麦克风和关机均用模拟器验证 |
 
 ## 功能特色
 
@@ -199,7 +199,7 @@
 
 - 编译：`dotnet build League.csproj -c Release`；Game Bar 组件见 [GameBar/README.md](GameBar/README.md)
 - 回归测试：编译 `Tests/StatisticsChecks/StatisticsChecks.csproj` 后直接运行，或用 `--settings-checks`、`--room-player-checks` 等参数运行单项；聊天发送、麦克风和关机计划均使用模拟器，不会产生真实操作
-- 代码规范：新增源码运行 `Scripts/Check-CodeQuality.ps1`；修改上游原有文件后运行 `Scripts/Check-UpstreamChanges.ps1`，详见 [AGENTS.md](AGENTS.md) 和 [docs/code-quality.md](docs/code-quality.md)
+- 代码规范：全部源码运行 `Scripts/Check-CodeQuality.ps1`，上游带来的文件也一样，详见 [AGENTS.md](AGENTS.md) 和 [docs/code-quality.md](docs/code-quality.md)
 - 设计文档：[docs](docs) 目录收录统计与时间线、历史筛选、到点关机、OP.GG / arammeta 需求与阵容分析等说明
 
 ---

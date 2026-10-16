@@ -10,9 +10,9 @@ $repository = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'CodeQuality.Common.ps1')
 $configuration = Get-Content -LiteralPath (Join-Path $repository 'config/code-quality.json') -Raw | ConvertFrom-Json
 $selected = @(Get-CodeQualitySelection $repository $configuration $BaseRef $Files)
-# Validate ownership before restoring tools or formatting anything.
-& (Join-Path $PSScriptRoot 'Update-CodeQualityScope.ps1') -Check
-if (!$selected.Count) { Write-Output 'No new source files selected.'; return }
+# Validate the generated configuration before restoring tools or formatting anything.
+& (Join-Path $PSScriptRoot 'Update-CodeQualityConfig.ps1') -Check
+if (!$selected.Count) { Write-Output 'No source files selected.'; return }
 
 Push-Location $repository
 try {
@@ -44,10 +44,10 @@ try {
         }
         if ($violations.Count) {
             $violations | Sort-Object -Unique | Write-Output
-            throw 'Selected new source files have code quality violations.'
+            throw 'Selected source files have code quality violations.'
         }
     }
-    Write-Output ('PASS: new source files checked: ' + $selected.Count)
+    Write-Output ('PASS: source files checked: ' + $selected.Count)
 } finally {
     Pop-Location
 }
