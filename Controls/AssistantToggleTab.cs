@@ -1,8 +1,8 @@
 namespace League.Controls;
 
 /// <summary>
-/// Small edge tab beside the League client that opens or closes the champion select assistant.
-/// It uses the panel's own colors, a chevron toward where the panel goes, and a two-character label.
+/// Small edge tab beside the League client that reopens a closed champion select assistant.
+/// It uses the panel's own colors, a chevron toward where the panel opens, and a two-character label.
 /// It never takes focus, so clicking it leaves keyboard input with the client.
 /// </summary>
 internal sealed class AssistantToggleTab : Form
@@ -17,14 +17,13 @@ internal sealed class AssistantToggleTab : Form
     private static readonly Color Border = Color.FromArgb(49, 83, 95);
     private static readonly Color Muted = Color.FromArgb(150, 172, 182);
     private readonly Font _glyph = new("Segoe MDL2 Assets", 8);
-    private bool _open = true;
     private bool _panelOnLeft = true;
     private bool _hover;
 
     public AssistantToggleTab(Font font)
     {
         Text = "选人助手";
-        AccessibleName = "打开或关闭选人助手";
+        AccessibleName = "展开选人助手";
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
@@ -35,19 +34,6 @@ internal sealed class AssistantToggleTab : Form
     }
 
     public event EventHandler? Toggled;
-
-    public bool Open
-    {
-        get => _open;
-        set
-        {
-            if (_open != value)
-            {
-                _open = value;
-                Invalidate();
-            }
-        }
-    }
 
     /// <summary>Which side of the client the panel uses, so the chevron points the way it moves.</summary>
     public bool PanelOnLeft
@@ -111,22 +97,12 @@ internal sealed class AssistantToggleTab : Form
             e.Graphics.DrawRectangle(border, 0, 0, Width - 1, Height - 1);
         }
 
-        // An accent edge on the panel side shows the panel is open; it disappears when closed.
-        if (_open)
-        {
-            using var accent = new SolidBrush(AccentColors.Accent);
-            int edge = Math.Max(2, Width / 10);
-            e.Graphics.FillRectangle(accent, _panelOnLeft ? 0 : Width - edge, 0, edge, Height);
-        }
-
-        // Open: the chevron points toward the client, where the panel collapses; closed: toward the panel side.
-        bool pointLeft = _open ? !_panelOnLeft : _panelOnLeft;
         int padding = (Height - _glyph.Height - Caption.Length * Font.Height) / 3;
         var color = _hover ? AccentColors.Accent : Muted;
         var flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix;
         TextRenderer.DrawText(
             e.Graphics,
-            pointLeft ? ChevronLeft : ChevronRight,
+            _panelOnLeft ? ChevronLeft : ChevronRight,
             _glyph,
             new Rectangle(0, padding, Width, _glyph.Height),
             color,
