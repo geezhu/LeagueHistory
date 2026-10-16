@@ -107,6 +107,8 @@ internal static class Program
         checks["--shutdown-checks"] = ShutdownSettingsChecks.Run;
         checks["--core-utility-checks"] = CoreUtilityChecks.Run;
         checks["--utility-logic-checks"] = UtilityLogicChecks.Run;
+        checks["--image-processor-checks"] = ImageProcessorChecks.Run;
+        checks["--update-support-checks"] = UpdateSupportChecks.Run;
         checks["--build-info-checks"] = BuildInfoChecks.Run;
         checks["--diagnostic-log-checks"] = () =>
         {
