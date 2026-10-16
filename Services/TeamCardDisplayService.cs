@@ -75,92 +75,40 @@ public sealed class TeamCardDisplayService
         _ = LoadGameSessionAsync(generation, cancellation.Token, clearCards);
     }
 
+    private enum RosterAttempt
+    {
+        // 名单还没就绪，或换了新一局，需要重试/停止。
+        Unavailable,
+        Stale,
+
+        // 已显示名单，但人数不足或含选人阶段补的临时身份，继续等更完整的名单。
+        Partial,
+        Complete,
+    }
+
     private async Task LoadGameSessionAsync(long generation, CancellationToken token, bool clearCards)
     {
         bool hadRoster = false;
         try
         {
-            if (clearCards)
-            {
-                _form._cachedMyTeam = new JArray();
-                _form._cachedEnemyTeam = new JArray();
-                await _cards.ClearCardsAsync();
-            }
-            await _cards._uiManager.DispatchAsync(() =>
-            {
-                if (token.IsCancellationRequested || generation != _cards.Generation)
-                {
-                    return;
-                }
-
-                _form._waitingPanel?.Dispose();
-                _form._waitingPanel = null;
-                League.Controls.PlayerTeamsLayout.Show(_form.tableLayoutPanel1, _form.penalGameMatchData);
-            });
+            await ShowTeamsLayoutAsync(generation, token, clearCards);
             // Team data may not be ready at the first InProgress transition. Retry the roster,
             // without making the game-phase monitor await player histories or slow LCU calls.
             for (int attempt = 0; attempt < 5 && generation == _cards.Generation; attempt++)
             {
                 try
                 {
-                    using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
-                    deadline.CancelAfter(TimeSpan.FromSeconds(8));
-                    var summoner = await Globals.lcuClient.GetCurrentSummoner(deadline.Token);
-                    var session = await Globals.lcuClient.GetGameSession(deadline.Token);
-                    token.ThrowIfCancellationRequested();
-                    if (generation != _cards.Generation)
+                    var result = await TryLoadRosterOnceAsync(generation, token);
+                    if (result == RosterAttempt.Stale)
                     {
                         return;
                     }
 
-                    string puuid = summoner?.Value<string>("puuid") ?? "";
-                    var data = session?["gameData"];
-                    var one = data?["teamOne"] as JArray;
-                    var two = data?["teamTwo"] as JArray;
-                    if (puuid.Length > 0 && one != null && two != null)
+                    hadRoster |= result is RosterAttempt.Partial or RosterAttempt.Complete;
+                    // Allow a later complete team list to replace a provisional hidden profile.
+                    if (result == RosterAttempt.Complete)
                     {
-                        bool inOne = one.Any(p => p.Value<string>("puuid") == puuid);
-                        bool inTwo = two.Any(p => p.Value<string>("puuid") == puuid);
-                        if (inOne != inTwo)
-                        {
-                            string queue = data?["queue"]?.Value<string>("id") ?? "";
-                            Globals.CurrGameMod = queue;
-                            var resolved = RoomPlayerLoader.ResolveGameTeams((JObject)data!);
-                            var ours = inOne ? resolved.One : resolved.Two;
-                            var theirs = inOne ? resolved.Two : resolved.One;
-                            // Known identities must never appear on both sides.
-                            var ourIds = ours.Select(p => p.Value<long?>("summonerId") ?? 0)
-                                .Where(id => id > 0)
-                                .ToHashSet();
-                            var ourPuuids = ours.Select(RoomPlayerLoader.PublicPuuid)
-                                .Where(p => p.Length > 0)
-                                .ToHashSet();
-                            theirs = new JArray(
-                                theirs
-                                    .Where(p =>
-                                        !ourIds.Contains(p.Value<long?>("summonerId") ?? 0)
-                                        && !ourPuuids.Contains(RoomPlayerLoader.PublicPuuid(p))
-                                    )
-                                    .Select(p => p.DeepClone())
-                            );
-                            int supplemented = ours.Concat(theirs)
-                                .Count(p => p.Value<bool?>("__roomSelectionOnly") == true);
-                            RoomLoadDiagnostics.Shared.Report(
-                                generation,
-                                "session-roster",
-                                detail: $"one={one.Count} two={two.Count} selections={(data?["playerChampionSelections"] as JArray)?.Count ?? 0} ally={ours.Count} enemy={theirs.Count} supplemented={supplemented}"
-                            );
-                            _form._cachedMyTeam = ours;
-                            _form._cachedEnemyTeam = theirs;
-                            await _cards.UpdateTeamAsync(ours, true, generation, queue);
-                            await _cards.UpdateTeamAsync(theirs, false, generation, queue);
-                            hadRoster = true;
-                            // Allow a later complete team list to replace a provisional hidden profile.
-                            if (ours.Count == 5 && theirs.Count == 5 && supplemented == 0)
-                            {
-                                return;
-                            }
-                        }
+                        return;
                     }
                 }
                 catch (OperationCanceledException) when (!token.IsCancellationRequested)
@@ -181,6 +129,93 @@ public sealed class TeamCardDisplayService
         {
             RoomLoadDiagnostics.Shared.Report(generation, "session-display-failed", detail: ex.GetType().Name);
         }
+    }
+
+    private async Task ShowTeamsLayoutAsync(long generation, CancellationToken token, bool clearCards)
+    {
+        if (clearCards)
+        {
+            _form._cachedMyTeam = new JArray();
+            _form._cachedEnemyTeam = new JArray();
+            await _cards.ClearCardsAsync();
+        }
+        await _cards._uiManager.DispatchAsync(() =>
+        {
+            if (token.IsCancellationRequested || generation != _cards.Generation)
+            {
+                return;
+            }
+
+            _form._waitingPanel?.Dispose();
+            _form._waitingPanel = null;
+            League.Controls.PlayerTeamsLayout.Show(_form.tableLayoutPanel1, _form.penalGameMatchData);
+        });
+    }
+
+    /// <summary>
+    /// 读一次对局会话；只有能确定自己在哪一队时才显示双方名单。单次读取最多等 8 秒。
+    /// </summary>
+    private async Task<RosterAttempt> TryLoadRosterOnceAsync(long generation, CancellationToken token)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(TimeSpan.FromSeconds(8));
+        var summoner = await Globals.lcuClient.GetCurrentSummoner(deadline.Token);
+        var session = await Globals.lcuClient.GetGameSession(deadline.Token);
+        token.ThrowIfCancellationRequested();
+        if (generation != _cards.Generation)
+        {
+            return RosterAttempt.Stale;
+        }
+
+        string puuid = summoner?.Value<string>("puuid") ?? "";
+        var data = session?["gameData"];
+        var one = data?["teamOne"] as JArray;
+        var two = data?["teamTwo"] as JArray;
+        if (puuid.Length == 0 || one == null || two == null)
+        {
+            return RosterAttempt.Unavailable;
+        }
+
+        bool inOne = one.Any(p => p.Value<string>("puuid") == puuid);
+        bool inTwo = two.Any(p => p.Value<string>("puuid") == puuid);
+        if (inOne == inTwo)
+        {
+            return RosterAttempt.Unavailable;
+        }
+
+        string queue = data?["queue"]?.Value<string>("id") ?? "";
+        Globals.CurrGameMod = queue;
+        var resolved = RoomPlayerLoader.ResolveGameTeams((JObject)data!);
+        var ours = inOne ? resolved.One : resolved.Two;
+        var theirs = WithoutAllies(ours, inOne ? resolved.Two : resolved.One);
+        int supplemented = ours.Concat(theirs).Count(p => p.Value<bool?>("__roomSelectionOnly") == true);
+        RoomLoadDiagnostics.Shared.Report(
+            generation,
+            "session-roster",
+            detail: $"one={one.Count} two={two.Count} selections={(data?["playerChampionSelections"] as JArray)?.Count ?? 0} ally={ours.Count} enemy={theirs.Count} supplemented={supplemented}"
+        );
+        _form._cachedMyTeam = ours;
+        _form._cachedEnemyTeam = theirs;
+        await _cards.UpdateTeamAsync(ours, true, generation, queue);
+        await _cards.UpdateTeamAsync(theirs, false, generation, queue);
+        return ours.Count == 5 && theirs.Count == 5 && supplemented == 0
+            ? RosterAttempt.Complete
+            : RosterAttempt.Partial;
+    }
+
+    // Known identities must never appear on both sides.
+    private static JArray WithoutAllies(JArray ours, JArray theirs)
+    {
+        var ourIds = ours.Select(p => p.Value<long?>("summonerId") ?? 0).Where(id => id > 0).ToHashSet();
+        var ourPuuids = ours.Select(RoomPlayerLoader.PublicPuuid).Where(p => p.Length > 0).ToHashSet();
+        return new JArray(
+            theirs
+                .Where(p =>
+                    !ourIds.Contains(p.Value<long?>("summonerId") ?? 0)
+                    && !ourPuuids.Contains(RoomPlayerLoader.PublicPuuid(p))
+                )
+                .Select(p => p.DeepClone())
+        );
     }
 
     private void StopGameSessionLoad()

@@ -190,26 +190,8 @@ namespace League.Services
                     return;
                 }
 
-                int cellId = session["localPlayerCellId"]?.Value<int>() ?? -1;
-                if (cellId < 0)
-                {
-                    return;
-                }
-
-                var myTeam = session["myTeam"] as JArray;
-                var me = myTeam?.FirstOrDefault(p => p["cellId"]?.Value<int>() == cellId);
-                if (me == null)
-                {
-                    return;
-                }
-
-                // 已锁定/已选 > 悬停意图
-                int championId = me["championId"]?.Value<int>() ?? 0;
-                if (championId <= 0)
-                {
-                    championId = me["championPickIntent"]?.Value<int>() ?? 0;
-                }
-
+                var me = FindMySelection(session);
+                int championId = me == null ? 0 : GetSelectedChampionId(me);
                 if (championId <= 0)
                 {
                     return;
@@ -261,6 +243,26 @@ namespace League.Services
             {
                 Debug.WriteLine($"[自动皮肤] TryAutoSkinAsync: {ex.Message}");
             }
+        }
+
+        // 选人会话里自己的那一格。
+        private static JToken? FindMySelection(JObject session)
+        {
+            int cellId = session["localPlayerCellId"]?.Value<int>() ?? -1;
+            if (cellId < 0)
+            {
+                return null;
+            }
+
+            var myTeam = session["myTeam"] as JArray;
+            return myTeam?.FirstOrDefault(p => p["cellId"]?.Value<int>() == cellId);
+        }
+
+        // 已锁定/已选 > 悬停意图
+        private static int GetSelectedChampionId(JToken me)
+        {
+            int championId = me["championId"]?.Value<int>() ?? 0;
+            return championId > 0 ? championId : me["championPickIntent"]?.Value<int>() ?? 0;
         }
     }
 }

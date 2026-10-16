@@ -45,13 +45,7 @@ namespace League.Clients
         /// </summary>
         public async Task<string?> FindConversationIdAsync(string type, int maxRetries = 3, int delayMs = 500)
         {
-            string[] targetTypes = type.ToLower() switch
-            {
-                "game" => new[] { "game", "champSelect", "customGame", "practiceTool", "inProgress" },
-                "champselect" => new[] { "champSelect", "championSelect", "inProgress" },
-                "ingame" => new[] { "inProgress", "game", "champSelect" },
-                _ => new[] { type },
-            };
+            string[] targetTypes = GetTargetTypes(type);
 
             for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
@@ -71,76 +65,13 @@ namespace League.Clients
 
                     if (attempt == 1 || conversations.Count == 0)
                     {
-                        foreach (var c in conversations)
-                        {
-                            Debug.WriteLine(
-                                $"[会话] id={c["id"]}, type={c["type"]}, gameStatus={c["gameStatus"]}, state={c["state"]}, name={c["name"] ?? c["gameName"] ?? "无"}"
-                            );
-                        }
+                        LogConversations(conversations);
                     }
 
-                    foreach (var conv in conversations)
+                    string? id = FindMatchingConversation(conversations, targetTypes);
+                    if (id != null)
                     {
-                        string convType = conv["type"]?.ToString() ?? "";
-                        string gameStatus = conv["gameStatus"]?.ToString() ?? "";
-                        string convState = conv["state"]?.ToString() ?? "";
-                        string convName = conv["gameName"]?.ToString() ?? conv["name"]?.ToString() ?? "";
-
-                        // 检查是否匹配目标类型
-                        foreach (var target in targetTypes)
-                        {
-                            bool match = false;
-
-                            // 1. 直接匹配 type
-                            if (convType.Equals(target, StringComparison.OrdinalIgnoreCase))
-                            {
-                                match = true;
-                            }
-                            // 2. 匹配 gameStatus
-                            else if (gameStatus.Equals(target, StringComparison.OrdinalIgnoreCase))
-                            {
-                                match = true;
-                            }
-                            // 3. 匹配游戏状态（inProgress 特殊处理）
-                            else if (target.Equals("inprogress", StringComparison.OrdinalIgnoreCase))
-                            {
-                                // 检查是否是游戏进行中状态
-                                if (
-                                    gameStatus.Equals("inProgress", StringComparison.OrdinalIgnoreCase)
-                                    || convState.Equals("active", StringComparison.OrdinalIgnoreCase)
-                                    || convName.Contains("游戏进行中")
-                                    || convName.Contains("正在游戏中")
-                                )
-                                {
-                                    match = true;
-                                }
-                            }
-                            // 4. 匹配游戏名称关键词
-                            else if (
-                                convName.Contains("召唤师峡谷")
-                                || convName.Contains("扭曲丛林")
-                                || convName.Contains("极地大乱斗")
-                                || convName.Contains("ARAM")
-                                || convName.Contains("匹配")
-                                || convName.Contains("排位")
-                                || convName.Contains("自定义")
-                            )
-                            {
-                                match = true;
-                            }
-
-                            if (match)
-                            {
-                                string? id = conv["id"]?.ToString();
-                                if (!string.IsNullOrEmpty(id))
-                                {
-                                    Debug.WriteLine(
-                                        $"[Chat] 找到会话: type={convType}, gameStatus={gameStatus}, state={convState}, name={convName}, id={id}"
-                                    );
-                                    return id;
-                                }
-                            }
-                        }
+                        return id;
                     }
 
                     if (attempt < maxRetries)
@@ -157,6 +88,89 @@ namespace League.Clients
 
             Debug.WriteLine($"[Chat] 重试 {maxRetries} 次后仍未找到 {type} 会话");
             return null;
+        }
+
+        // 调用方用的场景名对应会话可能出现的 type 或 gameStatus，按优先级排列。
+        private static string[] GetTargetTypes(string type) =>
+            type.ToLower() switch
+            {
+                "game" => new[] { "game", "champSelect", "customGame", "practiceTool", "inProgress" },
+                "champselect" => new[] { "champSelect", "championSelect", "inProgress" },
+                "ingame" => new[] { "inProgress", "game", "champSelect" },
+                _ => new[] { type },
+            };
+
+        private static void LogConversations(JArray conversations)
+        {
+            foreach (var c in conversations)
+            {
+                Debug.WriteLine(
+                    $"[会话] id={c["id"]}, type={c["type"]}, gameStatus={c["gameStatus"]}, state={c["state"]}, name={c["name"] ?? c["gameName"] ?? "无"}"
+                );
+            }
+        }
+
+        // 按会话顺序找第一个匹配任一目标、且带 id 的会话。
+        private static string? FindMatchingConversation(JArray conversations, string[] targetTypes)
+        {
+            foreach (var conv in conversations)
+            {
+                foreach (var target in targetTypes)
+                {
+                    if (!MatchesTarget(conv, target))
+                    {
+                        continue;
+                    }
+
+                    string? id = conv["id"]?.ToString();
+                    if (!string.IsNullOrEmpty(id))
+                    {
+                        Debug.WriteLine(
+                            $"[Chat] 找到会话: type={conv["type"]}, gameStatus={conv["gameStatus"]}, state={conv["state"]}, name={ConversationName(conv)}, id={id}"
+                        );
+                        return id;
+                    }
+                }
+            }
+            return null;
+        }
+
+        private static string ConversationName(JToken conv) =>
+            conv["gameName"]?.ToString() ?? conv["name"]?.ToString() ?? "";
+
+        /// <summary>
+        /// 依次比较 type、gameStatus；目标是 inProgress 时还看会话状态和名称；其他目标按游戏名称关键词兜底。
+        /// </summary>
+        private static bool MatchesTarget(JToken conv, string target)
+        {
+            string convType = conv["type"]?.ToString() ?? "";
+            string gameStatus = conv["gameStatus"]?.ToString() ?? "";
+            string convState = conv["state"]?.ToString() ?? "";
+            string convName = ConversationName(conv);
+
+            if (
+                convType.Equals(target, StringComparison.OrdinalIgnoreCase)
+                || gameStatus.Equals(target, StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                return true;
+            }
+
+            if (target.Equals("inprogress", StringComparison.OrdinalIgnoreCase))
+            {
+                return gameStatus.Equals("inProgress", StringComparison.OrdinalIgnoreCase)
+                    || convState.Equals("active", StringComparison.OrdinalIgnoreCase)
+                    || convName.Contains("游戏进行中")
+                    || convName.Contains("正在游戏中");
+            }
+
+            return convName.Contains("召唤师峡谷")
+                || convName.Contains("扭曲丛林")
+                || convName.Contains("极地大乱斗")
+                || convName.Contains("ARAM")
+                || convName.Contains("匹配")
+                || convName.Contains("排位")
+                || convName.Contains("自定义");
         }
     }
 }

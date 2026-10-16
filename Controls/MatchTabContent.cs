@@ -162,91 +162,14 @@ namespace League.Controls
                 return;
             }
 
-            // 检查是否已存在
-            foreach (TabPage page in MainTabControl.TabPages)
+            if (TrySelectExistingTab(puuid) || !MakeRoomForNewTab())
             {
-                if (string.Equals(page.Tag as string, puuid, StringComparison.OrdinalIgnoreCase))
-                {
-                    MainTabControl.SelectedTab = page;
-                    Debug.WriteLine($"[Tab 已存在] 切换到: {puuid}");
-
-                    if (_tabPageContents.TryGetValue(page, out var existingContent))
-                    {
-                        bool isCurrentPlayer = string.Equals(
-                            puuid,
-                            Globals.CurrentPuuid,
-                            StringComparison.OrdinalIgnoreCase
-                        );
-
-                        if (RefreshState.ForceMatchRefresh && isCurrentPlayer)
-                        {
-                            Debug.WriteLine($"[强制刷新] 检测到 ForceMatchRefresh=true，正在刷新当前玩家战绩");
-
-                            existingContent.SetNeedsRefresh(true); // 确保 MatchTabPageContent 有这个方法
-
-                            // 延迟执行刷新
-                            Task.Delay(800)
-                                .ContinueWith(
-                                    async _ =>
-                                    {
-                                        try
-                                        {
-                                            if (existingContent.NeedsRefresh)
-                                            {
-                                                await existingContent.ForceRefreshData(puuid);
-                                                existingContent.SetNeedsRefresh(false);
-                                                RefreshState.ForceMatchRefresh = false; // 刷新完重置
-                                                Debug.WriteLine("[强制刷新] 当前玩家战绩刷新完成");
-                                            }
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            Debug.WriteLine($"[强制刷新异常] {ex}");
-                                        }
-                                    },
-                                    TaskScheduler.FromCurrentSynchronizationContext()
-                                );
-                        }
-                    }
-                    return;
-                }
+                return;
             }
-
-            // Tab上限处理
-            const int MAX_TABS = 20;
-            if (MainTabControl.TabPages.Count >= MAX_TABS)
-            {
-                var oldestNonSelf = MainTabControl.TabPages.Cast<TabPage>().FirstOrDefault(t => !IsSelfTab(t));
-
-                if (oldestNonSelf != null)
-                {
-                    CloseTab(oldestNonSelf);
-                }
-                else
-                {
-                    MessageBox.Show(
-                        $"已达到最大Tab数量({MAX_TABS})",
-                        "提示",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning
-                    );
-                    return;
-                }
-            }
-
-            // 创建新Tab
-            var newTab = new TabPage($"{gameName}#{tagLine}") { Tag = puuid };
-
-            var tabContent = new MatchTabPageContent();
-
-            // 绑定事件...
-            tabContent.LoadDataRequested += async (p, beg, end, q) =>
-                await ((FormMain)this.ParentForm).LoadFullMatchDataAsync(p, beg, end, q);
-
-            tabContent.ParsePanelRequested += async (match, puuidParam, index) =>
-                await ((FormMain)this.ParentForm).ParseGameToPanelAsync(match, summonerId, gameName, tagLine, index);
 
             string fullName = $"{gameName}#{tagLine}";
+            var newTab = new TabPage(fullName) { Tag = puuid };
+            var tabContent = CreateTabContent(summonerId, gameName, tagLine);
             _ = tabContent.InitiaRank(
                 fullName,
                 profileIconId,
@@ -276,6 +199,98 @@ namespace League.Controls
             _tabPageContents[newTab] = tabContent;
 
             Debug.WriteLine($"[CreateNewTab] 成功创建: {fullName} | PUUID: {puuid}");
+        }
+
+        /// <summary>
+        /// 该玩家已有 Tab 时切换过去；是自己的 Tab 且要求强制刷新时，延迟刷新一次战绩。
+        /// </summary>
+        private bool TrySelectExistingTab(string puuid)
+        {
+            foreach (TabPage page in MainTabControl.TabPages)
+            {
+                if (!string.Equals(page.Tag as string, puuid, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                MainTabControl.SelectedTab = page;
+                Debug.WriteLine($"[Tab 已存在] 切换到: {puuid}");
+
+                bool isCurrentPlayer = string.Equals(puuid, Globals.CurrentPuuid, StringComparison.OrdinalIgnoreCase);
+                if (
+                    _tabPageContents.TryGetValue(page, out var existingContent)
+                    && RefreshState.ForceMatchRefresh
+                    && isCurrentPlayer
+                )
+                {
+                    ScheduleForcedRefresh(existingContent, puuid);
+                }
+                return true;
+            }
+            return false;
+        }
+
+        private static void ScheduleForcedRefresh(MatchTabPageContent existingContent, string puuid)
+        {
+            Debug.WriteLine($"[强制刷新] 检测到 ForceMatchRefresh=true，正在刷新当前玩家战绩");
+
+            existingContent.SetNeedsRefresh(true); // 确保 MatchTabPageContent 有这个方法
+
+            // 延迟执行刷新
+            Task.Delay(800)
+                .ContinueWith(
+                    async _ =>
+                    {
+                        try
+                        {
+                            if (existingContent.NeedsRefresh)
+                            {
+                                await existingContent.ForceRefreshData(puuid);
+                                existingContent.SetNeedsRefresh(false);
+                                RefreshState.ForceMatchRefresh = false; // 刷新完重置
+                                Debug.WriteLine("[强制刷新] 当前玩家战绩刷新完成");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"[强制刷新异常] {ex}");
+                        }
+                    },
+                    TaskScheduler.FromCurrentSynchronizationContext()
+                );
+        }
+
+        /// <summary>
+        /// Tab 达到上限时关闭最早的非自己 Tab；只剩自己的 Tab 时提示并放弃创建。
+        /// </summary>
+        private bool MakeRoomForNewTab()
+        {
+            const int MAX_TABS = 20;
+            if (MainTabControl.TabPages.Count < MAX_TABS)
+            {
+                return true;
+            }
+
+            var oldestNonSelf = MainTabControl.TabPages.Cast<TabPage>().FirstOrDefault(t => !IsSelfTab(t));
+            if (oldestNonSelf == null)
+            {
+                MessageBox.Show($"已达到最大Tab数量({MAX_TABS})", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
+            CloseTab(oldestNonSelf);
+            return true;
+        }
+
+        private MatchTabPageContent CreateTabContent(string summonerId, string gameName, string tagLine)
+        {
+            var tabContent = new MatchTabPageContent();
+            tabContent.LoadDataRequested += async (p, beg, end, q) =>
+                await ((FormMain)this.ParentForm).LoadFullMatchDataAsync(p, beg, end, q);
+
+            tabContent.ParsePanelRequested += async (match, puuidParam, index) =>
+                await ((FormMain)this.ParentForm).ParseGameToPanelAsync(match, summonerId, gameName, tagLine, index);
+            return tabContent;
         }
     }
 }

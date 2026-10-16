@@ -146,145 +146,176 @@ namespace League.Managers
 
                 await Task.Run(async () =>
                 {
-                    // 清空并创建临时目录
-                    if (Directory.Exists(tempDir))
-                    {
-                        try
-                        {
-                            Directory.Delete(tempDir, true);
-                        }
-                        catch { }
-                    }
-                    Directory.CreateDirectory(tempDir);
-                    Directory.CreateDirectory(extractPath);
-
-                    // ==================== 下载部分（保持你现在的逻辑）====================
-                    int retryCount = 0;
-                    const int maxDownloadRetries = 3;
-                    bool downloadSuccess = false;
-
-                    while (retryCount < maxDownloadRetries && !downloadSuccess)
-                    {
-                        try
-                        {
-                            var randomQuery = "?t=" + DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                            string freshZipUrl = zipUrl + randomQuery;
-
-                            using var request = new HttpRequestMessage(HttpMethod.Get, freshZipUrl);
-                            request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
-                            {
-                                NoCache = true,
-                                NoStore = true,
-                            };
-
-                            using var response = await http.SendAsync(
-                                request,
-                                HttpCompletionOption.ResponseHeadersRead
-                            );
-                            response.EnsureSuccessStatusCode();
-
-                            var totalBytes = response.Content.Headers.ContentLength.GetValueOrDefault(-1L);
-                            await using var remoteStream = await response.Content.ReadAsStreamAsync();
-                            await using var fileStream = new FileStream(
-                                zipPath,
-                                FileMode.Create,
-                                FileAccess.Write,
-                                FileShare.None
-                            );
-
-                            byte[] buffer = new byte[81920];
-                            long downloadedBytes = 0;
-                            int bytesRead;
-
-                            while ((bytesRead = await remoteStream.ReadAsync(buffer)) > 0)
-                            {
-                                await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead));
-                                downloadedBytes += bytesRead;
-
-                                if (totalBytes > 0)
-                                {
-                                    int percent = (int)((downloadedBytes * 100L) / totalBytes);
-                                    progressForm.Invoke(() =>
-                                        progressForm.UpdateStatus(
-                                            $"从 GitHub 下载中... {percent}% ({downloadedBytes / 1024 / 1024} MB)\r\n"
-                                                + "（速度受网络影响，可能较慢，请勿关闭窗口）",
-                                            percent
-                                        )
-                                    );
-                                }
-                            }
-                            downloadSuccess = true;
-                        }
-                        catch (Exception ex) when (ex is HttpRequestException || ex is IOException)
-                        {
-                            retryCount++;
-                            if (retryCount >= maxDownloadRetries)
-                            {
-                                throw;
-                            }
-
-                            progressForm.Invoke(() =>
-                                progressForm.UpdateStatus(
-                                    $"下载失败，正在第 {retryCount}/{maxDownloadRetries} 次重试...\r\n",
-                                    null
-                                )
-                            );
-                            await Task.Delay(3000 * retryCount);
-                        }
-                    }
-
-                    if (!downloadSuccess)
-                    {
-                        throw new Exception("多次尝试后仍无法下载更新包");
-                    }
+                    PrepareUpdateDirectories(tempDir, extractPath);
+                    await DownloadUpdateAsync(zipUrl, zipPath, progressForm);
 
                     progressForm.Invoke(() => progressForm.UpdateStatus("下载完成，正在解压..."));
-
-                    // ==================== 解压 ====================
-                    string extractRoot = Path.GetFullPath(extractPath) + Path.DirectorySeparatorChar;
-                    using (var archive = ZipFile.OpenRead(zipPath))
-                    {
-                        foreach (var entry in archive.Entries)
-                        {
-                            if (string.IsNullOrEmpty(entry.Name))
-                            {
-                                continue;
-                            }
-
-                            string destPath = Path.GetFullPath(
-                                Path.Combine(extractPath, entry.FullName.Replace('/', Path.DirectorySeparatorChar))
-                            );
-                            // 拒绝 ../ 等指向解压目录之外的条目
-                            if (!destPath.StartsWith(extractRoot, StringComparison.OrdinalIgnoreCase))
-                            {
-                                throw new InvalidDataException("更新包包含解压目录之外的路径：" + entry.FullName);
-                            }
-
-                            string destDir = Path.GetDirectoryName(destPath)!;
-
-                            if (!Directory.Exists(destDir))
-                            {
-                                Directory.CreateDirectory(destDir);
-                            }
-
-                            if (File.Exists(destPath))
-                            {
-                                File.Delete(destPath);
-                            }
-
-                            entry.ExtractToFile(destPath);
-                        }
-                    }
+                    ExtractUpdate(zipPath, extractPath);
 
                     progressForm.Invoke(() => progressForm.UpdateStatus("解压完成，正在生成更新脚本..."));
+                    await StartUpdateScriptAsync(tempDir, extractPath, newVersion);
 
-                    // ==================== 生成带备份恢复的 BAT ====================
-                    string batPath = Path.Combine(tempDir, "update.bat");
-                    string appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
-                    string exeName = Path.GetFileName(Application.ExecutablePath);
+                    progressForm.Invoke(() =>
+                    {
+                        progressForm.Complete("更新完成，正在重启程序...");
+                        Application.Exit();
+                    });
+                });
+            }
+            catch (Exception ex)
+            {
+                progressForm?.Invoke(() => progressForm.Complete($"更新失败: {ex.Message}"));
+                Debug.WriteLine("[自动更新失败] " + ex);
+            }
+        }
 
-                    string batContent =
-                        $@"
+        // 清空并创建临时目录
+        private static void PrepareUpdateDirectories(string tempDir, string extractPath)
+        {
+            if (Directory.Exists(tempDir))
+            {
+                try
+                {
+                    Directory.Delete(tempDir, true);
+                }
+                catch
+                {
+                    // 上次残留的文件可能被占用；下载会覆盖 update.zip，解压会逐个替换文件。
+                }
+            }
+            Directory.CreateDirectory(tempDir);
+            Directory.CreateDirectory(extractPath);
+        }
+
+        /// <summary>
+        /// 下载更新包并显示进度；网络或写盘失败最多重试 3 次，每次等待更久。
+        /// </summary>
+        private async Task DownloadUpdateAsync(string zipUrl, string zipPath, ProgressForm progressForm)
+        {
+            int retryCount = 0;
+            const int maxDownloadRetries = 3;
+            bool downloadSuccess = false;
+
+            while (retryCount < maxDownloadRetries && !downloadSuccess)
+            {
+                try
+                {
+                    await DownloadUpdateOnceAsync(zipUrl, zipPath, progressForm);
+                    downloadSuccess = true;
+                }
+                catch (Exception ex) when (ex is HttpRequestException || ex is IOException)
+                {
+                    retryCount++;
+                    if (retryCount >= maxDownloadRetries)
+                    {
+                        throw;
+                    }
+
+                    progressForm.Invoke(() =>
+                        progressForm.UpdateStatus(
+                            $"下载失败，正在第 {retryCount}/{maxDownloadRetries} 次重试...\r\n",
+                            null
+                        )
+                    );
+                    await Task.Delay(3000 * retryCount);
+                }
+            }
+
+            if (!downloadSuccess)
+            {
+                throw new Exception("多次尝试后仍无法下载更新包");
+            }
+        }
+
+        private async Task DownloadUpdateOnceAsync(string zipUrl, string zipPath, ProgressForm progressForm)
+        {
+            var randomQuery = "?t=" + DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            string freshZipUrl = zipUrl + randomQuery;
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, freshZipUrl);
+            request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
+            {
+                NoCache = true,
+                NoStore = true,
+            };
+
+            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+
+            var totalBytes = response.Content.Headers.ContentLength.GetValueOrDefault(-1L);
+            await using var remoteStream = await response.Content.ReadAsStreamAsync();
+            await using var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None);
+
+            byte[] buffer = new byte[81920];
+            long downloadedBytes = 0;
+            int bytesRead;
+
+            while ((bytesRead = await remoteStream.ReadAsync(buffer)) > 0)
+            {
+                await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead));
+                downloadedBytes += bytesRead;
+
+                if (totalBytes > 0)
+                {
+                    int percent = (int)((downloadedBytes * 100L) / totalBytes);
+                    progressForm.Invoke(() =>
+                        progressForm.UpdateStatus(
+                            $"从 GitHub 下载中... {percent}% ({downloadedBytes / 1024 / 1024} MB)\r\n"
+                                + "（速度受网络影响，可能较慢，请勿关闭窗口）",
+                            percent
+                        )
+                    );
+                }
+            }
+        }
+
+        private static void ExtractUpdate(string zipPath, string extractPath)
+        {
+            string extractRoot = Path.GetFullPath(extractPath) + Path.DirectorySeparatorChar;
+            using var archive = ZipFile.OpenRead(zipPath);
+            foreach (var entry in archive.Entries)
+            {
+                if (string.IsNullOrEmpty(entry.Name))
+                {
+                    continue;
+                }
+
+                string destPath = Path.GetFullPath(
+                    Path.Combine(extractPath, entry.FullName.Replace('/', Path.DirectorySeparatorChar))
+                );
+                // 拒绝 ../ 等指向解压目录之外的条目
+                if (!destPath.StartsWith(extractRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidDataException("更新包包含解压目录之外的路径：" + entry.FullName);
+                }
+
+                string destDir = Path.GetDirectoryName(destPath)!;
+
+                if (!Directory.Exists(destDir))
+                {
+                    Directory.CreateDirectory(destDir);
+                }
+
+                if (File.Exists(destPath))
+                {
+                    File.Delete(destPath);
+                }
+
+                entry.ExtractToFile(destPath);
+            }
+        }
+
+        /// <summary>
+        /// 生成带配置备份恢复的更新脚本并启动；脚本等程序退出后覆盖文件、恢复配置并重新启动。
+        /// </summary>
+        private static async Task StartUpdateScriptAsync(string tempDir, string extractPath, string newVersion)
+        {
+            string batPath = Path.Combine(tempDir, "update.bat");
+            string appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
+            string exeName = Path.GetFileName(Application.ExecutablePath);
+
+            string batContent =
+                $@"
 @echo off
 title 更新中，请勿关闭...
 timeout /t 2 /nobreak >nul
@@ -308,37 +339,24 @@ start """" /d ""%LH_UPDATE_APP%"" ""%LH_UPDATE_EXE%""
 rd /s /q ""%LH_UPDATE_TEMP%""
 exit";
 
-                    // cmd 按系统代码页读取批处理：中文用户名（临时目录）或安装目录直接写进脚本会被读错，
-                    // 路径改由环境变量传给子进程。不写 BOM，否则首行 @echo off 无法识别。
-                    Environment.SetEnvironmentVariable("LH_UPDATE_APP", appDir);
-                    Environment.SetEnvironmentVariable("LH_UPDATE_EXTRACT", extractPath);
-                    Environment.SetEnvironmentVariable("LH_UPDATE_TEMP", tempDir);
-                    Environment.SetEnvironmentVariable("LH_UPDATE_EXE", exeName);
-                    await File.WriteAllTextAsync(batPath, batContent, new System.Text.UTF8Encoding(false));
+            // cmd 按系统代码页读取批处理：中文用户名（临时目录）或安装目录直接写进脚本会被读错，
+            // 路径改由环境变量传给子进程。不写 BOM，否则首行 @echo off 无法识别。
+            Environment.SetEnvironmentVariable("LH_UPDATE_APP", appDir);
+            Environment.SetEnvironmentVariable("LH_UPDATE_EXTRACT", extractPath);
+            Environment.SetEnvironmentVariable("LH_UPDATE_TEMP", tempDir);
+            Environment.SetEnvironmentVariable("LH_UPDATE_EXE", exeName);
+            await File.WriteAllTextAsync(batPath, batContent, new System.Text.UTF8Encoding(false));
 
-                    // 启动 BAT 并退出当前程序
-                    Process.Start(
-                        new ProcessStartInfo
-                        {
-                            FileName = batPath,
-                            UseShellExecute = true,
-                            CreateNoWindow = true,
-                            WindowStyle = ProcessWindowStyle.Hidden,
-                        }
-                    );
-
-                    progressForm.Invoke(() =>
-                    {
-                        progressForm.Complete("更新完成，正在重启程序...");
-                        Application.Exit();
-                    });
-                });
-            }
-            catch (Exception ex)
-            {
-                progressForm?.Invoke(() => progressForm.Complete($"更新失败: {ex.Message}"));
-                Debug.WriteLine("[自动更新失败] " + ex);
-            }
+            // 启动 BAT 并退出当前程序
+            Process.Start(
+                new ProcessStartInfo
+                {
+                    FileName = batPath,
+                    UseShellExecute = true,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                }
+            );
         }
         #endregion
 

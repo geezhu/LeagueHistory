@@ -197,80 +197,13 @@ namespace League.Services
 
             try
             {
-                bool CanSend()
-                {
-                    if (canContinue?.Invoke() == false)
-                    {
-                        LastFailureReason = "发送条件已变化，停止输入";
-                        return false;
-                    }
-                    if (!HasInputPermission())
-                    {
-                        LastFailureReason = "请以管理员身份重新启动 League，再使用游戏内发送";
-                        return false;
-                    }
-                    var foreground = GetGameForegroundState();
-                    if (!foreground.IsGame)
-                    {
-                        LastFailureReason = foreground.Reason;
-                        return false;
-                    }
-                    if (!ModifiersReleased())
-                    {
-                        LastFailureReason = "请松开 Ctrl、Shift、Alt 和 Win 后再发送";
-                        return false;
-                    }
-                    return true;
-                }
                 string[] lines = message.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-
                 foreach (var line in lines)
                 {
-                    if (!CanSend())
+                    if (!await SendLineAsync(line, canContinue))
                     {
                         return false;
                     }
-                    // Open chat; callers must leave the chat box closed before starting.
-                    SendHardwareKey(VK_RETURN, SCAN_RETURN, false);
-                    try
-                    {
-                        await Task.Delay(ReturnHoldMilliseconds ?? _random.Next(15, 25));
-                    }
-                    finally
-                    {
-                        SendHardwareKey(VK_RETURN, SCAN_RETURN, true);
-                    }
-
-                    // Allow the chat UI to process Enter before inserting text.
-                    await Task.Delay(_random.Next(80, 120));
-                    if (!CanSend())
-                    {
-                        return false;
-                    }
-
-                    // Queue Unicode input for the line.
-                    SendUnicodeStringInstant(line);
-
-                    // 预留极其短暂的字数缓冲区反应时间
-                    await Task.Delay(_random.Next(100, 150));
-                    if (!CanSend())
-                    {
-                        return false;
-                    }
-
-                    // 3. 回车发送
-                    SendHardwareKey(VK_RETURN, SCAN_RETURN, false);
-                    try
-                    {
-                        await Task.Delay(ReturnHoldMilliseconds ?? _random.Next(15, 25));
-                    }
-                    finally
-                    {
-                        SendHardwareKey(VK_RETURN, SCAN_RETURN, true);
-                    }
-
-                    // 行间延迟（防国服速度过快被屏蔽，留 500ms 足够安全）
-                    await Task.Delay(_random.Next(500, 700));
                 }
 
                 return true;
@@ -287,6 +220,83 @@ namespace League.Services
             {
                 SendGate.Release();
             }
+        }
+
+        /// <summary>
+        /// 一行消息：Enter 打开聊天框 → 输入文字 → Enter 发送；每一步之前都确认仍可发送。
+        /// </summary>
+        private async Task<bool> SendLineAsync(string line, Func<bool>? canContinue)
+        {
+            if (!CanSend(canContinue))
+            {
+                return false;
+            }
+            // Open chat; callers must leave the chat box closed before starting.
+            await TapReturnAsync();
+
+            // Allow the chat UI to process Enter before inserting text.
+            await Task.Delay(_random.Next(80, 120));
+            if (!CanSend(canContinue))
+            {
+                return false;
+            }
+
+            // Queue Unicode input for the line.
+            SendUnicodeStringInstant(line);
+
+            // 预留极其短暂的字数缓冲区反应时间
+            await Task.Delay(_random.Next(100, 150));
+            if (!CanSend(canContinue))
+            {
+                return false;
+            }
+
+            // 3. 回车发送
+            await TapReturnAsync();
+
+            // 行间延迟（防国服速度过快被屏蔽，留 500ms 足够安全）
+            await Task.Delay(_random.Next(500, 700));
+            return true;
+        }
+
+        // 按下后无论等待是否出错都要松开，避免 Enter 卡在按下状态。
+        private async Task TapReturnAsync()
+        {
+            SendHardwareKey(VK_RETURN, SCAN_RETURN, false);
+            try
+            {
+                await Task.Delay(ReturnHoldMilliseconds ?? _random.Next(15, 25));
+            }
+            finally
+            {
+                SendHardwareKey(VK_RETURN, SCAN_RETURN, true);
+            }
+        }
+
+        private bool CanSend(Func<bool>? canContinue)
+        {
+            if (canContinue?.Invoke() == false)
+            {
+                LastFailureReason = "发送条件已变化，停止输入";
+                return false;
+            }
+            if (!HasInputPermission())
+            {
+                LastFailureReason = "请以管理员身份重新启动 League，再使用游戏内发送";
+                return false;
+            }
+            var foreground = GetGameForegroundState();
+            if (!foreground.IsGame)
+            {
+                LastFailureReason = foreground.Reason;
+                return false;
+            }
+            if (!ModifiersReleased())
+            {
+                LastFailureReason = "请松开 Ctrl、Shift、Alt 和 Win 后再发送";
+                return false;
+            }
+            return true;
         }
 
         /// <summary>

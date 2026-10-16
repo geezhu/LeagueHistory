@@ -178,77 +178,18 @@ namespace League.Clients
                 }
             }
 
-            string path = $"/match-history-query/v1/products/lol/player/{puuid}/SUMMARY";
-            var queries = new List<string> { $"startIndex={startIndex}", $"count={count}" };
-            if (!string.IsNullOrEmpty(tag))
-            {
-                queries.Add($"tag={tag}");
-            }
-
-            string fullUrl = _sgpUrl.TrimEnd('/') + path + "?" + string.Join("&", queries);
-
+            string fullUrl = BuildMatchHistoryUrl(puuid, startIndex, count, tag);
             for (int attempt = 1; attempt <= 3; attempt++)
             {
-                // Acquire before try: a cancelled wait must not release a slot it never took.
-                await _sgpLimiter.WaitAsync(cancellationToken);
-                try
+                var (outcome, games) = await TryFetchMatchesOnceAsync(fullUrl, attempt, cancellationToken);
+                if (outcome == SgpAttempt.Succeeded)
                 {
-                    using var request = new HttpRequestMessage(HttpMethod.Get, fullUrl);
-                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
-
-                    Debug.WriteLine($"SGP 请求地址: {fullUrl} (尝试 {attempt}/3)");
-
-                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                    cts.CancelAfter(TimeSpan.FromSeconds(RequestTimeoutSeconds));
-                    var watch = Stopwatch.StartNew();
-                    using HttpResponseMessage response = await _sharedSgpClient.SendAsync(request, cts.Token);
-                    watch.Stop();
-
-                    Debug.WriteLine($"SGP 查询状态: {response.StatusCode} 耗时: {watch.ElapsedMilliseconds}ms");
-
-                    if (response.IsSuccessStatusCode)
-                    {
-                        string content = await response.Content.ReadAsStringAsync(cts.Token);
-                        JObject json = JObject.Parse(content);
-
-                        // ★ 成功：有 games 就返回，没有就返回空数组（不要返回 null）
-                        var games = json["games"] as JArray;
-                        return games ?? new JArray();
-                    }
-
-                    string errorContent = await response.Content.ReadAsStringAsync(cts.Token);
-                    Debug.WriteLine($"请求失败: {response.StatusCode} - {errorContent}");
-
-                    // 401/403 再刷新 token
-                    if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-                    {
-                        if (!await LoadEntitlementsTokenAsync(cancellationToken))
-                        {
-                            Debug.WriteLine("刷新 Token 失败");
-                            return null;
-                        }
-                    }
-                    // 5xx / 503 等服务器错误：继续重试，最后仍失败则返回 null
+                    return games;
                 }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+
+                if (outcome == SgpAttempt.TokenRefreshFailed)
                 {
-                    throw;
-                }
-                catch (TaskCanceledException tce)
-                {
-                    Debug.WriteLine($"SGP 查询超时（尝试 {attempt}/3）: {tce.Message}");
-                }
-                catch (HttpRequestException hre)
-                {
-                    Debug.WriteLine($"HTTP 请求异常: {hre.Message} (Inner: {hre.InnerException?.Message})");
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"其他异常: {ex.Message}");
-                }
-                finally
-                {
-                    _sgpLimiter.Release();
+                    return null;
                 }
 
                 if (attempt < 3)
@@ -260,6 +201,99 @@ namespace League.Clients
 
             Debug.WriteLine("SGP 多次重试后仍失败（服务器异常或网络不可用）");
             return null; // ★ 明确表示：请求失败，不是「没有战绩」
+        }
+
+        private enum SgpAttempt
+        {
+            Succeeded,
+            Retry,
+            TokenRefreshFailed,
+        }
+
+        private string BuildMatchHistoryUrl(string puuid, int startIndex, int count, string tag)
+        {
+            string path = $"/match-history-query/v1/products/lol/player/{puuid}/SUMMARY";
+            var queries = new List<string> { $"startIndex={startIndex}", $"count={count}" };
+            if (!string.IsNullOrEmpty(tag))
+            {
+                queries.Add($"tag={tag}");
+            }
+
+            return _sgpUrl.TrimEnd('/') + path + "?" + string.Join("&", queries);
+        }
+
+        /// <summary>
+        /// 一次限流请求。成功时返回 games（没有 games 字段时为空数组）；超时、网络错误和服务器错误可以重试。
+        /// </summary>
+        private async Task<(SgpAttempt Outcome, JArray Games)> TryFetchMatchesOnceAsync(
+            string fullUrl,
+            int attempt,
+            CancellationToken cancellationToken
+        )
+        {
+            // Acquire before try: a cancelled wait must not release a slot it never took.
+            await _sgpLimiter.WaitAsync(cancellationToken);
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, fullUrl);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+
+                Debug.WriteLine($"SGP 请求地址: {fullUrl} (尝试 {attempt}/3)");
+
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(TimeSpan.FromSeconds(RequestTimeoutSeconds));
+                var watch = Stopwatch.StartNew();
+                using HttpResponseMessage response = await _sharedSgpClient.SendAsync(request, cts.Token);
+                watch.Stop();
+
+                Debug.WriteLine($"SGP 查询状态: {response.StatusCode} 耗时: {watch.ElapsedMilliseconds}ms");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    string content = await response.Content.ReadAsStringAsync(cts.Token);
+                    JObject json = JObject.Parse(content);
+
+                    // ★ 成功：有 games 就返回，没有就返回空数组（不要返回 null）
+                    var games = json["games"] as JArray;
+                    return (SgpAttempt.Succeeded, games ?? new JArray());
+                }
+
+                string errorContent = await response.Content.ReadAsStringAsync(cts.Token);
+                Debug.WriteLine($"请求失败: {response.StatusCode} - {errorContent}");
+
+                // 401/403 再刷新 token
+                if (
+                    response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
+                    && !await LoadEntitlementsTokenAsync(cancellationToken)
+                )
+                {
+                    Debug.WriteLine("刷新 Token 失败");
+                    return (SgpAttempt.TokenRefreshFailed, null);
+                }
+                // 5xx / 503 等服务器错误：继续重试，最后仍失败则返回 null
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (TaskCanceledException tce)
+            {
+                Debug.WriteLine($"SGP 查询超时（尝试 {attempt}/3）: {tce.Message}");
+            }
+            catch (HttpRequestException hre)
+            {
+                Debug.WriteLine($"HTTP 请求异常: {hre.Message} (Inner: {hre.InnerException?.Message})");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"其他异常: {ex.Message}");
+            }
+            finally
+            {
+                _sgpLimiter.Release();
+            }
+
+            return (SgpAttempt.Retry, null);
         }
     }
 }

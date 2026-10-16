@@ -95,54 +95,15 @@ public sealed class PlayerCardUIManager
         _table.SuspendLayout();
         try
         {
-            var wanted = states.Select(s => s.Key).ToHashSet();
-            foreach (var pair in _cards.Where(p => !wanted.Contains(p.Key) || p.Value.Card.IsDisposed).ToArray())
-            {
-                pair.Value.Panel.Dispose();
-                _cards.Remove(pair.Key);
-            }
-            var owned = _cards.Values.Select(c => (Control)c.Panel).ToHashSet();
-            foreach (Control control in _table.Controls.Cast<Control>().ToArray())
-            {
-                if (!owned.Contains(control))
-                {
-                    control.Dispose();
-                }
-            }
-
-            // Detach moved cards first so swapping slots never overflows the fixed 5x2 grid.
-            foreach (var state in states)
-            {
-                if (
-                    _cards.TryGetValue(state.Key, out var item)
-                    && item.Panel.Parent == _table
-                    && (
-                        _table.GetRow(item.Panel) != (state.Ally ? 0 : 1)
-                        || _table.GetColumn(item.Panel) != state.Column
-                    )
-                )
-                {
-                    _table.Controls.Remove(item.Panel);
-                }
-            }
+            RemoveStaleCards(states);
+            DetachMovedCards(states);
 
             foreach (var state in states)
             {
                 bool created = !_cards.TryGetValue(state.Key, out var item);
                 if (created)
                 {
-                    var panel = new BorderPanel
-                    {
-                        Tag = state.Ally,
-                        BorderColor = Color.FromArgb(221, 230, 240),
-                        BorderWidth = 1,
-                        Padding = new Padding(2),
-                        Dock = DockStyle.Fill,
-                        Margin = new Padding(5),
-                    };
-                    var card = new PlayerCardControl { Dock = DockStyle.Fill, Margin = Padding.Empty };
-                    panel.Controls.Add(card);
-                    item = (panel, card, -1);
+                    item = CreateCardSlot(state);
                 }
                 if (item.Revision != state.Revision)
                 {
@@ -176,6 +137,57 @@ public sealed class PlayerCardUIManager
         {
             _table.ResumeLayout(true);
         }
+    }
+
+    // 释放已离开房间或已销毁的卡片，以及表格里不属于任何卡片的控件（如等待提示）。
+    private void RemoveStaleCards(IReadOnlyList<RoomPlayerState> states)
+    {
+        var wanted = states.Select(s => s.Key).ToHashSet();
+        foreach (var pair in _cards.Where(p => !wanted.Contains(p.Key) || p.Value.Card.IsDisposed).ToArray())
+        {
+            pair.Value.Panel.Dispose();
+            _cards.Remove(pair.Key);
+        }
+        var owned = _cards.Values.Select(c => (Control)c.Panel).ToHashSet();
+        foreach (Control control in _table.Controls.Cast<Control>().ToArray())
+        {
+            if (!owned.Contains(control))
+            {
+                control.Dispose();
+            }
+        }
+    }
+
+    // Detach moved cards first so swapping slots never overflows the fixed 5x2 grid.
+    private void DetachMovedCards(IReadOnlyList<RoomPlayerState> states)
+    {
+        foreach (var state in states)
+        {
+            if (
+                _cards.TryGetValue(state.Key, out var item)
+                && item.Panel.Parent == _table
+                && (_table.GetRow(item.Panel) != (state.Ally ? 0 : 1) || _table.GetColumn(item.Panel) != state.Column)
+            )
+            {
+                _table.Controls.Remove(item.Panel);
+            }
+        }
+    }
+
+    private static (BorderPanel Panel, PlayerCardControl Card, long Revision) CreateCardSlot(RoomPlayerState state)
+    {
+        var panel = new BorderPanel
+        {
+            Tag = state.Ally,
+            BorderColor = Color.FromArgb(221, 230, 240),
+            BorderWidth = 1,
+            Padding = new Padding(2),
+            Dock = DockStyle.Fill,
+            Margin = new Padding(5),
+        };
+        var card = new PlayerCardControl { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        panel.Controls.Add(card);
+        return (panel, card, -1);
     }
 
     private void ApplyState(PlayerCardControl card, RoomPlayerState state)
