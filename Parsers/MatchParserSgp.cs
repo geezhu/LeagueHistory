@@ -444,6 +444,9 @@ namespace League.Parsers
             }
         }
 
+        /// <summary>官方队列对应的模式名；未收录时为 null。</summary>
+        public static string? QueueModeName(int queue) => QueueModes.GetValueOrDefault(queue);
+
         /// <summary>
         /// 官方队列对应的模式名。
         /// </summary>

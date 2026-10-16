@@ -115,6 +115,11 @@ public sealed class CareerStatistics
             2400 => "海克斯大乱斗",
             400 or 430 => "匹配",
             1700 => "斗魂竞技场",
-            _ => $"模式 {queue}",
+            // Custom rooms have queues of their own; their games stay apart from the matchmade modes.
+            3270 => "自定义海克斯大乱斗",
+            3100 => "自定义峡谷",
+            3140 => "训练模式",
+            0 => "自定义",
+            _ => Parsers.MatchParserSgp.QueueModeName(queue) ?? $"模式 {queue}",
         };
 }
