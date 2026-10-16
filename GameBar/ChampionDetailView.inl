@@ -22,6 +22,10 @@ bool fixturePreview = false, fixtureOpened = false;
 int pendingDetailImages = 0;
 int detailQueue = 0;
 int detailRarity = 0;
+// The augment tab's search spans all three rarities. The box lives across renders and typing redraws only the
+// results below it, so it keeps focus.
+TextBox augmentSearch{nullptr};
+StackPanel augmentResults;
 uint64_t detailRender = 0;
 
 static hstring NewDetailId()
@@ -405,17 +409,19 @@ void RenderDetails(bool resetScroll = true)
         DecodeDetailImage(detailArtwork, detailData.GetNamedString(L"art", L""), detailRender, 560);
         return;
     }
+    if (detailTab == L"augments")
+    {
+        if (!RenderAugmentResults())
+            RenderMissingSection();
+        DecodeDetailImage(detailArtwork, detailData.GetNamedString(L"art", L""), detailRender, 560);
+        return;
+    }
     bool found = false;
-    int rarityIndex = 0;
     auto sections = detailTab == L"live" ? liveSections : detailData.GetNamedArray(L"sections", JsonArray());
     for (auto const &entry : sections)
     {
         auto section = entry.GetObject();
         if (section.GetNamedString(L"tab", L"") != detailTab)
-        {
-            continue;
-        }
-        if (detailTab == L"augments" && rarityIndex++ != detailRarity)
         {
             continue;
         }
@@ -432,6 +438,20 @@ void RenderRarityChoices()
 {
     if (detailTab == L"augments")
     {
+        if (!augmentSearch)
+        {
+            augmentSearch = TextBox();
+            augmentSearch.PlaceholderText(L"搜索海克斯：名称、效果或拼音首字母（如 tkyq），搜索时不分品质");
+            augmentSearch.Margin({0, 0, 0, 6});
+            UseChineseInput(augmentSearch);
+            augmentSearch.TextChanged(
+                [this](auto &&, auto &&)
+                {
+                    if (detailTab == L"augments")
+                        RenderAugmentResults();
+                });
+        }
+        detailBody.Children().Append(augmentSearch);
         StackPanel rarities;
         rarities.Orientation(Orientation::Horizontal);
         rarities.Margin({0, 0, 0, 6});
@@ -450,27 +470,91 @@ void RenderRarityChoices()
             rarities.Children().Append(b);
         }
         detailBody.Children().Append(rarities);
+        detailBody.Children().Append(augmentResults);
     }
 }
-void RenderSectionHeading(JsonObject const &section)
+static constexpr std::array<wchar_t const *, 3> AugmentRarities{L"棱彩", L"黄金", L"白银"};
+// 0 when the name or its initials match, 1 when only the description does, -1 for no match.
+static int AugmentMatch(JsonObject const &row, std::wstring const &query)
+{
+    auto icons = row.GetNamedArray(L"icons", JsonArray());
+    if (icons.Size() == 0)
+        return -1;
+    auto icon = icons.GetObjectAt(0);
+    if (AugmentSearchText(icon.GetNamedString(L"name", L"") + L" " + row.GetNamedString(L"search", L"")).find(query) !=
+        std::wstring::npos)
+        return 0;
+    return AugmentSearchText(icon.GetNamedString(L"description", L"")).find(query) != std::wstring::npos ? 1 : -1;
+}
+// Without a query the chosen rarity shows as before; with one, matches from every rarity, name matches first, each
+// labelled with its rarity. Returns false when the source has no augment sections at all.
+bool RenderAugmentResults()
+{
+    augmentResults.Children().Clear();
+    std::vector<JsonObject> sections;
+    for (auto const &entry : detailData.GetNamedArray(L"sections", JsonArray()))
+        if (entry.GetObject().GetNamedString(L"tab", L"") == L"augments")
+            sections.push_back(entry.GetObject());
+    if (sections.empty())
+        return false;
+    auto query = AugmentSearchText(augmentSearch ? augmentSearch.Text() : hstring());
+    query.erase(0, query.find_first_not_of(L' '));
+    query.erase(query.find_last_not_of(L' ') + 1);
+    if (query.empty())
+    {
+        auto const &section = sections[std::min<size_t>(detailRarity, sections.size() - 1)];
+        RenderSectionHeading(section, augmentResults);
+        std::vector<std::pair<JsonObject, hstring>> rows;
+        for (auto const &value : section.GetNamedArray(L"rows", JsonArray()))
+            rows.emplace_back(value.GetObject(), hstring());
+        augmentResults.Children().Append(RecommendationTiles(rows));
+        return true;
+    }
+    std::vector<std::pair<JsonObject, hstring>> names, descriptions;
+    for (size_t i = 0; i < sections.size(); ++i)
+        for (auto const &value : sections[i].GetNamedArray(L"rows", JsonArray()))
+        {
+            auto row = value.GetObject();
+            int match = AugmentMatch(row, query);
+            hstring rarity = i < AugmentRarities.size() ? hstring(AugmentRarities[i]) : hstring();
+            if (match == 0)
+                names.emplace_back(row, rarity);
+            else if (match == 1)
+                descriptions.emplace_back(row, rarity);
+        }
+    names.insert(names.end(), descriptions.begin(), descriptions.end());
+    if (names.empty())
+    {
+        auto none = MakeText(L"没有匹配的海克斯。", 13, 0x91acbb);
+        none.Margin({4, 6, 0, 6});
+        augmentResults.Children().Append(none);
+        return true;
+    }
+    auto count = MakeText(L"找到 " + to_hstring(names.size()) + L" 个（名称匹配在前）", 12, 0x91acbb);
+    count.Margin({0, 0, 0, 6});
+    augmentResults.Children().Append(count);
+    augmentResults.Children().Append(RecommendationTiles(names));
+    return true;
+}
+void RenderSectionHeading(JsonObject const &section, StackPanel const &target)
 {
     auto title = MakeText(section.GetNamedString(L"title", L""), 15, 0xe0c688);
     title.Margin({0, 6, 0, 6});
-    detailBody.Children().Append(title);
+    target.Children().Append(title);
     auto note = section.GetNamedString(L"note", L"");
     if (!note.empty())
     {
         auto text = MakeText(note, 12, 0x91acbb);
         text.TextWrapping(TextWrapping::Wrap);
         text.Margin({0, 0, 0, 8});
-        detailBody.Children().Append(text);
+        target.Children().Append(text);
     }
 }
 void RenderDetailSection(JsonObject const &section)
 {
     if (RenderCardSection(section))
         return;
-    RenderSectionHeading(section);
+    RenderSectionHeading(section, detailBody);
     auto rows = section.GetNamedArray(L"rows", JsonArray());
     if (rows.Size() == 0)
     {
@@ -479,9 +563,12 @@ void RenderDetailSection(JsonObject const &section)
         detailBody.Children().Append(empty);
         return;
     }
-    if (detailTab == L"augments" || section.GetNamedString(L"layout", L"") == L"equipment")
+    if (section.GetNamedString(L"layout", L"") == L"equipment")
     {
-        RenderRecommendationTiles(rows);
+        std::vector<std::pair<JsonObject, hstring>> tiles;
+        for (auto const &value : rows)
+            tiles.emplace_back(value.GetObject(), hstring());
+        detailBody.Children().Append(RecommendationTiles(tiles));
         return;
     }
     if (detailTab == L"skills" && rows.GetObjectAt(0).GetNamedArray(L"icons", JsonArray()).Size() > 0 &&
@@ -495,42 +582,43 @@ void RenderDetailSection(JsonObject const &section)
         detailBody.Children().Append(CreateDetailRow(value.GetObject()));
     }
 }
-void RenderRecommendationTiles(JsonArray const &rows)
+// Three tiles a row; a label (the rarity in search results) goes before each name.
+Grid RecommendationTiles(std::vector<std::pair<JsonObject, hstring>> const &rows)
 {
     Grid tiles;
     for (int i = 0; i < 3; ++i)
     {
         tiles.ColumnDefinitions().Append(ColumnDefinition());
     }
-    for (uint32_t i = 0; i < (rows.Size() + 2) / 3; ++i)
+    for (size_t i = 0; i < (rows.size() + 2) / 3; ++i)
     {
         RowDefinition row;
         row.Height({1, GridUnitType::Auto});
         tiles.RowDefinitions().Append(row);
     }
-    for (uint32_t i = 0; i < rows.Size(); ++i)
+    for (size_t i = 0; i < rows.size(); ++i)
     {
-        auto row = rows.GetObjectAt(i);
+        auto const &[row, label] = rows[i];
         auto icons = row.GetNamedArray(L"icons", JsonArray());
         if (icons.Size() == 0)
         {
             continue;
         }
-        auto card = CreateRecommendationTile(row, icons);
-        Grid::SetRow(card, i / 3);
-        Grid::SetColumn(card, i % 3);
+        auto card = CreateRecommendationTile(row, icons, label);
+        Grid::SetRow(card, static_cast<int32_t>(i / 3));
+        Grid::SetColumn(card, static_cast<int32_t>(i % 3));
         tiles.Children().Append(card);
     }
-    detailBody.Children().Append(tiles);
+    return tiles;
 }
-StackPanel CreateRecommendationTile(JsonObject const &row, JsonArray const &icons)
+StackPanel CreateRecommendationTile(JsonObject const &row, JsonArray const &icons, hstring const &label)
 {
     auto icon = icons.GetObjectAt(0);
     StackPanel card;
     card.Padding({8});
     card.Margin({0, 0, 6, 6});
     card.Background(MakeBrush(0x112f3c));
-    auto name = MakeText(icon.GetNamedString(L"name", L"推荐"), 13);
+    auto name = MakeText((label.empty() ? hstring() : label + L" · ") + icon.GetNamedString(L"name", L"推荐"), 13);
     card.Children().Append(name);
     StackPanel metrics;
     metrics.Orientation(Orientation::Horizontal);
