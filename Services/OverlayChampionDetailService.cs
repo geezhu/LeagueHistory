@@ -251,12 +251,13 @@ public sealed class OverlayChampionDetailService : IDisposable
                         {
                             var icon = Icon("augment", r.Ids[0]);
                             icon["name"] = r.Name;
+                            // arammeta's own wording; the client's name replaces it later, both stay searchable.
+                            icon["sourceName"] = r.Name;
                             icon["description"] = TooltipText.PlainText(r.Description);
                             var row = Row("", icons: [icon], stats: Stats(r.WinRate, r.PickRate, r.Games, true));
                             row["winRateText"] = "胜率 " + Rate(r.WinRate);
                             row["pickRateText"] = "选取率 " + Rate(r.PickRate);
-                            // The widget's search matches the name, the description and these initials.
-                            row["search"] = ChineseInitials.Of(r.Name);
+                            UpdateAugmentSearch(row);
                             return row;
                         })
                 )
@@ -650,6 +651,26 @@ public sealed class OverlayChampionDetailService : IDisposable
         }
     }
 
+    /// <summary>
+    /// The widget's search text for an augment row besides its shown name and description: the initials of the shown
+    /// name, plus arammeta's own name and its initials when the client names the augment differently. Computed from
+    /// the current names, so running it again after the client's names arrive gives the same result.
+    /// </summary>
+    public static void UpdateAugmentSearch(JObject row)
+    {
+        var icon = row["icons"]?.First as JObject;
+        string name = (string?)icon?["name"] ?? "";
+        string source = (string?)icon?["sourceName"] ?? "";
+        var parts = new List<string> { ChineseInitials.Of(name) };
+        if (source.Length > 0 && source != name)
+        {
+            parts.Add(source);
+            parts.Add(ChineseInitials.Of(source));
+        }
+
+        row["search"] = string.Join(" ", parts.Where(part => part.Length > 0));
+    }
+
     private static void Decorate(JObject data)
     {
         var res = FormMain.Globals.resLoading;
@@ -679,6 +700,16 @@ public sealed class OverlayChampionDetailService : IDisposable
                 icon["description"] = TooltipText.PlainText(description);
             }
         }
+        foreach (
+            var row in ((JArray?)data["sections"] ?? new())
+                .OfType<JObject>()
+                .Where(s => (string?)s["tab"] == "augments")
+                .SelectMany(s => ((JArray?)s["rows"] ?? new()).OfType<JObject>())
+        )
+        {
+            UpdateAugmentSearch(row);
+        }
+
         foreach (
             var section in ((JArray?)data["sections"] ?? new())
                 .OfType<JObject>()
