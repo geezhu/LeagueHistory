@@ -50,7 +50,7 @@ SDK 固定为 Microsoft.Gaming.XboxGameBar 7.3.2607010，首次构建从 NuGet �
 ./Scripts/Publish-Release.ps1 -Version 1.1.0
 ```
 
-发布包在 `bin/Publish/<版本>`：League.exe 自带 .NET 运行时；`GameBar/` 下是未签名的组件安装包，由设置页在用户电脑上用本机证书签名后安装，项目不持有任何签名私钥，任何人都能打发布包；不附带语音模型，用户在设置中下载（先尝试 hf-mirror.com，再 huggingface.co，支持断点续传，校验 SHA-256）。签名使用 Windows 自带的 `mssign32.dll`，用户无需安装 SDK。因为签名在本机完成，它不证明安装包的来源；请在发布页提供压缩包的 SHA256。已用开发脚本注册同版本组件的电脑，需先卸载开发组件再安装发布版。
+发布包在 `bin/Publish/<版本>`，另有同样内容的一键安装程序 `League-<版本>-setup.exe`（`Scripts/Installer/LeagueHistory.iss`，默认勾选安装组件，见主 README）：League.exe 自带 .NET 运行时；`GameBar/` 下是未签名的组件安装包，由设置页在用户电脑上用本机证书签名后安装，项目不持有任何签名私钥，任何人都能打发布包；不附带语音模型，用户在设置中下载（先尝试 hf-mirror.com，再 huggingface.co，支持断点续传，校验 SHA-256）。签名使用 Windows 自带的 `mssign32.dll`，用户无需安装 SDK。因为签名在本机完成，它不证明安装包的来源；请在发布页提供压缩包的 SHA256。已用开发脚本注册同版本组件的电脑，需先卸载开发组件再安装发布版。
 
 更新构建需提高清单版本号，否则 Windows 可能继续指向旧安装目录。脚本会核对实际安装位置，并在更新后退出 Game Bar 的界面进程，使下次打开时重新加载组件，避免留下空白旧窗口；不会结束游戏或 League 主程序。录制服务运行时跳过重启，也可用 `-KeepGameBarRunning` 跳过，然后自行重开 Game Bar。
 
