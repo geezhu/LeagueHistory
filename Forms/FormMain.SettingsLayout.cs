@@ -342,10 +342,35 @@ public partial class FormMain
         SettingsCard(
             general,
             "关于与交流",
+            CreateVersionRow(),
             new SettingRow(label4.Text, null, lk_QQGroup),
             new SettingRow(label5.Text, null, lk_GitPro)
         );
         groupBox3.Dispose();
+    }
+
+    // 反馈问题时附上完整 commit，开发者可以对到确切的源码。
+    private static SettingRow CreateVersionRow()
+    {
+        var build = Infrastructure.BuildInfo.Current;
+        var copy = new Button { Name = "CopyVersion", Text = "复制版本信息" };
+        copy.Click += (_, _) =>
+        {
+            string builtAt = build.BuiltAtUtc is { } time ? time.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "未知";
+            try
+            {
+                Clipboard.SetText(
+                    $"联盟视界 {build.Describe()}{Environment.NewLine}提交：{build.Commit}{Environment.NewLine}构建时间：{builtAt}"
+                );
+                copy.Text = "已复制";
+            }
+            catch (System.Runtime.InteropServices.ExternalException)
+            {
+                // 剪贴板被其他程序占用时只提示，用户可以再点一次。
+                copy.Text = "复制失败，请重试";
+            }
+        };
+        return new SettingRow("版本", build.Describe(), copy);
     }
 
     private void ConfigureMessageSettings()

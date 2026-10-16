@@ -79,6 +79,7 @@ internal static class Program
         checks["--config-checks"] = LeagueConfigChecks.Run;
         checks["--shutdown-checks"] = ShutdownSettingsChecks.Run;
         checks["--core-utility-checks"] = CoreUtilityChecks.Run;
+        checks["--build-info-checks"] = BuildInfoChecks.Run;
         checks["--history-data-checks"] = HistoryDataChecks.Run;
         checks["--timeline-data-checks"] = TimelineDataChecks.Run;
     }
