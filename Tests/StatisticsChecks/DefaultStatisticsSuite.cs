@@ -38,6 +38,7 @@ internal static class DefaultStatisticsSuite
         Task.Run(AramMetaChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(ItemSetChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(AramBalanceChecks.RunAsync).GetAwaiter().GetResult();
+        Task.Run(LcuClientServiceChecks.RunAsync).GetAwaiter().GetResult();
     }
 
     private static void UiChecks()
