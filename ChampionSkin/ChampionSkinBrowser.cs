@@ -1,1150 +1,463 @@
-﻿using System.Diagnostics;
-using System.Drawing.Imaging;
-using League.Caching;
 using League.Models;
 using League.PrimaryElection;
 using League.Services;
-using Newtonsoft.Json.Linq;
-using static League.FormMain;
 
 namespace League.ChampionSkin
 {
     /// <summary>
-    /// 英雄皮肤浏览器：分路 / 搜索 / 已拥有 / 有皮肤过滤。
-    /// 卡片池只建一次；仅缓存当前账号已拥有的非默认皮。
-    /// 写盘：最长边 128 + JPEG，减小 Assets/skins 体积；UI 线程再解码。
+    /// 英雄皮肤：左边是英雄网格（搜索、分路、已有、有皮肤筛选），右边是选中皮肤的原画和该英雄已拥有的皮肤。
+    /// 点皮肤预览原画，「设为自动皮肤」或双击后，选人锁定该英雄时自动换成这款皮肤。
+    /// 图片按需读取：头像和皮肤小图跨英雄保留，原画只保留当前英雄的。
     /// </summary>
     public partial class ChampionSkinBrowser : Form
     {
-        #region 字段
+        private const int IconSize = 60;
+        private const int TileSize = 96;
 
         private readonly LeagueConfig _config;
-        private ChampionManager _championManager = null!;
-        private List<ChampionSkinCardModel> _allModels = new();
-        private ChampionPosition _currentPosition = ChampionPosition.All;
-        private bool _dataReady;
-        private bool _isRendering;
+        private readonly ISkinBrowserSource _source;
+        private readonly Action? _save;
+        private readonly CancellationTokenSource _life = new();
+        private readonly Dictionary<int, Image> _icons = new();
+        private readonly Dictionary<int, Image> _tiles = new();
+        private readonly Dictionary<int, Image> _splashes = new();
+        private readonly Dictionary<ChampionPosition, SkinBrowserButton> _positionButtons = new();
+        private readonly System.Windows.Forms.Timer _searchDelay = new() { Interval = 250 };
+        private List<ChampionSkinCardModel> _models = new();
+        private ChampionPosition _position = ChampionPosition.All;
+        private CancellationTokenSource? _championLife;
 
-        private SkinBrowserImageCache _imgCache = new();
-        private readonly Dictionary<int, ChampionSkinCard> _cardPool = new();
-        private System.Windows.Forms.Timer? _searchDebounce;
-        private CancellationTokenSource? _loadCts;
-
-        private readonly SemaphoreSlim _skinDownloadLock = new(2, 2);
-
-        /// <summary>
-        /// 缓存图最长边（接近头像 128，控制体积）。
-        /// 还想更清楚：256 + 88；
-        /// 还想体积更小：160 + 80。、128x80
-        /// </summary>
-        private const int SkinCacheMaxEdge = 256;
-
-        /// <summary>JPEG 质量，可调 70～85。</summary>
-        private const long JpegQuality = 80L;
-
-        /// <summary>同一 skinId 同时只允许一条下载，避免 Move 冲突。</summary>
-        private readonly System.Collections.Concurrent.ConcurrentDictionary<int, SemaphoreSlim> _skinIdLocks = new();
-
-        #endregion
-
-        #region 构造
+        private readonly TextBox _search = new();
+        private readonly CheckBox _ownedOnly = new();
+        private readonly CheckBox _hasSkinOnly = new();
+        private readonly Label _stats = new();
+        private readonly SkinBrowserButton _clearAll = new();
+        private readonly ChampionGridView _grid = new();
+        private readonly SkinSplashView _splash = new();
+        private readonly SkinStripView _strip = new();
+        private readonly SkinBrowserButton _setPreferred = new(primary: true);
+        private readonly SkinBrowserButton _restoreDefault = new();
+        private readonly Label _hint = new();
 
         public ChampionSkinBrowser(LeagueConfig config)
+            : this(config, new LcuSkinBrowserSource()) { }
+
+        /// <param name="save">Saves the configuration after a change; by default the owning main window saves it.</param>
+        public ChampionSkinBrowser(LeagueConfig config, ISkinBrowserSource source, Action? save = null)
         {
-            InitializeComponent();
             _config = config ?? throw new ArgumentNullException(nameof(config));
-
-            if (txtSearch != null)
-            {
-                txtSearch.PlaceholderText = "搜索英雄（中文/称号/英文）";
-            }
-
-            chkOwnedOnly.Checked = _config.SkinBrowserOwnedOnly;
-            if (chkHasSkinOnly != null)
-            {
-                chkHasSkinOnly.Checked = _config.SkinBrowserHasSkinOnly;
-            }
-
-            BindUiEvents();
-            Load += async (_, _) => await InitializeAsync();
-            FormClosing += ChampionSkinBrowser_FormClosing;
-        }
-
-        #endregion
-
-        #region UI 事件
-
-        private void BindUiEvents()
-        {
-            btnAll.Click += (_, _) => OnPositionClick(ChampionPosition.All, btnAll);
-            btnTop.Click += (_, _) => OnPositionClick(ChampionPosition.Top, btnTop);
-            btnJungle.Click += (_, _) => OnPositionClick(ChampionPosition.Jungle, btnJungle);
-            btnMid.Click += (_, _) => OnPositionClick(ChampionPosition.Mid, btnMid);
-            btnAdc.Click += (_, _) => OnPositionClick(ChampionPosition.ADC, btnAdc);
-            btnSupport.Click += (_, _) => OnPositionClick(ChampionPosition.Support, btnSupport);
-            BtnClearPrefs.Click += BtnClearPrefs_Click;
-
-            _searchDebounce = new System.Windows.Forms.Timer { Interval = 280 };
-            _searchDebounce.Tick += (_, _) =>
-            {
-                _searchDebounce!.Stop();
-                ApplyFilterAndRender();
-            };
-            txtSearch.TextChanged += (_, _) =>
-            {
-                _searchDebounce!.Stop();
-                _searchDebounce.Start();
-            };
-
-            chkOwnedOnly.CheckedChanged += (_, _) =>
-            {
-                _config.SkinBrowserOwnedOnly = chkOwnedOnly.Checked;
-                ApplyFilterAndRender();
-            };
-            if (chkHasSkinOnly != null)
-            {
-                chkHasSkinOnly.CheckedChanged += (_, _) =>
-                {
-                    _config.SkinBrowserHasSkinOnly = chkHasSkinOnly.Checked;
-                    ApplyFilterAndRender();
-                };
-            }
-        }
-
-        private void OnPositionClick(ChampionPosition pos, Button btn)
-        {
-            _currentPosition = pos;
-            HighlightPositionButton(btn);
-            ApplyFilterAndRender();
-        }
-
-        private void HighlightPositionButton(Button active)
-        {
-            foreach (var b in new[] { btnAll, btnTop, btnJungle, btnMid, btnAdc, btnSupport })
-            {
-                b.BackColor = SystemColors.Control;
-                b.ForeColor = SystemColors.ControlText;
-                b.Font = new Font(b.Font, FontStyle.Regular);
-            }
-            active.BackColor = Color.FromArgb(0, 120, 215);
-            active.ForeColor = Color.White;
-            active.Font = new Font(active.Font, FontStyle.Bold);
-        }
-
-        private void SetBusy(bool busy)
-        {
-            UseWaitCursor = busy;
-            btnAll.Enabled =
-                btnTop.Enabled =
-                btnJungle.Enabled =
-                btnMid.Enabled =
-                btnAdc.Enabled =
-                btnSupport.Enabled =
-                    !busy;
-            txtSearch.Enabled = !busy;
-            chkOwnedOnly.Enabled = !busy;
-            if (chkHasSkinOnly != null)
-            {
-                chkHasSkinOnly.Enabled = !busy;
-            }
-
-            BtnClearPrefs.Enabled = !busy;
-        }
-
-        #endregion
-
-        #region 初始化 / 库存
-
-        private async Task InitializeAsync()
-        {
-            // 开头，加载完成前先藏起 flpCards
-            flpCards.Visible = false;
-            flpCards.SuspendLayout();
-
-            if (_loadCts != null)
-            {
-                await _loadCts.CancelAsync();
-            }
-
-            _loadCts = new CancellationTokenSource();
-            var token = _loadCts.Token;
-
-            try
-            {
-                SetBusy(true);
-                lblStats.Text = "正在加载英雄数据...";
-
-                _championManager = Globals.resLoading.ChampionManager;
-                await _championManager.InitializeAsync(forceRefresh: false);
-
-                if (_championManager.AllChampions.Count == 0)
-                {
-                    lblStats.Text = "未加载到英雄数据";
-                    return;
-                }
-
-                var ownedSkinsByChamp = await LoadOwnedSkinsAsync(token);
-                _config.PreferredChampionSkins ??= new Dictionary<int, int>();
-                _allModels.Clear();
-
-                foreach (var champ in _championManager.AllChampions.OrderBy(c => c.Name))
-                {
-                    _allModels.Add(BuildChampionModel(champ, ownedSkinsByChamp));
-                }
-
-                _dataReady = true;
-                HighlightPositionButton(btnAll);
-                EnsureCardPool();
-                ApplyFilterAndRender(); // 内部仍会 Suspend/Resume
-
-                flpCards.ResumeLayout(true);
-                flpCards.Visible = true; // 只露一次，已有同步读到的本地图
-
-                _ = PreloadAllOwnedSkinImagesAsync(ownedSkinsByChamp, token);
-            }
-            catch (OperationCanceledException) when (token.IsCancellationRequested)
-            {
-                // 窗口关闭或重新加载取消了这次初始化，不提示错误。
-            }
-            catch (Exception ex)
-            {
-                AppLog.Shared.Warn(LogCategory.Ui, "[ChampionSkinBrowser] 初始化失败", ex);
-                MessageBox.Show($"加载失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                SetBusy(false);
-            }
-        }
-
-        /// <summary>
-        /// 一个英雄的卡片数据：没有拥有记录的英雄也补上默认皮肤，偏好只认非默认皮肤。
-        /// </summary>
-        private ChampionSkinCardModel BuildChampionModel(
-            PrimaryChampion champ,
-            Dictionary<int, List<SkinThumbItem>> ownedSkinsByChamp
-        )
-        {
-            int defaultSkinId = champ.Id * 1000;
-            ownedSkinsByChamp.TryGetValue(champ.Id, out var skinList);
-            skinList ??= new List<SkinThumbItem>();
-
-            if (!skinList.Any(s => s.IsBase))
-            {
-                skinList.Insert(
-                    0,
-                    new SkinThumbItem
-                    {
-                        SkinId = defaultSkinId,
-                        Name = "默认",
-                        IsBase = true,
-                    }
-                );
-            }
-
-            int preferred = 0;
-            if (_config.PreferredChampionSkins.TryGetValue(champ.Id, out int pref) && pref > 0 && pref % 1000 != 0)
-            {
-                preferred = pref;
-            }
-
-            return new ChampionSkinCardModel
-            {
-                ChampionId = champ.Id,
-                Name = champ.Name,
-                Title = champ.Title,
-                Alias = champ.Alias,
-                IsOwned = ownedSkinsByChamp.ContainsKey(champ.Id),
-                DefaultSkinId = defaultSkinId,
-                PreferredSkinId = preferred,
-                Skins = skinList.OrderBy(s => s.IsBase ? 0 : 1).ThenBy(s => s.SkinId).ToList(),
-            };
-        }
-
-        private async Task<Dictionary<int, List<SkinThumbItem>>> LoadOwnedSkinsAsync(
-            CancellationToken cancellationToken
-        )
-        {
-            var result = new Dictionary<int, List<SkinThumbItem>>();
-            try
-            {
-                var summoner = await Globals.lcuClient.GetCurrentSummoner(cancellationToken);
-                string? sid = summoner?["summonerId"]?.ToString();
-                if (string.IsNullOrEmpty(sid))
-                {
-                    Debug.WriteLine("[ChampionSkinBrowser] 无 summonerId");
-                    return result;
-                }
-
-                var http = Globals.lcuClient.Client ?? throw new InvalidOperationException("LCU Client 未就绪");
-
-                using var resp = await http.GetAsync(
-                    $"lol-champions/v1/inventories/{sid}/skins-minimal",
-                    cancellationToken
-                );
-                string body = await resp.Content.ReadAsStringAsync(cancellationToken);
-                Debug.WriteLine($"[ChampionSkinBrowser] skins-minimal status={resp.StatusCode} len={body?.Length}");
-                if (!resp.IsSuccessStatusCode)
-                {
-                    return result;
-                }
-
-                foreach (var t in JArray.Parse(body))
-                {
-                    if (t is JObject o)
-                    {
-                        AddOwnedSkin(result, o);
-                    }
-                }
-
-                int nonBase = result.Values.Sum(l => l.Count(s => !s.IsBase && s.SkinId % 1000 != 0));
-                Debug.WriteLine($"[ChampionSkinBrowser] 英雄数={result.Count}, 非默认皮肤={nonBase}");
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                AppLog.Shared.Warn(LogCategory.Ui, "[ChampionSkinBrowser] LoadOwnedSkinsAsync", ex);
-            }
-            return result;
-        }
-
-        /// <summary>
-        /// skins-minimal 的一项：只收已拥有的皮肤，缺英雄 ID 时由皮肤 ID 推出，同一皮肤只记一次。
-        /// </summary>
-        private static void AddOwnedSkin(Dictionary<int, List<SkinThumbItem>> result, JObject o)
-        {
-            if (!(o["ownership"]?["owned"]?.Value<bool>() ?? false))
-            {
-                return;
-            }
-
-            int skinId = o["id"]?.Value<int>() ?? 0;
-            int champId = o["championId"]?.Value<int>() ?? 0;
-            if (champId <= 0 && skinId > 0)
-            {
-                champId = skinId / 1000;
-            }
-
-            if (champId <= 0)
-            {
-                return;
-            }
-
-            bool isBase = o["isBase"]?.Value<bool>() ?? (skinId % 1000 == 0);
-            string name = o["name"]?.ToString() ?? (isBase ? "默认" : skinId.ToString());
-            string? tilePath = o["tilePath"]?.ToString() ?? o["tileUrl"]?.ToString() ?? o["splashPath"]?.ToString();
-
-            if (!result.TryGetValue(champId, out var list))
-            {
-                list = new List<SkinThumbItem>();
-                result[champId] = list;
-            }
-            if (list.Any(x => x.SkinId == skinId))
-            {
-                return;
-            }
-
-            list.Add(
-                new SkinThumbItem
-                {
-                    SkinId = skinId,
-                    Name = name,
-                    IsBase = isBase,
-                    TilePath = string.IsNullOrWhiteSpace(tilePath) ? null : tilePath.Trim(),
-                }
-            );
-        }
-
-        #endregion
-
-        #region 卡片池 / 过滤
-
-        private void EnsureCardPool()
-        {
-            if (_cardPool.Count > 0)
-            {
-                return;
-            }
-
-            flpCards.SuspendLayout();
-            try
-            {
-                foreach (var model in _allModels)
-                {
-                    var card = new ChampionSkinCard();
-                    card.SetImageCache(_imgCache);
-                    card.Bind(model);
-                    card.PreferredSkinChanged += OnPreferredSkinChanged;
-                    card.Visible = false;
-                    _cardPool[model.ChampionId] = card;
-                    flpCards.Controls.Add(card);
-                }
-            }
-            finally
-            {
-                flpCards.ResumeLayout(true);
-            }
-        }
-
-        private void ApplyFilterAndRender()
-        {
-            if (!_dataReady || _isRendering)
-            {
-                return;
-            }
-
-            _isRendering = true;
-            try
-            {
-                EnsureCardPool();
-                var list = FilterModels();
-                ShowCards(list);
-
-                int withSkin = list.Count(m => m.Skins.Any(s => !s.IsBase && s.SkinId % 1000 != 0));
-                lblStats.Text = $"共 {list.Count} 英雄，其中 {withSkin} 个有皮肤";
-
-                _ = LoadHeroIconsAsync();
-                _ = LoadSkinThumbsAsync();
-            }
-            finally
-            {
-                _isRendering = false;
-            }
-        }
-
-        /// <summary>
-        /// 按分路、已拥有、有皮肤和搜索词（名称、称号、英文名）筛选，按名称排序。
-        /// </summary>
-        private List<ChampionSkinCardModel> FilterModels()
-        {
-            string keyword = txtSearch.Text?.Trim() ?? "";
-            IEnumerable<ChampionSkinCardModel> q = _allModels;
-
-            if (_currentPosition != ChampionPosition.All)
-            {
-                q = q.Where(m =>
-                {
-                    var c = _championManager.GetChampionById(m.ChampionId);
-                    return c != null && c.GetPositions().Contains(_currentPosition);
-                });
-            }
-            if (chkOwnedOnly.Checked)
-            {
-                q = q.Where(m => m.IsOwned);
-            }
-
-            if (chkHasSkinOnly?.Checked ?? false)
-            {
-                q = q.Where(m => m.Skins.Any(s => !s.IsBase && s.SkinId % 1000 != 0));
-            }
-
-            if (!string.IsNullOrEmpty(keyword))
-            {
-                q = q.Where(m =>
-                    m.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase)
-                    || m.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase)
-                    || m.Alias.Contains(keyword, StringComparison.OrdinalIgnoreCase)
-                );
-            }
-
-            return q.OrderBy(m => m.Name).ToList();
-        }
-
-        // 卡片控件只创建一次，筛选时只切换可见性并按结果顺序排列。
-        private void ShowCards(List<ChampionSkinCardModel> list)
-        {
-            flpCards.SuspendLayout();
-            try
-            {
-                foreach (var card in _cardPool.Values)
-                {
-                    card.Visible = false;
-                }
-
-                int index = 0;
-                foreach (var model in list)
-                {
-                    if (!_cardPool.TryGetValue(model.ChampionId, out var card))
-                    {
-                        continue;
-                    }
-
-                    card.Visible = true;
-                    flpCards.Controls.SetChildIndex(card, index++);
-                }
-            }
-            finally
-            {
-                flpCards.ResumeLayout(true);
-            }
-        }
-
-        #endregion
-
-        #region 英雄头像补图
-
-        private async Task LoadHeroIconsAsync()
-        {
-            foreach (Control c in flpCards.Controls)
-            {
-                if (c is not ChampionSkinCard card || !card.Visible)
-                {
-                    continue;
-                }
-
-                if (card.Tag is not int champId)
-                {
-                    continue;
-                }
-
-                if (card.HasHeroImage)
-                {
-                    continue;
-                }
-
-                try
-                {
-                    var img = await Globals.resLoading.GetChampionIconAsync(champId);
-                    if (img != null && !card.IsDisposed)
-                    {
-                        card.SetHeroImage(img);
-                    }
-                }
-                catch { }
-            }
-        }
-
-        #endregion
-
-        #region 皮肤路径 / 清理
-
-        private static string SkinCacheDir => Path.Combine(Application.StartupPath, "Assets", "skins");
-
-        private static string SkinJpgPath(string cacheDir, int skinId) => Path.Combine(cacheDir, $"{skinId}.jpg");
-
-        private static bool IsValidSkinFile(string path)
-        {
-            try
-            {
-                return File.Exists(path) && new FileInfo(path).Length >= 256;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        /// <summary>优先 .jpg，兼容旧 .png。</summary>
-        private static string? ResolveSkinFile(string cacheDir, int skinId)
-        {
-            string jpg = SkinJpgPath(cacheDir, skinId);
-            if (IsValidSkinFile(jpg))
-            {
-                return jpg;
-            }
-
-            string png = Path.Combine(cacheDir, $"{skinId}.png");
-            if (IsValidSkinFile(png))
-            {
-                return png;
-            }
-
-            return null;
-        }
-
-        private static void CleanupCorruptSkinCache(string cacheDir)
-        {
-            if (!Directory.Exists(cacheDir))
-            {
-                return;
-            }
-
-            foreach (var f in Directory.GetFiles(cacheDir, "*.*"))
-            {
-                try
-                {
-                    string ext = Path.GetExtension(f).ToLowerInvariant();
-                    if (ext is not (".png" or ".jpg" or ".jpeg" or ".tmp"))
-                    {
-                        continue;
-                    }
-
-                    if (new FileInfo(f).Length < 256)
-                    {
-                        File.Delete(f);
-                    }
-                }
-                catch { }
-            }
-        }
-
-        #endregion
-
-        #region 可见皮肤补图 + 预缓存
-
-        private async Task LoadSkinThumbsAsync()
-        {
-            var http = Globals.lcuClient.Client;
-            if (http == null)
-            {
-                return;
-            }
-
-            string cacheDir = SkinCacheDir;
-            Directory.CreateDirectory(cacheDir);
-            var token = _loadCts?.Token ?? CancellationToken.None;
-            try
-            {
-                await LoadVisibleSkinThumbsAsync(http, cacheDir, token);
-            }
-            catch (OperationCanceledException) when (token.IsCancellationRequested)
-            {
-                // 窗口关闭或重新加载时停止补图。
-            }
-        }
-
-        private async Task LoadVisibleSkinThumbsAsync(HttpClient http, string cacheDir, CancellationToken token)
-        {
-            foreach (Control c in flpCards.Controls)
-            {
-                if (c is not ChampionSkinCard card || !card.Visible)
-                {
-                    continue;
-                }
-
-                if (card.Tag is not int champId)
-                {
-                    continue;
-                }
-
-                var model = _allModels.FirstOrDefault(m => m.ChampionId == champId);
-                if (model == null)
-                {
-                    continue;
-                }
-
-                foreach (var skin in model.Skins)
-                {
-                    if (skin.IsBase || skin.SkinId % 1000 == 0)
-                    {
-                        continue;
-                    }
-
-                    string? path = ResolveSkinFile(cacheDir, skin.SkinId);
-                    if (path == null)
-                    {
-                        await EnsureSkinFileCachedAsync(http, cacheDir, champId, skin.SkinId, skin.TilePath, token);
-                        path = ResolveSkinFile(cacheDir, skin.SkinId);
-                    }
-
-                    if (path == null || card.IsDisposed)
-                    {
-                        continue;
-                    }
-
-                    void apply()
-                    {
-                        try
-                        {
-                            ApplySkinFileToCard(card, skin.SkinId, path!);
-                        }
-                        catch (ArgumentException) { }
-                    }
-
-                    if (card.IsDisposed)
-                    {
-                        continue;
-                    }
-
-                    if (card.InvokeRequired)
-                    {
-                        card.BeginInvoke(apply);
-                    }
-                    else
-                    {
-                        apply();
-                    }
-                }
-            }
-        }
-
-        private void ApplySkinFileToCard(ChampionSkinCard card, int skinId, string path)
-        {
-            if (card.IsDisposed || !IsValidSkinFile(path))
-            {
-                return;
-            }
-
-            var img = _imgCache.GetOrLoad(
-                $"skin:{skinId}:31",
-                () => SkinBrowserImageCache.LoadScaledFromFile(path, 31, 31)
-            );
-            if (img != null)
-            {
-                card.SetSkinImage(skinId, img);
-            }
-        }
-
-        private async Task PreloadAllOwnedSkinImagesAsync(
-            Dictionary<int, List<SkinThumbItem>> owned,
-            CancellationToken token
-        )
-        {
-            var http = Globals.lcuClient.Client;
-            if (http == null)
-            {
-                return;
-            }
-
-            string cacheDir = SkinCacheDir;
-            Directory.CreateDirectory(cacheDir);
-            CleanupCorruptSkinCache(cacheDir);
-
-            int done = 0,
-                fail = 0;
-            foreach (var (champId, list) in owned)
-            {
-                if (token.IsCancellationRequested)
-                {
-                    break;
-                }
-
-                foreach (var s in list)
-                {
-                    if (token.IsCancellationRequested)
-                    {
-                        break;
-                    }
-
-                    if (s.IsBase || s.SkinId % 1000 == 0)
-                    {
-                        continue;
-                    }
-
-                    if (ResolveSkinFile(cacheDir, s.SkinId) != null)
-                    {
-                        done++;
-                        continue;
-                    }
-
-                    try
-                    {
-                        bool ok = await EnsureSkinFileCachedAsync(http, cacheDir, champId, s.SkinId, s.TilePath, token);
-                        if (ok)
-                        {
-                            done++;
-                        }
-                        else
-                        {
-                            fail++;
-                        }
-                    }
-                    catch
-                    {
-                        fail++;
-                    }
-                }
-            }
-
-            Debug.WriteLine($"[皮肤图] 预缓存结束 ok≈{done} fail={fail}");
-
-            if (!IsDisposed && IsHandleCreated)
-            {
-                try
-                {
-                    BeginInvoke(new Action(() => _ = LoadSkinThumbsAsync()));
-                }
-                catch { }
-            }
-        }
-
-        #endregion
-
-        #region 下载写盘（JPEG）
-
-        private async Task<bool> EnsureSkinFileCachedAsync(
-            HttpClient lcuHttp,
-            string cacheDir,
-            int championId,
-            int skinId,
-            string? tilePathFromApi,
-            CancellationToken cancellationToken
-        )
-        {
-            // 已有有效文件直接成功
-            if (ResolveSkinFile(cacheDir, skinId) != null)
-            {
-                return true;
-            }
-
-            var idLock = _skinIdLocks.GetOrAdd(skinId, _ => new SemaphoreSlim(1, 1));
-            await idLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                // 双检：等锁期间可能已被别的任务写好
-                if (ResolveSkinFile(cacheDir, skinId) != null)
-                {
-                    return true;
-                }
-
-                await _skinDownloadLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-                try
-                {
-                    if (ResolveSkinFile(cacheDir, skinId) != null)
-                    {
-                        return true;
-                    }
-
-                    var paths = GetSkinImagePaths(championId, skinId, tilePathFromApi);
-                    return await DownloadSkinFileAsync(lcuHttp, cacheDir, championId, skinId, paths, cancellationToken)
-                        .ConfigureAwait(false);
-                }
-                finally
-                {
-                    _skinDownloadLock.Release();
-                }
-            }
-            finally
-            {
-                idLock.Release();
-            }
-        }
-
-        /// <summary>
-        /// 皮肤图的候选地址，按优先级：接口给的地址、头像图、原画、未居中原画，最后是默认皮肤的头像图。
-        /// </summary>
-        private static List<string> GetSkinImagePaths(int championId, int skinId, string? tilePathFromApi)
-        {
-            int baseSkinId = championId * 1000;
-            var lcuPaths = new List<string>();
-
-            if (!string.IsNullOrWhiteSpace(tilePathFromApi))
-            {
-                var p = tilePathFromApi.Trim();
-                if (!p.StartsWith("/"))
-                {
-                    p = "/" + p;
-                }
-
-                lcuPaths.Add(p);
-            }
-
-            lcuPaths.Add($"/lol-game-data/assets/v1/champion-tiles/{championId}/{skinId}.jpg");
-            lcuPaths.Add($"/lol-game-data/assets/v1/champion-splashes/{skinId}.jpg");
-            lcuPaths.Add($"/lol-game-data/assets/v1/champion-splashes/uncentered/{skinId}.jpg");
-            if (skinId != baseSkinId)
-            {
-                lcuPaths.Add($"/lol-game-data/assets/v1/champion-tiles/{championId}/{baseSkinId}.jpg");
-            }
-
-            return lcuPaths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        }
-
-        // 调用方已持有该皮肤的锁和全局下载锁。
-        private async Task<bool> DownloadSkinFileAsync(
-            HttpClient lcuHttp,
-            string cacheDir,
-            int championId,
-            int skinId,
-            List<string> paths,
-            CancellationToken cancellationToken
-        )
-        {
-            string cachePath = SkinJpgPath(cacheDir, skinId);
-            foreach (var path in paths)
-            {
-                var bytes = await TryGetBytesFromLcuAsync(lcuHttp, path, cancellationToken).ConfigureAwait(false);
-                if (bytes == null)
-                {
-                    continue;
-                }
-
-                if (SaveBytesAsCachedJpeg(bytes, cachePath))
-                {
-                    return true;
-                }
-                // 写失败但文件已出现（别的线程写完）也算成功
-                if (ResolveSkinFile(cacheDir, skinId) != null)
-                {
-                    return true;
-                }
-            }
-
-            if (await TrySaveChampionPlaceholderAsync(championId, skinId, cachePath, cancellationToken))
-            {
-                return true;
-            }
-
-            if (ResolveSkinFile(cacheDir, skinId) != null)
-            {
-                return true;
-            }
-
-            Debug.WriteLine($"[皮肤图] 全部失败 skin={skinId} champ={championId}");
-            return false;
-        }
-
-        // 兜底：英雄头占位（可选，避免黑格）
-        private static async Task<bool> TrySaveChampionPlaceholderAsync(
-            int championId,
-            int skinId,
-            string cachePath,
-            CancellationToken cancellationToken
-        )
-        {
-            string champIcon = Path.Combine(Application.StartupPath, "Assets", "champion", $"{championId}.png");
-            if (!File.Exists(champIcon))
-            {
-                return false;
-            }
-
-            try
-            {
-                var iconBytes = await File.ReadAllBytesAsync(champIcon, cancellationToken).ConfigureAwait(false);
-                if (SaveBytesAsCachedJpeg(iconBytes, cachePath))
-                {
-                    Debug.WriteLine($"[皮肤图] skin={skinId} 使用英雄头占位");
-                    return true;
-                }
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch
-            {
-                // 占位图只是兜底，读不到时按下载失败处理。
-            }
-            return false;
-        }
-
-        private static async Task<byte[]?> TryGetBytesFromLcuAsync(
-            HttpClient http,
-            string path,
-            CancellationToken cancellationToken
-        )
-        {
-            try
-            {
-                using var resp = await http.GetAsync(path, cancellationToken).ConfigureAwait(false);
-                if (!resp.IsSuccessStatusCode)
-                {
-                    return null;
-                }
-
-                var bytes = await resp.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
-                return bytes.Length >= 256 ? bytes : null;
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch
-            {
-                // 单个路径失败（404、超时、断线）时换下一个候选路径。
-                return null;
-            }
-        }
-
-        private static Bitmap ScaleToMaxEdge(Image src, int maxEdge)
-        {
-            int w = src.Width,
-                h = src.Height;
-            if (w <= maxEdge && h <= maxEdge)
-            {
-                return new Bitmap(src);
-            }
-
-            double r = Math.Min((double)maxEdge / w, (double)maxEdge / h);
-            int nw = Math.Max(1, (int)(w * r));
-            int nh = Math.Max(1, (int)(h * r));
-            var bmp = new Bitmap(nw, nh);
-            using var g = Graphics.FromImage(bmp);
-            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-            g.DrawImage(src, 0, 0, nw, nh);
-            return bmp;
-        }
-
-        /// <summary>
-        /// 解码 → 缩边 → 转 24bpp → JPEG 原子写盘；删除同 id 旧 png。
-        /// </summary>
-        private static bool SaveBytesAsCachedJpeg(byte[] bytes, string cachePath)
-        {
-            if (bytes == null || bytes.Length < 256)
-            {
-                return false;
-            }
-
-            string? dir = Path.GetDirectoryName(cachePath);
-            if (!string.IsNullOrEmpty(dir))
-            {
-                Directory.CreateDirectory(dir);
-            }
-
-            string tmp = Path.Combine(
-                dir ?? Path.GetTempPath(),
-                $"{Path.GetFileNameWithoutExtension(cachePath)}_{Guid.NewGuid():N}.tmp"
-            );
-
-            try
-            {
-                if (!WriteScaledJpeg(bytes, tmp))
-                {
-                    TryDeleteFile(tmp);
-                    return false;
-                }
-
-                if (!ReplaceCachedFile(tmp, cachePath))
-                {
-                    TryDeleteFile(tmp);
-                    return false;
-                }
-
-                TryDeleteFile(Path.ChangeExtension(cachePath, ".png"));
-                return true;
-            }
-            catch (Exception ex)
-            {
-                // 竞态下目标已写好 → 成功
-                if (IsValidSkinFile(cachePath))
-                {
-                    return true;
-                }
-
-                Debug.WriteLine($"[皮肤图] JPEG 写盘失败: {ex.Message}");
-                TryDeleteFile(tmp);
-                return false;
-            }
-        }
-
-        // 写出的临时文件太小视为失败；没有 JPEG 编码器时也返回失败。
-        private static bool WriteScaledJpeg(byte[] bytes, string tmp)
-        {
-            using var ms = new MemoryStream(bytes);
-            using var src = Image.FromStream(ms);
-            using var scaled = ScaleToMaxEdge(src, SkinCacheMaxEdge);
-            using var rgb = ToJpegCompatibleBitmap(scaled);
-
-            var jpegCodec = ImageCodecInfo.GetImageEncoders().FirstOrDefault(c => c.FormatID == ImageFormat.Jpeg.Guid);
-            if (jpegCodec == null)
-            {
-                return false;
-            }
-
-            using (var ep = new EncoderParameters(1))
-            {
-                ep.Param[0] = new EncoderParameter(Encoder.Quality, JpegQuality);
-                rgb.Save(tmp, jpegCodec, ep);
-            }
-
-            var fi = new FileInfo(tmp);
-            return fi.Exists && fi.Length >= 256;
-        }
-
-        /// <summary>
-        /// 用临时文件替换缓存文件。目标被别的线程占用时重试；期间目标已是有效文件也算成功。
-        /// </summary>
-        private static bool ReplaceCachedFile(string tmp, string cachePath)
-        {
-            // 目标已存在时先删，避免「无法创建该文件」
-            for (int i = 0; i < 5; i++)
-            {
-                try
-                {
-                    if (File.Exists(cachePath))
-                    {
-                        File.Delete(cachePath);
-                    }
-
-                    File.Move(tmp, cachePath);
-                    break;
-                }
-                catch (IOException) when (i < 4)
-                {
-                    Thread.Sleep(30);
-                    // 若目标已是有效文件，视为成功
-                    if (IsValidSkinFile(cachePath))
-                    {
-                        TryDeleteFile(tmp);
-                        return true;
-                    }
-                }
-            }
-
-            return IsValidSkinFile(cachePath);
-        }
-
-        private static void TryDeleteFile(string path)
-        {
-            try
-            {
-                if (File.Exists(path))
-                {
-                    File.Delete(path);
-                }
-            }
-            catch
-            {
-                // 临时文件或旧格式缓存删不掉只会留下多余文件，不影响已写好的缓存。
-            }
-        }
-
-        /// <summary>
-        /// 转成 JPEG 可写的 24bppRgb，避免 GDI+ generic error。
-        /// </summary>
-        private static Bitmap ToJpegCompatibleBitmap(Image src)
-        {
-            var bmp = new Bitmap(src.Width, src.Height, PixelFormat.Format24bppRgb);
-            using var g = Graphics.FromImage(bmp);
-            g.Clear(Color.Black);
-            g.DrawImage(src, 0, 0, src.Width, src.Height);
-            return bmp;
-        }
-
-        #endregion
-
-        #region 偏好 / 清除 / 关窗
-
-        private void OnPreferredSkinChanged(int championId, int skinId)
-        {
+            _source = source;
+            _save = save;
             _config.PreferredChampionSkins ??= new Dictionary<int, int>();
-            if (skinId <= 0 || skinId % 1000 == 0)
+            InitializeComponent();
+            BackColor = SkinBrowserTheme.Background;
+            ForeColor = SkinBrowserTheme.Text;
+            BuildLayout();
+            BindEvents();
+            Load += async (_, _) => await LoadModelsAsync();
+        }
+
+        /// <summary>Completes when the champion list is shown; tests wait for it.</summary>
+        public Task Loading { get; private set; } = Task.CompletedTask;
+
+        #region 布局
+
+        private void BuildLayout()
+        {
+            var root = new TableLayoutPanel
             {
-                _config.PreferredChampionSkins.Remove(championId);
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+            };
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            root.Controls.Add(BuildToolbar(), 0, 0);
+            root.Controls.Add(BuildBody(), 0, 1);
+            Controls.Add(root);
+        }
+
+        private FlowLayoutPanel BuildToolbar()
+        {
+            var bar = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                WrapContents = true,
+                Padding = new Padding(10, 8, 10, 6),
+                BackColor = SkinBrowserTheme.Background,
+            };
+            _search.PlaceholderText = "搜索英雄（名称 / 称号 / 英文）";
+            _search.Width = 220;
+            _search.BorderStyle = BorderStyle.FixedSingle;
+            _search.BackColor = SkinBrowserTheme.Panel;
+            _search.ForeColor = SkinBrowserTheme.Text;
+            _search.Margin = new Padding(0, 4, 12, 4);
+            bar.Controls.Add(_search);
+
+            foreach (
+                var (position, text) in new[]
+                {
+                    (ChampionPosition.All, "全部"),
+                    (ChampionPosition.Top, "上单"),
+                    (ChampionPosition.Jungle, "打野"),
+                    (ChampionPosition.Mid, "中单"),
+                    (ChampionPosition.ADC, "下路"),
+                    (ChampionPosition.Support, "辅助"),
+                }
+            )
+            {
+                var button = ToolbarButton(text);
+                button.Width = 56;
+                button.Margin = new Padding(0, 3, 4, 3);
+                button.Click += (_, _) => SelectPosition(position);
+                _positionButtons[position] = button;
+                bar.Controls.Add(button);
+            }
+
+            ConfigureCheck(_ownedOnly, "仅已有英雄", _config.SkinBrowserOwnedOnly);
+            ConfigureCheck(_hasSkinOnly, "仅有皮肤的英雄", _config.SkinBrowserHasSkinOnly);
+            _ownedOnly.Margin = new Padding(14, 6, 6, 3);
+            bar.Controls.Add(_ownedOnly);
+            bar.Controls.Add(_hasSkinOnly);
+
+            _stats.AutoSize = true;
+            _stats.ForeColor = SkinBrowserTheme.MutedText;
+            _stats.Margin = new Padding(14, 8, 0, 3);
+            bar.Controls.Add(_stats);
+            HighlightPosition();
+            return bar;
+        }
+
+        private SplitContainer BuildBody()
+        {
+            var split = new SplitContainer
+            {
+                Dock = DockStyle.Fill,
+                FixedPanel = FixedPanel.Panel1,
+                BackColor = SkinBrowserTheme.Border,
+                SplitterWidth = 3,
+                Margin = new Padding(0),
+            };
+            split.Panel1.BackColor = SkinBrowserTheme.Panel;
+            split.Panel2.BackColor = SkinBrowserTheme.Background;
+            _grid.Dock = DockStyle.Fill;
+            _grid.Icon = id => _icons.GetValueOrDefault(id);
+            split.Panel1.Controls.Add(_grid);
+            split.Panel2.Controls.Add(BuildDetail());
+            // The splitter distance needs the final size: set it once the window has its layout.
+            Shown += (_, _) => split.SplitterDistance = LogicalToDeviceUnits(372);
+            return split;
+        }
+
+        private TableLayoutPanel BuildDetail()
+        {
+            var detail = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 3,
+                Margin = new Padding(0),
+            };
+            detail.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            detail.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(176)));
+            detail.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _splash.Dock = DockStyle.Fill;
+            _splash.Margin = new Padding(0);
+            _strip.Dock = DockStyle.Fill;
+            _strip.Margin = new Padding(0);
+            _strip.Tile = id => _tiles.GetValueOrDefault(id);
+            detail.Controls.Add(_splash, 0, 0);
+            detail.Controls.Add(_strip, 0, 1);
+            detail.Controls.Add(BuildActions(), 0, 2);
+            return detail;
+        }
+
+        // Actions for the shown champion on the left; clearing every champion sits apart on the right.
+        private TableLayoutPanel BuildActions()
+        {
+            var row = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                ColumnCount = 2,
+                Padding = new Padding(12, 8, 12, 10),
+                BackColor = SkinBrowserTheme.Background,
+            };
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            var actions = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                Margin = new Padding(0),
+            };
+            _setPreferred.Text = "★ 设为自动皮肤";
+            _restoreDefault.Text = "恢复默认皮肤";
+            foreach (var button in new[] { _setPreferred, _restoreDefault })
+            {
+                button.AutoSize = true;
+                button.MinimumSize = new Size(120, 32);
+                button.Margin = new Padding(0, 0, 8, 0);
+                actions.Controls.Add(button);
+            }
+
+            _hint.AutoSize = true;
+            _hint.ForeColor = SkinBrowserTheme.MutedText;
+            _hint.Margin = new Padding(8, 8, 0, 0);
+            actions.Controls.Add(_hint);
+
+            _clearAll.Text = "清除全部自动皮肤";
+            _clearAll.AutoSize = true;
+            _clearAll.MinimumSize = new Size(0, 32);
+            _clearAll.Margin = new Padding(8, 0, 0, 0);
+            row.Controls.Add(actions, 0, 0);
+            row.Controls.Add(_clearAll, 1, 0);
+            return row;
+        }
+
+        private static SkinBrowserButton ToolbarButton(string text) => new() { Text = text, Height = 26 };
+
+        private static void ConfigureCheck(CheckBox check, string text, bool value)
+        {
+            check.Text = text;
+            check.Checked = value;
+            check.AutoSize = true;
+            check.ForeColor = SkinBrowserTheme.Text;
+            check.Margin = new Padding(6, 6, 6, 3);
+        }
+
+        private void HighlightPosition()
+        {
+            foreach (var (position, button) in _positionButtons)
+            {
+                button.Active = position == _position;
+            }
+        }
+
+        #endregion
+
+        #region 事件
+
+        private void BindEvents()
+        {
+            _searchDelay.Tick += (_, _) =>
+            {
+                _searchDelay.Stop();
+                ApplyFilter();
+            };
+            _search.TextChanged += (_, _) =>
+            {
+                _searchDelay.Stop();
+                _searchDelay.Start();
+            };
+            _ownedOnly.CheckedChanged += (_, _) =>
+            {
+                _config.SkinBrowserOwnedOnly = _ownedOnly.Checked;
+                ApplyFilter();
+            };
+            _hasSkinOnly.CheckedChanged += (_, _) =>
+            {
+                _config.SkinBrowserHasSkinOnly = _hasSkinOnly.Checked;
+                ApplyFilter();
+            };
+            _clearAll.Click += (_, _) => ClearAllPreferences();
+            _grid.SelectionChanged += (_, _) => ShowChampion(_grid.Selected);
+            _strip.SelectionChanged += (_, _) => ShowSkin();
+            _strip.Activated += (_, _) => SetPreferred(_strip.Selected);
+            _setPreferred.Click += (_, _) => SetPreferred(_strip.Selected);
+            _restoreDefault.Click += (_, _) => SetPreferred(_grid.Selected?.Skins.FirstOrDefault(s => s.IsDefault));
+            KeyDown += (_, e) =>
+            {
+                if (e.KeyCode == Keys.Escape)
+                {
+                    Close();
+                }
+            };
+        }
+
+        private void SelectPosition(ChampionPosition position)
+        {
+            _position = position;
+            HighlightPosition();
+            ApplyFilter();
+        }
+
+        #endregion
+
+        #region 数据与筛选
+
+        private Task LoadModelsAsync()
+        {
+            Loading = LoadAndShowAsync();
+            return Loading;
+        }
+
+        private async Task LoadAndShowAsync()
+        {
+            _splash.Show(null, "", "", false, "正在读取英雄和皮肤…");
+            try
+            {
+                _models = await _source.LoadAsync(_config.PreferredChampionSkins, _life.Token);
+            }
+            catch (OperationCanceledException) when (_life.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception e) when (e is HttpRequestException or InvalidOperationException or IOException)
+            {
+                AppLog.Shared.Warn(LogCategory.Ui, "皮肤浏览：读取英雄失败", e);
+                _splash.Show(null, "", "", false, "读取英雄失败：" + e.Message);
+                return;
+            }
+
+            if (_models.Count == 0)
+            {
+                _splash.Show(null, "", "", false, "没有读到英雄数据。");
+                return;
+            }
+
+            ApplyFilter();
+            _ = LoadIconsAsync(_life.Token);
+        }
+
+        private void ApplyFilter()
+        {
+            var list = Filter(_models, _position, _ownedOnly.Checked, _hasSkinOnly.Checked, _search.Text);
+            _grid.SetItems(list);
+            UpdateStats();
+            UpdateHint();
+        }
+
+        private void UpdateStats()
+        {
+            var listed = _grid.Items;
+            _stats.Text =
+                $"{listed.Count} 个英雄 · {listed.Count(m => m.HasNonDefaultSkin)} 个有皮肤 · "
+                + $"{_models.Count(m => m.PreferredSkinId > 0)} 个已设自动皮肤";
+        }
+
+        /// <summary>按分路、已拥有、有皮肤和搜索词（名称、称号、英文名）筛选，按名称排序。</summary>
+        public static List<ChampionSkinCardModel> Filter(
+            IEnumerable<ChampionSkinCardModel> models,
+            ChampionPosition position,
+            bool ownedOnly,
+            bool hasSkinOnly,
+            string? keyword
+        )
+        {
+            string text = keyword?.Trim() ?? "";
+            return models
+                .Where(m => position == ChampionPosition.All || m.Positions.Contains(position))
+                .Where(m => !ownedOnly || m.IsOwned)
+                .Where(m => !hasSkinOnly || m.HasNonDefaultSkin)
+                .Where(m =>
+                    text.Length == 0
+                    || m.Name.Contains(text, StringComparison.OrdinalIgnoreCase)
+                    || m.Title.Contains(text, StringComparison.OrdinalIgnoreCase)
+                    || m.Alias.Contains(text, StringComparison.OrdinalIgnoreCase)
+                )
+                .OrderBy(m => m.Name)
+                .ToList();
+        }
+
+        #endregion
+
+        #region 英雄与皮肤
+
+        private void ShowChampion(ChampionSkinCardModel? champion)
+        {
+            _championLife?.Cancel();
+            _championLife?.Dispose();
+            _championLife = null;
+            ReleaseSplashes();
+            if (champion == null)
+            {
+                _strip.SetItems([], 0, 0);
+                _splash.Show(null, "", "", false, _models.Count > 0 ? "没有符合条件的英雄" : "");
+                UpdateButtons();
+                return;
+            }
+
+            _championLife = CancellationTokenSource.CreateLinkedTokenSource(_life.Token);
+            int selected = champion.PreferredSkinId > 0 ? champion.PreferredSkinId : champion.DefaultSkinId;
+            _strip.SetItems(champion.Skins, selected, champion.PreferredSkinId);
+            _ = LoadTilesAsync(champion, _championLife.Token);
+        }
+
+        private void ShowSkin()
+        {
+            var champion = _grid.Selected;
+            var skin = _strip.Selected;
+            UpdateButtons();
+            if (champion == null || skin == null)
+            {
+                return;
+            }
+
+            string title = SkinTitle(champion, skin);
+            string subtitle = champion.Name + (champion.Title.Length > 0 ? " · " + champion.Title : "");
+            bool preferred = !skin.IsDefault && champion.PreferredSkinId == skin.SkinId;
+            var image = _splashes.GetValueOrDefault(skin.SkinId);
+            _splash.Show(image, title, subtitle, preferred, image == null ? "原画加载中…" : "");
+            if (image == null && _championLife != null)
+            {
+                _ = LoadSplashAsync(champion, skin, _championLife.Token);
+            }
+        }
+
+        // The client names the default look after the champion, e.g. 光辉女郎 拉克丝.
+        private static string SkinTitle(ChampionSkinCardModel champion, SkinThumbItem skin) =>
+            skin.IsDefault ? (champion.Name + " " + champion.Title).Trim() : skin.Name;
+
+        private void UpdateButtons()
+        {
+            var champion = _grid.Selected;
+            var skin = _strip.Selected;
+            bool already = skin != null && !skin.IsDefault && champion?.PreferredSkinId == skin.SkinId;
+            _setPreferred.Text = already ? "★ 已是自动皮肤" : "★ 设为自动皮肤";
+            _setPreferred.Enabled = champion != null && skin != null && !skin.IsDefault && !already;
+            _restoreDefault.Enabled = champion?.PreferredSkinId > 0;
+        }
+
+        private void UpdateHint() =>
+            _hint.Text = _config.EnableAutoSkinSelect
+                ? "自动换皮肤已开启：选人锁定英雄后换成 ★ 皮肤。双击皮肤也可设定。"
+                : "自动换皮肤未开启：在设置「英雄预选」中打开后，锁定英雄时换成 ★ 皮肤。";
+
+        /// <summary>The default skin clears the champion's preference; another owned skin becomes it.</summary>
+        private void SetPreferred(SkinThumbItem? skin)
+        {
+            var champion = _grid.Selected;
+            if (champion == null || skin == null)
+            {
+                return;
+            }
+
+            champion.PreferredSkinId = skin.IsDefault ? 0 : skin.SkinId;
+            if (champion.PreferredSkinId == 0)
+            {
+                _config.PreferredChampionSkins.Remove(champion.ChampionId);
             }
             else
             {
-                _config.PreferredChampionSkins[championId] = skinId;
+                _config.PreferredChampionSkins[champion.ChampionId] = champion.PreferredSkinId;
             }
 
-            var m = _allModels.FirstOrDefault(x => x.ChampionId == championId);
-            if (m != null)
-            {
-                m.PreferredSkinId = (skinId <= 0 || skinId % 1000 == 0) ? 0 : skinId;
-            }
-
-            if (_cardPool.TryGetValue(championId, out var card))
-            {
-                card.RefreshPreference(m?.PreferredSkinId ?? 0);
-            }
-
-            if (Owner is FormMain main)
-            {
-                main.SaveAppConfig();
-            }
-
-            Debug.WriteLine($"[ChampionSkinBrowser] 偏好 champ={championId} skin={skinId}");
+            Save();
+            _strip.SetPreferred(champion.PreferredSkinId);
+            _grid.Invalidate();
+            UpdateStats();
+            ShowSkin();
         }
 
-        private void BtnClearPrefs_Click(object? sender, EventArgs e)
+        private void ClearAllPreferences()
         {
             if (
                 MessageBox.Show(
-                    "确定清除全部皮肤预选并恢复为默认皮？",
-                    "清除皮肤预选恢复默认",
+                    this,
+                    "确定清除全部自动皮肤，所有英雄恢复默认皮肤？",
+                    "清除全部自动皮肤",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question
                 ) != DialogResult.Yes
@@ -1153,60 +466,203 @@ namespace League.ChampionSkin
                 return;
             }
 
-            _config.PreferredChampionSkins ??= new Dictionary<int, int>();
             _config.PreferredChampionSkins.Clear();
-            foreach (var m in _allModels)
+            foreach (var model in _models)
             {
-                m.PreferredSkinId = 0;
+                model.PreferredSkinId = 0;
             }
 
-            foreach (var card in _cardPool.Values)
-            {
-                card.RefreshPreference(0);
-            }
-
-            if (Owner is FormMain main)
-            {
-                main.SaveAppConfig();
-            }
-
-            ApplyFilterAndRender();
+            Save();
+            ApplyFilter();
         }
 
-        private void ChampionSkinBrowser_FormClosing(object? sender, FormClosingEventArgs e)
+        private void Save()
         {
-            _searchDebounce?.Stop();
-            _loadCts?.Cancel();
-
-            Opacity = 0;
-            Visible = false;
-            ShowInTaskbar = false;
-
-            if (Owner is FormMain main)
+            if (_save != null)
+            {
+                _save();
+            }
+            else if (Owner is FormMain main)
             {
                 main.SaveAppConfig();
             }
-
-            foreach (var card in _cardPool.Values)
-            {
-                card.PreferredSkinChanged -= OnPreferredSkinChanged;
-            }
-
-            _cardPool.Clear();
-            flpCards.Controls.Clear();
-
-            var cache = _imgCache;
-            _imgCache = new SkinBrowserImageCache();
-            ThreadPool.QueueUserWorkItem(_ =>
-            {
-                try
-                {
-                    cache.Dispose();
-                }
-                catch { }
-            });
         }
 
         #endregion
+
+        #region 图片
+
+        private async Task LoadIconsAsync(CancellationToken token)
+        {
+            int size = LogicalToDeviceUnits(IconSize);
+            int loaded = 0;
+            // Listed champions first, so the visible grid fills in before the hidden ones.
+            foreach (var champion in _grid.Items.Concat(_models).DistinctBy(m => m.ChampionId).ToList())
+            {
+                var icon = await LoadScaledAsync(() => _source.LoadIconAsync(champion, token), size, token);
+                if (token.IsCancellationRequested)
+                {
+                    icon?.Dispose();
+                    return;
+                }
+
+                if (icon != null)
+                {
+                    _icons[champion.ChampionId] = icon;
+                    if (++loaded % 12 == 0)
+                    {
+                        _grid.Invalidate();
+                    }
+                }
+            }
+
+            _grid.Invalidate();
+        }
+
+        private async Task LoadTilesAsync(ChampionSkinCardModel champion, CancellationToken token)
+        {
+            int size = LogicalToDeviceUnits(TileSize);
+            foreach (var skin in champion.Skins.Where(s => !_tiles.ContainsKey(s.SkinId)).ToList())
+            {
+                var tile = await LoadScaledAsync(
+                    () => _source.LoadSkinAsync(champion, skin, SkinImageKind.Tile, token),
+                    size,
+                    token
+                );
+                if (token.IsCancellationRequested)
+                {
+                    tile?.Dispose();
+                    return;
+                }
+
+                if (tile != null && !_tiles.TryAdd(skin.SkinId, tile))
+                {
+                    tile.Dispose();
+                }
+
+                _strip.Invalidate();
+            }
+        }
+
+        private async Task LoadSplashAsync(ChampionSkinCardModel champion, SkinThumbItem skin, CancellationToken token)
+        {
+            Image? image;
+            try
+            {
+                image = await _source.LoadSkinAsync(champion, skin, SkinImageKind.Splash, token);
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                return;
+            }
+
+            // A late result for a champion that is no longer shown is dropped.
+            if (token.IsCancellationRequested)
+            {
+                image?.Dispose();
+                return;
+            }
+
+            if (image != null && !_splashes.TryAdd(skin.SkinId, image))
+            {
+                image.Dispose();
+            }
+
+            if (_strip.Selected?.SkinId == skin.SkinId)
+            {
+                if (image == null)
+                {
+                    _splash.Show(
+                        null,
+                        SkinTitle(champion, skin),
+                        champion.Name,
+                        false,
+                        "读不到这张原画：客户端未连接或资源缺失。"
+                    );
+                }
+                else
+                {
+                    ShowSkin();
+                }
+            }
+        }
+
+        // Scaled copies keep a long session small; the original decode is released immediately.
+        private static async Task<Image?> LoadScaledAsync(Func<Task<Image?>> load, int size, CancellationToken token)
+        {
+            Image? original;
+            try
+            {
+                original = await load();
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            if (original == null)
+            {
+                return null;
+            }
+
+            return await Task.Run(
+                () =>
+                {
+                    using (original)
+                    {
+                        var scaled = new Bitmap(size, size);
+                        using var g = Graphics.FromImage(scaled);
+                        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                        g.DrawImage(original, 0, 0, size, size);
+                        return (Image?)scaled;
+                    }
+                },
+                CancellationToken.None
+            );
+        }
+
+        private void ReleaseSplashes()
+        {
+            _splash.Show(null, "", "", false, "");
+            foreach (var image in _splashes.Values)
+            {
+                image.Dispose();
+            }
+
+            _splashes.Clear();
+        }
+
+        #endregion
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            _searchDelay.Stop();
+            _life.Cancel();
+            _championLife?.Cancel();
+            Save();
+            base.OnFormClosed(e);
+        }
+
+        // Images go only after the views that draw them are gone.
+        protected override void OnHandleDestroyed(EventArgs e)
+        {
+            base.OnHandleDestroyed(e);
+            if (!RecreatingHandle)
+            {
+                _grid.Icon = _ => null;
+                _strip.Tile = _ => null;
+                ReleaseSplashes();
+                foreach (var image in _icons.Values.Concat(_tiles.Values))
+                {
+                    image.Dispose();
+                }
+
+                _icons.Clear();
+                _tiles.Clear();
+                _searchDelay.Dispose();
+                _championLife?.Dispose();
+                _life.Dispose();
+            }
+        }
     }
 }
