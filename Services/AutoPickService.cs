@@ -29,7 +29,11 @@ namespace League.Services
         public async Task StartChampSelectMonitoring(TeamCardDisplayService cardDisplayService)
         {
             _cardDisplayService = cardDisplayService;
-            _champSelectCts?.Cancel();
+            if (_champSelectCts != null)
+            {
+                await _champSelectCts.CancelAsync();
+            }
+
             _champSelectCts = new CancellationTokenSource();
             var token = _champSelectCts.Token;
 
@@ -53,12 +57,12 @@ namespace League.Services
                             await _cardDisplayService.ShowMyTeamCards(token);
 
                             // 自动预选抢英雄
-                            await TryAutoPreliminaryAsync();
+                            await TryAutoPreliminaryAsync(token);
 
                             // 自动配置皮肤
-                            await TryAutoSkinAsync();
+                            await TryAutoSkinAsync(token);
 
-                            var session = await Globals.lcuClient.GetChampSelectSession();
+                            var session = await Globals.lcuClient.GetChampSelectSession(token);
                             int queueId = session?["queueId"]?.Value<int>() ?? 0;
 
                             // 乱斗类轮询更快，其它模式 1 秒
@@ -102,7 +106,7 @@ namespace League.Services
         /// <summary>
         /// 自动预选功能核心方法，新增根据勾选的模式进行过滤
         /// </summary>
-        private async Task TryAutoPreliminaryAsync()
+        private async Task TryAutoPreliminaryAsync(CancellationToken cancellationToken)
         {
             var preConfig = _form.GetAppConfig()?.Preliminary;
             if (preConfig == null || !preConfig.EnableAutoPreliminary)
@@ -116,7 +120,7 @@ namespace League.Services
                 return;
             }
 
-            var session = await Globals.lcuClient.GetChampSelectSession();
+            var session = await Globals.lcuClient.GetChampSelectSession(cancellationToken);
             if (session == null)
             {
                 return;
@@ -165,7 +169,7 @@ namespace League.Services
         /// <summary>
         /// 选人阶段：若开启自动皮肤，且当前英雄在 PreferredChampionSkins 中有非默认皮，则 PATCH。
         /// </summary>
-        private async Task TryAutoSkinAsync()
+        private async Task TryAutoSkinAsync(CancellationToken cancellationToken)
         {
             var cfg = _form.GetAppConfig();
             if (cfg == null || !cfg.EnableAutoSkinSelect)
@@ -180,7 +184,7 @@ namespace League.Services
 
             try
             {
-                var session = await Globals.lcuClient.GetChampSelectSession();
+                var session = await Globals.lcuClient.GetChampSelectSession(cancellationToken);
                 if (session == null)
                 {
                     return;
@@ -248,6 +252,10 @@ namespace League.Services
                 {
                     Debug.WriteLine($"[自动皮肤] 已请求切换 champ={championId} skin={wantSkin}");
                 }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {

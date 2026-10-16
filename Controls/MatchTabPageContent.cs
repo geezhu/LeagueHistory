@@ -203,7 +203,8 @@ namespace League.Controls
 
         private async Task UpdateMatchesDisplay()
         {
-            await _loadSemaphore.WaitAsync();
+            // _updateCts 只代表当前这一次列表更新，不是页面生命周期；排队等上一页加载结束不能被它取消。
+            await _loadSemaphore.WaitAsync(CancellationToken.None);
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss}] 开始加载数据 - PUUID: {_puuid}");
 
             try
@@ -325,10 +326,15 @@ namespace League.Controls
 
         private async Task UpdateMatchList(JArray matches)
         {
-            await _updateLock.WaitAsync();
+            // 等的是上一次列表更新退出，新的取消源要在拿到锁之后才创建，所以这里不能用旧的取消源。
+            await _updateLock.WaitAsync(CancellationToken.None);
             try
             {
-                _updateCts?.Cancel();
+                if (_updateCts != null)
+                {
+                    await _updateCts.CancelAsync();
+                }
+
                 _updateCts = new CancellationTokenSource();
                 CancellationToken token = _updateCts.Token;
                 if (flowLayoutPanelRight.InvokeRequired)
@@ -479,7 +485,8 @@ namespace League.Controls
                 _summonerId = summonerId;
             }
 
-            await Task.Delay(200);
+            // 等控件加载完的固定延迟，与列表更新的取消源无关。
+            await Task.Delay(200, CancellationToken.None);
 
             SafeInvoke(() =>
             {
@@ -611,11 +618,15 @@ namespace League.Controls
                 // 确保在UI线程上执行
                 if (this.InvokeRequired)
                 {
-                    await Task.Run(async () =>
-                    {
-                        _isRefreshing = true;
-                        await ForceRefreshDataInternal(puuid);
-                    });
+                    // 强制刷新自己会替换 _updateCts，不能被即将作废的旧取消源取消。
+                    await Task.Run(
+                        async () =>
+                        {
+                            _isRefreshing = true;
+                            await ForceRefreshDataInternal(puuid);
+                        },
+                        CancellationToken.None
+                    );
                     return;
                 }
 

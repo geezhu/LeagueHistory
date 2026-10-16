@@ -13,23 +13,35 @@ namespace League.Infrastructure
 
             _interval = interval;
             _cts = new CancellationTokenSource();
+            // 每个循环只看自己的取消源：重新 Start 后旧循环读到新的 _cts 会继续跑，变成两个循环同时轮询。
+            var token = _cts.Token;
 
-            Task.Run(async () =>
-            {
-                while (!_cts.IsCancellationRequested)
+            Task.Run(
+                async () =>
                 {
-                    try
+                    while (!token.IsCancellationRequested)
                     {
-                        await action();
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"[Poller异常] {ex}");
-                    }
+                        try
+                        {
+                            await action();
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"[Poller异常] {ex}");
+                        }
 
-                    await Task.Delay(_interval, _cts.Token);
-                }
-            });
+                        try
+                        {
+                            await Task.Delay(_interval, token);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            break;
+                        }
+                    }
+                },
+                token
+            );
         }
 
         public void Stop()

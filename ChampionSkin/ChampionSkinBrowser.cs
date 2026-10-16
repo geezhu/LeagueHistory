@@ -160,7 +160,11 @@ namespace League.ChampionSkin
             flpCards.Visible = false;
             flpCards.SuspendLayout();
 
-            _loadCts?.Cancel();
+            if (_loadCts != null)
+            {
+                await _loadCts.CancelAsync();
+            }
+
             _loadCts = new CancellationTokenSource();
             var token = _loadCts.Token;
 
@@ -178,7 +182,7 @@ namespace League.ChampionSkin
                     return;
                 }
 
-                var ownedSkinsByChamp = await LoadOwnedSkinsAsync();
+                var ownedSkinsByChamp = await LoadOwnedSkinsAsync(token);
                 _config.PreferredChampionSkins ??= new Dictionary<int, int>();
                 _allModels.Clear();
 
@@ -237,6 +241,10 @@ namespace League.ChampionSkin
 
                 _ = PreloadAllOwnedSkinImagesAsync(ownedSkinsByChamp, token);
             }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                // 窗口关闭或重新加载取消了这次初始化，不提示错误。
+            }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[ChampionSkinBrowser] 初始化失败: {ex}");
@@ -248,12 +256,14 @@ namespace League.ChampionSkin
             }
         }
 
-        private async Task<Dictionary<int, List<SkinThumbItem>>> LoadOwnedSkinsAsync()
+        private async Task<Dictionary<int, List<SkinThumbItem>>> LoadOwnedSkinsAsync(
+            CancellationToken cancellationToken
+        )
         {
             var result = new Dictionary<int, List<SkinThumbItem>>();
             try
             {
-                var summoner = await Globals.lcuClient.GetCurrentSummoner();
+                var summoner = await Globals.lcuClient.GetCurrentSummoner(cancellationToken);
                 string? sid = summoner?["summonerId"]?.ToString();
                 if (string.IsNullOrEmpty(sid))
                 {
@@ -263,8 +273,11 @@ namespace League.ChampionSkin
 
                 var http = Globals.lcuClient.Client ?? throw new InvalidOperationException("LCU Client 未就绪");
 
-                var resp = await http.GetAsync($"lol-champions/v1/inventories/{sid}/skins-minimal");
-                string body = await resp.Content.ReadAsStringAsync();
+                using var resp = await http.GetAsync(
+                    $"lol-champions/v1/inventories/{sid}/skins-minimal",
+                    cancellationToken
+                );
+                string body = await resp.Content.ReadAsStringAsync(cancellationToken);
                 Debug.WriteLine($"[ChampionSkinBrowser] skins-minimal status={resp.StatusCode} len={body?.Length}");
                 if (!resp.IsSuccessStatusCode)
                 {
@@ -323,6 +336,10 @@ namespace League.ChampionSkin
 
                 int nonBase = result.Values.Sum(l => l.Count(s => !s.IsBase && s.SkinId % 1000 != 0));
                 Debug.WriteLine($"[ChampionSkinBrowser] 英雄数={result.Count}, 非默认皮肤={nonBase}");
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -559,7 +576,19 @@ namespace League.ChampionSkin
 
             string cacheDir = SkinCacheDir;
             Directory.CreateDirectory(cacheDir);
+            var token = _loadCts?.Token ?? CancellationToken.None;
+            try
+            {
+                await LoadVisibleSkinThumbsAsync(http, cacheDir, token);
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                // 窗口关闭或重新加载时停止补图。
+            }
+        }
 
+        private async Task LoadVisibleSkinThumbsAsync(HttpClient http, string cacheDir, CancellationToken token)
+        {
             foreach (Control c in flpCards.Controls)
             {
                 if (c is not ChampionSkinCard card || !card.Visible)
@@ -588,7 +617,7 @@ namespace League.ChampionSkin
                     string? path = ResolveSkinFile(cacheDir, skin.SkinId);
                     if (path == null)
                     {
-                        await EnsureSkinFileCachedAsync(http, cacheDir, champId, skin.SkinId, skin.TilePath);
+                        await EnsureSkinFileCachedAsync(http, cacheDir, champId, skin.SkinId, skin.TilePath, token);
                         path = ResolveSkinFile(cacheDir, skin.SkinId);
                     }
 
@@ -684,7 +713,7 @@ namespace League.ChampionSkin
 
                     try
                     {
-                        bool ok = await EnsureSkinFileCachedAsync(http, cacheDir, champId, s.SkinId, s.TilePath);
+                        bool ok = await EnsureSkinFileCachedAsync(http, cacheDir, champId, s.SkinId, s.TilePath, token);
                         if (ok)
                         {
                             done++;
@@ -722,7 +751,8 @@ namespace League.ChampionSkin
             string cacheDir,
             int championId,
             int skinId,
-            string? tilePathFromApi = null
+            string? tilePathFromApi,
+            CancellationToken cancellationToken
         )
         {
             // 已有有效文件直接成功
@@ -732,7 +762,7 @@ namespace League.ChampionSkin
             }
 
             var idLock = _skinIdLocks.GetOrAdd(skinId, _ => new SemaphoreSlim(1, 1));
-            await idLock.WaitAsync().ConfigureAwait(false);
+            await idLock.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 // 双检：等锁期间可能已被别的任务写好
@@ -741,7 +771,7 @@ namespace League.ChampionSkin
                     return true;
                 }
 
-                await _skinDownloadLock.WaitAsync().ConfigureAwait(false);
+                await _skinDownloadLock.WaitAsync(cancellationToken).ConfigureAwait(false);
                 try
                 {
                     if (ResolveSkinFile(cacheDir, skinId) != null)
@@ -774,7 +804,8 @@ namespace League.ChampionSkin
 
                     foreach (var path in lcuPaths.Distinct(StringComparer.OrdinalIgnoreCase))
                     {
-                        var bytes = await TryGetBytesFromLcuAsync(lcuHttp, path).ConfigureAwait(false);
+                        var bytes = await TryGetBytesFromLcuAsync(lcuHttp, path, cancellationToken)
+                            .ConfigureAwait(false);
                         if (bytes == null)
                         {
                             continue;
@@ -797,14 +828,22 @@ namespace League.ChampionSkin
                     {
                         try
                         {
-                            var iconBytes = await File.ReadAllBytesAsync(champIcon).ConfigureAwait(false);
+                            var iconBytes = await File.ReadAllBytesAsync(champIcon, cancellationToken)
+                                .ConfigureAwait(false);
                             if (SaveBytesAsCachedJpeg(iconBytes, cachePath))
                             {
                                 Debug.WriteLine($"[皮肤图] skin={skinId} 使用英雄头占位");
                                 return true;
                             }
                         }
-                        catch { }
+                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                        {
+                            throw;
+                        }
+                        catch
+                        {
+                            // 占位图只是兜底，读不到时按下载失败处理。
+                        }
                     }
 
                     if (ResolveSkinFile(cacheDir, skinId) != null)
@@ -826,21 +865,30 @@ namespace League.ChampionSkin
             }
         }
 
-        private static async Task<byte[]?> TryGetBytesFromLcuAsync(HttpClient http, string path)
+        private static async Task<byte[]?> TryGetBytesFromLcuAsync(
+            HttpClient http,
+            string path,
+            CancellationToken cancellationToken
+        )
         {
             try
             {
-                using var resp = await http.GetAsync(path).ConfigureAwait(false);
+                using var resp = await http.GetAsync(path, cancellationToken).ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode)
                 {
                     return null;
                 }
 
-                var bytes = await resp.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                var bytes = await resp.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
                 return bytes.Length >= 256 ? bytes : null;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch
             {
+                // 单个路径失败（404、超时、断线）时换下一个候选路径。
                 return null;
             }
         }
