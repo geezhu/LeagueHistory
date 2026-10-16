@@ -158,6 +158,7 @@ namespace League
 
                 // After the window is shown, so the question is not hidden behind the splash of an empty form.
                 BeginInvoke(ShowCrashPromptIfNeeded);
+                StartHangMonitor();
             }
             catch (Exception ex)
             {
@@ -1164,6 +1165,8 @@ namespace League
             _tab1Poller?.Stop();
 
             // 卸载热键钩子
+            // Stop first: closing work on the UI thread is not a hang worth reporting.
+            StopHangMonitor();
             _hotkeyManager?.Dispose();
             _loadingOverlay?.Dispose();
 

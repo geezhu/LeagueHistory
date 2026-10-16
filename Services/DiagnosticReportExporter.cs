@@ -9,7 +9,15 @@ using Newtonsoft.Json.Linq;
 namespace League.Services;
 
 /// <summary>导出时在界面线程上取的程序状态；其余信息在后台收集。</summary>
-public sealed record DiagnosticAppState(bool LcuConnected, bool InGame, string GameBarStatus, LeagueConfig? Config);
+/// <param name="Lcu">已连接时用来读客户端版本和大区；只读这两项，不读账号数据。</param>
+public sealed record DiagnosticAppState(
+    bool LcuConnected,
+    bool InGame,
+    string GameBarStatus,
+    LeagueConfig? Config,
+    HttpClient? Lcu = null,
+    string Phase = "未知"
+);
 
 /// <summary>要收进报告的一个目录：只取顶层、匹配文件名、最近 7 天改过的文件。</summary>
 public sealed record DiagnosticSource(string Directory, string[] Patterns, string ArchiveFolder);
@@ -129,7 +137,7 @@ public sealed class DiagnosticReportExporter
                 }
             }
 
-            var report = BuildReport(state, included);
+            var report = BuildReport(state, included, await DescribeClientAsync(state.Lcu, cancellationToken));
             var entry = archive.CreateEntry("report.json");
             await using var writer = new StreamWriter(entry.Open(), new UTF8Encoding(false));
             await writer.WriteAsync(_redactor.Redact(report.ToString(Formatting.Indented)));
@@ -138,7 +146,7 @@ public sealed class DiagnosticReportExporter
         return included.Count;
     }
 
-    public JObject BuildReport(DiagnosticAppState state, IReadOnlyList<JObject> files)
+    public JObject BuildReport(DiagnosticAppState state, IReadOnlyList<JObject> files, JObject? client = null)
     {
         var build = BuildInfo.Current;
         return new JObject
@@ -152,10 +160,13 @@ public sealed class DiagnosticReportExporter
                 ["builtAtUtc"] = build.BuiltAtUtc?.ToString("o") ?? "unknown",
             },
             ["environment"] = DescribeEnvironment(),
+            ["client"] = client ?? new JObject { ["available"] = false },
+            ["processes"] = DescribeProcesses(),
             ["app"] = new JObject
             {
                 ["lcuConnected"] = state.LcuConnected,
                 ["inGame"] = state.InGame,
+                ["phase"] = state.Phase,
                 ["gameBar"] = state.GameBarStatus,
                 ["voiceModelReady"] = VoiceModelStore.Shared.AvailableDirectory != null,
                 ["installation"] = DescribeInstallation(),
@@ -244,6 +255,84 @@ public sealed class DiagnosticReportExporter
                 })
             ),
         };
+    }
+
+    // Process names only, never paths: enough to tell a closed client, a running game or a WeGame launch apart.
+    private static readonly string[] WatchedProcesses =
+    {
+        "LeagueClient",
+        "LeagueClientUx",
+        "LeagueClientUxRender",
+        "League of Legends",
+        "RiotClientServices",
+        "Riot Client",
+        "wegame",
+        "tgp_daemon",
+        "LeagueHistory.GameBar",
+    };
+
+    public static JObject DescribeProcesses()
+    {
+        var result = new JObject();
+        foreach (string name in WatchedProcesses)
+        {
+            var processes = System.Diagnostics.Process.GetProcessesByName(name);
+            result[name] = processes.Length;
+            foreach (var process in processes)
+            {
+                process.Dispose();
+            }
+        }
+        return result;
+    }
+
+    /// <summary>客户端版本和大区；未连接或 3 秒内没有响应时只记原因。</summary>
+    public static async Task<JObject> DescribeClientAsync(HttpClient? lcu, CancellationToken cancellationToken)
+    {
+        if (lcu == null)
+        {
+            return new JObject { ["available"] = false, ["reason"] = "客户端未连接" };
+        }
+
+        var result = new JObject { ["available"] = true };
+        result["gameVersion"] = await ReadClientAsync(lcu, "/lol-patch/v1/game-version", cancellationToken);
+        var region = await ReadClientAsync(lcu, "/riotclient/region-locale", cancellationToken);
+        if (region is JObject locale)
+        {
+            result["region"] = locale["region"]?.ToString() ?? "";
+            result["webRegion"] = locale["webRegion"]?.ToString() ?? "";
+            result["locale"] = locale["locale"]?.ToString() ?? "";
+        }
+        else
+        {
+            result["region"] = region;
+        }
+        return result;
+    }
+
+    private static async Task<JToken> ReadClientAsync(HttpClient lcu, string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(3));
+            using var response = await lcu.GetAsync(path, timeout.Token);
+            if (!response.IsSuccessStatusCode)
+            {
+                return $"未取得（{(int)response.StatusCode}）";
+            }
+
+            return JToken.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException)
+        {
+            // The report is still useful without these two fields; record why they are missing.
+            return $"未取得（{ex.GetType().Name}）";
+        }
     }
 
     private static JObject DescribeInstallation()

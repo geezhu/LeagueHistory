@@ -106,10 +106,14 @@ namespace League.Services
         /// <summary>
         /// 核心：游戏阶段变化时分发处理
         /// </summary>
+        /// <summary>最近一次收到的游戏阶段，供卡顿记录和诊断报告说明当时在做什么。</summary>
+        public string CurrentPhase { get; private set; } = "未知";
+
         public async Task OnGameflowPhaseChanged(string phase, string? previousPhase)
         {
             // The timeline that ties every other log line to what the player was doing at the time.
             AppLog.Shared.Info(LogCategory.Game, $"游戏阶段 {previousPhase ?? "无"} → {phase}");
+            CurrentPhase = phase;
             if (
                 (phase is "EndOfGame" or "PreEndOfGame" or "WaitingForStats")
                 && (previousPhase is "GameStart" or "InProgress" or "Reconnect")
