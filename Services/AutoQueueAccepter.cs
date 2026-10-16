@@ -14,7 +14,10 @@ namespace League.Services
         public async Task TryAcceptAsync(int delaySeconds = 0)
         {
             if (_hasAcceptedReadyCheck || _pending is { IsCancellationRequested: false })
+            {
                 return;
+            }
+
             var pending = _pending = new CancellationTokenSource();
             var token = pending.Token;
             delaySeconds = delaySeconds is 5 or 10 ? delaySeconds : 0;
@@ -32,13 +35,22 @@ namespace League.Services
                 {
                     token.ThrowIfCancellationRequested();
                     if (_form.GetAppConfig()?.EnableAutoAcceptQueue != true)
+                    {
                         return;
+                    }
+
                     var client = Globals.lcuClient?.Client;
                     if (client == null)
+                    {
                         return;
+                    }
+
                     string phase = await client.GetStringAsync("/lol-gameflow/v1/gameflow-phase", token);
                     if (phase.Trim().Trim('"') != "ReadyCheck")
+                    {
                         return;
+                    }
+
                     bool success = await Globals.lcuClient.AcceptReadyCheckAsync();
                     if (success)
                     {
@@ -59,7 +71,10 @@ namespace League.Services
             finally
             {
                 if (ReferenceEquals(_pending, pending))
+                {
                     _pending = null;
+                }
+
                 pending.Dispose();
             }
         }

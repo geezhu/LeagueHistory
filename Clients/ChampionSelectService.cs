@@ -51,20 +51,17 @@ namespace League.Clients
             Debug.WriteLine($"[LCU 自动预选] 开始执行，列表 {preSelectedHeroes?.Count ?? 0} 个英雄");
 
             if (preSelectedHeroes == null || !preSelectedHeroes.Any())
+            {
                 return false;
+            }
 
             try
             {
                 var (session, apiPrefix) = await ResolveChampSelectSessionAsync();
                 if (session == null || session["actions"] == null)
                 {
-                    Debug.WriteLine($"[自动预选] session/actions 为空, prefix={apiPrefix}");
                     return false;
                 }
-
-                int queueId = session["queueId"]?.Value<int>() ?? 0;
-                bool isLegacyFlag = session["isLegacyChampSelect"]?.Value<bool>() ?? false;
-                Debug.WriteLine($"[自动预选] queueId={queueId}, isClassic={IsClassicQueue(queueId)}, isLegacyFlag={isLegacyFlag}, prefix={apiPrefix}");
 
                 var actions = session["actions"] as JArray;
                 long localCellId = session["localPlayerCellId"]?.Value<long>()
@@ -99,13 +96,14 @@ namespace League.Clients
 
                 if (myPickAction == null)
                 {
-                    Debug.WriteLine("[自动预选] 当前没有自己的 pick action（可能未轮到）");
                     return false;
                 }
 
                 var actionId = myPickAction["id"]?.Value<int>() ?? 0;
                 if (actionId == 0)
+                {
                     return false;
+                }
 
                 // session 里已禁/已选是「会话 ID」（经典为 600xx）
                 var bannedSessionIds = GetBannedAndSelectedChampions(session);
@@ -120,8 +118,12 @@ namespace League.Clients
                     return false;
                 }
 
-                int sessionChampId = ToSessionChampionId(availableHero.ChampionId, queueId);
-                int currentHoverId = myPickAction["championId"]?.Value<int>() ?? 0;
+                // 检查是否已经 hover 了这个英雄
+                var currentHoverId = myPickAction["championId"]?.Value<int>() ?? 0;
+                if (currentHoverId == availableHero.ChampionId)
+                {
+                    return false; // 已经预选，无需重复
+                }
 
                 // 执行预选
                 var patchBody = new JObject { ["championId"] = availableHero.ChampionId };
@@ -263,30 +265,40 @@ namespace League.Clients
         public async Task AutoSwapToHighestPriorityAsync(List<PreliminaryHero> preSelectedHeroes)
         {
             if (preSelectedHeroes == null || !preSelectedHeroes.Any())
+            {
                 return;
+            }
 
             try
             {
                 var session = await _gameflowService.GetChampSelectSessionAsync();
                 if (session == null)
+                {
                     return;
+                }
 
                 var queueId = session["queueId"]?.Value<int>() ?? 0;
 
                 // 只有非ARAM模式才返回，450=大乱斗、2400=海克斯乱斗、900=无限乱斗
                 if (queueId != 450 && queueId != 2400 && queueId != 900)
+                {
                     return;
+                }
 
                 var myCellId = session["localPlayerCellId"]?.Value<int>() ?? -1;
                 if (myCellId == -1)
+                {
                     return;
+                }
 
                 var myTeam = session["myTeam"] as JArray ?? new JArray();
                 var myPlayer = myTeam.FirstOrDefault(p => p["cellId"]?.Value<int>() == myCellId);
                 var currentChampId = myPlayer?["championId"]?.Value<int>() ?? 0;
 
                 if (currentChampId == 0)
+                {
                     return;
+                }
 
                 var currentPriority =
                     preSelectedHeroes.FirstOrDefault(h => h.ChampionId == currentChampId)?.Priority ?? int.MaxValue;
@@ -299,7 +311,9 @@ namespace League.Clients
                 {
                     var id = item["championId"]?.Value<int>() ?? 0;
                     if (id > 0)
+                    {
                         availableChampIds.Add(id);
+                    }
                 }
 
                 // 找出 bench 中优先级最高的预选英雄
@@ -309,7 +323,9 @@ namespace League.Clients
                     .FirstOrDefault();
 
                 if (bestAvailable == null)
+                {
                     return;
+                }
 
                 // 只有当 bench 中的最高优先级严格高于当前持有，才抢
                 if (bestAvailable.Priority < currentPriority)
@@ -345,7 +361,9 @@ namespace League.Clients
             {
                 var champId = ban.Value<int>();
                 if (champId > 0)
+                {
                     bannedChampIds.Add(champId);
+                }
             }
 
             // 获取我方已选英雄
@@ -354,7 +372,9 @@ namespace League.Clients
             {
                 var champId = player["championId"]?.Value<int>() ?? 0;
                 if (champId > 0)
+                {
                     bannedChampIds.Add(champId);
+                }
             }
 
             return bannedChampIds;
@@ -366,9 +386,14 @@ namespace League.Clients
         public async Task<bool> TryApplyPreferredSkinAsync(int championId, int skinId, int? lastAppliedSkinId = null)
         {
             if (championId <= 0 || skinId <= 0 || skinId % 1000 == 0)
+            {
                 return false;
+            }
+
             if (lastAppliedSkinId == skinId)
+            {
                 return false;
+            }
 
             try
             {

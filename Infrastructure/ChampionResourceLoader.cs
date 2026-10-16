@@ -42,7 +42,9 @@ namespace League.Infrastructure
         {
             var champ = GetById(id);
             if (champ == null)
+            {
                 return (null, "未知英雄", "未找到该英雄的描述");
+            }
 
             var image = await GetIconAsync(id);
             return (image, champ.Name, champ.Description);
@@ -52,7 +54,9 @@ namespace League.Infrastructure
         {
             var champ = GetById(id);
             if (champ == null)
+            {
                 return null;
+            }
 
             string safeName = champ.Name.Replace(" ", "").Replace("'", "");
             return await _imageCache.GetOrDownloadImageAsync(

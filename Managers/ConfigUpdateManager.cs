@@ -219,7 +219,10 @@ namespace League.Managers
                         {
                             retryCount++;
                             if (retryCount >= maxDownloadRetries)
+                            {
                                 throw;
+                            }
+
                             progressForm.Invoke(() =>
                                 progressForm.UpdateStatus(
                                     $"下载失败，正在第 {retryCount}/{maxDownloadRetries} 次重试...\r\n",
@@ -231,7 +234,9 @@ namespace League.Managers
                     }
 
                     if (!downloadSuccess)
+                    {
                         throw new Exception("多次尝试后仍无法下载更新包");
+                    }
 
                     progressForm.Invoke(() => progressForm.UpdateStatus("下载完成，正在解压..."));
 
@@ -242,21 +247,30 @@ namespace League.Managers
                         foreach (var entry in archive.Entries)
                         {
                             if (string.IsNullOrEmpty(entry.Name))
+                            {
                                 continue;
+                            }
 
                             string destPath = Path.GetFullPath(
                                 Path.Combine(extractPath, entry.FullName.Replace('/', Path.DirectorySeparatorChar))
                             );
                             // 拒绝 ../ 等指向解压目录之外的条目
                             if (!destPath.StartsWith(extractRoot, StringComparison.OrdinalIgnoreCase))
+                            {
                                 throw new InvalidDataException("更新包包含解压目录之外的路径：" + entry.FullName);
+                            }
+
                             string destDir = Path.GetDirectoryName(destPath)!;
 
                             if (!Directory.Exists(destDir))
+                            {
                                 Directory.CreateDirectory(destDir);
+                            }
 
                             if (File.Exists(destPath))
+                            {
                                 File.Delete(destPath);
+                            }
 
                             entry.ExtractToFile(destPath);
                         }

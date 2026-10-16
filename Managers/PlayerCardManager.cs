@@ -26,9 +26,12 @@ public sealed class PlayerCardManager : IDisposable
             states =>
             {
                 foreach (var team in states.GroupBy(s => s.Ally))
+                {
                     new PartyDetector().Detect(
                         team.Where(s => !string.IsNullOrEmpty(s.Info?.Player?.Puuid)).Select(s => s.Info!).ToList()
                     );
+                }
+
                 _uiManager.Render(states);
                 _cache.Replace(
                     states
@@ -71,7 +74,10 @@ public sealed class PlayerCardManager : IDisposable
     {
         var snapshot = (JArray)players.DeepClone();
         foreach (var player in snapshot.OfType<JObject>())
+        {
             player["__roomQueue"] = queueId;
+        }
+
         return _loader.UpdateTeamAsync(snapshot, ally, generation);
     }
 

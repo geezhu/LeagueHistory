@@ -15,10 +15,15 @@ namespace League.Controls
             set
             {
                 if (_currentChampionId == value)
+                {
                     return;
+                }
+
                 _currentChampionId = value;
                 if (_championBar.Parent != null)
+                {
                     _ = RefreshChampionAsync();
+                }
             }
         }
         public string CurrentPuuId { get; set; } = "";
@@ -124,7 +129,9 @@ namespace League.Controls
 
             // 重新创建粗体字体
             if (!oldFont.Bold)
+            {
                 lblPlayerName.Font = new Font(oldFont.FontFamily, oldFont.Size, FontStyle.Bold);
+            }
 
             lblPlayerName.BorderStyle = BorderStyle.None;
 
@@ -237,9 +244,13 @@ namespace League.Controls
                             try
                             {
                                 if (lblPlayerName.InvokeRequired)
+                                {
                                     lblPlayerName.Invoke(() => lblPlayerName.Text = originalText);
+                                }
                                 else
+                                {
                                     lblPlayerName.Text = originalText;
+                                }
                             }
                             catch { }
                         }

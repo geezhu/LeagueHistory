@@ -72,7 +72,9 @@ namespace League.Services
         {
             var config = _form.GetAppConfig();
             if (config == null)
+            {
                 return;
+            }
 
             try
             {
@@ -99,7 +101,10 @@ namespace League.Services
         public async Task ReturnToSpecificLobbyAsync()
         {
             if (_endGameActions == null)
+            {
                 return;
+            }
+
             try
             {
                 await Task.Delay(600);

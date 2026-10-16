@@ -16,7 +16,9 @@ namespace League.Managers
         public void FixHiddenPlayerCard(PlayerCardControl card)
         {
             if (card == null || card.IsDisposed)
+            {
                 return;
+            }
 
             FormUiStateManager.SafeInvoke(
                 card,
@@ -47,11 +49,15 @@ namespace League.Managers
                             // 【关键修复】加强 null 判断
                             var panel = _form.tableLayoutPanel1.GetControlFromPosition(col, row) as BorderPanel;
                             if (panel == null || panel.Controls.Count == 0)
+                            {
                                 continue;
+                            }
 
                             var card = panel.Controls[0] as PlayerCardControl;
                             if (card == null || card.IsDisposed)
+                            {
                                 continue;
+                            }
 
                             string name = card.lblPlayerName.Text?.Trim() ?? "";
                             string soloRank = card.lblSoloRank.Text?.Trim() ?? "";

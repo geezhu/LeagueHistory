@@ -178,7 +178,9 @@ public static class GameChatInputSender
         finally
         {
             if (attached)
+            {
                 AttachThreadInput(curThread, gameThread, false);
+            }
         }
     }
 
@@ -187,7 +189,9 @@ public static class GameChatInputSender
     {
         uint flags = down ? 0u : KEYEVENTF_KEYUP;
         if (scan != 0)
+        {
             flags |= KEYEVENTF_SCANCODE;
+        }
 
         var input = new INPUT
         {
@@ -211,14 +215,20 @@ public static class GameChatInputSender
     private static void SetClipboardText(string text)
     {
         if (!OpenClipboard(IntPtr.Zero))
+        {
             return;
+        }
+
         try
         {
             EmptyClipboard();
             byte[] bytes = Encoding.Unicode.GetBytes(text + "\0");
             IntPtr hMem = GlobalAlloc(0x0042, (UIntPtr)bytes.Length);
             if (hMem == IntPtr.Zero)
+            {
                 return;
+            }
+
             IntPtr ptr = GlobalLock(hMem);
             Marshal.Copy(bytes, 0, ptr, bytes.Length);
             GlobalUnlock(hMem);

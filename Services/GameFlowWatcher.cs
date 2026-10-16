@@ -54,7 +54,9 @@ namespace League.Services
         public async void StartGameflowWatcher()
         {
             if (!_uiManager.LcuReady)
+            {
                 return;
+            }
 
             _watcherCts = new CancellationTokenSource();
 
@@ -109,9 +111,15 @@ namespace League.Services
                 (phase is "EndOfGame" or "PreEndOfGame" or "WaitingForStats")
                 && (previousPhase is "GameStart" or "InProgress" or "Reconnect")
             )
+            {
                 Clients.ChampionMasteryService.Shared.Invalidate(_form.GetCurrentPuuid() ?? "");
+            }
+
             if (phase != "ReadyCheck")
+            {
                 _autoAccepter.Reset();
+            }
+
             try
             {
                 // 🔥 最重要的调试日志
@@ -181,7 +189,9 @@ namespace League.Services
                 int delay = _form.GetAppConfig()?.AutoAcceptDelaySeconds ?? 0;
                 // 只允许 0 / 5 / 10，防止配置被改乱
                 if (delay != 5 && delay != 10)
+                {
                     delay = 0;
+                }
 
                 _ = _autoAccepter.TryAcceptAsync(delay);
             }

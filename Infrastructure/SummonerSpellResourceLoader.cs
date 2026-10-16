@@ -43,7 +43,9 @@ namespace League.Infrastructure
         {
             var spell = GetById(spellId);
             if (spell == null)
+            {
                 return (null, "未知召唤师技能", "未找到该技能的描述");
+            }
 
             var image = await GetIconAsync(spell.IconPath);
             return (image, spell.Name, spell.Description);
@@ -52,13 +54,20 @@ namespace League.Infrastructure
         public async Task<Image?> GetIconAsync(string iconPath)
         {
             if (string.IsNullOrEmpty(iconPath))
+            {
                 return null;
+            }
+
             if (!iconPath.StartsWith("/"))
+            {
                 iconPath = "/" + iconPath;
+            }
 
             string fileName = Path.GetFileName(iconPath);
             if (string.IsNullOrEmpty(fileName))
+            {
                 return null;
+            }
 
             return await _imageCache.GetOrDownloadImageAsync(iconPath, "spell", fileName);
         }

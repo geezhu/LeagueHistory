@@ -50,7 +50,9 @@ namespace League.UIState
                 {
                     // 已经在显示中则跳过
                     if (_isShowingLoading && _loadingOverlay != null && !_loadingOverlay.IsDisposed)
+                    {
                         return;
+                    }
 
                     // 清理旧的（防止竞态）
                     CleanupCurrentLoadingOverlay();
@@ -146,7 +148,9 @@ namespace League.UIState
                 () =>
                 {
                     if (!_isShowingLoading || _loadingOverlay == null)
+                    {
                         return;
+                    }
 
                     _isShowingLoading = false;
 
@@ -198,7 +202,9 @@ namespace League.UIState
                 try
                 {
                     if (_form.Controls.Contains(_loadingOverlay))
+                    {
                         _form.Controls.Remove(_loadingOverlay);
+                    }
 
                     _loadingOverlay.Dispose();
                 }
@@ -270,7 +276,9 @@ namespace League.UIState
             }
 
             if (panel.Controls.OfType<ProgressBar>().Any())
+            {
                 return true;
+            }
 
             return false;
         }
@@ -324,12 +332,17 @@ namespace League.UIState
         private void OpenFolder(string exePath)
         {
             if (string.IsNullOrEmpty(exePath))
+            {
                 return;
+            }
+
             try
             {
                 string? dir = Path.GetDirectoryName(exePath);
                 if (Directory.Exists(dir))
+                {
                     Process.Start("explorer.exe", dir);
+                }
             }
             catch { }
         }
@@ -349,7 +362,10 @@ namespace League.UIState
             if (_waitingPanel != null)
             {
                 if (parentControl.Controls.Contains(_waitingPanel))
+                {
                     parentControl.Controls.Remove(_waitingPanel);
+                }
+
                 _waitingPanel.Dispose();
                 _waitingPanel = null;
             }
@@ -372,7 +388,9 @@ namespace League.UIState
         {
             var tabControl = sender as ImageTabControl;
             if (tabControl == null)
+            {
                 return;
+            }
 
             for (int i = 0; i < tabControl.TabPages.Count; i++)
             {
@@ -442,7 +460,9 @@ namespace League.UIState
         public static void SafeInvoke(Control? control, Action action)
         {
             if (control == null || control.IsDisposed || action == null)
+            {
                 return;
+            }
 
             if (control.IsHandleCreated)
             {
@@ -483,7 +503,10 @@ namespace League.UIState
         public static void SafeInvokeSync(Control? control, Action action)
         {
             if (control == null || control.IsDisposed || action == null)
+            {
                 return;
+            }
+
             if (control.IsHandleCreated && control.InvokeRequired)
             {
                 try

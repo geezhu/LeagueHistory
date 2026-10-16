@@ -34,7 +34,10 @@ public class GameFlowPhaseMonitor
                             if (phase != lastPhase)
                             {
                                 if (PhaseChanged != null)
+                                {
                                     await PhaseChanged(phase, lastPhase);
+                                }
+
                                 lastPhase = phase;
                             }
 

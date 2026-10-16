@@ -102,10 +102,15 @@ namespace League.Services
             {
                 var window = GetForegroundWindow();
                 if (window == IntPtr.Zero)
+                {
                     return (false, "当前没有前台窗口");
+                }
+
                 GetWindowThreadProcessId(window, out id);
                 if (id == 0)
+                {
                     return (false, "无法取得前台窗口的进程编号");
+                }
                 // Enumerated processes carry cached process information. GetProcessById followed
                 // by ProcessName can instead require a handle to the protected game process.
                 var processes = Process.GetProcesses();
@@ -125,7 +130,9 @@ namespace League.Services
                 finally
                 {
                     foreach (var process in processes)
+                    {
                         process.Dispose();
+                    }
                 }
             }
             catch (Exception ex)
@@ -138,11 +145,17 @@ namespace League.Services
         internal async Task<bool> ProbeEnterAsync(Func<bool> canContinue)
         {
             if (!await SendGate.WaitAsync(0))
+            {
                 return false;
+            }
+
             try
             {
                 if (!canContinue())
+                {
                     return false;
+                }
+
                 SendHardwareKey(VK_RETURN, SCAN_RETURN, false);
                 try
                 {
@@ -214,7 +227,9 @@ namespace League.Services
                 foreach (var line in lines)
                 {
                     if (!CanSend())
+                    {
                         return false;
+                    }
                     // Open chat; callers must leave the chat box closed before starting.
                     SendHardwareKey(VK_RETURN, SCAN_RETURN, false);
                     try
@@ -229,7 +244,9 @@ namespace League.Services
                     // Allow the chat UI to process Enter before inserting text.
                     await Task.Delay(_random.Next(80, 120));
                     if (!CanSend())
+                    {
                         return false;
+                    }
 
                     // Queue Unicode input for the line.
                     SendUnicodeStringInstant(line);
@@ -237,7 +254,9 @@ namespace League.Services
                     // 预留极其短暂的字数缓冲区反应时间
                     await Task.Delay(_random.Next(100, 150));
                     if (!CanSend())
+                    {
                         return false;
+                    }
 
                     // 3. 回车发送
                     SendHardwareKey(VK_RETURN, SCAN_RETURN, false);
@@ -276,7 +295,9 @@ namespace League.Services
         private void SendUnicodeStringInstant(string text)
         {
             if (string.IsNullOrEmpty(text))
+            {
                 return;
+            }
 
             int len = text.Length;
             // 每个字符包含 按下 和 弹起 2个事件
@@ -324,7 +345,9 @@ namespace League.Services
 
             // 一条系统指令将整个数组全部发送出去，底层多线程原子化执行
             if (SendInput((uint)inputs.Length, inputs, inputSize) != (uint)inputs.Length)
+            {
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            }
         }
 
         private void SendHardwareKey(ushort vk, ushort scan, bool isKeyUp)
@@ -348,7 +371,9 @@ namespace League.Services
                 },
             };
             if (SendInput(1, inputs, Marshal.SizeOf(typeof(INPUT))) != 1)
+            {
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            }
         }
     }
 }

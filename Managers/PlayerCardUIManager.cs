@@ -30,7 +30,10 @@ public sealed class PlayerCardUIManager
         _table = table;
         PlayerTeamsLayout.Attach(table);
         if (form.IsHandleCreated)
+        {
             _ready.TrySetResult();
+        }
+
         form.HandleCreated += (_, _) => _ready.TrySetResult();
         form.Disposed += (_, _) => _closed.Cancel();
     }
@@ -38,14 +41,20 @@ public sealed class PlayerCardUIManager
     public Task DispatchAsync(Action action)
     {
         if (_form.IsDisposed || _closed.IsCancellationRequested)
+        {
             return Task.CompletedTask;
+        }
+
         if (Environment.CurrentManagedThreadId == _uiThread)
         {
             action();
             return Task.CompletedTask;
         }
         if (!_form.IsHandleCreated)
+        {
             return DispatchWhenReadyAsync(action);
+        }
+
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         try
         {
@@ -55,7 +64,10 @@ public sealed class PlayerCardUIManager
                     try
                     {
                         if (!_form.IsDisposed)
+                        {
                             action();
+                        }
+
                         completion.TrySetResult();
                     }
                     catch (Exception ex)
@@ -91,11 +103,16 @@ public sealed class PlayerCardUIManager
             }
             var owned = _cards.Values.Select(c => (Control)c.Panel).ToHashSet();
             foreach (Control control in _table.Controls.Cast<Control>().ToArray())
+            {
                 if (!owned.Contains(control))
+                {
                     control.Dispose();
+                }
+            }
 
             // Detach moved cards first so swapping slots never overflows the fixed 5x2 grid.
             foreach (var state in states)
+            {
                 if (
                     _cards.TryGetValue(state.Key, out var item)
                     && item.Panel.Parent == _table
@@ -104,7 +121,10 @@ public sealed class PlayerCardUIManager
                         || _table.GetColumn(item.Panel) != state.Column
                     )
                 )
+                {
                     _table.Controls.Remove(item.Panel);
+                }
+            }
 
             foreach (var state in states)
             {
@@ -130,7 +150,10 @@ public sealed class PlayerCardUIManager
                     item.Revision = state.Revision;
                 }
                 if (item.Panel.Parent != _table)
+                {
                     _table.Controls.Add(item.Panel, state.Column, state.Ally ? 0 : 1);
+                }
+
                 _cards[state.Key] = item;
                 if (state.Info?.Player is { } player)
                 {
@@ -187,10 +210,13 @@ public sealed class PlayerCardUIManager
         }
         string status = state.Status;
         if (state.Info != null && state.Info.MatchItems.Count == 0 && status.Length == 0)
+        {
             status =
                 state.Player.Value<bool?>("__roomSelectionOnly") == true ? "客户端未提供玩家资料，战绩不可用"
                 : player?.GameName?.Contains("隐藏") == true ? "该玩家未公开战绩"
                 : "当前模式暂无战绩";
+        }
+
         card.SetHistoryLoadStatus(
             status,
             state.Info == null && !state.CanRetry,

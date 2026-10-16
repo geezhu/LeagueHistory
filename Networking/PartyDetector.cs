@@ -30,11 +30,15 @@ namespace League.Networking
             players = players.Where(p => p?.Player != null && !string.IsNullOrEmpty(p.Player.Puuid)).ToList();
 
             if (players.Count == 0)
+            {
                 return;
+            }
 
             // 初始化并查集
             foreach (var p in players)
+            {
                 parentMap[p.Player.Puuid] = p.Player.Puuid;
+            }
 
             // 合并有相同比赛的玩家
             for (int i = 0; i < players.Count; i++)
@@ -57,7 +61,10 @@ namespace League.Networking
             {
                 string root = Find(p.Player.Puuid);
                 if (!groupMap.ContainsKey(root))
+                {
                     groupMap[root] = new List<PlayerMatchInfo>();
+                }
+
                 groupMap[root].Add(p);
             }
 
@@ -90,7 +97,10 @@ namespace League.Networking
         private string Find(string puuid)
         {
             if (parentMap[puuid] != puuid)
+            {
                 parentMap[puuid] = Find(parentMap[puuid]);
+            }
+
             return parentMap[puuid];
         }
 
@@ -99,7 +109,9 @@ namespace League.Networking
             string rootA = Find(puuidA);
             string rootB = Find(puuidB);
             if (rootA != rootB)
+            {
                 parentMap[rootB] = rootA;
+            }
         }
     }
 }

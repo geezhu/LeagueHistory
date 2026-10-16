@@ -42,7 +42,10 @@ namespace League.Services
             }
 
             if (_mainForm.IsDisposed)
+            {
                 return;
+            }
+
             if (cancellationToken.IsCancellationRequested || stillCurrent?.Invoke() == false)
             {
                 Report("cancelled", "未发送：对局或发送请求已变化。");
@@ -73,7 +76,10 @@ namespace League.Services
                 Report("loading", "正在读取对局和统计数据，最长等待 25 秒。");
                 var messages = await build(timeout.Token);
                 if (messages.Count == 0 || _mainForm.IsDisposed)
+                {
                     return;
+                }
+
                 string phase = await GetGameflowPhaseSafeAsync();
                 if (phase != "InProgress")
                 {
@@ -88,9 +94,15 @@ namespace League.Services
                 // Release Ctrl before Enter so the chord cannot change the chat channel.
                 var until = DateTime.UtcNow.AddSeconds(2);
                 if (!GameInputService.ModifiersReleased())
+                {
                     Report("modifiers", "请松开 Ctrl、Shift、Alt、Win，等待发送（最多 2 秒）。");
+                }
+
                 while (!GameInputService.ModifiersReleased() && DateTime.UtcNow < until)
+                {
                     await Task.Delay(30, timeout.Token);
+                }
+
                 if (!GameInputService.ModifiersReleased())
                 {
                     Report("modifiers", "未发送：Ctrl、Shift、Alt 或 Win 在等待后仍未松开。");
@@ -115,12 +127,16 @@ namespace League.Services
                     }
                 );
                 if (completed)
+                {
                     Report("input-complete", "键盘输入已完成，请查看游戏聊天（无法确认服务器是否接收）。");
+                }
                 else
+                {
                     Report(
                         "input-stopped",
                         "发送未完成，可能已输入部分内容：" + (stopped ?? input.LastFailureReason ?? "输入未完成")
                     );
+                }
             }
             catch (OperationCanceledException)
             {
@@ -148,7 +164,9 @@ namespace League.Services
         {
             string phase = await GetGameflowPhaseSafeAsync();
             if (phase != "ChampSelect")
+            {
                 return;
+            }
 
             var (isCustomMode, msg) = await GetUiSendStateAsync();
 
@@ -159,12 +177,17 @@ namespace League.Services
                 {
                     var session = await Globals.lcuClient.GetChampSelectSession();
                     if (session != null)
+                    {
                         _mainForm._cachedMyTeam = session["myTeam"] as JArray;
+                    }
+
                     myTeam = _mainForm._cachedMyTeam;
                 }
 
                 if (myTeam == null || myTeam.Count == 0)
+                {
                     return;
+                }
 
                 // 选人阶段强制使用玩家名称（英雄未锁定）
                 msg = _chatMessageBuilder?.BuildMyTeamSummary(myTeam, useChampionName: false) ?? "";
@@ -176,7 +199,10 @@ namespace League.Services
         public async Task HandleMyTeamAsync()
         {
             if (_isSendingMessage)
+            {
                 return;
+            }
+
             await SendTeamDataAsync(isFullTeam: false);
         }
 
@@ -188,11 +214,15 @@ namespace League.Services
         private async Task SendTeamDataAsync(bool isFullTeam)
         {
             if (_isSendingMessage)
+            {
                 return;
+            }
 
             string phase = await GetGameflowPhaseSafeAsync();
             if (phase != "InProgress")
+            {
                 return;
+            }
 
             var (isCustomMode, msg) = await GetUiSendStateAsync();
             if (isCustomMode)
@@ -208,14 +238,18 @@ namespace League.Services
             JArray? enemyTeam = isFullTeam ? await EnsureTeamDataReadyAsync(_mainForm._cachedEnemyTeam, false) : null;
 
             if (myTeam?.Count == 0 || (isFullTeam && enemyTeam?.Count == 0))
+            {
                 return;
+            }
 
             msg = isFullTeam
                 ? _chatMessageBuilder?.BuildFullTeamSummary(myTeam, enemyTeam, useChampionName) ?? ""
                 : _chatMessageBuilder?.BuildMyTeamSummary(myTeam, useChampionName) ?? "";
 
             if (string.IsNullOrWhiteSpace(msg))
+            {
                 return;
+            }
 
             try
             {
@@ -242,7 +276,9 @@ namespace League.Services
             }
 
             if (team == null || team.Count == 0)
+            {
                 return null;
+            }
 
             var start = DateTime.Now;
             int attempt = 0;
@@ -259,7 +295,9 @@ namespace League.Services
                 {
                     long sid = p["summonerId"]?.Value<long>() ?? 0;
                     if (sid != 0 && infos.ContainsKey(sid))
+                    {
                         readyCount++;
+                    }
                 }
 
                 if (readyCount == team.Count)
@@ -269,7 +307,9 @@ namespace League.Services
                 }
 
                 if (attempt % 6 == 0)
+                {
                     Debug.WriteLine($"[Ensure] {(isMyTeam ? "我方" : "敌方")} 等待中... {readyCount}/{team.Count}");
+                }
 
                 await Task.Delay(RetryIntervalMs);
             }
@@ -295,7 +335,9 @@ namespace League.Services
         private async Task SendMessageAsync(string msg, bool isChampSelect)
         {
             if (string.IsNullOrWhiteSpace(msg))
+            {
                 return;
+            }
 
             bool success = isChampSelect
                 ? await Globals.lcuClient.SendChampSelectMessageAsync(msg)

@@ -100,7 +100,10 @@ namespace League.Controls
         public void Dispose()
         {
             if (_disposed)
+            {
                 return;
+            }
+
             _disposed = true;
             Cleanup();
             _loadSemaphore?.Dispose();
@@ -109,7 +112,9 @@ namespace League.Controls
             foreach (Control control in flowLayoutPanelRight.Controls)
             {
                 if (control is IDisposable disposable)
+                {
                     disposable.Dispose();
+                }
             }
             flowLayoutPanelRight.Dispose();
             GC.SuppressFinalize(this);
@@ -145,7 +150,9 @@ namespace League.Controls
         private string GetSelectedFilterText()
         {
             if (comboFilter.SelectedItem is QueueFilterItem item && !string.IsNullOrEmpty(item.Text))
+            {
                 return item.Text;
+            }
 
             // 兜底：按 Value 映射
             return _selectedQueueId switch
@@ -176,7 +183,9 @@ namespace League.Controls
         public void Initialize(string puuid)
         {
             if (string.IsNullOrEmpty(puuid))
+            {
                 throw new ArgumentException("PUUID不能为空");
+            }
 
             _puuid = puuid;
             _ = LoadDataAsync(); // 异步初始化加载
@@ -185,7 +194,10 @@ namespace League.Controls
         private async Task LoadDataAsync(bool resetPage = true)
         {
             if (resetPage)
+            {
                 _currentPage = 1;
+            }
+
             await UpdateMatchesDisplay();
         }
 
@@ -225,12 +237,17 @@ namespace League.Controls
 
                 JArray matches;
                 if (_selectedWin.HasValue)
+                {
                     matches = await LoadOutcomePage();
+                }
                 else
                 {
                     matches = await this.LoadDataRequested(_puuid, startIndex, count, _selectedQueueId);
                     if (matches != null && matches.Count < count)
+                    {
                         TotalPages = _currentPage;
+                    }
+
                     SafeInvoke(() => _filterScope.Text = $"第 {_currentPage} 页 · 按时间从新到旧");
                 }
                 Debug.WriteLine(
@@ -359,7 +376,9 @@ namespace League.Controls
                     foreach (var t in tasks)
                     {
                         if (token.IsCancellationRequested)
+                        {
                             break;
+                        }
 
                         try
                         {
@@ -386,7 +405,10 @@ namespace League.Controls
             if (token.IsCancellationRequested)
             {
                 foreach (var panel in panels)
+                {
                     panel.Dispose();
+                }
+
                 return;
             }
 
@@ -406,7 +428,9 @@ namespace League.Controls
                         foreach (Control control in flowLayoutPanelRight.Controls.Cast<Control>().ToArray())
                         {
                             if (control is IDisposable disposable)
+                            {
                                 disposable.Dispose();
+                            }
                         }
                         flowLayoutPanelRight.Controls.Clear();
 
@@ -415,16 +439,23 @@ namespace League.Controls
                         foreach (var reference in oldPanels)
                         {
                             if (reference.Target is Control old && !old.IsDisposed)
+                            {
                                 old.Dispose();
+                            }
+
                             _allParsedPanels.Remove(reference);
                         }
                         if (reopenDetail)
                         {
                             var first = panels.OfType<MatchListPanel>().FirstOrDefault();
                             if (first?.MatchInfo != null)
+                            {
                                 OpenInlineMatch(first.MatchInfo);
+                            }
                             else
+                            {
                                 ReturnToProfile();
+                            }
                         }
                     }
                     finally
@@ -438,11 +469,15 @@ namespace League.Controls
         public async Task SafeInitializeAsync(string puuid, string? summonerId = null)
         {
             if (string.IsNullOrEmpty(puuid))
+            {
                 return;
+            }
 
             _puuid = puuid;
             if (!string.IsNullOrEmpty(summonerId))
+            {
                 _summonerId = summonerId;
+            }
 
             await Task.Delay(200);
 
@@ -631,7 +666,9 @@ namespace League.Controls
                     foreach (Control control in controls)
                     {
                         if (control is IDisposable disposable)
+                        {
                             disposable.Dispose();
+                        }
                     }
                     flowLayoutPanelRight.Controls.Clear();
                 }
@@ -664,7 +701,9 @@ namespace League.Controls
         private async Task UpdateProfileIcon(int iconId)
         {
             if (iconId <= 0)
+            {
                 return;
+            }
 
             try
             {
@@ -679,7 +718,9 @@ namespace League.Controls
                 }
 
                 if (newImage == null)
+                {
                     return;
+                }
 
                 SafeInvoke(() =>
                 {
@@ -902,14 +943,20 @@ namespace League.Controls
         private void SafeInvoke(Control ctrl, Action action)
         {
             if (ctrl == null || ctrl.IsDisposed || ctrl.Disposing)
+            {
                 return;
+            }
 
             try
             {
                 if (ctrl.InvokeRequired)
+                {
                     ctrl.Invoke(action);
+                }
                 else
+                {
                     action();
+                }
             }
             catch (ObjectDisposedException)
             {
@@ -924,14 +971,20 @@ namespace League.Controls
         private void SafeInvoke(Action action)
         {
             if (IsDisposed || Disposing)
+            {
                 return;
+            }
 
             try
             {
                 if (InvokeRequired)
+                {
                     BeginInvoke(action);
+                }
                 else
+                {
                     action();
+                }
             }
             catch (ObjectDisposedException)
             {
@@ -942,11 +995,16 @@ namespace League.Controls
         private void SafeSetEnabled(Control ctrl, bool enabled)
         {
             if (ctrl == null)
+            {
                 return;
+            }
+
             SafeInvoke(() =>
             {
                 if (!ctrl.IsDisposed)
+                {
                     ctrl.Enabled = enabled;
+                }
             });
         }
 
@@ -1045,7 +1103,9 @@ namespace League.Controls
         private void DeepCleanJArray(JArray array)
         {
             if (array == null)
+            {
                 return;
+            }
 
             try
             {
@@ -1066,7 +1126,9 @@ namespace League.Controls
         private void DeepCleanJObject(JObject obj)
         {
             if (obj == null)
+            {
                 return;
+            }
 
             try
             {

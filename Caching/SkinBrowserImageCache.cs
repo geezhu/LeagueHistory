@@ -11,12 +11,21 @@
         public Image? GetOrLoad(string key, Func<Image?> loader)
         {
             if (_disposed)
+            {
                 return null;
+            }
+
             if (_map.TryGetValue(key, out var existing))
+            {
                 return existing;
+            }
+
             var img = loader();
             if (img == null)
+            {
                 return null;
+            }
+
             _map[key] = img;
             return img;
         }
@@ -26,7 +35,10 @@
         public void Dispose()
         {
             if (_disposed)
+            {
                 return;
+            }
+
             _disposed = true;
             foreach (var img in _map.Values)
             {
@@ -42,7 +54,10 @@
         public static Image? LoadScaledFromFile(string path, int maxW, int maxH)
         {
             if (!File.Exists(path))
+            {
                 return null;
+            }
+
             try
             {
                 using var fs = File.OpenRead(path);
@@ -58,7 +73,9 @@
         public static Image Scale(Image src, int maxW, int maxH)
         {
             if (src.Width <= maxW && src.Height <= maxH)
+            {
                 return new Bitmap(src);
+            }
 
             double ratio = Math.Min(maxW / (double)src.Width, maxH / (double)src.Height);
             int w = Math.Max(1, (int)(src.Width * ratio));

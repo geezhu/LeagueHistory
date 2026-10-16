@@ -104,7 +104,9 @@ namespace League
         private void RightListView_DragDrop(object sender, DragEventArgs e)
         {
             if (rightListView.SelectedItems.Count == 0)
+            {
                 return;
+            }
 
             // 1. 先获取当前插入标记的准确目标位置
             int targetIndex = rightListView.InsertionMark.Index;
@@ -112,7 +114,9 @@ namespace League
 
             // 如果标记在最后一项之后，targetIndex 会是 Items.Count，需要特殊处理
             if (targetIndex == rightListView.Items.Count)
+            {
                 dropAfter = true;
+            }
 
             // 计算最终插入位置（在移除前计算）
             int insertAt = dropAfter ? targetIndex + 1 : targetIndex;
@@ -124,7 +128,9 @@ namespace League
                 .ToList();
 
             if (draggedItems.Count == 0)
+            {
                 return;
+            }
 
             // 3. 计算偏移：被拖走的项中，有多少原本在目标位置之前
             int removedBeforeTarget = draggedItems.Count(item => item.Index < targetIndex);
@@ -134,9 +140,14 @@ namespace League
 
             // 边界保护
             if (finalInsertIndex < 0)
+            {
                 finalInsertIndex = 0;
+            }
+
             if (finalInsertIndex > rightListView.Items.Count)
+            {
                 finalInsertIndex = rightListView.Items.Count;
+            }
 
             // 4. 先移除所有拖拽项（从后往前移除，避免索引错乱）
             for (int i = draggedItems.Count - 1; i >= 0; i--)
@@ -152,7 +163,10 @@ namespace League
 
             // 6. 保持选中状态
             foreach (var item in draggedItems)
+            {
                 item.Selected = true;
+            }
+
             rightListView.Focus();
 
             // 7. 更新优先级和显示序号
@@ -174,7 +188,9 @@ namespace League
             foreach (var item in draggedItems)
             {
                 if (item.Index < originalTarget)
+                {
                     offset++;
+                }
             }
             return appearsAfter ? originalTarget - offset + draggedItems.Count : originalTarget - offset;
         }
@@ -245,21 +261,27 @@ namespace League
         private void AddToPreSelected()
         {
             if (leftListView.SelectedItems.Count == 0)
+            {
                 return;
+            }
 
             int addedCount = 0;
             foreach (ListViewItem item in leftListView.SelectedItems)
             {
                 var champion = item.Tag as PrimaryChampion;
                 if (champion == null)
+                {
                     continue;
+                }
 
                 // 防重
                 bool exists = rightListView
                     .Items.Cast<ListViewItem>()
                     .Any(x => (x.Tag as PreliminaryHero)?.ChampionId == champion.Id);
                 if (exists)
+                {
                     continue;
+                }
 
                 var preHero = new PreliminaryHero
                 {
@@ -282,28 +304,43 @@ namespace League
             }
 
             if (addedCount > 0)
+            {
                 UpdatePreSelectedPriorities();
+            }
             else if (leftListView.SelectedItems.Count == 1)
+            {
                 MessageBox.Show("该英雄已在预选列表中", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
         }
 
         private void RemoveFromPreSelected()
         {
             if (rightListView.SelectedItems.Count == 0)
+            {
                 return;
+            }
+
             foreach (ListViewItem item in rightListView.SelectedItems)
+            {
                 rightListView.Items.Remove(item);
+            }
+
             UpdatePreSelectedPriorities();
         }
 
         private void MoveUpPreSelected()
         {
             if (rightListView.SelectedItems.Count != 1)
+            {
                 return;
+            }
+
             var item = rightListView.SelectedItems[0];
             int index = item.Index;
             if (index == 0)
+            {
                 return;
+            }
 
             rightListView.Items.RemoveAt(index);
             rightListView.Items.Insert(index - 1, item);
@@ -314,11 +351,16 @@ namespace League
         private void MoveDownPreSelected()
         {
             if (rightListView.SelectedItems.Count != 1)
+            {
                 return;
+            }
+
             var item = rightListView.SelectedItems[0];
             int index = item.Index;
             if (index >= rightListView.Items.Count - 1)
+            {
                 return;
+            }
 
             rightListView.Items.RemoveAt(index);
             rightListView.Items.Insert(index + 1, item);
@@ -329,7 +371,10 @@ namespace League
         private void ClearAllPreSelected()
         {
             if (rightListView.Items.Count == 0)
+            {
                 return;
+            }
+
             if (
                 MessageBox.Show(
                     "确定要清空所有预选英雄吗？",
@@ -366,7 +411,10 @@ namespace League
         private void OnPositionButtonClick(ChampionPosition position, Button button)
         {
             if (!_isDataLoaded)
+            {
                 return;
+            }
+
             LoadChampionsByPosition(position);
             HighlightActiveButton(button);
         }
@@ -435,7 +483,9 @@ namespace League
             }
 
             if (_isDataLoaded)
+            {
                 return; // 防止重复执行
+            }
 
             _isDataLoaded = true;
             SetButtonsEnabled(true);
@@ -469,11 +519,15 @@ namespace League
         private void LoadChampionsByPosition(ChampionPosition position)
         {
             if (!_isDataLoaded || _championManager == null)
+            {
                 return;
+            }
 
             // 如果当前有搜索文字，不受位置按钮影响（保持当前搜索结果）
             if (!string.IsNullOrEmpty(txtSearch.Text.Trim()))
+            {
                 return;
+            }
 
             leftListView.BeginUpdate();
             leftListView.Items.Clear();
@@ -553,15 +607,30 @@ namespace League
         private ChampionPosition GetCurrentPosition()
         {
             if (btnTop.BackColor == Color.FromArgb(0, 120, 215))
+            {
                 return ChampionPosition.Top;
+            }
+
             if (btnMid.BackColor == Color.FromArgb(0, 120, 215))
+            {
                 return ChampionPosition.Mid;
+            }
+
             if (btnJungle.BackColor == Color.FromArgb(0, 120, 215))
+            {
                 return ChampionPosition.Jungle;
+            }
+
             if (btnADC.BackColor == Color.FromArgb(0, 120, 215))
+            {
                 return ChampionPosition.ADC;
+            }
+
             if (btnSupport.BackColor == Color.FromArgb(0, 120, 215))
+            {
                 return ChampionPosition.Support;
+            }
+
             return ChampionPosition.Top;
         }
 
@@ -569,7 +638,9 @@ namespace League
         {
             var positions = champion.GetPositions();
             if (positions.Count == 0)
+            {
                 return "?";
+            }
 
             return string.Join(
                 "/",
@@ -609,14 +680,18 @@ namespace League
             rightListView.Items.Clear();
 
             if (_config.Preliminary?.Heroes == null || _config.Preliminary.Heroes.Count == 0)
+            {
                 return;
+            }
 
             var sorted = _config.Preliminary.Heroes.OrderBy(h => h.Priority).ToList();
             foreach (var preHero in sorted)
             {
                 var champion = _championManager.GetChampionById(preHero.ChampionId);
                 if (champion == null)
+                {
                     continue;
+                }
 
                 var item = new ListViewItem((rightListView.Items.Count + 1).ToString());
                 item.SubItems.Add(champion.Name);
@@ -656,7 +731,10 @@ namespace League
         private string GetPositionDisplayName(List<ChampionPosition> positions)
         {
             if (positions == null || positions.Count == 0)
+            {
                 return "?";
+            }
+
             return string.Join(
                 "/",
                 positions.Select(p =>

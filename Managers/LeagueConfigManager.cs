@@ -45,11 +45,17 @@ namespace League.Managers
             lock (_gate)
             {
                 if (File.Exists(ConfigPath))
+                {
                     return Read(File.ReadAllText(ConfigPath));
+                }
+
                 foreach (string path in _legacyPaths)
                 {
                     if (!File.Exists(path))
+                    {
                         continue;
+                    }
+
                     string json = File.ReadAllText(path);
                     _ = Read(json); // Validate before migrating; leave the original file intact.
                     Write(json, overwrite: false);
@@ -63,7 +69,9 @@ namespace League.Managers
         {
             ArgumentNullException.ThrowIfNull(config);
             lock (_gate)
+            {
                 Write(JsonConvert.SerializeObject(config, Formatting.Indented), overwrite: true);
+            }
         }
 
         private static LeagueConfig Read(string json) =>
@@ -88,7 +96,9 @@ namespace League.Managers
             finally
             {
                 if (File.Exists(temporary))
+                {
                     File.Delete(temporary);
+                }
             }
         }
     }

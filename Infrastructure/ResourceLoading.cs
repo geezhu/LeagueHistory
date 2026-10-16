@@ -60,7 +60,10 @@ namespace League.Infrastructure
                 if (_championManager == null)
                 {
                     if (_lcuClient == null)
+                    {
                         throw new InvalidOperationException("LcuClient未初始化");
+                    }
+
                     _championManager = new ChampionManager(_lcuClient, this);
                 }
                 return _championManager;

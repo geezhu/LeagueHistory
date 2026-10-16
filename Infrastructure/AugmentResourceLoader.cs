@@ -46,10 +46,14 @@ namespace League.Infrastructure
 
             // 优先处理 ID >= 1000 的海克斯符文
             foreach (var item in jsonArray.Where(i => (i["id"]?.Value<int>() ?? 0) >= 1000))
+            {
                 ProcessAugmentItem(item, augments, descriptionMap);
+            }
 
             foreach (var item in jsonArray.Where(i => (i["id"]?.Value<int>() ?? 0) < 1000))
+            {
                 ProcessAugmentItem(item, augments, descriptionMap);
+            }
 
             return augments;
         }
@@ -58,13 +62,17 @@ namespace League.Infrastructure
         {
             int id = item["id"]?.Value<int>() ?? 0;
             if (id <= 0)
+            {
                 return;
+            }
 
             string name = item["nameTRA"]?.ToString() ?? item["name"]?.ToString() ?? $"Augment {id}";
             string description = item["description"]?.ToString() ?? item["desc"]?.ToString() ?? "";
 
             if (string.IsNullOrEmpty(description) && descMap.TryGetValue(name, out var mapped))
+            {
                 description = mapped;
+            }
 
             string iconPath = item["augmentSmallIconPath"]?.ToString() ?? "";
 
@@ -89,14 +97,18 @@ namespace League.Infrastructure
         {
             var augment = GetById(id);
             if (augment == null)
+            {
                 return (null, $"Augment {id}", "");
+            }
 
             string rarityCn = RarityToChinese(augment.Rarity);
             string cleanDesc = CleanDescription(augment.Description);
             string fullDesc = $"[{rarityCn}] {cleanDesc}";
 
             if (string.IsNullOrEmpty(augment.IconPath))
+            {
                 return (null, augment.Name, fullDesc);
+            }
 
             using var image = await _imageCache.GetOrDownloadImageAsync(augment.IconPath, "augments", $"{id}.png", id);
 

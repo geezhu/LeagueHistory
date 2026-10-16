@@ -54,7 +54,10 @@ namespace League.Parsers
                 var session = await Globals.lcuClient.GetGameSession(cancellationToken);
                 var queueId = session?["gameData"]?["queue"]?["id"]?.ToString();
                 if (!string.IsNullOrEmpty(queueId) && queueId != "0")
+                {
                     return queueId;
+                }
+
                 var selection = await Globals.lcuClient.GetChampSelectSession(cancellationToken);
                 return selection?["queueId"]?.ToString() ?? "";
             }

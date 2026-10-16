@@ -58,7 +58,10 @@ namespace League.Infrastructure
                 {
                     using var response = await _client.GetAsync(iconPath);
                     if (!response.IsSuccessStatusCode)
+                    {
                         return null;
+                    }
+
                     await using var input = await response.Content.ReadAsStreamAsync();
                     using var source = Image.FromStream(input);
                     var image = new Bitmap(source); // Independent of the response stream's lifetime.
@@ -121,7 +124,9 @@ namespace League.Infrastructure
             finally
             {
                 if (File.Exists(tempPath))
+                {
                     TryDelete(tempPath);
+                }
             }
         }
 

@@ -352,7 +352,9 @@ namespace League.UIState
                     gameMode.Contains("cherry", StringComparison.OrdinalIgnoreCase)
                     || gameMode.Contains("hextech", StringComparison.OrdinalIgnoreCase)
                 )
+                {
                     return true;
+                }
 
                 // 方法3：如果有海克斯符文数据，也认为是海克斯大乱斗
                 int[] augments = ExtractAugments(participant);
@@ -426,7 +428,10 @@ namespace League.UIState
                 if (matchInfo.AllPlayersAugments.TryGetValue(participantPuuid, out var augments))
                 {
                     if (ids.Length == 0)
+                    {
                         return augments ?? Array.Empty<RuneInfo>();
+                    }
+
                     return ids.Select(id =>
                             augments?.FirstOrDefault(a => a.id == id)
                             ?? new RuneInfo
@@ -453,7 +458,10 @@ namespace League.UIState
         private async Task RetryMissingAugmentsAsync(JObject participant, MatchInfo matchInfo)
         {
             if (!IsHextechArenaMode(participant))
+            {
                 return;
+            }
+
             var augments = GetSelfAugments(participant, matchInfo);
             foreach (var augment in augments.Where(a => a.Icon == null))
             {
@@ -473,9 +481,14 @@ namespace League.UIState
             if (!string.IsNullOrEmpty(puuid))
             {
                 lock (matchInfo.AllPlayersAugments)
+                {
                     matchInfo.AllPlayersAugments[puuid] = augments;
+                }
+
                 if (puuid == matchInfo.CurrPuuid)
+                {
                     matchInfo.Augments = augments;
+                }
             }
         }
 
@@ -535,7 +548,9 @@ namespace League.UIState
         private int[] ExtractAugments(JObject participant)
         {
             if (participant == null)
+            {
                 return Array.Empty<int>();
+            }
 
             int[] augIds = new int[]
             {

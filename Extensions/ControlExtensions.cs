@@ -9,11 +9,15 @@ namespace League.Extensions
         public static void InvokeIfRequired(this Control control, Action action)
         {
             if (control == null)
+            {
                 throw new ArgumentNullException(nameof(control));
+            }
 
             // 重要：检查句柄是否已创建
             if (!control.IsHandleCreated || control.IsDisposed || control.Disposing)
+            {
                 return;
+            }
 
             if (control.InvokeRequired)
             {
@@ -37,11 +41,15 @@ namespace League.Extensions
         public static async Task InvokeIfRequiredAsync(this Control control, Func<Task> asyncAction)
         {
             if (control == null)
+            {
                 throw new ArgumentNullException(nameof(control));
+            }
 
             // 重要：检查句柄是否已创建
             if (!control.IsHandleCreated || control.IsDisposed || control.Disposing)
+            {
                 return;
+            }
 
             if (control.InvokeRequired)
             {

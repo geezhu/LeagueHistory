@@ -122,7 +122,9 @@ namespace League.Clients
 
                 var content = await response.Content.ReadAsStringAsync(cancellationToken);
                 if (string.IsNullOrWhiteSpace(content))
+                {
                     return null;
+                }
 
                 var obj = JObject.Parse(content);
                 // 必须有 puuid 才算真正登录完成

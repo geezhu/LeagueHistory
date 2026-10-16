@@ -69,7 +69,9 @@ namespace League.Managers
             Image championIcon = LoadErrorImage();
 
             if (summonerId == 0)
+            {
                 return CreateHiddenPlayerInfo(0, championId);
+            }
 
             return new PlayerMatchInfo
             {

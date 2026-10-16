@@ -39,7 +39,9 @@ namespace League.Infrastructure
         {
             var response = await _client.GetAsync("/lol-game-data/assets/v1/perks.json");
             if (!response.IsSuccessStatusCode)
+            {
                 return;
+            }
 
             string json = await response.Content.ReadAsStringAsync();
             Runes = JsonConvert.DeserializeObject<List<RuneInfo>>(json) ?? new List<RuneInfo>();
@@ -47,7 +49,9 @@ namespace League.Infrastructure
             {
                 using var styles = await _client.GetAsync("/lol-game-data/assets/v1/perkstyles.json");
                 if (styles.IsSuccessStatusCode)
+                {
                     Styles = ParseStyles(JObject.Parse(await styles.Content.ReadAsStringAsync()));
+                }
             }
             catch
             {
@@ -61,7 +65,9 @@ namespace League.Infrastructure
         {
             var rune = GetById(runeId);
             if (rune == null)
+            {
                 return (null, "未知符文", "未找到该符文描述");
+            }
 
             var image = await GetIconAsync(rune.iconPath);
             return (image, rune.name, rune.longDesc);
@@ -70,11 +76,15 @@ namespace League.Infrastructure
         public async Task<Image?> GetIconAsync(string iconPath)
         {
             if (string.IsNullOrEmpty(iconPath))
+            {
                 return null;
+            }
 
             string fileName = Path.GetFileName(iconPath);
             if (string.IsNullOrEmpty(fileName))
+            {
                 return null;
+            }
 
             return await _imageCache.GetOrDownloadImageAsync(iconPath, "runes", fileName);
         }

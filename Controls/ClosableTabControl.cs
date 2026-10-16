@@ -109,22 +109,30 @@ namespace League.Controls
                 if (isSelected)
                 {
                     using (var brush = new LinearGradientBrush(tabRect, Color.White, Color.LightBlue, 45f))
+                    {
                         e.Graphics.FillRectangle(brush, tabRect);
+                    }
                 }
                 else
                 {
                     using (var brush = new SolidBrush(Color.FromArgb(240, 240, 240)))
+                    {
                         e.Graphics.FillRectangle(brush, tabRect);
+                    }
                 }
 
                 Color backColor = isSelected ? Color.White : Color.LightGray;
                 Color borderColor = Color.Gray;
 
                 using (Brush b = new SolidBrush(backColor))
+                {
                     e.Graphics.FillRectangle(b, tabRect);
+                }
 
                 using (Pen p = new Pen(borderColor))
+                {
                     e.Graphics.DrawRectangle(p, tabRect);
+                }
 
                 // 绘制文字
                 string tabText = TabPages[i].Text;
