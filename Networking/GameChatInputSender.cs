@@ -122,55 +122,13 @@ public static class GameChatInputSender
             attached = AttachThreadInput(curThread, gameThread, true);
             Debug.WriteLine($"[GameChat] 线程绑定: {(attached ? "成功" : "失败")}");
 
-            // 还原并激活窗口（多次尝试）
-            ShowWindow(hwnd, SW_RESTORE);
-            for (int i = 0; i < 3; i++)
-            {
-                SetForegroundWindow(hwnd);
-                Thread.Sleep(100);
-            }
-            Thread.Sleep(200); // 等待焦点稳定
-
-            // 确认焦点（日志）
-            IntPtr fgWnd = GetForegroundWindow();
-            Debug.WriteLine($"[GameChat] 当前前台窗口: {fgWnd} (目标: {hwnd})");
-
-            // ESC 清状态（防残留）
-            PressKey(VK_ESCAPE, 0, true); // down
-            Thread.Sleep(20);
-            PressKey(VK_ESCAPE, 0, false); // up
-            Thread.Sleep(100);
-
-            // 打开聊天框（双 Enter，确保进入输入模式）
-            for (int i = 0; i < 2; i++)
-            {
-                PressKey(VK_RETURN, SC_RETURN, true);
-                Thread.Sleep(30);
-                PressKey(VK_RETURN, SC_RETURN, false);
-                Thread.Sleep(300); // 关键：UI 响应延迟
-            }
-
-            // 等待聊天框稳定
-            Thread.Sleep(250);
-
-            SetClipboardText(text);
-            Thread.Sleep(100);
-
-            // Ctrl + V 粘贴（混合键码）
-            PressKey(VK_CONTROL, SC_CONTROL, true);
-            Thread.Sleep(30);
-            PressKey(VK_V, SC_V, true);
-            Thread.Sleep(20);
-            PressKey(VK_V, SC_V, false);
-            Thread.Sleep(40);
-            PressKey(VK_CONTROL, SC_CONTROL, false);
-            Thread.Sleep(200); // 关键：等待游戏解析文本
+            FocusGameWindow(hwnd);
+            OpenChatInput();
+            PasteText(text);
 
             // 发送 Enter
             Thread.Sleep(100);
-            PressKey(VK_RETURN, SC_RETURN, true);
-            Thread.Sleep(30);
-            PressKey(VK_RETURN, SC_RETURN, false);
+            TapKey(VK_RETURN, SC_RETURN, 30);
 
             Debug.WriteLine("[GameChat] ✅ 输入序列完成 (焦点确认后)");
             return true;
@@ -182,6 +140,58 @@ public static class GameChatInputSender
                 AttachThreadInput(curThread, gameThread, false);
             }
         }
+    }
+
+    // 还原并激活窗口（多次尝试），等待焦点稳定
+    private static void FocusGameWindow(IntPtr hwnd)
+    {
+        ShowWindow(hwnd, SW_RESTORE);
+        for (int i = 0; i < 3; i++)
+        {
+            SetForegroundWindow(hwnd);
+            Thread.Sleep(100);
+        }
+        Thread.Sleep(200);
+
+        IntPtr fgWnd = GetForegroundWindow();
+        Debug.WriteLine($"[GameChat] 当前前台窗口: {fgWnd} (目标: {hwnd})");
+    }
+
+    // ESC 清掉残留状态，再按两次 Enter 确保进入输入模式；每一步的等待都是游戏界面的响应时间。
+    private static void OpenChatInput()
+    {
+        TapKey(VK_ESCAPE, 0, 20);
+        Thread.Sleep(100);
+
+        for (int i = 0; i < 2; i++)
+        {
+            TapKey(VK_RETURN, SC_RETURN, 30);
+            Thread.Sleep(300); // 关键：UI 响应延迟
+        }
+
+        // 等待聊天框稳定
+        Thread.Sleep(250);
+    }
+
+    // 剪贴板 + Ctrl+V 粘贴（混合键码），等游戏解析文本
+    private static void PasteText(string text)
+    {
+        SetClipboardText(text);
+        Thread.Sleep(100);
+
+        PressKey(VK_CONTROL, SC_CONTROL, true);
+        Thread.Sleep(30);
+        TapKey(VK_V, SC_V, 20);
+        Thread.Sleep(40);
+        PressKey(VK_CONTROL, SC_CONTROL, false);
+        Thread.Sleep(200);
+    }
+
+    private static void TapKey(ushort vk, ushort scan, int holdMilliseconds)
+    {
+        PressKey(vk, scan, true);
+        Thread.Sleep(holdMilliseconds);
+        PressKey(vk, scan, false);
     }
 
     // 通用按键函数（VK + ScanCode 混合）

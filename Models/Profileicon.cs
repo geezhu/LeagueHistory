@@ -72,87 +72,84 @@ namespace League.Models
                 }
             }
 
-            // ==================== 下载逻辑 ====================
+            return await DownloadCnIconAsync(profileIconId, localPath, cacheKey)
+                ?? await DownloadIntlIconAsync(profileIconId, localPath, cacheKey)
+                ?? GetDefaultImageSafe();
+        }
 
-            // Step 1: 优先尝试国服
+        // Step 1: 优先尝试国服
+        private static async Task<Image?> DownloadCnIconAsync(int profileIconId, string localPath, string cacheKey)
+        {
             var cnUrl = $"https://game.gtimg.cn/images/lol/act/img/profileicon/{profileIconId}.png";
+            await _fileLock.WaitAsync();
             try
             {
-                await _fileLock.WaitAsync();
                 Debug.WriteLine($"[尝试国服下载] {cnUrl}");
-
                 var cnBytes = await _httpClient.GetByteArrayAsync(cnUrl);
-                Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
-                await File.WriteAllBytesAsync(localPath, cnBytes);
-
-                var image = LoadImageSafe(localPath);
-                if (image != null)
-                {
-                    _imageCache.TryAdd(cacheKey, image);
-                    return new Bitmap(image);
-                }
+                return await SaveAndCacheAsync(cnBytes, localPath, cacheKey);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[国服下载失败] {ex.Message}");
+                return null;
             }
             finally
             {
                 _fileLock.Release();
             }
+        }
 
-            // Step 2: 国际服（带版本回退）
+        // Step 2: 国际服（带版本回退）：版本过期导致下载失败时强制刷新版本再试一次
+        private static async Task<Image?> DownloadIntlIconAsync(int profileIconId, string localPath, string cacheKey)
+        {
             string version = await GetOrLoadDdragonVersionAsync();
             var intlUrl = $"https://ddragon.leagueoflegends.com/cdn/{version}/img/profileicon/{profileIconId}.png";
 
+            await _fileLock.WaitAsync();
             try
             {
-                await _fileLock.WaitAsync();
                 Debug.WriteLine($"[尝试国际服下载] {intlUrl}");
-
                 var intlBytes = await _httpClient.GetByteArrayAsync(intlUrl);
-                Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
-                await File.WriteAllBytesAsync(localPath, intlBytes);
-
-                var image = LoadImageSafe(localPath);
-                if (image != null)
-                {
-                    _imageCache.TryAdd(cacheKey, image);
-                    return new Bitmap(image);
-                }
+                return await SaveAndCacheAsync(intlBytes, localPath, cacheKey);
             }
             catch (HttpRequestException ex)
             {
                 Debug.WriteLine($"[国际服下载失败] {ex.Message}");
 
-                // 版本过期时强制刷新版本重试
                 version = await GetLatestDdragonVersionAsync(forceUpdate: true);
                 intlUrl = $"https://ddragon.leagueoflegends.com/cdn/{version}/img/profileicon/{profileIconId}.png";
 
                 try
                 {
                     var retryBytes = await _httpClient.GetByteArrayAsync(intlUrl);
-                    Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
-                    await File.WriteAllBytesAsync(localPath, retryBytes);
-
-                    var image = LoadImageSafe(localPath);
-                    if (image != null)
-                    {
-                        _imageCache.TryAdd(cacheKey, image);
-                        return new Bitmap(image);
-                    }
+                    return await SaveAndCacheAsync(retryBytes, localPath, cacheKey);
                 }
                 catch (Exception retryEx)
                 {
                     Debug.WriteLine($"[国际服重试失败] {retryEx.Message}");
+                    return null;
                 }
             }
             finally
             {
                 _fileLock.Release();
             }
+        }
 
-            return GetDefaultImageSafe();
+        // 写入本地文件并缓存原图，返回副本；文件读不出来时返回 null。
+        private static async Task<Image?> SaveAndCacheAsync(byte[] bytes, string localPath, string cacheKey)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(localPath)!);
+            await File.WriteAllBytesAsync(localPath, bytes);
+
+            var image = LoadImageSafe(localPath);
+            if (image == null)
+            {
+                return null;
+            }
+
+            _imageCache.TryAdd(cacheKey, image);
+            return new Bitmap(image);
         }
 
         /// <summary>

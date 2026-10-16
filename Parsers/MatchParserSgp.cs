@@ -89,94 +89,45 @@ namespace League.Parsers
                 return null;
             }
             long gameId = ((long?)gameJson["gameId"]).GetValueOrDefault();
-            (
-                string currPuuid,
-                string currSummonerId,
-                bool isWin,
-                int teamId,
-                int duration,
-                DateTime createTime,
-                int kills,
-                int deaths,
-                int assists,
-                int goldEarned,
-                int damageToChampions,
-                double killParticipation,
-                string mode,
-                string queueId
-            )? basicData = ExtractBasicMatchData(gameJson, selfParticipant, participants);
-            if (!basicData.HasValue)
+            if (ExtractBasicMatchData(gameJson, selfParticipant, participants) is not { } basic)
             {
                 return null;
             }
-            (string, string, bool, int, int, DateTime, int, int, int, int, int, double, string, string) value =
-                basicData.Value;
-            string currPuuid = value.Item1;
-            string currSummonerId = value.Item2;
-            bool isWin = value.Item3;
-            int teamId = value.Item4;
-            int duration = value.Item5;
-            DateTime createTime = value.Item6;
-            int kills = value.Item7;
-            int deaths = value.Rest.Item1;
-            int assists = value.Rest.Item2;
-            int goldEarned = value.Rest.Item3;
-            int damageToChampions = value.Rest.Item4;
-            double killParticipation = value.Rest.Item5;
-            string mode = value.Rest.Item6;
-            string queueId = value.Rest.Item7;
-            (int, int, int) tuple2 = CalculateRanks(
+
+            var (damageRank, goldRank, kpRank) = CalculateRanks(
                 participants,
                 selfParticipant,
-                damageToChampions,
-                goldEarned,
-                killParticipation
+                basic.damageToChampions,
+                basic.goldEarned,
+                basic.killParticipation
             );
-            int damageRank = tuple2.Item1;
-            int goldRank = tuple2.Item2;
-            int kpRank = tuple2.Item3;
-            (int, string) tuple3 = ExtractDamageTakenData(selfParticipant, participants);
-            _ = tuple3.Item1;
-            string damageTakenText = tuple3.Item2;
-            (
-                Image champIcon,
-                string champName,
-                Image spellImg1,
-                Image spellImg2,
-                string spellName1,
-                string spellDesc1,
-                string spellName2,
-                string spellDesc2,
-                RuneInfo[] primaryRunes,
-                RuneInfo[] secondaryRunes,
-                RuneInfo[] statRunes,
-                Item[] items
-            ) resources = await LoadEssentialResourcesSimple(selfParticipant);
+            var (_, damageTakenText) = ExtractDamageTakenData(selfParticipant, participants);
+            var resources = await LoadEssentialResourcesSimple(selfParticipant);
 
             // 修改：加载所有玩家的海克斯符文
             var allPlayersAugments = await LoadAllPlayersAugmentsAsync(allParticipants);
-            var selfAugments = allPlayersAugments.ContainsKey(currPuuid)
-                ? allPlayersAugments[currPuuid]
+            var selfAugments = allPlayersAugments.ContainsKey(basic.currPuuid)
+                ? allPlayersAugments[basic.currPuuid]
                 : Array.Empty<RuneInfo>();
 
             MatchInfo matchInfo = CreateMatchInfo(
                 index,
                 gameId,
-                currPuuid,
-                currSummonerId,
-                isWin,
-                teamId,
-                duration,
-                createTime,
-                kills,
-                deaths,
-                assists,
-                $"{damageToChampions / 1000f:0.#}K |{damageRank}",
-                $"{goldEarned / 1000f:0.#}K |{goldRank}",
-                $"{killParticipation:P0} |{kpRank}",
+                basic.currPuuid,
+                basic.currSummonerId,
+                basic.isWin,
+                basic.teamId,
+                basic.duration,
+                basic.createTime,
+                basic.kills,
+                basic.deaths,
+                basic.assists,
+                $"{basic.damageToChampions / 1000f:0.#}K |{damageRank}",
+                $"{basic.goldEarned / 1000f:0.#}K |{goldRank}",
+                $"{basic.killParticipation:P0} |{kpRank}",
                 damageTakenText,
-                mode,
-                queueId,
+                basic.mode,
+                basic.queueId,
                 resources.champIcon,
                 resources.champName,
                 resources.spellImg1,
@@ -323,81 +274,89 @@ namespace League.Parsers
                 return null;
             }
 
-            JObject self = null;
-
             // 方案1：优先使用summonerId进行精确匹配（最可靠）
             if (!string.IsNullOrEmpty(summonerId))
             {
-                self = participants.FirstOrDefault(
+                var self = participants.FirstOrDefault(
                     (p) => string.Equals(p["summonerId"]?.ToString(), summonerId, StringComparison.OrdinalIgnoreCase)
                 );
 
                 if (self != null)
                 {
-                    //Debug.WriteLine($"✅ 通过SummonerId找到玩家: {summonerId}");
                     return self;
                 }
-                else
-                {
-                    Debug.WriteLine($"⚠ SummonerId匹配失败: {summonerId}");
-                }
+
+                Debug.WriteLine($"⚠ SummonerId匹配失败: {summonerId}");
             }
 
-            // 方案2：如果summonerId匹配失败，尝试通过puuid匹配（第二可靠）
-            // 如果需要，你可以在这里添加puuid匹配逻辑
+            // 方案2：传统名称匹配（作为fallback），只在summonerId匹配失败时使用
+            var byName = FindParticipantByName(participants, gameName, tagLine);
+            if (byName != null)
+            {
+                return byName;
+            }
 
-            // 方案3：传统名称匹配（作为fallback）
-            // 保持原有的名称匹配逻辑，但只在summonerId匹配失败时使用
+            LogUnmatchedParticipants(participants, summonerId, gameName, tagLine);
 
-            // 尝试完整的Riot ID匹配
-            self = participants.FirstOrDefault(
+            // 作为最后的手段，返回第一个参与者
+            Debug.WriteLine("⚠ 使用第一个玩家代替以确保解析不中断。");
+            return participants.FirstOrDefault();
+        }
+
+        /// <summary>
+        /// 依次按完整 Riot ID、Riot 游戏名、召唤师名精确匹配，最后按名称包含关系模糊匹配。
+        /// </summary>
+        private static JObject FindParticipantByName(List<JObject> participants, string gameName, string tagLine)
+        {
+            var self = participants.FirstOrDefault(
                 (p) =>
                     string.Equals(p["riotIdGameName"]?.ToString(), gameName, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(p["riotIdTagline"]?.ToString(), tagLine, StringComparison.OrdinalIgnoreCase)
             );
-
             if (self != null)
             {
                 Debug.WriteLine($"⚠ SummonerId匹配失败，通过Riot ID找到玩家: {gameName}#{tagLine}");
                 return self;
             }
 
-            // 尝试只匹配gameName
             self = participants.FirstOrDefault(
                 (p) => string.Equals(p["riotIdGameName"]?.ToString(), gameName, StringComparison.OrdinalIgnoreCase)
             );
-
             if (self != null)
             {
                 Debug.WriteLine($"⚠ SummonerId匹配失败，通过Riot GameName找到玩家: {gameName}");
                 return self;
             }
 
-            // 尝试匹配summonerName
             self = participants.FirstOrDefault(
                 (p) => string.Equals(p["summonerName"]?.ToString(), gameName, StringComparison.OrdinalIgnoreCase)
             );
-
             if (self != null)
             {
                 Debug.WriteLine($"⚠ SummonerId匹配失败，通过SummonerName找到玩家: {gameName}");
                 return self;
             }
 
-            // 模糊匹配
             self = participants.FirstOrDefault(
                 (p) =>
                     (p["riotIdGameName"]?.ToString() ?? "").IndexOf(gameName, StringComparison.OrdinalIgnoreCase) >= 0
                     || (p["summonerName"]?.ToString() ?? "").IndexOf(gameName, StringComparison.OrdinalIgnoreCase) >= 0
             );
-
             if (self != null)
             {
                 Debug.WriteLine($"⚠ SummonerId匹配失败，通过模糊匹配找到玩家: {gameName}");
-                return self;
             }
+            return self;
+        }
 
-            // 如果所有匹配都失败，记录详细信息用于调试
+        // 如果所有匹配都失败，记录详细信息用于调试
+        private static void LogUnmatchedParticipants(
+            List<JObject> participants,
+            string summonerId,
+            string gameName,
+            string tagLine
+        )
+        {
             Debug.WriteLine($"❌ 所有匹配方法都失败！");
             Debug.WriteLine($"查找条件: summonerId={summonerId}, gameName={gameName}, tagLine={tagLine}");
             Debug.WriteLine($"参与者数量: {participants.Count}");
@@ -419,10 +378,6 @@ namespace League.Parsers
                         + $"PUUID: {puuid?.Substring(0, Math.Min(8, puuid?.Length ?? 0))}..."
                 );
             }
-
-            // 作为最后的手段，返回第一个参与者
-            Debug.WriteLine("⚠ 使用第一个玩家代替以确保解析不中断。");
-            return participants.FirstOrDefault();
         }
 
         private (
@@ -489,12 +444,50 @@ namespace League.Parsers
         }
 
         /// <summary>
-        /// 战绩列表中显示模式信息
+        /// 官方队列对应的模式名。
         /// </summary>
-        /// <param name="gameJson"></param>
-        /// <returns></returns>
+        private static readonly Dictionary<int, string> QueueModes = new()
+        {
+            [420] = "单双排",
+            [440] = "灵活排位",
+            [400] = "匹配征召",
+            [430] = "匹配盲选",
+            [450] = "大乱斗",
+            [900] = "无限乱斗",
+            [1900] = "自选无限火力",
+            [480] = "快速模式",
+            [1700] = "斗魂竞技场",
+            [2400] = "海克斯乱斗",
+            [2450] = "经典海克斯乱斗",
+            [1020] = "克隆大作战",
+            [1300] = "极限闪击",
+            [1400] = "终极魔典",
+            [700] = "冠军杯赛",
+            [830] = "人机入门",
+            [840] = "人机新手",
+            [850] = "人机中等",
+            [870] = "人机入门",
+            [880] = "人机新手",
+            [890] = "人机中等",
+            [2000] = "新手教程1",
+            [2010] = "新手教程2",
+            [2020] = "新手教程3",
+            [1090] = "云顶匹配",
+            [1100] = "云顶排位",
+            [1130] = "云顶疾速",
+            [1160] = "云顶双人",
+            [0] = "自定义",
+            [3100] = "自定义峡谷",
+            [3140] = "训练模式",
+            [3270] = "自定义海克斯",
+            [4310] = "经典峡谷",
+            [4320] = "经典人机",
+            [950] = "末日人机",
+            [960] = "末日人机",
+        };
+
         /// <summary>
-        /// 战绩列表中显示模式信息
+        /// 战绩列表中显示模式信息：自定义优先，其次官方队列，最后按 gameMode 兜底。
         /// </summary>
         private (string mode, string queueId) ExtractGameMode(JObject gameJson)
         {
@@ -503,158 +496,63 @@ namespace League.Parsers
             string gameMode = gameJson["gameMode"]?.ToString() ?? gameJson["info"]?["gameMode"]?.ToString();
             string gameType = gameJson["gameType"]?.ToString() ?? gameJson["info"]?["gameType"]?.ToString();
 
-            /* =========================
-             * 1️⃣ 自定义（最高优先级）
-             * ========================= */
             if (gameType == "CUSTOM_GAME")
             {
-                if (queue == 4310 || string.Equals(gameMode, "JADE", StringComparison.OrdinalIgnoreCase))
-                {
-                    return ("经典峡谷", queueId);
-                }
-                if (queue == 3270 || string.Equals(gameMode, "KIWI", StringComparison.OrdinalIgnoreCase))
-                {
-                    return ("自定义海克斯", queueId);
-                }
-                if (string.Equals(gameMode, "PRACTICETOOL", StringComparison.OrdinalIgnoreCase))
-                {
-                    return ("训练模式", queueId);
-                }
-
-                return gameMode?.ToLower() switch
-                {
-                    "classic" => ("自定义峡谷", queueId),
-                    "aram" => ("自定义大乱斗", queueId),
-                    "cherry" => ("自定义海克斯", queueId),
-                    _ => ("自定义", queueId),
-                };
+                return (GetCustomGameMode(queue, gameMode), queueId);
             }
 
-            /* =========================
-             * 2️⃣ 官方匹配 / 排位 / 特殊模式
-             * ========================= */
-            switch (queue)
+            if (QueueModes.TryGetValue(queue, out string? mode))
             {
-                // ========== 排位 ==========
-                case 420:
-                    return ("单双排", queueId);
-                case 440:
-                    return ("灵活排位", queueId);
-
-                // ========== 匹配 ==========
-                case 400:
-                    return ("匹配征召", queueId);
-                case 430:
-                    return ("匹配盲选", queueId);
-
-                // ========== 大乱斗 & 无限 ==========
-                case 450:
-                    return ("大乱斗", queueId);
-                case 900:
-                    return ("无限乱斗", queueId);
-                case 1900:
-                    return ("自选无限火力", queueId);
-
-                // ========== 快速模式 ==========
-                case 480:
-                    return ("快速模式", queueId);
-
-                // ========== 斗魂 / 海克斯 ==========
-                case 1700:
-                    return ("斗魂竞技场", queueId);
-                case 2400:
-                    return ("海克斯乱斗", queueId);
-                case 2450:
-                    return ("经典海克斯乱斗", queueId);
-
-                // ========== 其他特殊模式 ==========
-                case 1020:
-                    return ("克隆大作战", queueId);
-                case 1300:
-                    return ("极限闪击", queueId);
-                case 1400:
-                    return ("终极魔典", queueId);
-                case 700:
-                    return ("冠军杯赛", queueId);
-
-                // ========== 人机（完整） ==========
-                case 830:
-                    return ("人机入门", queueId);
-                case 840:
-                    return ("人机新手", queueId);
-                case 850:
-                    return ("人机中等", queueId);
-                case 870:
-                    return ("人机入门", queueId);
-                case 880:
-                    return ("人机新手", queueId);
-                case 890:
-                    return ("人机中等", queueId);
-
-                // ========== 新手教程 ==========
-                case 2000:
-                    return ("新手教程1", queueId);
-                case 2010:
-                    return ("新手教程2", queueId);
-                case 2020:
-                    return ("新手教程3", queueId);
-
-                // ========== 云顶之弈 ==========
-                case 1090:
-                    return ("云顶匹配", queueId);
-                case 1100:
-                    return ("云顶排位", queueId);
-                case 1130:
-                    return ("云顶疾速", queueId);
-                case 1160:
-                    return ("云顶双人", queueId);
-
-                // ========== 自定义 / 训练 / 经典 ==========
-                case 0:
-                    return ("自定义", queueId);
-                case 3100:
-                    return ("自定义峡谷", queueId);
-                case 3140:
-                    return ("训练模式", queueId);
-                case 3270:
-                    return ("自定义海克斯", queueId);
-                case 4310:
-                    return ("经典峡谷", queueId);
-                case 4320:
-                    return ("经典人机", queueId);
-
-                // ========== 末日人机 ==========
-                case 950:
-                case 960:
-                    return ("末日人机", queueId);
+                return (mode, queueId);
             }
 
-            /* =========================
-             * 3️⃣ queue = 0 且非自定义
-             * ========================= */
-            if (queue == 0)
+            return (GetModeFromGameMode(gameMode, queue), queueId);
+        }
+
+        private static string GetCustomGameMode(int queue, string? gameMode)
+        {
+            if (queue == 4310 || string.Equals(gameMode, "JADE", StringComparison.OrdinalIgnoreCase))
             {
-                return ("未知模式", queueId);
+                return "经典峡谷";
             }
 
-            /* =========================
-             * 4️⃣ gameMode 最终兜底
-             * ========================= */
-            if (!string.IsNullOrEmpty(gameMode))
+            if (queue == 3270 || string.Equals(gameMode, "KIWI", StringComparison.OrdinalIgnoreCase))
             {
-                return gameMode.ToLower() switch
-                {
-                    "classic" => ("召唤师峡谷", queueId),
-                    "aram" => ("大乱斗", queueId),
-                    "cherry" => ("斗魂竞技场", queueId),
-                    "jade" => ("经典峡谷", queueId),
-                    "urf" => ("无限乱斗", queueId),
-                    "tutorial" => ("新手教程", queueId),
-                    _ => ($"未知模式({queue})", queueId),
-                };
+                return "自定义海克斯";
             }
 
-            return ($"未知模式({queue})", queueId);
+            if (string.Equals(gameMode, "PRACTICETOOL", StringComparison.OrdinalIgnoreCase))
+            {
+                return "训练模式";
+            }
+
+            return gameMode?.ToLower() switch
+            {
+                "classic" => "自定义峡谷",
+                "aram" => "自定义大乱斗",
+                "cherry" => "自定义海克斯",
+                _ => "自定义",
+            };
+        }
+
+        // queue 0 已在 QueueModes 中映射为「自定义」，这里只处理未收录的队列。
+        private static string GetModeFromGameMode(string? gameMode, int queue)
+        {
+            if (string.IsNullOrEmpty(gameMode))
+            {
+                return $"未知模式({queue})";
+            }
+
+            return gameMode.ToLower() switch
+            {
+                "classic" => "召唤师峡谷",
+                "aram" => "大乱斗",
+                "cherry" => "斗魂竞技场",
+                "jade" => "经典峡谷",
+                "urf" => "无限乱斗",
+                "tutorial" => "新手教程",
+                _ => $"未知模式({queue})",
+            };
         }
 
         private (int damageRank, int goldRank, int kpRank) CalculateRanks(

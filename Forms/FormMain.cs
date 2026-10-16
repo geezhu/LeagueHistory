@@ -136,14 +136,7 @@ namespace League
                 // 检查更新（不等待，避免阻塞UI）
                 _ = _configUpdateManager.CheckForUpdates();
 
-                // 加载图片
-                var img1 = Image.FromFile(Path.Combine(AppContext.BaseDirectory, "Assets", "Defaults", "01.png"));
-                var img2 = Image.FromFile(Path.Combine(AppContext.BaseDirectory, "Assets", "Defaults", "02.png"));
-                var img3 = Image.FromFile(Path.Combine(AppContext.BaseDirectory, "Assets", "Defaults", "03.png"));
-
-                imageTabControl1.TabPages[0].Tag = img1;
-                imageTabControl1.TabPages[1].Tag = img2;
-                imageTabControl1.TabPages[2].Tag = img3;
+                LoadTabImages();
 
                 // 绑定事件
                 imageTabControl1.MouseMove += (s, ev) => _uiManager!.HandleImageTabControlMouseMove(s, ev);
@@ -155,90 +148,10 @@ namespace League
                 var assistant = new ChampionSelectAssistant(this);
                 Disposed += (_, _) => assistant.Dispose();
 
-                // 恢复复选框状态（新增）
-                chkNormal.Checked = _appConfig.EnablePreliminaryInNormal; //匹配
-                chkRanked.Checked = _appConfig.EnablePreliminaryInRanked; //排位
-                chkAram.Checked = _appConfig.EnablePreliminaryInAram; //大乱斗
-                chkNexus.Checked = _appConfig.EnablePreliminaryInNexusBlitz; //海克斯乱斗
-                chkAutoAccept.Checked = _appConfig.EnableAutoAcceptQueue; // 自动接受对局
-                chkUrf.Checked = _appConfig.EnablePreliminaryInUrf; // 无限乱斗（900）
-                chkPickUrf.Checked = _appConfig.EnablePreliminaryInPickUrf; // 无限火力（1900）
-
-                chkHideSelf.Checked = _appConfig.HideSelfWhenSending; //发送战绩时是否隐藏自己
-                chkUseChampionName.Checked = _appConfig.UseChampionNameWhenSending; //发送战绩时是否使用英雄名称
-                chkSkipHonor.Checked = _appConfig.EnableSkipHonor; //自动跳过点赞界面
-                chkSkipEndOfGameStats.Checked = _appConfig.EnableSkipEndOfGameStats; //自动跳过结算统计界面
-
-                chkAutoSkinSelect.Checked = _appConfig.EnableAutoSkinSelect; // 是否自动配置皮肤
-
-                // 消息发送恢复快捷键显示
-                if (txtHotkeyChampSelect != null && txtHotkeyMyTeam != null && txtHotkeyFullTeam != null)
-                {
-                    txtHotkeyChampSelect.ReadOnly = true;
-                    txtHotkeyMyTeam.ReadOnly = true;
-                    txtHotkeyFullTeam.ReadOnly = true;
-
-                    txtHotkeyChampSelect.Text = string.IsNullOrWhiteSpace(_appConfig.HotkeyChampSelect)
-                        ? "Ctrl+F7" : _appConfig.HotkeyChampSelect;
-                    txtHotkeyMyTeam.Text = string.IsNullOrWhiteSpace(_appConfig.HotkeyMyTeam)
-                        ? "F9" : _appConfig.HotkeyMyTeam;
-                    txtHotkeyFullTeam.Text = string.IsNullOrWhiteSpace(_appConfig.HotkeyFullTeam)
-                        ? "F11" : _appConfig.HotkeyFullTeam;
-
-                    // 避免重复绑定：若你可能多次进这段，可先 -= 再 +=
-                    txtHotkeyChampSelect.KeyDown -= HotkeyTextBox_KeyDown;
-                    txtHotkeyMyTeam.KeyDown -= HotkeyTextBox_KeyDown;
-                    txtHotkeyFullTeam.KeyDown -= HotkeyTextBox_KeyDown;
-
-                    txtHotkeyChampSelect.KeyDown += HotkeyTextBox_KeyDown;
-                    txtHotkeyMyTeam.KeyDown += HotkeyTextBox_KeyDown;
-                    txtHotkeyFullTeam.KeyDown += HotkeyTextBox_KeyDown;
-                }
-
-                // 把配置应用到钩子（必须在 _appConfig 已 Load、_hotkeyManager 已创建之后）
-                _hotkeyManager?.ApplyConfig(_appConfig);
-
-                // 根据配置文件恢复消息发送信息 ===
-                if (rbModeMatch != null && rbModeCustom != null && txtCustomContent != null)
-                {
-                    // 1. 恢复文本框里的内容
-                    txtCustomContent.Text = _appConfig.CustomSendContent ?? string.Empty;
-
-                    // 2. 依据配置勾选对应的单选框
-                    if (_appConfig.SendMode == 2)
-                    {
-                        rbModeCustom.Checked = true;
-                        txtCustomContent.Visible = true; // 显示文本框
-                    }
-                    else
-                    {
-                        rbModeMatch.Checked = true;
-                        txtCustomContent.Visible = false; // 隐藏文本框
-                    }
-
-                    // 3. 恢复后再绑定事件，防止初始化触发不必要的自动保存
-                    rbModeMatch.CheckedChanged += SendMode_CheckedChanged;
-                    rbModeCustom.CheckedChanged += SendMode_CheckedChanged;
-
-                    // 绑定文本框失去焦点事件，用来自动保存文本
-                    txtCustomContent.Leave += TxtCustomContent_Leave;
-                }
-
-                // 绑定事件（建议统一一个事件处理）
-                chkNormal.CheckedChanged += ModeCheckBox_CheckedChanged;
-                chkRanked.CheckedChanged += ModeCheckBox_CheckedChanged;
-                chkAram.CheckedChanged += ModeCheckBox_CheckedChanged;
-                chkNexus.CheckedChanged += ModeCheckBox_CheckedChanged;
-                chkUrf.CheckedChanged += ModeCheckBox_CheckedChanged;
-                chkPickUrf.CheckedChanged += ModeCheckBox_CheckedChanged;
-                chkClassic.CheckedChanged += ModeCheckBox_CheckedChanged;
-                chkBot.CheckedChanged += ModeCheckBox_CheckedChanged;
-                chkAutoAccept.CheckedChanged += AutoAccept_CheckedChanged;
-                chkHideSelf.CheckedChanged += HideSelf_CheckedChanged;
-                chkUseChampionName.CheckedChanged += UseChampionName_CheckedChanged;
-                chkSkipHonor.CheckedChanged += ChkSkipHonor_CheckedChanged;
-                chkSkipEndOfGameStats.CheckedChanged += ChkSkipEndOfGameStats_CheckedChanged;
-                chkAutoSkinSelect.CheckedChanged += chkAutoSkinSelect_CheckedChanged;
+                // 先恢复控件状态再绑定事件，防止初始化触发不必要的自动保存
+                RestoreSettingControls();
+                RestoreSendMode();
+                BindSettingEvents();
 
                 // 启动轮询 LCU 检测
                 StartLcuConnectPolling();
@@ -247,6 +160,79 @@ namespace League
             {
                 Debug.WriteLine($"[全局初始化异常] {ex.Message}");
             }
+        }
+
+        private void LoadTabImages()
+        {
+            var img1 = Image.FromFile(Path.Combine(AppContext.BaseDirectory, "Assets", "Defaults", "01.png"));
+            var img2 = Image.FromFile(Path.Combine(AppContext.BaseDirectory, "Assets", "Defaults", "02.png"));
+            var img3 = Image.FromFile(Path.Combine(AppContext.BaseDirectory, "Assets", "Defaults", "03.png"));
+
+            imageTabControl1.TabPages[0].Tag = img1;
+            imageTabControl1.TabPages[1].Tag = img2;
+            imageTabControl1.TabPages[2].Tag = img3;
+        }
+
+        private void RestoreSettingControls()
+        {
+            chkNormal.Checked = _appConfig.EnablePreliminaryInNormal; //匹配
+            chkRanked.Checked = _appConfig.EnablePreliminaryInRanked; //排位
+            chkAram.Checked = _appConfig.EnablePreliminaryInAram; //大乱斗
+            chkNexus.Checked = _appConfig.EnablePreliminaryInNexusBlitz; //海克斯乱斗
+            chkAutoAccept.Checked = _appConfig.EnableAutoAcceptQueue; // 自动接受对局
+            chkUrf.Checked = _appConfig.EnablePreliminaryInUrf; // 无限乱斗（900）
+            chkPickUrf.Checked = _appConfig.EnablePreliminaryInPickUrf; // 无限火力（1900）
+
+            chkHideSelf.Checked = _appConfig.HideSelfWhenSending; //发送战绩时是否隐藏自己
+            chkUseChampionName.Checked = _appConfig.UseChampionNameWhenSending; //发送战绩时是否使用英雄名称
+            chkSkipHonor.Checked = _appConfig.EnableSkipHonor; //自动跳过点赞界面
+            chkSkipEndOfGameStats.Checked = _appConfig.EnableSkipEndOfGameStats; //自动跳过结算统计界面
+
+            chkAutoSkinSelect.Checked = _appConfig.EnableAutoSkinSelect; // 是否自动配置皮肤
+        }
+
+        // 根据配置文件恢复消息发送信息；恢复后再绑定事件，防止初始化触发不必要的自动保存
+        private void RestoreSendMode()
+        {
+            if (rbModeMatch == null || rbModeCustom == null || txtCustomContent == null)
+            {
+                return;
+            }
+
+            txtCustomContent.Text = _appConfig.CustomSendContent ?? string.Empty;
+
+            if (_appConfig.SendMode == 2)
+            {
+                rbModeCustom.Checked = true;
+                txtCustomContent.Visible = true; // 显示文本框
+            }
+            else
+            {
+                rbModeMatch.Checked = true;
+                txtCustomContent.Visible = false; // 隐藏文本框
+            }
+
+            rbModeMatch.CheckedChanged += SendMode_CheckedChanged;
+            rbModeCustom.CheckedChanged += SendMode_CheckedChanged;
+
+            // 绑定文本框失去焦点事件，用来自动保存文本
+            txtCustomContent.Leave += TxtCustomContent_Leave;
+        }
+
+        private void BindSettingEvents()
+        {
+            chkNormal.CheckedChanged += ModeCheckBox_CheckedChanged;
+            chkRanked.CheckedChanged += ModeCheckBox_CheckedChanged;
+            chkAram.CheckedChanged += ModeCheckBox_CheckedChanged;
+            chkNexus.CheckedChanged += ModeCheckBox_CheckedChanged;
+            chkUrf.CheckedChanged += ModeCheckBox_CheckedChanged;
+            chkPickUrf.CheckedChanged += ModeCheckBox_CheckedChanged;
+            chkAutoAccept.CheckedChanged += AutoAccept_CheckedChanged;
+            chkHideSelf.CheckedChanged += HideSelf_CheckedChanged;
+            chkUseChampionName.CheckedChanged += UseChampionName_CheckedChanged;
+            chkSkipHonor.CheckedChanged += ChkSkipHonor_CheckedChanged;
+            chkSkipEndOfGameStats.CheckedChanged += ChkSkipEndOfGameStats_CheckedChanged;
+            chkAutoSkinSelect.CheckedChanged += chkAutoSkinSelect_CheckedChanged;
         }
 
         #endregion

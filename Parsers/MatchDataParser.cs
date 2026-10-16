@@ -259,6 +259,56 @@ namespace League.Parsers
         }
 
         /// <summary>
+        /// 战绩标签对应的模式名，按优先级排列：同一场比赛带多个标签时取最先匹配的一项。
+        /// </summary>
+        private static readonly (string Tag, string Mode)[] TagModes =
+        {
+            ("q_420", "单双排"),
+            ("q_440", "灵活排位"),
+            ("q_400", "匹配征召"),
+            ("q_430", "匹配盲选"),
+            ("q_450", "大乱斗"),
+            ("q_900", "无限乱斗"),
+            ("q_1900", "自选无限火力"),
+            ("q_480", "快速模式"),
+            ("q_1700", "斗魂竞技场"),
+            ("q_2400", "海克斯乱斗"),
+            ("q_2450", "经典海克斯乱斗"),
+            ("q_1020", "克隆大作战"),
+            ("q_1300", "极限闪击"),
+            ("q_1400", "终极魔典"),
+            ("q_700", "冠军杯赛"),
+            ("q_830", "人机入门"),
+            ("q_840", "人机新手"),
+            ("q_850", "人机中等"),
+            ("q_870", "人机入门"),
+            ("q_880", "人机新手"),
+            ("q_890", "人机中等"),
+            ("q_2000", "新手教程1"),
+            ("q_2010", "新手教程2"),
+            ("q_2020", "新手教程3"),
+            ("q_1090", "云顶匹配"),
+            ("q_1100", "云顶排位"),
+            ("q_1130", "云顶疾速"),
+            ("q_1160", "云顶双人"),
+            ("q_3100", "自定义峡谷"),
+            ("q_3140", "训练模式"),
+            ("q_3270", "自定义海克斯"),
+            ("q_4310", "经典峡谷"),
+            ("q_4320", "经典人机"),
+            ("q_950", "末日人机"),
+            ("q_960", "末日人机"),
+            ("mode_practicetool", "训练模式"),
+            ("mode_classic", "自定义峡谷"),
+            ("mode_aram", "自定义大乱斗"),
+            ("mode_cherry", "自定义海克斯"),
+            ("mode_kiwi", "自定义海克斯"),
+            ("type_CUSTOM_GAME", "自定义"),
+            ("mode_jade", "经典峡谷"),
+            ("mdoe_jade", "经典峡谷"),
+        };
+
+        /// <summary>
         /// 此处用于在用户列表中显示
         /// </summary>
         /// <param name="tags"></param>
@@ -271,209 +321,12 @@ namespace League.Parsers
             }
 
             var tagList = tags.Select(t => t.ToString()).ToList();
-
-            if (tagList.Contains("q_420"))
+            foreach (var (tag, mode) in TagModes)
             {
-                return "单双排";
-            }
-
-            if (tagList.Contains("q_440"))
-            {
-                return "灵活排位";
-            }
-
-            if (tagList.Contains("q_400"))
-            {
-                return "匹配征召";
-            }
-
-            if (tagList.Contains("q_430"))
-            {
-                return "匹配盲选";
-            }
-
-            if (tagList.Contains("q_450"))
-            {
-                return "大乱斗";
-            }
-
-            if (tagList.Contains("q_900"))
-            {
-                return "无限乱斗";
-            }
-
-            if (tagList.Contains("q_1900"))
-            {
-                return "自选无限火力";
-            }
-
-            if (tagList.Contains("q_480"))
-            {
-                return "快速模式";
-            }
-
-            if (tagList.Contains("q_1700"))
-            {
-                return "斗魂竞技场";
-            }
-
-            if (tagList.Contains("q_2400"))
-            {
-                return "海克斯乱斗";
-            }
-
-            if (tagList.Contains("q_2450"))
-            {
-                return "经典海克斯乱斗";
-            }
-
-            if (tagList.Contains("q_1020"))
-            {
-                return "克隆大作战";
-            }
-
-            if (tagList.Contains("q_1300"))
-            {
-                return "极限闪击";
-            }
-
-            if (tagList.Contains("q_1400"))
-            {
-                return "终极魔典";
-            }
-
-            if (tagList.Contains("q_700"))
-            {
-                return "冠军杯赛";
-            }
-
-            // 人机
-            if (tagList.Contains("q_830"))
-            {
-                return "人机入门";
-            }
-
-            if (tagList.Contains("q_840"))
-            {
-                return "人机新手";
-            }
-
-            if (tagList.Contains("q_850"))
-            {
-                return "人机中等";
-            }
-
-            if (tagList.Contains("q_870"))
-            {
-                return "人机入门";
-            }
-
-            if (tagList.Contains("q_880"))
-            {
-                return "人机新手";
-            }
-
-            if (tagList.Contains("q_890"))
-            {
-                return "人机中等";
-            }
-
-            // 教程
-            if (tagList.Contains("q_2000"))
-            {
-                return "新手教程1";
-            }
-
-            if (tagList.Contains("q_2010"))
-            {
-                return "新手教程2";
-            }
-
-            if (tagList.Contains("q_2020"))
-            {
-                return "新手教程3";
-            }
-
-            // 云顶
-            if (tagList.Contains("q_1090"))
-            {
-                return "云顶匹配";
-            }
-
-            if (tagList.Contains("q_1100"))
-            {
-                return "云顶排位";
-            }
-
-            if (tagList.Contains("q_1130"))
-            {
-                return "云顶疾速";
-            }
-
-            if (tagList.Contains("q_1160"))
-            {
-                return "云顶双人";
-            }
-
-            // 自定义/经典
-            if (tagList.Contains("q_3100"))
-            {
-                return "自定义峡谷";
-            }
-
-            if (tagList.Contains("q_3140"))
-            {
-                return "训练模式";
-            }
-
-            if (tagList.Contains("q_3270"))
-            {
-                return "自定义海克斯";
-            }
-
-            if (tagList.Contains("q_4310"))
-            {
-                return "经典峡谷";
-            }
-
-            if (tagList.Contains("q_4320"))
-            {
-                return "经典人机";
-            }
-
-            if (tagList.Contains("q_950") || tagList.Contains("q_960"))
-            {
-                return "末日人机";
-            }
-
-            if (tagList.Contains("mode_practicetool"))
-            {
-                return "训练模式";
-            }
-
-            if (tagList.Contains("mode_classic"))
-            {
-                return "自定义峡谷";
-            }
-
-            if (tagList.Contains("mode_aram"))
-            {
-                return "自定义大乱斗";
-            }
-
-            if (tagList.Contains("mode_cherry") || tagList.Contains("mode_kiwi"))
-            {
-                return "自定义海克斯";
-            }
-
-            if (tagList.Contains("type_CUSTOM_GAME"))
-            {
-                return "自定义";
-            }
-
-            if (tagList.Contains("mode_jade") || tagList.Contains("mdoe_jade"))
-            {
-                return "经典峡谷";
+                if (tagList.Contains(tag))
+                {
+                    return mode;
+                }
             }
 
             return $"未知({string.Join(",", tagList)})";

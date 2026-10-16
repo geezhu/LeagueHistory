@@ -48,12 +48,13 @@ namespace League.Clients
         /// </summary>
         public async Task<bool> AutoDeclareIntentAsync(List<PreliminaryHero> preSelectedHeroes)
         {
-            Debug.WriteLine($"[LCU 自动预选] 开始执行，列表 {preSelectedHeroes?.Count ?? 0} 个英雄");
-
+            // 先判空再写日志：列表为空时原来会在日志这一行抛出空引用。
             if (preSelectedHeroes == null || !preSelectedHeroes.Any())
             {
                 return false;
             }
+
+            Debug.WriteLine($"[LCU 自动预选] 开始执行，列表 {preSelectedHeroes.Count} 个英雄");
 
             try
             {
@@ -63,37 +64,7 @@ namespace League.Clients
                     return false;
                 }
 
-                var actions = session["actions"] as JArray;
-                long localCellId = session["localPlayerCellId"]?.Value<long>()
-                                ?? session["localPlayerCellId"]?.Value<int>()
-                                ?? -1;
-
-                // 诊断（确认后可删或降为 Verbose）
-                Debug.WriteLine($"[自动预选诊断] localPlayerCellId={localCellId}, hasSimultaneousPicks={session["hasSimultaneousPicks"]}, timer.phase={session["timer"]?["phase"]}");
-                if (actions != null)
-                {
-                    foreach (var group in actions)
-                    {
-                        var arr = group as JArray;
-                        if (arr == null) continue;
-                        foreach (var a in arr)
-                        {
-                            Debug.WriteLine(
-                                $"[自动预选诊断] act id={a["id"]} type={a["type"]} actor={a["actorCellId"]} " +
-                                $"completed={a["completed"]} inProgress={a["isInProgress"]} champ={a["championId"]}");
-                        }
-                    }
-                }
-
-                // 找自己未完成的 pick（兼容 actorCellId 为 int/long）
-                var myPickAction = actions
-                    .SelectMany(g => g as JArray ?? new JArray())
-                    .FirstOrDefault(a =>
-                        a["actorCellId"]?.Value<long>() == session["localPlayerCellId"]?.Value<long>()
-                        && a["type"]?.ToString() == "pick"
-                        && a["completed"]?.Value<bool>() != true
-                    );
-
+                var myPickAction = FindMyPendingPick(session);
                 if (myPickAction == null)
                 {
                     return false;
@@ -179,6 +150,49 @@ namespace League.Clients
                 Debug.WriteLine($"[自动预选] 执行异常: {ex.Message}");
                 return false;
             }
+        }
+
+        // 自己还没完成的 pick 操作。
+        private static JToken? FindMyPendingPick(JObject session)
+        {
+            var actions = session["actions"] as JArray;
+            return actions
+                .SelectMany(a => a as JArray)
+                .FirstOrDefault(a =>
+                    a["actorCellId"]?.Value<long>() == session["localPlayerCellId"]?.Value<long>()
+                    && a["type"]?.ToString() == "pick"
+                    && a["completed"]?.Value<bool>() != true
+                );
+        }
+
+        // 自己当前持有的英雄；不在房间或还没分到英雄时为 0。
+        private static int GetMyChampionId(JObject session)
+        {
+            var myCellId = session["localPlayerCellId"]?.Value<int>() ?? -1;
+            if (myCellId == -1)
+            {
+                return 0;
+            }
+
+            var myTeam = session["myTeam"] as JArray ?? new JArray();
+            var myPlayer = myTeam.FirstOrDefault(p => p["cellId"]?.Value<int>() == myCellId);
+            return myPlayer?["championId"]?.Value<int>() ?? 0;
+        }
+
+        // 板凳席上可以交换的英雄。
+        private static HashSet<int> GetBenchChampionIds(JObject session)
+        {
+            var benchChampions = session["benchChampions"] as JArray ?? new JArray();
+            var availableChampIds = new HashSet<int>();
+            foreach (var item in benchChampions)
+            {
+                var id = item["championId"]?.Value<int>() ?? 0;
+                if (id > 0)
+                {
+                    availableChampIds.Add(id);
+                }
+            }
+            return availableChampIds;
         }
 
         /// <summary>
@@ -285,16 +299,7 @@ namespace League.Clients
                     return;
                 }
 
-                var myCellId = session["localPlayerCellId"]?.Value<int>() ?? -1;
-                if (myCellId == -1)
-                {
-                    return;
-                }
-
-                var myTeam = session["myTeam"] as JArray ?? new JArray();
-                var myPlayer = myTeam.FirstOrDefault(p => p["cellId"]?.Value<int>() == myCellId);
-                var currentChampId = myPlayer?["championId"]?.Value<int>() ?? 0;
-
+                var currentChampId = GetMyChampionId(session);
                 if (currentChampId == 0)
                 {
                     return;
@@ -302,19 +307,7 @@ namespace League.Clients
 
                 var currentPriority =
                     preSelectedHeroes.FirstOrDefault(h => h.ChampionId == currentChampId)?.Priority ?? int.MaxValue;
-
-                // bench 中所有可用英雄
-                var benchChampions = session["benchChampions"] as JArray ?? new JArray();
-                var availableChampIds = new HashSet<int>();
-
-                foreach (var item in benchChampions)
-                {
-                    var id = item["championId"]?.Value<int>() ?? 0;
-                    if (id > 0)
-                    {
-                        availableChampIds.Add(id);
-                    }
-                }
+                var availableChampIds = GetBenchChampionIds(session);
 
                 // 找出 bench 中优先级最高的预选英雄
                 var bestAvailable = preSelectedHeroes

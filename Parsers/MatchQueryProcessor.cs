@@ -135,15 +135,7 @@ namespace League.Parsers
             string puuid = playerData["puuid"]?.ToString() ?? "";
             int championId = playerData["championId"]?.Value<int>() ?? 0;
 
-            string nameVisibility = playerData["nameVisibilityType"]?.ToString() ?? "UNHIDDEN";
-            bool isHidden =
-                nameVisibility == "HIDDEN"
-                || string.IsNullOrEmpty(puuid)
-                || summonerId == 0
-                || puuid.StartsWith("OBFUSCATED_")
-                || puuid.StartsWith("HIDDEN_");
-
-            if (isHidden)
+            if (IsHiddenPlayer(playerData, summonerId, puuid))
             {
                 return _factory.CreateHiddenPlayerInfo(summonerId, championId);
             }
@@ -159,22 +151,39 @@ namespace League.Parsers
                 && cached.Player.Puuid == puuid
             )
             {
-                cached = cached.CopyForChampion(championId);
-                cached.Player.ChampionId = championId;
-                cached.Player.ChampionName = Globals.resLoading.GetChampionById(championId)?.Name ?? "Unknown";
-                if (queueOverride == null)
-                {
-                    cached.Player.Avatar = await Globals
-                        .resLoading.GetChampionIconAsync(championId)
-                        .WaitAsync(cancellationToken);
-                }
-
-                cancellationToken.ThrowIfCancellationRequested();
+                cached = await CopyCachedForChampionAsync(cached, championId, queueOverride, cancellationToken);
                 stage?.Invoke("cache-hit");
                 return cached;
             }
 
-            // 正常查询流程...
+            return await QueryPlayerMatchInfoAsync(
+                summonerId,
+                puuid,
+                championId,
+                queueId,
+                count,
+                historyFilter,
+                queueOverride,
+                stage,
+                cancellationToken
+            );
+        }
+
+        /// <summary>
+        /// 缓存未命中时的查询：召唤师资料 → 段位 → 战绩 → 解析，结果按玩家和模式写入缓存。
+        /// </summary>
+        private async Task<PlayerMatchInfo> QueryPlayerMatchInfoAsync(
+            long summonerId,
+            string puuid,
+            int championId,
+            string queueId,
+            int count,
+            string historyFilter,
+            string? queueOverride,
+            Action<string>? stage,
+            CancellationToken cancellationToken
+        )
+        {
             stage?.Invoke("profile");
             var summonerInfo =
                 summonerId != 0
@@ -234,6 +243,39 @@ namespace League.Parsers
             cancellationToken.ThrowIfCancellationRequested();
             _cacheManager.CachePlayerMatch(summonerId, historyFilter, result);
             return result;
+        }
+
+        // 名称隐藏、身份缺失或被混淆的玩家只显示隐藏卡片，不查询战绩。
+        private static bool IsHiddenPlayer(JToken playerData, long summonerId, string puuid)
+        {
+            string nameVisibility = playerData["nameVisibilityType"]?.ToString() ?? "UNHIDDEN";
+            return nameVisibility == "HIDDEN"
+                || string.IsNullOrEmpty(puuid)
+                || summonerId == 0
+                || puuid.StartsWith("OBFUSCATED_")
+                || puuid.StartsWith("HIDDEN_");
+        }
+
+        // 缓存按玩家和模式保存；同一玩家换英雄时复制一份，换上当前英雄的名称和头像。
+        private static async Task<PlayerMatchInfo> CopyCachedForChampionAsync(
+            PlayerMatchInfo cached,
+            int championId,
+            string? queueOverride,
+            CancellationToken cancellationToken
+        )
+        {
+            var copy = cached.CopyForChampion(championId);
+            copy.Player.ChampionId = championId;
+            copy.Player.ChampionName = Globals.resLoading.GetChampionById(championId)?.Name ?? "Unknown";
+            if (queueOverride == null)
+            {
+                copy.Player.Avatar = await Globals
+                    .resLoading.GetChampionIconAsync(championId)
+                    .WaitAsync(cancellationToken);
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            return copy;
         }
 
         private void CalculatePlayerBehavior(PlayerMatchInfo info)

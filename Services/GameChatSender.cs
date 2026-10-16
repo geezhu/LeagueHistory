@@ -41,33 +41,11 @@ namespace League.Services
                 progress?.Invoke(stage, message);
             }
 
-            if (_mainForm.IsDisposed)
+            if (_mainForm.IsDisposed || !CanStartSend(Report, stillCurrent, cancellationToken))
             {
                 return;
             }
 
-            if (cancellationToken.IsCancellationRequested || stillCurrent?.Invoke() == false)
-            {
-                Report("cancelled", "未发送：对局或发送请求已变化。");
-                return;
-            }
-            if (!GameInputService.HasInputPermission())
-            {
-                Report("permission", "未发送：请以管理员身份重新启动 League，游戏内快捷键和输入需要相应权限。");
-                return;
-            }
-            if (_isSendingMessage)
-            {
-                Report("busy", "未发送：上一条消息仍在处理，请稍后重试。");
-                return;
-            }
-            var foreground = GameInputService.GetGameForegroundState();
-            if (!foreground.IsGame)
-            {
-                Report("foreground", "未发送：" + foreground.Reason + "。");
-                return;
-            }
-            Report("foreground-ok", foreground.Reason + "。");
             _isSendingMessage = true;
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(25));
@@ -91,52 +69,12 @@ namespace League.Services
                     Report("cancelled", "未发送：对局或发送请求已变化。");
                     return;
                 }
-                // Release Ctrl before Enter so the chord cannot change the chat channel.
-                var until = DateTime.UtcNow.AddSeconds(2);
-                if (!GameInputService.ModifiersReleased())
+                if (!await WaitForModifiersReleasedAsync(Report, timeout.Token))
                 {
-                    Report("modifiers", "请松开 Ctrl、Shift、Alt、Win，等待发送（最多 2 秒）。");
-                }
-
-                while (!GameInputService.ModifiersReleased() && DateTime.UtcNow < until)
-                {
-                    await Task.Delay(30, timeout.Token);
-                }
-
-                if (!GameInputService.ModifiersReleased())
-                {
-                    Report("modifiers", "未发送：Ctrl、Shift、Alt 或 Win 在等待后仍未松开。");
                     return;
                 }
-                string? stopped = null;
-                var input = new GameInputService();
-                Report("input", $"正在输入 {messages.Count} 条消息，请保持游戏窗口在前台。");
-                bool completed = await input.SendInGameMessageAsync(
-                    string.Join("\n", messages),
-                    () =>
-                    {
-                        var current = GameInputService.GetGameForegroundState();
-                        stopped =
-                            _mainForm.IsDisposed ? "程序正在关闭"
-                            : timeout.IsCancellationRequested ? "发送超时"
-                            : stillCurrent?.Invoke() == false ? "对局或发送请求已变化"
-                            : !current.IsGame ? current.Reason
-                            : !GameInputService.ModifiersReleased() ? "发送时按下了 Ctrl、Shift、Alt 或 Win"
-                            : null;
-                        return stopped == null;
-                    }
-                );
-                if (completed)
-                {
-                    Report("input-complete", "键盘输入已完成，请查看游戏聊天（无法确认服务器是否接收）。");
-                }
-                else
-                {
-                    Report(
-                        "input-stopped",
-                        "发送未完成，可能已输入部分内容：" + (stopped ?? input.LastFailureReason ?? "输入未完成")
-                    );
-                }
+
+                await TypeMessagesAsync(messages, Report, stillCurrent, timeout);
             }
             catch (OperationCanceledException)
             {
@@ -156,6 +94,106 @@ namespace League.Services
             finally
             {
                 _isSendingMessage = false;
+            }
+        }
+
+        /// <summary>
+        /// 开始读取数据前的检查：请求仍有效、有输入权限、没有正在发送的消息、游戏窗口在前台。
+        /// </summary>
+        private bool CanStartSend(
+            Action<string, string> report,
+            Func<bool>? stillCurrent,
+            CancellationToken cancellationToken
+        )
+        {
+            if (cancellationToken.IsCancellationRequested || stillCurrent?.Invoke() == false)
+            {
+                report("cancelled", "未发送：对局或发送请求已变化。");
+                return false;
+            }
+            if (!GameInputService.HasInputPermission())
+            {
+                report("permission", "未发送：请以管理员身份重新启动 League，游戏内快捷键和输入需要相应权限。");
+                return false;
+            }
+            if (_isSendingMessage)
+            {
+                report("busy", "未发送：上一条消息仍在处理，请稍后重试。");
+                return false;
+            }
+            var foreground = GameInputService.GetGameForegroundState();
+            if (!foreground.IsGame)
+            {
+                report("foreground", "未发送：" + foreground.Reason + "。");
+                return false;
+            }
+            report("foreground-ok", foreground.Reason + "。");
+            return true;
+        }
+
+        // Release Ctrl before Enter so the chord cannot change the chat channel.
+        private static async Task<bool> WaitForModifiersReleasedAsync(
+            Action<string, string> report,
+            CancellationToken cancellationToken
+        )
+        {
+            var until = DateTime.UtcNow.AddSeconds(2);
+            if (!GameInputService.ModifiersReleased())
+            {
+                report("modifiers", "请松开 Ctrl、Shift、Alt、Win，等待发送（最多 2 秒）。");
+            }
+
+            while (!GameInputService.ModifiersReleased() && DateTime.UtcNow < until)
+            {
+                await Task.Delay(30, cancellationToken);
+            }
+
+            if (!GameInputService.ModifiersReleased())
+            {
+                report("modifiers", "未发送：Ctrl、Shift、Alt 或 Win 在等待后仍未松开。");
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// 逐条输入；每一步都确认程序未关闭、未超时、请求仍有效、游戏仍在前台且没有按下修饰键，否则停止。
+        /// </summary>
+        private async Task TypeMessagesAsync(
+            IReadOnlyList<string> messages,
+            Action<string, string> report,
+            Func<bool>? stillCurrent,
+            CancellationTokenSource timeout
+        )
+        {
+            string? stopped = null;
+            var input = new GameInputService();
+            report("input", $"正在输入 {messages.Count} 条消息，请保持游戏窗口在前台。");
+            bool completed = await input.SendInGameMessageAsync(
+                string.Join("\n", messages),
+                () =>
+                {
+                    var current = GameInputService.GetGameForegroundState();
+                    stopped =
+                        _mainForm.IsDisposed ? "程序正在关闭"
+                        : timeout.IsCancellationRequested ? "发送超时"
+                        : stillCurrent?.Invoke() == false ? "对局或发送请求已变化"
+                        : !current.IsGame ? current.Reason
+                        : !GameInputService.ModifiersReleased() ? "发送时按下了 Ctrl、Shift、Alt 或 Win"
+                        : null;
+                    return stopped == null;
+                }
+            );
+            if (completed)
+            {
+                report("input-complete", "键盘输入已完成，请查看游戏聊天（无法确认服务器是否接收）。");
+            }
+            else
+            {
+                report(
+                    "input-stopped",
+                    "发送未完成，可能已输入部分内容：" + (stopped ?? input.LastFailureReason ?? "输入未完成")
+                );
             }
         }
 

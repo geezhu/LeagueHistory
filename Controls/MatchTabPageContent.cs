@@ -227,8 +227,7 @@ namespace League.Controls
                     if (count <= 0)
                     {
                         ShowEmptyMessage("已到达API接口查询上限（最多200场），没有更多比赛记录了");
-                        SafeSetEnabled(btnPrev, _currentPage > 1);
-                        SafeSetEnabled(btnNext, false);
+                        DisableNextPage();
                         return;
                     }
                 }
@@ -236,21 +235,7 @@ namespace League.Controls
                 // 仅作上限参考，真正是否有下一页看本页返回数量
                 TotalPages = (int)Math.Ceiling(200.0 / (double)_pageSize);
 
-                JArray matches;
-                if (_selectedWin.HasValue)
-                {
-                    matches = await LoadOutcomePage();
-                }
-                else
-                {
-                    matches = await this.LoadDataRequested(_puuid, startIndex, count, _selectedQueueId);
-                    if (matches != null && matches.Count < count)
-                    {
-                        TotalPages = _currentPage;
-                    }
-
-                    SafeInvoke(() => _filterScope.Text = $"第 {_currentPage} 页 · 按时间从新到旧");
-                }
+                JArray matches = await LoadCurrentPageAsync(startIndex, count);
                 Debug.WriteLine(
                     $"收到 {(matches == null ? "null(服务器异常)" : matches.Count.ToString())} 条数据，请求参数: startIndex={startIndex}, count={count}"
                 );
@@ -258,37 +243,14 @@ namespace League.Controls
 
                 if (matches == null)
                 {
-                    ShowErrorMessage(
-                        "战绩服务器异常\n"
-                            + "客户端头像处对局记录查不到，那么这里也查不到，表示正在维护中（一般3-5小时会恢复）..."
-                    );
-                    SafeSetEnabled(btnPrev, _currentPage > 1);
-                    SafeSetEnabled(btnNext, false);
+                    ShowServerUnavailable();
                     return;
                 }
 
                 if (matches.Count == 0)
                 {
-                    if (_currentPage > 1)
-                    {
-                        // 翻到没有数据的页
-                        ShowEmptyMessage("没有更多比赛记录了");
-                    }
-                    else
-                    {
-                        // 第一页就没有
-                        string modeName = GetSelectedFilterText();
-                        // 「全部」时不写【全部】，文案更自然
-                        string msg =
-                            modeName == "全部"
-                                ? "没有匹配的比赛记录或玩家长时间未登录，所以暂时查不到..."
-                                : $"没有匹配的【{modeName}】比赛记录或玩家长时间未登录，所以暂时查不到...";
-
-                        ShowEmptyMessage(msg);
-                    }
-
-                    SafeSetEnabled(btnPrev, _currentPage > 1);
-                    SafeSetEnabled(btnNext, false);
+                    ShowNoMatches();
+                    DisableNextPage();
                     return;
                 }
 
@@ -304,15 +266,7 @@ namespace League.Controls
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("[异常] " + ex.GetType().Name + ": " + ex.Message);
-                Debug.WriteLine(ex.StackTrace);
-                ShowErrorMessage(
-                    "加载失败：战绩服务器异常\n"
-                        + "客户端头像处对局记录查不到，那么这里也查不到\n\n"
-                        + $"详情：{ex.Message}"
-                );
-                SafeSetEnabled(btnPrev, _currentPage > 1);
-                SafeSetEnabled(btnNext, false);
+                ShowLoadFailure(ex);
             }
             finally
             {
@@ -322,6 +276,74 @@ namespace League.Controls
                 // 若你的 SetLoadingState 会强制 Enabled=true，见下面「修改 3」
                 _loadSemaphore.Release();
             }
+        }
+
+        /// <summary>
+        /// 胜负筛选由分页器跨页查找；普通翻页直接请求这一页，返回不足一页时这就是最后一页。null 表示服务器异常。
+        /// </summary>
+        private async Task<JArray> LoadCurrentPageAsync(int startIndex, int count)
+        {
+            if (_selectedWin.HasValue)
+            {
+                return await LoadOutcomePage();
+            }
+
+            var matches = await this.LoadDataRequested(_puuid, startIndex, count, _selectedQueueId);
+            if (matches != null && matches.Count < count)
+            {
+                TotalPages = _currentPage;
+            }
+
+            SafeInvoke(() => _filterScope.Text = $"第 {_currentPage} 页 · 按时间从新到旧");
+            return matches;
+        }
+
+        private void ShowNoMatches()
+        {
+            if (_currentPage > 1)
+            {
+                // 翻到没有数据的页
+                ShowEmptyMessage("没有更多比赛记录了");
+                return;
+            }
+
+            // 第一页就没有；「全部」时不写【全部】，文案更自然
+            string modeName = GetSelectedFilterText();
+            string msg =
+                modeName == "全部"
+                    ? "没有匹配的比赛记录或玩家长时间未登录，所以暂时查不到..."
+                    : $"没有匹配的【{modeName}】比赛记录或玩家长时间未登录，所以暂时查不到...";
+
+            ShowEmptyMessage(msg);
+        }
+
+        // 失败、空页或到达上限时：仍可回到上一页，不能再往后翻。
+        private void DisableNextPage()
+        {
+            SafeSetEnabled(btnPrev, _currentPage > 1);
+            SafeSetEnabled(btnNext, false);
+        }
+
+        // 战绩服务器返回失败（不是「没有战绩」）。
+        private void ShowServerUnavailable()
+        {
+            ShowErrorMessage(
+                "战绩服务器异常\n"
+                    + "客户端头像处对局记录查不到，那么这里也查不到，表示正在维护中（一般3-5小时会恢复）..."
+            );
+            DisableNextPage();
+        }
+
+        private void ShowLoadFailure(Exception ex)
+        {
+            Debug.WriteLine("[异常] " + ex.GetType().Name + ": " + ex.Message);
+            Debug.WriteLine(ex.StackTrace);
+            ShowErrorMessage(
+                "加载失败：战绩服务器异常\n"
+                    + "客户端头像处对局记录查不到，那么这里也查不到\n\n"
+                    + $"详情：{ex.Message}"
+            );
+            DisableNextPage();
         }
 
         private async Task UpdateMatchList(JArray matches)
@@ -366,46 +388,7 @@ namespace League.Controls
         {
             // Keep the current detail alive while the next page is being parsed.
             var oldPanels = _allParsedPanels.ToArray();
-
-            var panels = await Task.Run(
-                async () =>
-                {
-                    var panelList = new List<Panel>();
-                    int num = 1;
-                    var tasks = matches
-                        .Cast<JObject>()
-                        .Select(match => ParsePanelRequested?.Invoke(match, _puuid, num++))
-                        .ToList();
-
-                    _currentParsingTask = Task.WhenAll(tasks);
-
-                    foreach (var t in tasks)
-                    {
-                        if (token.IsCancellationRequested)
-                        {
-                            break;
-                        }
-
-                        try
-                        {
-                            var panel = await t.ConfigureAwait(false);
-                            if (panel != null)
-                            {
-                                panelList.Add(panel);
-                                _allParsedPanels.Add(new WeakReference(panel)); // 🔥 跟踪
-                            }
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            break;
-                        }
-                    }
-
-                    _currentParsingTask = null;
-                    return panelList;
-                },
-                token
-            );
+            var panels = await Task.Run(() => ParsePanelsAsync(matches, token), token);
 
             // 清理时不再等待解析，取消后晚到的面板由这里释放，不再加入已清理的列表
             if (token.IsCancellationRequested)
@@ -418,58 +401,98 @@ namespace League.Controls
                 return;
             }
 
-            SafeInvoke(
-                flowLayoutPanelRight,
-                () =>
+            SafeInvoke(flowLayoutPanelRight, () => ReplacePanels(panels, oldPanels));
+        }
+
+        // 并行请求解析，按比赛顺序收集面板；取消后停止收集。
+        private async Task<List<Panel>> ParsePanelsAsync(JArray matches, CancellationToken token)
+        {
+            var panelList = new List<Panel>();
+            int num = 1;
+            var tasks = matches
+                .Cast<JObject>()
+                .Select(match => ParsePanelRequested?.Invoke(match, _puuid, num++))
+                .ToList();
+
+            _currentParsingTask = Task.WhenAll(tasks);
+
+            foreach (var t in tasks)
+            {
+                if (token.IsCancellationRequested)
                 {
-                    bool reopenDetail = _detailView != null;
-                    if (reopenDetail)
-                    {
-                        _selectedCard = null;
-                    }
-                    flowLayoutPanelRight.SuspendLayout();
-                    try
-                    {
-                        // 先清理旧的
-                        foreach (Control control in flowLayoutPanelRight.Controls.Cast<Control>().ToArray())
-                        {
-                            if (control is IDisposable disposable)
-                            {
-                                disposable.Dispose();
-                            }
-                        }
-                        flowLayoutPanelRight.Controls.Clear();
+                    break;
+                }
 
-                        // 添加新的
-                        flowLayoutPanelRight.Controls.AddRange(panels.ToArray());
-                        foreach (var reference in oldPanels)
-                        {
-                            if (reference.Target is Control old && !old.IsDisposed)
-                            {
-                                old.Dispose();
-                            }
-
-                            _allParsedPanels.Remove(reference);
-                        }
-                        if (reopenDetail)
-                        {
-                            var first = panels.OfType<MatchListPanel>().FirstOrDefault();
-                            if (first?.MatchInfo != null)
-                            {
-                                OpenInlineMatch(first.MatchInfo);
-                            }
-                            else
-                            {
-                                ReturnToProfile();
-                            }
-                        }
-                    }
-                    finally
+                try
+                {
+                    var panel = await t.ConfigureAwait(false);
+                    if (panel != null)
                     {
-                        flowLayoutPanelRight.ResumeLayout(true);
+                        panelList.Add(panel);
+                        _allParsedPanels.Add(new WeakReference(panel)); // 🔥 跟踪
                     }
                 }
-            );
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+
+            _currentParsingTask = null;
+            return panelList;
+        }
+
+        /// <summary>
+        /// 在 UI 线程换上新一页：释放旧面板；如果正在看详情，改为打开新一页的第一场。
+        /// </summary>
+        private void ReplacePanels(List<Panel> panels, WeakReference[] oldPanels)
+        {
+            bool reopenDetail = _detailView != null;
+            if (reopenDetail)
+            {
+                _selectedCard = null;
+            }
+            flowLayoutPanelRight.SuspendLayout();
+            try
+            {
+                // 先清理旧的
+                foreach (Control control in flowLayoutPanelRight.Controls.Cast<Control>().ToArray())
+                {
+                    if (control is IDisposable disposable)
+                    {
+                        disposable.Dispose();
+                    }
+                }
+                flowLayoutPanelRight.Controls.Clear();
+
+                // 添加新的
+                flowLayoutPanelRight.Controls.AddRange(panels.ToArray());
+                foreach (var reference in oldPanels)
+                {
+                    if (reference.Target is Control old && !old.IsDisposed)
+                    {
+                        old.Dispose();
+                    }
+
+                    _allParsedPanels.Remove(reference);
+                }
+                if (reopenDetail)
+                {
+                    var first = panels.OfType<MatchListPanel>().FirstOrDefault();
+                    if (first?.MatchInfo != null)
+                    {
+                        OpenInlineMatch(first.MatchInfo);
+                    }
+                    else
+                    {
+                        ReturnToProfile();
+                    }
+                }
+            }
+            finally
+            {
+                flowLayoutPanelRight.ResumeLayout(true);
+            }
         }
 
         public async Task SafeInitializeAsync(string puuid, string? summonerId = null)

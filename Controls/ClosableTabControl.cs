@@ -102,111 +102,67 @@ namespace League.Controls
 
             for (int i = 0; i < TabCount; i++)
             {
-                Rectangle tabRect = GetTabRect(i);
-                bool isSelected = i == SelectedIndex;
-
-                // 在OnPaint方法中修改选中标签页样式
-                if (isSelected)
-                {
-                    using (var brush = new LinearGradientBrush(tabRect, Color.White, Color.LightBlue, 45f))
-                    {
-                        e.Graphics.FillRectangle(brush, tabRect);
-                    }
-                }
-                else
-                {
-                    using (var brush = new SolidBrush(Color.FromArgb(240, 240, 240)))
-                    {
-                        e.Graphics.FillRectangle(brush, tabRect);
-                    }
-                }
-
-                Color backColor = isSelected ? Color.White : Color.LightGray;
-                Color borderColor = Color.Gray;
-
-                using (Brush b = new SolidBrush(backColor))
-                {
-                    e.Graphics.FillRectangle(b, tabRect);
-                }
-
-                using (Pen p = new Pen(borderColor))
-                {
-                    e.Graphics.DrawRectangle(p, tabRect);
-                }
-
-                // 绘制文字
-                string tabText = TabPages[i].Text;
-                Rectangle textRect = new Rectangle(
-                    tabRect.X + 5,
-                    tabRect.Y + 4,
-                    tabRect.Width - CloseButtonSize - 10,
-                    tabRect.Height - 8
-                );
-                TextRenderer.DrawText(
-                    e.Graphics,
-                    tabText,
-                    Font,
-                    textRect,
-                    Color.Black,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter
-                );
-
-                // 绘制关闭按钮
-                Rectangle closeRect = new Rectangle(
-                    tabRect.Right - CloseButtonSize - 4,
-                    tabRect.Top + (tabRect.Height - CloseButtonSize) / 2,
-                    CloseButtonSize,
-                    CloseButtonSize
-                );
-                _closeButtonBounds[i] = closeRect;
-
-                using (Pen pen = new Pen(Color.DarkGray, 2))
-                {
-                    e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                    e.Graphics.DrawLine(
-                        pen,
-                        closeRect.Left + 3,
-                        closeRect.Top + 3,
-                        closeRect.Right - 3,
-                        closeRect.Bottom - 3
-                    );
-                    e.Graphics.DrawLine(
-                        pen,
-                        closeRect.Right - 3,
-                        closeRect.Top + 3,
-                        closeRect.Left + 3,
-                        closeRect.Bottom - 3
-                    );
-                }
+                PaintTab(e.Graphics, i);
             }
 
-            // 绘制标签页内容区域边框
-            // 在 OnPaint 方法中添加选中项检查
             if (SelectedIndex >= 0 && SelectedIndex < TabPages.Count)
             {
-                // 绘制标签页内容区域边框
-                Rectangle pageBounds = TabPages[SelectedIndex].Bounds;
-                using (Pen borderPen = new Pen(Color.Gray))
-                {
-                    e.Graphics.DrawRectangle(
-                        borderPen,
-                        pageBounds.X - 2,
-                        pageBounds.Y - 2,
-                        pageBounds.Width + 3,
-                        pageBounds.Height + 3
-                    );
-                }
-                using (Pen borderPen = new Pen(Color.Gray))
-                {
-                    e.Graphics.DrawRectangle(
-                        borderPen,
-                        pageBounds.X - 2,
-                        pageBounds.Y - 2,
-                        pageBounds.Width + 3,
-                        pageBounds.Height + 3
-                    );
-                }
+                PaintPageBorder(e.Graphics, TabPages[SelectedIndex].Bounds);
             }
+        }
+
+        // 选中页白底、其他页浅灰底，灰色边框；标题右侧留出关闭按钮的位置。
+        private void PaintTab(Graphics g, int index)
+        {
+            Rectangle tabRect = GetTabRect(index);
+            using (Brush b = new SolidBrush(index == SelectedIndex ? Color.White : Color.LightGray))
+            {
+                g.FillRectangle(b, tabRect);
+            }
+
+            using (Pen p = new Pen(Color.Gray))
+            {
+                g.DrawRectangle(p, tabRect);
+            }
+
+            Rectangle textRect = new Rectangle(
+                tabRect.X + 5,
+                tabRect.Y + 4,
+                tabRect.Width - CloseButtonSize - 10,
+                tabRect.Height - 8
+            );
+            TextRenderer.DrawText(
+                g,
+                TabPages[index].Text,
+                Font,
+                textRect,
+                Color.Black,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter
+            );
+
+            PaintCloseButton(g, index, tabRect);
+        }
+
+        private void PaintCloseButton(Graphics g, int index, Rectangle tabRect)
+        {
+            Rectangle closeRect = new Rectangle(
+                tabRect.Right - CloseButtonSize - 4,
+                tabRect.Top + (tabRect.Height - CloseButtonSize) / 2,
+                CloseButtonSize,
+                CloseButtonSize
+            );
+            _closeButtonBounds[index] = closeRect;
+
+            using Pen pen = new Pen(Color.DarkGray, 2);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.DrawLine(pen, closeRect.Left + 3, closeRect.Top + 3, closeRect.Right - 3, closeRect.Bottom - 3);
+            g.DrawLine(pen, closeRect.Right - 3, closeRect.Top + 3, closeRect.Left + 3, closeRect.Bottom - 3);
+        }
+
+        private static void PaintPageBorder(Graphics g, Rectangle pageBounds)
+        {
+            using Pen borderPen = new Pen(Color.Gray);
+            g.DrawRectangle(borderPen, pageBounds.X - 2, pageBounds.Y - 2, pageBounds.Width + 3, pageBounds.Height + 3);
         }
 
         protected override void OnDrawItem(DrawItemEventArgs e)

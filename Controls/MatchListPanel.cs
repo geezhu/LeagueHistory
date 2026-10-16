@@ -226,55 +226,64 @@ namespace League.Controls
 
             if (Compact)
             {
-                var color = MatchInfo.ResultColor;
-                e.Graphics.Clear(SelectedMatch ? Color.FromArgb(232, 241, 253) : Color.White);
-                using var stripe = new SolidBrush(color);
-                if (SelectedMatch)
-                {
-                    e.Graphics.FillRectangle(stripe, 0, 0, 3, Height);
-                }
-
-                if (MatchInfo.HeroIcon != null)
-                {
-                    e.Graphics.DrawImage(MatchInfo.HeroIcon, new Rectangle(6, 11, 40, 40));
-                }
-
-                void Draw(string text, int x, int y, int width, Color ink) =>
-                    TextRenderer.DrawText(
-                        e.Graphics,
-                        text,
-                        Font,
-                        new Rectangle(x, y, Math.Max(1, width), 20),
-                        ink,
-                        TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis
-                    );
-                var resultArea = new Rectangle(Math.Max(0, Width - 100), 0, 100, Height);
-                using var resultBackground = new System.Drawing.Drawing2D.LinearGradientBrush(
-                    resultArea,
-                    Color.FromArgb(0, color),
-                    Color.FromArgb(32, color),
-                    0f
-                );
-                e.Graphics.FillRectangle(resultBackground, resultArea);
-                Draw(MatchInfo.Mode, 50, 9, Width - 112, Color.FromArgb(36, 48, 65));
-                string date = DateTime.TryParse(MatchInfo.GameTime, out var played)
-                    ? played.ToString("MM-dd")
-                    : MatchInfo.GameTime;
-                Draw(date, 50, 31, Width - 112, Color.FromArgb(111, 123, 139));
-                using var resultFont = new Font(Font.FontFamily, 12f, FontStyle.Bold);
-                TextRenderer.DrawText(
-                    e.Graphics,
-                    MatchInfo.ResultText,
-                    resultFont,
-                    new Rectangle(Width - 58, 0, 56, Height),
-                    color,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
-                );
-                _detailsRect = ClientRectangle;
+                PaintCompact(e.Graphics);
                 return;
             }
 
-            var g = e.Graphics;
+            PaintFull(e.Graphics);
+        }
+
+        private void PaintCompact(Graphics g)
+        {
+            var color = MatchInfo.ResultColor;
+            g.Clear(SelectedMatch ? Color.FromArgb(232, 241, 253) : Color.White);
+            using var stripe = new SolidBrush(color);
+            if (SelectedMatch)
+            {
+                g.FillRectangle(stripe, 0, 0, 3, Height);
+            }
+
+            if (MatchInfo.HeroIcon != null)
+            {
+                g.DrawImage(MatchInfo.HeroIcon, new Rectangle(6, 11, 40, 40));
+            }
+
+            void Draw(string text, int x, int y, int width, Color ink) =>
+                TextRenderer.DrawText(
+                    g,
+                    text,
+                    Font,
+                    new Rectangle(x, y, Math.Max(1, width), 20),
+                    ink,
+                    TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis
+                );
+            var resultArea = new Rectangle(Math.Max(0, Width - 100), 0, 100, Height);
+            using var resultBackground = new System.Drawing.Drawing2D.LinearGradientBrush(
+                resultArea,
+                Color.FromArgb(0, color),
+                Color.FromArgb(32, color),
+                0f
+            );
+            g.FillRectangle(resultBackground, resultArea);
+            Draw(MatchInfo.Mode, 50, 9, Width - 112, Color.FromArgb(36, 48, 65));
+            string date = DateTime.TryParse(MatchInfo.GameTime, out var played)
+                ? played.ToString("MM-dd")
+                : MatchInfo.GameTime;
+            Draw(date, 50, 31, Width - 112, Color.FromArgb(111, 123, 139));
+            using var resultFont = new Font(Font.FontFamily, 12f, FontStyle.Bold);
+            TextRenderer.DrawText(
+                g,
+                MatchInfo.ResultText,
+                resultFont,
+                new Rectangle(Width - 58, 0, 56, Height),
+                color,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
+            );
+            _detailsRect = ClientRectangle;
+        }
+
+        private void PaintFull(Graphics g)
+        {
             var state = g.Save();
             try
             {
@@ -286,137 +295,197 @@ namespace League.Controls
                 g.Clear(Color.White);
                 using var border = new Pen(Color.FromArgb(225, 231, 239));
                 g.DrawRectangle(border, 0, 0, width - 1, height - 1);
-                Color result = MatchInfo.ResultColor;
-                using var resultBrush = new SolidBrush(result);
+                using var resultBrush = new SolidBrush(MatchInfo.ResultColor);
                 g.FillRectangle(resultBrush, 0, 0, 4, height);
-                // Layout is expressed in 96-DPI pixels; the transform applies display scaling once.
-                using var normal = new Font("Microsoft YaHei UI", 12f, FontStyle.Regular, GraphicsUnit.Pixel);
-                using var strong = new Font("Microsoft YaHei UI", 13.33f, FontStyle.Bold, GraphicsUnit.Pixel);
-                using var headline = new Font("Microsoft YaHei UI", 21.33f, FontStyle.Bold, GraphicsUnit.Pixel);
-                using var small = new Font("Microsoft YaHei UI", 10.67f, FontStyle.Regular, GraphicsUnit.Pixel);
-                using var format = new StringFormat
-                {
-                    Trimming = StringTrimming.EllipsisCharacter,
-                    FormatFlags = StringFormatFlags.NoWrap,
-                };
+                using var canvas = new RowCanvas(this, g);
 
-                void Text(string? text, Font font, Color color, int x, int y, int w, int h = 24)
-                {
-                    using var brush = new SolidBrush(color);
-                    g.DrawString(text ?? "", font, brush, new RectangleF(x, y, w, h), format);
-                }
-                void Icon(Image? image, int x, int y, int size, string? hint, bool dark = false)
-                {
-                    using var fill = new SolidBrush(dark ? Color.FromArgb(40, 49, 63) : Color.FromArgb(239, 243, 248));
-                    g.FillRectangle(fill, x, y, size, size);
-                    if (image != null)
-                    {
-                        g.DrawImage(image, x, y, size, size);
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(hint))
-                    {
-                        _imageHints.Add((ScreenRect(x, y, size, size), hint));
-                    }
-                }
-
-                Text(MatchInfo.ResultText, strong, result, 16, 18, 64);
-                Text(MatchInfo.DurationText, small, Muted, 16, 47, 65);
-                Text($"#{MatchInfo.Index:00}", small, Muted, 16, 78, 58);
-                Icon(MatchInfo.HeroIcon, 88, 18, 52, MatchInfo.ChampionName);
-                Text(MatchInfo.ChampionName, strong, Ink, 150, 16, 120);
-                Text(MatchInfo.Mode, normal, Muted, 150, 43, 120);
-                Text(MatchInfo.GameTime, small, Muted, 88, 80, 184);
-
-                Text($"{MatchInfo.Kills} / {MatchInfo.Deaths} / {MatchInfo.Assists}", headline, Ink, 282, 13, 194, 34);
-                for (int i = 0; i < 6; i++)
-                {
-                    var item = MatchInfo.Items?.ElementAtOrDefault(i);
-                    Icon(
-                        item?.Icon,
-                        282 + i * 31,
-                        62,
-                        28,
-                        item == null ? null : item.Name + "\n" + StripHtmlTags(item.Description)
-                    );
-                }
-                for (int i = 0; i < 2; i++)
-                {
-                    Icon(
-                        MatchInfo.SummonerSpells?.ElementAtOrDefault(i),
-                        488 + i * 28,
-                        18,
-                        24,
-                        MatchInfo.SpellNames?.ElementAtOrDefault(i)
-                            + "\n"
-                            + StripHtmlTags(MatchInfo.SpellDescriptions?.ElementAtOrDefault(i))
-                    );
-                }
-
-                bool augments = MatchInfo.Mode?.Contains("海克斯") == true || MatchInfo.QueueId == "q_2400";
-                for (int i = 0; i < 6; i++)
-                {
-                    var rune =
-                        augments ? MatchInfo.Augments?.ElementAtOrDefault(i)
-                        : i < 4 ? MatchInfo.PrimaryRunes?.ElementAtOrDefault(i)
-                        : MatchInfo.SecondaryRunes?.ElementAtOrDefault(i - 4);
-                    Icon(
-                        rune?.Icon,
-                        552 + i * (augments ? 27 : 23),
-                        18,
-                        augments ? 24 : 21,
-                        rune == null ? null : rune.name + "\n" + StripHtmlTags(rune.longDesc ?? rune.Description),
-                        dark: true
-                    );
-                }
-                Text(augments ? "海克斯强化" : "技能与符文", small, Muted, 488, 45, 190);
-                _detailsRect = ScreenRect(488, 72, 88, 26);
-                _replayRect = ScreenRect(582, 72, 90, 26);
-                Text("查看详情 →", normal, Accent, 488, 73, 90);
-                Text(MatchInfo.IsReplayDownloaded ? "播放回放" : "下载回放", normal, Accent, 582, 73, 90);
-
+                PaintIdentity(canvas);
+                PaintItems(canvas);
+                bool augments = PaintSpellsAndRunes(canvas);
                 bool showTeams = width >= 980;
-                int statsX = augments ? 728 : 704;
-                int statsWidth = showTeams ? (int)width - 158 - statsX : (int)width - 16 - statsX;
-                Text("伤害  " + MatchInfo.DamageText, small, Ink, statsX, 18, statsWidth);
-                Text("经济  " + MatchInfo.GoldText, small, Muted, statsX, 44, statsWidth);
-                Text("参团  " + MatchInfo.KPPercentage, small, Muted, statsX, 70, statsWidth);
+                PaintStatistics(canvas, width, augments, showTeams);
                 if (showTeams)
                 {
-                    int teamX = (int)width - 148;
-                    for (int row = 0; row < 2; row++)
-                    {
-                        var team = row == 0 ? MatchInfo.RedTeam : MatchInfo.BlueTeam;
-                        if (team == null)
-                        {
-                            continue;
-                        }
-
-                        for (int i = 0; i < Math.Min(5, team.Count); i++)
-                        {
-                            var player = team[i];
-                            if (player == null)
-                            {
-                                continue;
-                            }
-
-                            int x = teamX + i * 27,
-                                y = 18 + row * 34;
-                            Icon(player.Avatar, x, y, 24, player.FullName);
-                            _playerRegions.Add(Tuple.Create(ScreenRect(x, y, 24, 24), player));
-                            if (player.IsSelf)
-                            {
-                                using var selfPen = new Pen(Accent, 2);
-                                g.DrawRectangle(selfPen, x, y, 24, 24);
-                            }
-                        }
-                    }
-                    Text("双方阵容", small, Muted, teamX, 82, 140);
+                    PaintTeams(canvas, width);
                 }
             }
             finally
             {
                 g.Restore(state);
+            }
+        }
+
+        private void PaintIdentity(RowCanvas canvas)
+        {
+            canvas.Text(MatchInfo.ResultText, canvas.Strong, MatchInfo.ResultColor, 16, 18, 64);
+            canvas.Text(MatchInfo.DurationText, canvas.Small, Muted, 16, 47, 65);
+            canvas.Text($"#{MatchInfo.Index:00}", canvas.Small, Muted, 16, 78, 58);
+            canvas.Icon(MatchInfo.HeroIcon, 88, 18, 52, MatchInfo.ChampionName);
+            canvas.Text(MatchInfo.ChampionName, canvas.Strong, Ink, 150, 16, 120);
+            canvas.Text(MatchInfo.Mode, canvas.Normal, Muted, 150, 43, 120);
+            canvas.Text(MatchInfo.GameTime, canvas.Small, Muted, 88, 80, 184);
+        }
+
+        private void PaintItems(RowCanvas canvas)
+        {
+            canvas.Text(
+                $"{MatchInfo.Kills} / {MatchInfo.Deaths} / {MatchInfo.Assists}",
+                canvas.Headline,
+                Ink,
+                282,
+                13,
+                194,
+                34
+            );
+            for (int i = 0; i < 6; i++)
+            {
+                var item = MatchInfo.Items?.ElementAtOrDefault(i);
+                canvas.Icon(
+                    item?.Icon,
+                    282 + i * 31,
+                    62,
+                    28,
+                    item == null ? null : item.Name + "\n" + StripHtmlTags(item.Description)
+                );
+            }
+        }
+
+        /// <summary>
+        /// 召唤师技能、符文或海克斯强化，以及详情和回放入口；返回本局是否显示海克斯强化。
+        /// </summary>
+        private bool PaintSpellsAndRunes(RowCanvas canvas)
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                canvas.Icon(
+                    MatchInfo.SummonerSpells?.ElementAtOrDefault(i),
+                    488 + i * 28,
+                    18,
+                    24,
+                    MatchInfo.SpellNames?.ElementAtOrDefault(i)
+                        + "\n"
+                        + StripHtmlTags(MatchInfo.SpellDescriptions?.ElementAtOrDefault(i))
+                );
+            }
+
+            bool augments = MatchInfo.Mode?.Contains("海克斯") == true || MatchInfo.QueueId == "q_2400";
+            for (int i = 0; i < 6; i++)
+            {
+                var rune =
+                    augments ? MatchInfo.Augments?.ElementAtOrDefault(i)
+                    : i < 4 ? MatchInfo.PrimaryRunes?.ElementAtOrDefault(i)
+                    : MatchInfo.SecondaryRunes?.ElementAtOrDefault(i - 4);
+                canvas.Icon(
+                    rune?.Icon,
+                    552 + i * (augments ? 27 : 23),
+                    18,
+                    augments ? 24 : 21,
+                    rune == null ? null : rune.name + "\n" + StripHtmlTags(rune.longDesc ?? rune.Description),
+                    dark: true
+                );
+            }
+            canvas.Text(augments ? "海克斯强化" : "技能与符文", canvas.Small, Muted, 488, 45, 190);
+            _detailsRect = ScreenRect(488, 72, 88, 26);
+            _replayRect = ScreenRect(582, 72, 90, 26);
+            canvas.Text("查看详情 →", canvas.Normal, Accent, 488, 73, 90);
+            canvas.Text(MatchInfo.IsReplayDownloaded ? "播放回放" : "下载回放", canvas.Normal, Accent, 582, 73, 90);
+            return augments;
+        }
+
+        private void PaintStatistics(RowCanvas canvas, float width, bool augments, bool showTeams)
+        {
+            int statsX = augments ? 728 : 704;
+            int statsWidth = showTeams ? (int)width - 158 - statsX : (int)width - 16 - statsX;
+            canvas.Text("伤害  " + MatchInfo.DamageText, canvas.Small, Ink, statsX, 18, statsWidth);
+            canvas.Text("经济  " + MatchInfo.GoldText, canvas.Small, Muted, statsX, 44, statsWidth);
+            canvas.Text("参团  " + MatchInfo.KPPercentage, canvas.Small, Muted, statsX, 70, statsWidth);
+        }
+
+        private void PaintTeams(RowCanvas canvas, float width)
+        {
+            int teamX = (int)width - 148;
+            for (int row = 0; row < 2; row++)
+            {
+                var team = row == 0 ? MatchInfo.RedTeam : MatchInfo.BlueTeam;
+                if (team == null)
+                {
+                    continue;
+                }
+
+                for (int i = 0; i < Math.Min(5, team.Count); i++)
+                {
+                    var player = team[i];
+                    if (player == null)
+                    {
+                        continue;
+                    }
+
+                    int x = teamX + i * 27,
+                        y = 18 + row * 34;
+                    canvas.Icon(player.Avatar, x, y, 24, player.FullName);
+                    _playerRegions.Add(Tuple.Create(ScreenRect(x, y, 24, 24), player));
+                    if (player.IsSelf)
+                    {
+                        using var selfPen = new Pen(Accent, 2);
+                        canvas.Graphics.DrawRectangle(selfPen, x, y, 24, 24);
+                    }
+                }
+            }
+            canvas.Text("双方阵容", canvas.Small, Muted, teamX, 82, 140);
+        }
+
+        /// <summary>
+        /// 完整战绩行的绘制资源：布局用 96-DPI 像素表示，坐标变换统一负责缩放；图标提示登记到所属行。
+        /// </summary>
+        private sealed class RowCanvas : IDisposable
+        {
+            private readonly MatchListPanel _owner;
+            private readonly StringFormat _format = new()
+            {
+                Trimming = StringTrimming.EllipsisCharacter,
+                FormatFlags = StringFormatFlags.NoWrap,
+            };
+
+            public RowCanvas(MatchListPanel owner, Graphics graphics)
+            {
+                _owner = owner;
+                Graphics = graphics;
+            }
+
+            public Graphics Graphics { get; }
+            public Font Normal { get; } = new("Microsoft YaHei UI", 12f, FontStyle.Regular, GraphicsUnit.Pixel);
+            public Font Strong { get; } = new("Microsoft YaHei UI", 13.33f, FontStyle.Bold, GraphicsUnit.Pixel);
+            public Font Headline { get; } = new("Microsoft YaHei UI", 21.33f, FontStyle.Bold, GraphicsUnit.Pixel);
+            public Font Small { get; } = new("Microsoft YaHei UI", 10.67f, FontStyle.Regular, GraphicsUnit.Pixel);
+
+            public void Text(string? text, Font font, Color color, int x, int y, int w, int h = 24)
+            {
+                using var brush = new SolidBrush(color);
+                Graphics.DrawString(text ?? "", font, brush, new RectangleF(x, y, w, h), _format);
+            }
+
+            public void Icon(Image? image, int x, int y, int size, string? hint, bool dark = false)
+            {
+                using var fill = new SolidBrush(dark ? Color.FromArgb(40, 49, 63) : Color.FromArgb(239, 243, 248));
+                Graphics.FillRectangle(fill, x, y, size, size);
+                if (image != null)
+                {
+                    Graphics.DrawImage(image, x, y, size, size);
+                }
+
+                if (!string.IsNullOrWhiteSpace(hint))
+                {
+                    _owner._imageHints.Add((_owner.ScreenRect(x, y, size, size), hint));
+                }
+            }
+
+            public void Dispose()
+            {
+                _format.Dispose();
+                Normal.Dispose();
+                Strong.Dispose();
+                Headline.Dispose();
+                Small.Dispose();
             }
         }
 
