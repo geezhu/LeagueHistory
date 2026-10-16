@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace League.Services;
 
 public sealed record ChatSendStatus(DateTime Time, string Stage, string Message);
@@ -7,38 +5,31 @@ public sealed record ChatSendStatus(DateTime Time, string Stage, string Message)
 /// <summary>Contains diagnostic stages only, never message bodies or authentication data.</summary>
 public sealed class ChatSendDiagnostics
 {
-    public static ChatSendDiagnostics Shared { get; } =
-        new(
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "League",
-                "Logs",
-                $"tier-chat-{Environment.ProcessId}.log"
-            )
-        );
+    // One file for every process; the process ID is on each line. Per-process files used to pile up without cleanup.
+    public static ChatSendDiagnostics Shared { get; } = new(Path.Combine(LogRetention.LogsDirectory, "tier-chat.log"));
     private readonly object _gate = new();
-    private readonly Queue<string> _pending = new();
-    private Task _writer = Task.CompletedTask;
-    private bool _writing;
+    private readonly LogFileWriter _log;
     public string LogPath { get; }
-    public string? LogError { get; private set; }
+    public string? LogError => _log.LastError;
     public ChatSendStatus Current { get; private set; } =
         new(DateTime.Now, "ready", "等待发送：游戏内 F9 / F11，或 Game Bar 的「发送」。");
     public event Action? Changed;
 
-    public ChatSendDiagnostics(string path) => LogPath = path;
+    public ChatSendDiagnostics(string path)
+    {
+        LogPath = path;
+        _log = new LogFileWriter(path, 256 * 1024, 1000);
+    }
 
     public void Report(string stage, string message)
     {
+        // Current and the queued line change together so the status and the log keep the same order.
         lock (_gate)
         {
             Current = new(DateTime.Now, stage, message.Replace('\r', ' ').Replace('\n', ' '));
-            _pending.Enqueue($"{Current.Time:yyyy-MM-dd HH:mm:ss.fff} [{stage}] {Current.Message}");
-            if (!_writing)
-            {
-                _writing = true;
-                _writer = Task.Run(WritePending);
-            }
+            _log.Write(
+                $"{Current.Time:yyyy-MM-dd HH:mm:ss.fff} pid={Environment.ProcessId} [{stage}] {Current.Message}"
+            );
         }
         foreach (var subscriber in Changed?.GetInvocationList() ?? [])
         {
@@ -53,55 +44,5 @@ public sealed class ChatSendDiagnostics
         }
     }
 
-    public async Task FlushAsync()
-    {
-        while (true)
-        {
-            Task writer;
-            lock (_gate)
-            {
-                writer = _writer;
-            }
-
-            await writer;
-            lock (_gate)
-            {
-                if (!_writing)
-                {
-                    return;
-                }
-            }
-        }
-    }
-
-    private void WritePending()
-    {
-        while (true)
-        {
-            string line;
-            lock (_gate)
-            {
-                if (!_pending.TryDequeue(out line!))
-                {
-                    _writing = false;
-                    return;
-                }
-            }
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
-                if (File.Exists(LogPath) && new FileInfo(LogPath).Length > 256 * 1024)
-                {
-                    File.Move(LogPath, LogPath + ".previous", true);
-                }
-
-                File.AppendAllText(LogPath, line + Environment.NewLine, Encoding.UTF8);
-                LogError = null;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                LogError = "日志保存失败：" + ex.GetType().Name;
-            }
-        }
-    }
+    public Task FlushAsync() => _log.FlushAsync();
 }

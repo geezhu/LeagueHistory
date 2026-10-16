@@ -1,4 +1,4 @@
-namespace League
+﻿namespace League
 {
     internal static class Program
     {
@@ -26,6 +26,7 @@ namespace League
             // To customize application configuration such as set high DPI settings or default font,
             // see https://aka.ms/applicationconfiguration.
             ApplicationConfiguration.Initialize();
+            Services.LogRetention.CleanInBackground();
             Application.Run(new FormMain());
             //Application.Run(new Search());
         }

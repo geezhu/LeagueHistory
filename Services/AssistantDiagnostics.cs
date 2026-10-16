@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace League.Services;
 
 /// <summary>
@@ -8,96 +6,24 @@ namespace League.Services;
 /// </summary>
 public sealed class AssistantDiagnostics
 {
-    public static AssistantDiagnostics Shared { get; } =
-        new(
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "League",
-                "Logs",
-                "assistant.log"
-            )
-        );
-    private readonly object _gate = new();
-    private readonly Queue<string> _pending = new();
-    private Task _writer = Task.CompletedTask;
-    private bool _writing;
+    public static AssistantDiagnostics Shared { get; } = new(Path.Combine(LogRetention.LogsDirectory, "assistant.log"));
+    private readonly LogFileWriter _log;
     public string LogPath { get; }
 
-    public AssistantDiagnostics(string path) => LogPath = path;
+    public AssistantDiagnostics(string path)
+    {
+        LogPath = path;
+        _log = new LogFileWriter(path, 256 * 1024, 200);
+    }
 
     public void Report(string stage, Exception error)
     {
         var root = error.GetBaseException();
-        string line =
+        _log.Write(
             $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} pid={Environment.ProcessId} stage={stage} "
-            + $"error={error.GetType().Name} root={root.GetType().Name} message={root.Message}";
-        lock (_gate)
-        {
-            if (_pending.Count >= 200)
-            {
-                _pending.Dequeue();
-            }
-
-            _pending.Enqueue(line.Replace('\r', ' ').Replace('\n', ' '));
-            if (!_writing)
-            {
-                _writing = true;
-                _writer = Task.Run(WritePending);
-            }
-        }
+                + $"error={error.GetType().Name} root={root.GetType().Name} message={root.Message}"
+        );
     }
 
-    private void WritePending()
-    {
-        while (true)
-        {
-            string[] lines;
-            lock (_gate)
-            {
-                if (_pending.Count == 0)
-                {
-                    _writing = false;
-                    return;
-                }
-                lines = _pending.ToArray();
-                _pending.Clear();
-            }
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
-                if (File.Exists(LogPath) && new FileInfo(LogPath).Length > 256 * 1024)
-                {
-                    File.Move(LogPath, LogPath + ".previous", true);
-                }
-
-                File.AppendAllLines(LogPath, lines, Encoding.UTF8);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // Diagnostics are optional; a locked log must not interrupt the assistant.
-                System.Diagnostics.Debug.WriteLine("assistant log write: " + ex.GetType().Name);
-            }
-        }
-    }
-
-    public async Task FlushAsync()
-    {
-        while (true)
-        {
-            Task writer;
-            lock (_gate)
-            {
-                writer = _writer;
-            }
-
-            await writer;
-            lock (_gate)
-            {
-                if (!_writing)
-                {
-                    return;
-                }
-            }
-        }
-    }
+    public Task FlushAsync() => _log.FlushAsync();
 }
