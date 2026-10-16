@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using League.Models;
+using League.Services;
 
 namespace League.Controls;
 
@@ -375,7 +376,7 @@ internal sealed class OpggRankingsView : UserControl
         catch (Exception ex)
         {
             image?.Dispose();
-            System.Diagnostics.Debug.WriteLine($"OP.GG ranking icon: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "OP.GG ranking icon", ex);
             if (!_closing)
             {
                 _icons[id] = null;

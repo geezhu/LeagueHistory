@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using League.Models;
+using League.Services;
 using League.UIState;
 using Newtonsoft.Json.Linq;
 
@@ -61,7 +62,7 @@ public partial class MatchDetailView
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"详情加载失败: {ex}");
+            AppLog.Shared.Warn(LogCategory.Ui, "详情加载失败", ex);
             ShowScoreboardFailure(panel, sections, loading);
         }
         finally
@@ -275,7 +276,7 @@ public partial class MatchDetailView
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine("释放图片资源失败: " + ex.Message);
+                    AppLog.Shared.Warn(LogCategory.Ui, "释放图片资源失败", ex);
                 }
             }
             if (control.HasChildren)

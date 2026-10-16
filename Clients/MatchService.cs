@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Clients
@@ -77,7 +78,7 @@ namespace League.Clients
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"请求异常: {ex.Message}");
+                    AppLog.Shared.Warn(LogCategory.Data, "请求异常", ex);
                 }
                 finally
                 {
@@ -120,7 +121,7 @@ namespace League.Clients
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[第{i + 1}次尝试失败] 异常: {ex.Message}");
+                    AppLog.Shared.Warn(LogCategory.Data, $"[第{i + 1}次尝试失败] 异常", ex);
                 }
 
                 if (i < retryDelays.Length - 1)
@@ -157,7 +158,7 @@ namespace League.Clients
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"获取完整对战信息失败: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Data, "获取完整对战信息失败", ex);
                 return null;
             }
         }

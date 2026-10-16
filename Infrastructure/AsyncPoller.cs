@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using League.Services;
 
 namespace League.Infrastructure
 {
@@ -23,7 +24,7 @@ namespace League.Infrastructure
                         }
                         catch (Exception ex)
                         {
-                            Debug.WriteLine($"轮询异常: {ex.Message}");
+                            AppLog.Shared.Warn(LogCategory.App, "轮询异常", ex);
                         }
 
                         await Task.Delay(intervalMs, token);

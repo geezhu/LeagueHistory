@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 using static League.FormMain;
 
@@ -67,7 +68,7 @@ namespace League.Parsers
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[模式过滤] 获取 session 失败: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Data, "[模式过滤] 获取 session 失败", ex);
             }
             return "";
         }

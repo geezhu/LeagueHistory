@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Net;
 using System.Text;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Clients
@@ -78,8 +79,8 @@ namespace League.Clients
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[回放] 下载异常: {ex}");
-                return ReplayDownloadResult.Failed;
+                AppLog.Shared.Warn(LogCategory.Data, "[回放] 下载异常", ex);
+                return false;
             }
         }
 
@@ -109,7 +110,7 @@ namespace League.Clients
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[回放] 播放异常: {ex}");
+                AppLog.Shared.Warn(LogCategory.Data, "[回放] 播放异常", ex);
                 return false;
             }
         }
@@ -140,8 +141,8 @@ namespace League.Clients
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[回放] 检查现有回放异常: {ex.Message}");
-                return (exists: false, isValid: false, state: "");
+                AppLog.Shared.Warn(LogCategory.Data, "[回放] 检查现有回放异常", ex);
+                return (exists: false, isValid: false);
             }
         }
 
@@ -191,7 +192,7 @@ namespace League.Clients
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[回放] 状态查询异常: {ex.Message}");
+                    AppLog.Shared.Warn(LogCategory.Data, "[回放] 状态查询异常", ex);
                 }
             }
 

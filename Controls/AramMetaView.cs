@@ -1,5 +1,6 @@
 using League.Clients;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -697,7 +698,7 @@ internal sealed partial class AramMetaView : UserControl
         catch (Exception ex)
         {
             // Background faults are observed while still completing ownership cleanup.
-            System.Diagnostics.Debug.WriteLine($"arammeta cleanup: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "arammeta cleanup", ex);
         }
         _client.Dispose();
         _imageHttp.Dispose();

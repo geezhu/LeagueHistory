@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using League.Models;
 using League.PrimaryElection;
+using League.Services;
 using Newtonsoft.Json;
 using static League.FormMain;
 
@@ -724,7 +725,7 @@ namespace League
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[Preliminary] 更新预选失败: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Ui, "[Preliminary] 更新预选失败", ex);
             }
         }
 

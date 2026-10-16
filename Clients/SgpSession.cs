@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Security;
 using System.Text.RegularExpressions;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Clients
@@ -158,7 +159,7 @@ namespace League.Clients
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[SGP] 获取 Endpoint 异常: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Sgp, "[SGP] 获取 Endpoint 异常", ex);
             }
 
             Debug.WriteLine("[SGP] 未能获取 SGP 地址");
@@ -309,7 +310,7 @@ namespace League.Clients
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"其他异常: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Sgp, "其他异常", ex);
                 return (SgpAttempt.Retry, null, $"{ex.GetType().Name} HRESULT={ex.HResult:X8}");
             }
             finally

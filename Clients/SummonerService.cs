@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Diagnostics;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Clients
@@ -43,7 +44,7 @@ namespace League.Clients
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"查询召唤师异常: {ex}");
+                AppLog.Shared.Warn(LogCategory.Data, "查询召唤师异常", ex);
                 return null;
             }
         }
@@ -100,7 +101,7 @@ namespace League.Clients
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"根据ID查询召唤师异常: {ex}");
+                AppLog.Shared.Warn(LogCategory.Data, "根据ID查询召唤师异常", ex);
                 return null;
             }
         }
@@ -146,7 +147,7 @@ namespace League.Clients
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"获取当前召唤师失败: {ex}");
+                AppLog.Shared.Warn(LogCategory.Data, "获取当前召唤师失败", ex);
                 return null; // 不要 new JObject()
             }
         }

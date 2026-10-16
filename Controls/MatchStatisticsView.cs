@@ -1,4 +1,5 @@
 ﻿using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -269,7 +270,7 @@ public sealed class MatchStatisticsView : UserControl
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Stats portrait: {ex.GetType().Name}");
+                AppLog.Shared.Warn(LogCategory.Ui, "Stats portrait", ex);
             }
         }
     }

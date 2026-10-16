@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using static League.FormMain;
 
 namespace League.Services
@@ -26,7 +26,7 @@ namespace League.Services
             {
                 if (delaySeconds > 0)
                 {
-                    Debug.WriteLine($"[自动接受] 等待 {delaySeconds} 秒后接受...");
+                    AppLog.Shared.Info(LogCategory.Automation, $"找到对局，{delaySeconds} 秒后自动接受");
                     await Task.Delay(TimeSpan.FromSeconds(delaySeconds), token);
                 }
 
@@ -55,18 +55,21 @@ namespace League.Services
                     if (success)
                     {
                         _hasAcceptedReadyCheck = true;
-                        //Debug.WriteLine($"[自动接受] ✅ 第 {i + 1} 次尝试成功（延迟 {delaySeconds}s）");
+                        AppLog.Shared.Info(
+                            LogCategory.Automation,
+                            $"已自动接受对局（第 {i + 1} 次尝试，延迟 {delaySeconds} 秒）"
+                        );
                         return;
                     }
                     await Task.Delay(300, token);
                 }
-                Debug.WriteLine("[自动接受] 多次尝试后仍失败");
+                AppLog.Shared.Warn(LogCategory.Automation, "自动接受对局失败：3 次尝试都未成功");
             }
             // Reset() or a newer ready check cancelled this attempt; nothing to accept.
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[自动接受] 异常: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Automation, "[自动接受] 异常", ex);
             }
             finally
             {

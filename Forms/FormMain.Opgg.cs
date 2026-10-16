@@ -1,5 +1,6 @@
 using League.Controls;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League;
@@ -18,7 +19,7 @@ public partial class FormMain
         }
         catch (Exception error)
         {
-            System.Diagnostics.Debug.WriteLine($"Assistant guide: {error}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Assistant guide", error);
             if (!IsDisposed && !Disposing)
             {
                 MessageBox.Show(this, "英雄攻略打开失败，请稍后重试。", "英雄攻略");

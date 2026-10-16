@@ -143,7 +143,7 @@ public partial class PlayerCardControl
         catch (Exception ex)
         {
             // A failed optional recommendation keeps the player card usable and can be retried.
-            System.Diagnostics.Debug.WriteLine($"Champion tier: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Champion tier", ex);
             if (!IsDisposed && generation == _tierGeneration)
             {
                 _heroTier.Text = "梯队暂不可用";
@@ -171,7 +171,7 @@ public partial class PlayerCardControl
         catch (Exception ex)
         {
             // The icon is optional; release its active marker so a later refresh can retry.
-            System.Diagnostics.Debug.WriteLine($"Champion icon: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Champion icon", ex);
             if (!IsDisposed && CurrentChampionId == id && generation == _iconGeneration)
             {
                 _iconHero = 0;

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using League.Services;
 
 namespace League.Controls
 {
@@ -258,7 +259,7 @@ namespace League.Controls
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[PlayerCard] 复制名称失败: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Ui, "[PlayerCard] 复制名称失败", ex);
             }
         }
 

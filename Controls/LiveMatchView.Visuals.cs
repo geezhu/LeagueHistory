@@ -1,5 +1,6 @@
 using League.Infrastructure;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -554,7 +555,7 @@ public sealed partial class LiveMatchView
         catch (Exception ex)
         {
             // Missing local artwork leaves a named placeholder; the statistics remain usable.
-            System.Diagnostics.Debug.WriteLine($"Live match icon: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Live match icon", ex);
         }
     }
 
@@ -624,7 +625,7 @@ public sealed partial class LiveMatchView
             catch (Exception ex)
             {
                 // Keep one failed placeholder per asset instead of retrying it on every poll.
-                System.Diagnostics.Debug.WriteLine($"Live match cached icon: {ex.GetType().Name}");
+                AppLog.Shared.Warn(LogCategory.Ui, "Live match cached icon", ex);
                 return (null, "", "");
             }
         }
@@ -674,7 +675,7 @@ public sealed partial class LiveMatchView
         {
             image?.Dispose();
             // Champion artwork is optional when the client disconnects or a local asset is missing.
-            System.Diagnostics.Debug.WriteLine($"Live match artwork: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Live match artwork", ex);
         }
     }
 

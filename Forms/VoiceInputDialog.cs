@@ -491,7 +491,7 @@ internal sealed class VoiceInputDialog : Form
         catch (Exception error)
         {
             // A cleanup failure must be observed without reviving the closed dialog or replacing its primary error.
-            System.Diagnostics.Debug.WriteLine($"Voice dialog closed-work cleanup: {error}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Voice dialog closed-work cleanup", error);
         }
         finally
         {

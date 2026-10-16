@@ -185,6 +185,7 @@ public sealed class TeamCardDisplayService
 
         string queue = data?["queue"]?.Value<string>("id") ?? "";
         Globals.CurrGameMod = queue;
+        AppLog.Shared.State(LogCategory.Game, "game-queue", $"对局队列 {queue}，双方 {one.Count}+{two.Count} 人");
         var resolved = RoomPlayerLoader.ResolveGameTeams((JObject)data!);
         var ours = inOne ? resolved.One : resolved.Two;
         var theirs = WithoutAllies(ours, inOne ? resolved.Two : resolved.One);

@@ -94,7 +94,7 @@ namespace League.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[ExecuteSkipActionsAsync] 异常: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Automation, "[ExecuteSkipActionsAsync] 异常", ex);
             }
         }
 
@@ -113,7 +113,7 @@ namespace League.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[ReturnToSpecificLobbyAsync] 异常: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Automation, "[ReturnToSpecificLobbyAsync] 异常", ex);
                 _gameJustEnded = false;
             }
         }
@@ -140,7 +140,7 @@ namespace League.Services
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[GameEndCleanup] InitializeDefaultTab 异常: {ex}");
+                    AppLog.Shared.Warn(LogCategory.Automation, "[GameEndCleanup] InitializeDefaultTab 异常", ex);
                 }
             });
         }

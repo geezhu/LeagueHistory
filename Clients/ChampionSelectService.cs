@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Text;
 using League.PrimaryElection;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Clients
@@ -85,7 +86,7 @@ namespace League.Clients
                 var availableHero = preSelectedHeroes.FirstOrDefault(h => !IsUnavailable(h.ChampionId));
                 if (availableHero == null)
                 {
-                    Debug.WriteLine("[自动预选] 预选列表中没有当前可用英雄");
+                    LogPickState("自动预选：预选英雄都已被禁用或被选走");
                     return false;
                 }
 
@@ -107,50 +108,23 @@ namespace League.Clients
 
                 if (response.IsSuccessStatusCode)
                 {
-                    Debug.WriteLine(
-                        $"[自动预选] 成功预选: {availableHero.ChampionName} (ID: {availableHero.ChampionId})"
-                    );
+                    LogPickState($"自动预选：已预选 {availableHero.ChampionName}（{availableHero.ChampionId}）");
                     return true;
                 }
 
-                // 现代接口 2xx 但未换上：经典模式再强制试 legacy 一次（同一 sessionChampId）
-                if (IsClassicQueue(queueId) && apiPrefix.Contains("lol-champ-select/v1") && !apiPrefix.Contains("legacy"))
-                {
-                    var legacyUrl = $"/lol-champ-select-legacy/v1/session/actions/{actionId}";
-                    var legacyResp = await _client.PatchAsync(legacyUrl, jsonContent);
-                    var legacyBody = await legacyResp.Content.ReadAsStringAsync();
-                    Debug.WriteLine($"[自动预选] 强制 legacy PATCH {legacyUrl} => {(int)legacyResp.StatusCode}, body={legacyBody}");
-
-                    await Task.Delay(150);
-                    var (session3, _) = await ResolveChampSelectSessionAsync();
-                    var me3 = (session3?["myTeam"] as JArray)?.FirstOrDefault(p =>
-                    {
-                        long cell = p["cellId"]?.Value<long>() ?? p["cellId"]?.Value<int>() ?? -999;
-                        return cell == localCellId;
-                    });
-                    int intent3 = me3?["championPickIntent"]?.Value<int>() ?? 0;
-                    int locked3 = me3?["championId"]?.Value<int>() ?? 0;
-                    if (intent3 == sessionChampId || locked3 == sessionChampId)
-                    {
-                        Debug.WriteLine($"[自动预选] legacy 会话已确认换上: {availableHero.ChampionName}");
-                        return true;
-                    }
-                }
-
-                // HTTP 成功但会话未变：返回 false，让 AutoPickService 继续轮询，不要标记 _hasAutoPreliminated
-                if (response.IsSuccessStatusCode)
-                {
-                    Debug.WriteLine("[自动预选] HTTP 成功但会话未换上，视为失败（可能 ID/通道仍不对）");
-                }
-
+                LogPickState($"自动预选：客户端返回 {(int)response.StatusCode}");
                 return false;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[自动预选] 执行异常: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Automation, "[自动预选] 执行异常", ex);
                 return false;
             }
         }
+
+        // The pick loop polls every second; only a changed outcome is logged.
+        private static void LogPickState(string message) =>
+            Services.AppLog.Shared.State(Services.LogCategory.Automation, "auto-pick", message);
 
         // 自己还没完成的 pick 操作。
         private static JToken? FindMyPendingPick(JObject session)
@@ -327,6 +301,10 @@ namespace League.Clients
                         $"/lol-champ-select/v1/session/bench/swap/{bestAvailable.ChampionId}"
                     );
 
+                    Services.AppLog.Shared.Info(
+                        Services.LogCategory.Automation,
+                        $"板凳席换英雄：{bestAvailable.ChampionName}（{bestAvailable.ChampionId}）→ {(int)response.StatusCode}"
+                    );
                     if (response.IsSuccessStatusCode)
                     {
                         await Task.Delay(100); // 稍微延时，避免API过于频繁
@@ -335,7 +313,7 @@ namespace League.Clients
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[ARAM 贪婪抢] 异常: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Automation, "[ARAM 贪婪抢] 异常", ex);
             }
         }
 
@@ -394,12 +372,15 @@ namespace League.Clients
                 var content = new StringContent(body.ToString(), Encoding.UTF8, "application/json");
                 var resp = await _client.PatchAsync("/lol-champ-select/v1/session/my-selection", content);
 
-                Debug.WriteLine($"[自动皮肤] champ={championId} skin={skinId} status={resp.StatusCode}");
+                Services.AppLog.Shared.Info(
+                    Services.LogCategory.Automation,
+                    $"自动换皮肤：英雄 {championId} 皮肤 {skinId} → {(int)resp.StatusCode}"
+                );
                 return resp.IsSuccessStatusCode;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[自动皮肤] {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Automation, "[自动皮肤]", ex);
                 return false;
             }
         }

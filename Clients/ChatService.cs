@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using League.Services;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -82,7 +83,7 @@ namespace League.Clients
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[Chat] 查找会话异常: {ex}");
+                    AppLog.Shared.Warn(LogCategory.Automation, "[Chat] 查找会话异常", ex);
                 }
             }
 

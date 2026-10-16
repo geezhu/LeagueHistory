@@ -1,4 +1,5 @@
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -73,7 +74,7 @@ public sealed class PlayerNameLink : LinkLabel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"玩家隐私查询失败: {ex.Message}");
+            AppLog.Shared.Warn(LogCategory.Ui, "玩家隐私查询失败", ex);
         }
     }
 }

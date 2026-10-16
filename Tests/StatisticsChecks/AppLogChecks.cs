@@ -6,6 +6,7 @@ internal static class AppLogChecks
     {
         Redaction();
         await SessionAndStatesAsync();
+        await RepeatedWarningsAsync();
         CrashMarker();
         Console.WriteLine(
             "PASS: app log header, state de-duplication, crash flush, crash marker and redaction of tokens, paths and player IDs."
@@ -80,6 +81,49 @@ internal static class AppLogChecks
             Check(
                 crashLines.Length == 2 && crashLines[1].Contains("[fatal] [Crash]") && crashLines[1].Contains("at "),
                 "A crash is written synchronously with its stack"
+            );
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    private static async Task RepeatedWarningsAsync()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "league-app-log-" + Guid.NewGuid().ToString("N"));
+        string path = Path.Combine(directory, "app.log");
+        long now = 0;
+        try
+        {
+            var log = new AppLog(() => path, new DiagnosticRedactor("salt", ""), () => now);
+            var offline = new HttpRequestException("offline");
+            for (int i = 0; i < 25; i++)
+            {
+                log.Warn(LogCategory.Ui, "OP.GG icon", offline);
+                now += 1000;
+            }
+
+            log.Warn(LogCategory.Ui, "OP.GG ranking icon", offline);
+            now += 60_000;
+            log.Warn(LogCategory.Ui, "OP.GG icon", offline);
+
+            log.State(LogCategory.Automation, "auto-pick", "自动预选：未开启");
+            log.ResetStates("auto-pick");
+            log.State(LogCategory.Automation, "auto-pick", "自动预选：未开启");
+            await log.FlushAsync();
+
+            var lines = (await File.ReadAllLinesAsync(path)).Skip(1).ToArray();
+            Check(lines.Length == 5, "Repeats inside a minute collapse into one line: " + string.Join(" / ", lines));
+            Check(
+                lines[0].Contains("OP.GG icon | HttpRequestException") && !lines[0].Contains("又出现"),
+                "First warning"
+            );
+            Check(lines[1].Contains("OP.GG ranking icon"), "A different message is not suppressed");
+            Check(lines[2].Contains("此前 60 秒内又出现 24 次"), "The next line reports how many were suppressed");
+            Check(
+                lines[3].Contains("自动预选：未开启") && lines[4].Contains("自动预选：未开启"),
+                "Reset states log again"
             );
         }
         finally

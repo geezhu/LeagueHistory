@@ -91,7 +91,7 @@ public sealed class ChampionCompositionView : FlowLayoutPanel
         }
         catch (Exception error)
         {
-            System.Diagnostics.Debug.WriteLine($"Composition statistics: {error}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Composition statistics", error);
             _error = "arammeta 统计暂不可用";
         }
         finally

@@ -39,6 +39,8 @@ namespace League.Services
 
             _hasAutoPreliminated = false;
             _hasSwappedInAram = false;
+            // A new champion select: log its outcomes even if they match the previous game's.
+            AppLog.Shared.ResetStates("auto-pick", "game-queue");
 
             await Task.Run(
                 async () =>
@@ -64,6 +66,7 @@ namespace League.Services
 
                             var session = await Globals.lcuClient.GetChampSelectSession(token);
                             int queueId = session?["queueId"]?.Value<int>() ?? 0;
+                            AppLog.Shared.State(LogCategory.Game, "game-queue", $"选人队列 {queueId}");
 
                             // 乱斗类轮询更快，其它模式 1 秒
                             int delay = (queueId == 450 || queueId == 2400 || queueId == 900) ? 500 : 1000;
@@ -79,7 +82,7 @@ namespace League.Services
                         }
                         catch (Exception ex)
                         {
-                            Debug.WriteLine($"[AutoPickService] 异常: {ex.Message}");
+                            AppLog.Shared.Warn(LogCategory.Automation, "[AutoPickService] 异常", ex);
                         }
                     }
                 },
@@ -111,12 +114,14 @@ namespace League.Services
             var preConfig = _form.GetAppConfig()?.Preliminary;
             if (preConfig == null || !preConfig.EnableAutoPreliminary)
             {
+                LogPickState("自动预选：未开启");
                 return;
             }
 
             var preList = await _form.GetPreSelectedHeroesAsync();
             if (!preList.Any())
             {
+                LogPickState("自动预选：预选列表为空");
                 return;
             }
 
@@ -142,12 +147,14 @@ namespace League.Services
 
             if (!shouldExecute)
             {
+                LogPickState($"自动预选：队列 {queueId} 未启用或不支持");
                 return;
             }
 
             // 有板凳席的乱斗类模式：大乱斗、海克斯、无限乱斗 → 抢英雄
             if (queueId == 450 || queueId == 2400 || queueId == 900)
             {
+                LogPickState($"自动预选：队列 {queueId} 从板凳席换优先英雄");
                 await Globals.lcuClient.AutoSwapToHighestPriorityAsync(preList);
                 return;
             }
@@ -162,9 +169,12 @@ namespace League.Services
             if (success)
             {
                 _hasAutoPreliminated = true;
-                Debug.WriteLine("[自动预选] 普通模式意图声明成功");
             }
         }
+
+        // Same key as ChampionSelectService, so the log reads as one sequence of auto-pick outcomes.
+        private static void LogPickState(string message) =>
+            AppLog.Shared.State(LogCategory.Automation, "auto-pick", message);
 
         /// <summary>
         /// 选人阶段：若开启自动皮肤，且当前英雄在 PreferredChampionSkins 中有非默认皮，则 PATCH。
@@ -241,7 +251,7 @@ namespace League.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[自动皮肤] TryAutoSkinAsync: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Automation, "[自动皮肤] TryAutoSkinAsync", ex);
             }
         }
 

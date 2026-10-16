@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Text.RegularExpressions;
 using League.Models;
+using League.Services;
 
 namespace League.Controls
 {
@@ -171,7 +172,7 @@ namespace League.Controls
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[MatchListPanel.DeepClean异常] {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Ui, "[MatchListPanel.DeepClean异常]", ex);
             }
         }
 

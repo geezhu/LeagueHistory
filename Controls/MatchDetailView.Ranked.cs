@@ -1,5 +1,6 @@
 using League.Clients;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -121,7 +122,7 @@ public partial class MatchDetailView
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Player rank: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Player rank", ex);
         }
     }
 
@@ -267,7 +268,7 @@ public partial class MatchDetailView
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Ban icon: {ex.GetType().Name}");
+                AppLog.Shared.Warn(LogCategory.Ui, "Ban icon", ex);
             }
         }
     }

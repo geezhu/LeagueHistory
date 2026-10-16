@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using League.Services;
 using static League.FormMain;
 
 public class GameFlowPhaseMonitor
@@ -49,7 +50,7 @@ public class GameFlowPhaseMonitor
                         }
                         catch (Exception ex) // ← 关键修改
                         {
-                            Debug.WriteLine($"[GameFlowPhaseMonitor] 异常（可能客户端关闭）: {ex.Message}");
+                            AppLog.Shared.Warn(LogCategory.Game, "[GameFlowPhaseMonitor] 异常（可能客户端关闭）", ex);
                             OnLcuDisconnected?.Invoke(); // 异常也视为断线
                             return; // 退出循环
                         }

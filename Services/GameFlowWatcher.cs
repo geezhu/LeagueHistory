@@ -108,6 +108,8 @@ namespace League.Services
         /// </summary>
         public async Task OnGameflowPhaseChanged(string phase, string? previousPhase)
         {
+            // The timeline that ties every other log line to what the player was doing at the time.
+            AppLog.Shared.Info(LogCategory.Game, $"游戏阶段 {previousPhase ?? "无"} → {phase}");
             if (
                 (phase is "EndOfGame" or "PreEndOfGame" or "WaitingForStats")
                 && (previousPhase is "GameStart" or "InProgress" or "Reconnect")
@@ -167,7 +169,7 @@ namespace League.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[GameFlowWatcher] 阶段处理异常: {ex}");
+                AppLog.Shared.Warn(LogCategory.Game, "[GameFlowWatcher] 阶段处理异常", ex);
             }
         }
 

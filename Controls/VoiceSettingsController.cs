@@ -148,7 +148,7 @@ internal sealed class VoiceSettingsController : IDisposable
         }
         catch (Exception error)
         {
-            System.Diagnostics.Debug.WriteLine($"Voice input device listing: {error}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Voice input device listing", error);
             if (!_disposed)
             {
                 _microphoneStatus.Text = "麦克风列表读取失败，请连接设备后刷新。";
@@ -225,7 +225,7 @@ internal sealed class VoiceSettingsController : IDisposable
         }
         catch (Exception error)
         {
-            System.Diagnostics.Debug.WriteLine($"Voice model settings: {error}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Voice model settings", error);
             if (!_disposed)
             {
                 ShowFailure("模型准备失败", error);

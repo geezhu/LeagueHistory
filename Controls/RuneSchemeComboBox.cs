@@ -1,4 +1,5 @@
 using League.Models;
+using League.Services;
 
 namespace League.Controls;
 
@@ -53,7 +54,7 @@ internal sealed class RuneSchemeComboBox : DarkSelectionComboBox
             catch (Exception ex)
             {
                 // A failed optional icon leaves its placeholder usable; continue loading the other choices.
-                System.Diagnostics.Debug.WriteLine($"Selection icon: {ex.GetType().Name}");
+                AppLog.Shared.Warn(LogCategory.Ui, "Selection icon", ex);
                 if (IsDisposed || _images.IsCancellationRequested)
                 {
                     return;

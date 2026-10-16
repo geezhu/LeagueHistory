@@ -1,4 +1,5 @@
 using League.Models;
+using League.Services;
 
 namespace League;
 
@@ -156,7 +157,7 @@ internal sealed partial class ChampionSelectAssistant
         catch (Exception error)
         {
             // Missing optional icons leave the selector and apply action usable.
-            System.Diagnostics.Debug.WriteLine($"Rune icons: {error}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Rune icons", error);
         }
     }
 

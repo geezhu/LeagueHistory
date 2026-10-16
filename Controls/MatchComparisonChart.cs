@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -94,7 +95,7 @@ internal sealed class MatchComparisonChart : ScrollableControl
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Chart portrait: {ex.GetType().Name}");
+                AppLog.Shared.Warn(LogCategory.Ui, "Chart portrait", ex);
             }
         }
     }

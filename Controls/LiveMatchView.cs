@@ -1,5 +1,6 @@
 using League.Clients;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -371,7 +372,7 @@ public sealed partial class LiveMatchView : UserControl
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Live match polling: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Live match polling", ex);
             if (!_closing)
             {
                 ShowDisconnected();
@@ -392,7 +393,7 @@ public sealed partial class LiveMatchView : UserControl
         catch (Exception ex)
         {
             // The client may disappear while the game remains available on port 2999.
-            System.Diagnostics.Debug.WriteLine($"Live match queue fallback: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Live match queue fallback", ex);
             return 0;
         }
     }
@@ -498,7 +499,7 @@ public sealed partial class LiveMatchView : UserControl
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Live match ranks: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Live match ranks", ex);
             if (!CanPublishRanks(queue, token))
             {
                 return;
@@ -584,7 +585,7 @@ public sealed partial class LiveMatchView : UserControl
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Live match recommendations: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Live match recommendations", ex);
             if (CanPublishRecommendation(request))
             {
                 SetMessage(_recommendations, "推荐读取失败，可点击刷新对局重试。");
@@ -715,7 +716,7 @@ public sealed partial class LiveMatchView : UserControl
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Live match request cleanup: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Live match request cleanup", ex);
         }
         finally
         {
@@ -731,7 +732,7 @@ public sealed partial class LiveMatchView : UserControl
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Live match cleanup: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Live match cleanup", ex);
         }
         DisposeImageCache();
         if (_ownsLive)

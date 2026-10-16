@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using League.Models;
 using League.Parsers;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -52,7 +53,7 @@ public partial class PlayerCardControl
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Room profile: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Room profile", ex);
         }
     }
 

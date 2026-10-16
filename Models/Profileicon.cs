@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Diagnostics;
+using League.Services;
 
 namespace League.Models
 {
@@ -33,7 +34,7 @@ namespace League.Models
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[默认头像加载失败] {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Data, "[默认头像加载失败]", ex);
                 _defaultProfile = new Bitmap(64, 64); // 纯兜底
             }
         }
@@ -90,7 +91,7 @@ namespace League.Models
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[国服下载失败] {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Data, "[国服下载失败]", ex);
                 return null;
             }
             finally
@@ -126,7 +127,7 @@ namespace League.Models
                 }
                 catch (Exception retryEx)
                 {
-                    Debug.WriteLine($"[国际服重试失败] {retryEx.Message}");
+                    AppLog.Shared.Warn(LogCategory.Data, "[国际服重试失败]", retryEx);
                     return null;
                 }
             }
@@ -174,7 +175,7 @@ namespace League.Models
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[LoadImageSafe失败] {path} → {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Data, $"[LoadImageSafe失败] {path}", ex);
                 return null;
             }
         }
@@ -200,7 +201,7 @@ namespace League.Models
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[读取本地版本失败] {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Data, "[读取本地版本失败]", ex);
             }
             return null;
         }
@@ -222,7 +223,7 @@ namespace League.Models
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[获取远程版本失败] {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Data, "[获取远程版本失败]", ex);
                 return "15.12.1";
             }
         }

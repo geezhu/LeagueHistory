@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Text.RegularExpressions;
 using League.Models;
+using League.Services;
 using League.UIHelpers;
 using Newtonsoft.Json.Linq;
 
@@ -474,7 +475,7 @@ namespace League.UIState
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"海克斯 {augment.id} 重试失败: {ex.Message}");
+                    AppLog.Shared.Warn(LogCategory.Ui, $"海克斯 {augment.id} 重试失败", ex);
                 }
             }
             string? puuid = participant["puuid"]?.ToString();

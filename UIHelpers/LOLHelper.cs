@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using League.Services;
 using Microsoft.Win32;
 using Newtonsoft.Json.Linq;
 
@@ -51,7 +52,7 @@ public class LOLHelper
         catch (Exception ex)
             when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            Debug.WriteLine($"LOL directory validation: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "LOL directory validation", ex);
         }
         return null;
     }
@@ -85,7 +86,7 @@ public class LOLHelper
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"LOL path config ignored: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "LOL path config ignored", ex);
         }
         return null;
     }
@@ -151,7 +152,7 @@ public class LOLHelper
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"LOL process path: {ex.GetType().Name}");
+                    AppLog.Shared.Warn(LogCategory.Ui, "LOL process path", ex);
                 }
             }
         }
@@ -187,7 +188,7 @@ public class LOLHelper
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"LOL registry: {ex.GetType().Name}");
+                        AppLog.Shared.Warn(LogCategory.Ui, "LOL registry", ex);
                     }
                 }
             }
