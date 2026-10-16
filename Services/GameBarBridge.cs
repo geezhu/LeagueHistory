@@ -21,7 +21,7 @@ public sealed partial class GameBarBridge : IDisposable
     private long _revision,
         _nextDiscovery;
     private bool _disposed;
-    public string Status { get; private set; } = "请在 Win＋G 中打开并固定「League 对局速览」。";
+    public string Status { get; private set; } = "正在检查 Game Bar 组件…";
     public Task Completion { get; }
 
     public GameBarBridge(string? directory = null)
@@ -297,7 +297,7 @@ public sealed partial class GameBarBridge : IDisposable
                 string directory = FindDirectory();
                 if (directory.Length == 0)
                 {
-                    Status = "Game Bar 组件尚未就绪；安装后按 Win＋G 打开「League 对局速览」。";
+                    Status = "组件尚未就绪 · 安装后按 Win＋G 打开";
                     continue;
                 }
                 Directory.CreateDirectory(directory);
@@ -330,7 +330,7 @@ public sealed partial class GameBarBridge : IDisposable
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or Newtonsoft.Json.JsonException)
             {
-                Status = "Game Bar 本机同步暂不可用：" + e.Message;
+                Status = "本机同步不可用：" + e.Message;
             }
         }
     }
@@ -340,7 +340,7 @@ public sealed partial class GameBarBridge : IDisposable
         long age = now - ((long?)state?["updatedAt"] ?? 0);
         if (state == null || age < 0 || age >= 15000)
         {
-            return "数据已准备，Game Bar 组件未连接；请在 Win＋G 中打开「League 对局速览」。";
+            return "组件未连接 · 按 Win＋G 打开「League 对局速览」";
         }
 
         string error = (string?)state["error"] ?? "";
@@ -354,25 +354,25 @@ public sealed partial class GameBarBridge : IDisposable
             || (state["connected"] == null && !string.IsNullOrEmpty((string?)state["readError"]))
         )
         {
-            return "组件已启动，但尚未读到有效数据；请确认主程序正在运行。";
+            return "组件已打开，但尚未读到有效数据";
         }
 
         if ((double?)state["width"] <= 0 || (double?)state["height"] <= 0)
         {
-            return "组件已连接，但画面尚未加载；请关闭该小组件后重新打开。";
+            return "组件画面尚未加载，请关闭后重新打开";
         }
 
         if ((bool?)state["pinned"] != true)
         {
-            return "Game Bar 已连接但尚未固定 · 在 Win＋G 中查看，固定后可保留在游戏上方。";
+            return "已连接，尚未固定 · 点图钉可留在游戏上方";
         }
 
         if ((bool?)state["active"] == false)
         {
-            return "Game Bar 已连接并固定 · 等待对局 · Win＋G 管理面板。";
+            return "已连接并固定 · 等待对局";
         }
 
-        return "Game Bar 已连接并固定 · Win＋G 管理面板。";
+        return "已连接并固定";
     }
 
     private readonly GameBarVoiceRecognition _voiceRecognition = new();

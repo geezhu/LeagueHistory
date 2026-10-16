@@ -211,7 +211,7 @@ public partial class FormMain
             DropDownStyle = ComboBoxStyle.DropDownList,
             Width = 220,
         };
-        overlayBackend.Items.AddRange(new object[] { "桌面窗口（窗口 / 无边框）", "Game Bar（全屏验证版）" });
+        overlayBackend.Items.AddRange(new object[] { "桌面窗口", "Game Bar（支持全屏）" });
         overlayBackend.SelectedIndex = _appConfig?.LoadingOverlayBackend == "GameBar" ? 1 : 0;
         var gameBarStatus = new Label { Text = _loadingOverlay?.GameBarStatus ?? "" };
         TrackGameBarSettingsStatus(gameBarStatus);
@@ -260,12 +260,8 @@ public partial class FormMain
         Label gameBarStatus
     )
     {
-        var gameBarHelp = new Label
-        {
-            Text =
-                "按 Win＋G，从小组件列表打开「League 对局速览」；点击组件右上角图钉可保留在游戏上方。保持 League 主程序运行以同步对局数据。",
-        };
-        var desktopHelp = new Label { Text = "支持窗口 / 无边框模式，检测到独占全屏时暂停弹窗。" };
+        var gameBarHelp = new Label { Text = "按 Win＋G 打开「League 对局速览」，点图钉固定在游戏上方。" };
+        var desktopHelp = new Label { Text = "适用于窗口 / 无边框模式，独占全屏时不弹出。" };
         backendRow.AddNote(desktopHelp);
         backendRow.AddNote(gameBarHelp);
         backendRow.AddNote(gameBarStatus);
