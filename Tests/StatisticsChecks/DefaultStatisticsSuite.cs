@@ -13,6 +13,8 @@ internal static class DefaultStatisticsSuite
     {
         CoreUtilityChecks.Run();
         UtilityLogicChecks.Run();
+        ImageProcessorChecks.Run();
+        UpdateSupportChecks.Run();
         BuildInfoChecks.Run();
         HistoryDataChecks.Run();
         TimelineDataChecks.Run();
