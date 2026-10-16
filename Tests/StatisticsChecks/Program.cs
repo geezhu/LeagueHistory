@@ -3,6 +3,32 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        // Settings, logs and search history go to a throwaway folder, never the user's own files.
+        string dataRoot = Path.Combine(Path.GetTempPath(), "league-checks-" + Guid.NewGuid().ToString("N"));
+        Environment.SetEnvironmentVariable(League.Services.AppDataPaths.RootVariable, dataRoot);
+        try
+        {
+            RunChecks(args);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(dataRoot))
+                {
+                    Directory.Delete(dataRoot, true);
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // A log still open by a background writer is left in the temp folder.
+                Console.WriteLine("Test data folder kept: " + dataRoot);
+            }
+        }
+    }
+
+    private static void RunChecks(string[] args)
+    {
         Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         Application.EnableVisualStyles();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
@@ -179,6 +205,7 @@ internal static class Program
         checks["--skin-browser-checks"] = () => Ui(SkinBrowserChecks.Run);
         checks["--preliminary-checks"] = () => Ui(PreliminaryChecks.Run);
         checks["--gamebar-composition-checks"] = () => Background(GameBarCompositionChecks.Run);
+        checks["--stale-session-checks"] = () => Background(StaleSessionChecks.Run);
         checks["--minion-wave-checks"] = MinionWaveChecks.Run;
         checks["--death-timing-checks"] = DeathTimingChecks.Run;
         checks["--turret-checks"] = TurretChecks.Run;
@@ -217,6 +244,7 @@ internal static class Program
         OverlayRecordChecks.Run();
         ControlChecks.Run();
         GameBarCompositionChecks.Run();
+        StaleSessionChecks.Run();
         OverlayVoiceChatChecks.Run();
     }
 

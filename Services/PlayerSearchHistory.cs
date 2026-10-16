@@ -12,13 +12,7 @@ public sealed class PlayerSearchHistory
 
     public PlayerSearchHistory(string? path = null)
     {
-        _path =
-            path
-            ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "LeagueHistory",
-                "search-history.json"
-            );
+        _path = path ?? Path.Combine(AppDataPaths.LocalData, "LeagueHistory", "search-history.json");
         try
         {
             if (File.Exists(_path))

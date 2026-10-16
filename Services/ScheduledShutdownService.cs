@@ -71,13 +71,7 @@ public sealed class ScheduledShutdownService
         Func<DateTime>? now = null
     )
     {
-        _directory =
-            directory
-            ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "LeagueHistory",
-                "ScheduledShutdown"
-            );
+        _directory = directory ?? Path.Combine(AppDataPaths.LocalData, "LeagueHistory", "ScheduledShutdown");
         _tasks = tasks ?? new WindowsShutdownTaskStore();
         _now = now ?? (() => DateTime.Now);
     }

@@ -34,21 +34,25 @@ public static class LiveDeathStreakAnalysis
         LiveMatchSnapshot? snapshot
     )
     {
-        return roster.Players.ToDictionary(
-            p => p.Key,
-            p =>
-            {
-                if (p.IdentityHidden)
+        // A roster should hold each player once; a duplicate must not break the whole poll.
+        return roster
+            .Players.GroupBy(p => p.Key)
+            .Select(group => group.First())
+            .ToDictionary(
+                p => p.Key,
+                p =>
                 {
-                    return LiveDeathStreak.Unavailable("玩家身份隐藏，不能唯一匹配死亡事件。");
-                }
+                    if (p.IdentityHidden)
+                    {
+                        return LiveDeathStreak.Unavailable("玩家身份隐藏，不能唯一匹配死亡事件。");
+                    }
 
-                var match = snapshot?.Find(p);
-                return match != null
-                    ? snapshot!.DeathStreaks.GetValueOrDefault(match.Key) ?? LiveDeathStreak.Unavailable()
-                    : LiveDeathStreak.Unavailable("等待游戏事件与玩家名单匹配。");
-            }
-        );
+                    var match = snapshot?.Find(p);
+                    return match != null
+                        ? snapshot!.DeathStreaks.GetValueOrDefault(match.Key) ?? LiveDeathStreak.Unavailable()
+                        : LiveDeathStreak.Unavailable("等待游戏事件与玩家名单匹配。");
+                }
+            );
     }
 
     public static IReadOnlyDictionary<string, LiveDeathStreak> Calculate(LiveMatchSnapshot snapshot)
