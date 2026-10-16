@@ -31,6 +31,7 @@ internal static class DefaultStatisticsSuite
         Task.Run(ChatSendDiagnosticsChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(DiagnosticLogChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(AppLogChecks.RunAsync).GetAwaiter().GetResult();
+        Task.Run(DiagnosticReportChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(OpggChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(AramMetaChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(ItemSetChecks.RunAsync).GetAwaiter().GetResult();

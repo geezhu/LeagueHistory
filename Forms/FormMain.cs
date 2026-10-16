@@ -155,10 +155,13 @@ namespace League
 
                 // 启动轮询 LCU 检测
                 StartLcuConnectPolling();
+
+                // After the window is shown, so the question is not hidden behind the splash of an empty form.
+                BeginInvoke(ShowCrashPromptIfNeeded);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[全局初始化异常] {ex.Message}");
+                AppLog.Shared.Error(LogCategory.App, "主窗口初始化失败", ex);
             }
         }
 

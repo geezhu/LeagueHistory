@@ -343,6 +343,7 @@ public partial class FormMain
             general,
             "关于与交流",
             CreateVersionRow(),
+            CreateDiagnosticsRow(),
             new SettingRow(label4.Text, null, lk_QQGroup),
             new SettingRow(label5.Text, null, lk_GitPro)
         );
