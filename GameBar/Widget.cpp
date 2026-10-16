@@ -1,5 +1,6 @@
 // Game Bar owns this window. Never activate or reposition the desktop League window here.
 #include <windows.h>
+#include <winrt/Windows.ApplicationModel.h>
 #include <winrt/Windows.ApplicationModel.Activation.h>
 #include <winrt/Windows.Data.Json.h>
 #include <winrt/Windows.Graphics.Imaging.h>
@@ -62,11 +63,20 @@ static int64_t Now()
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
         .count();
 }
-static void LogError(hstring const &message) noexcept
+// Appends one line; past 64 KB the file becomes <name>.previous.txt so the latest history survives rotation.
+// The desktop app collects both files into its diagnostic report.
+static void AppendBounded(wchar_t const *name, wchar_t const *previous, hstring const &message) noexcept
 {
     try
     {
-        auto path = ApplicationData::Current().LocalFolder().Path() + L"\\component-error.txt";
+        std::wstring folder{ApplicationData::Current().LocalFolder().Path()};
+        std::wstring path = folder + L"\\" + name;
+        WIN32_FILE_ATTRIBUTE_DATA info{};
+        if (GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &info) &&
+            (info.nFileSizeHigh != 0 || info.nFileSizeLow > 65536))
+        {
+            MoveFileExW(path.c_str(), (folder + L"\\" + previous).c_str(), MOVEFILE_REPLACE_EXISTING);
+        }
         std::ofstream log(path.c_str(), std::ios::app);
         log << Now() << " " << to_string(message) << "\n";
     }
@@ -75,22 +85,27 @@ static void LogError(hstring const &message) noexcept
         // Logging must remain best effort when the app-local directory is unavailable.
     }
 }
+static void LogError(hstring const &message) noexcept
+{
+    AppendBounded(L"component-error.txt", L"component-error.previous.txt", message);
+}
 static void Trace(hstring const &message) noexcept
+{
+    // Diagnostics must not interrupt the Game Bar window when its directory is unavailable.
+    AppendBounded(L"component-diagnostics.txt", L"component-diagnostics.previous.txt", message);
+}
+static hstring PackageVersion() noexcept
 {
     try
     {
-        auto path = ApplicationData::Current().LocalFolder().Path() + L"\\component-diagnostics.txt";
-        std::ofstream log(path.c_str(), std::ios::app);
-        if (log.tellp() > 65536)
-        {
-            log.close();
-            log.open(path.c_str(), std::ios::trunc);
-        }
-        log << Now() << " " << to_string(message) << "\n";
+        auto version = Windows::ApplicationModel::Package::Current().Id().Version();
+        return to_hstring(version.Major) + L"." + to_hstring(version.Minor) + L"." + to_hstring(version.Build) + L"." +
+               to_hstring(version.Revision);
     }
     catch (...)
     {
-        // Diagnostics must not interrupt the Game Bar window when its directory is unavailable.
+        // An unpackaged preview run has no package identity.
+        return L"unpackaged";
     }
 }
 
@@ -935,13 +950,23 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                     root.Height(std::clamp(data.GetNamedNumber(L"height", 560), 500.0, 800.0));
                 }
                 ValidateSnapshot(data, connectionMessage);
+                if (!readError.empty())
+                {
+                    Trace(L"snapshot-read-recovered");
+                }
                 readError = L"";
                 ApplySnapshot(data);
             }
         }
         catch (hresult_error const &exception)
         {
-            readError = to_hstring(uint32_t(exception.code())) + L" " + exception.message();
+            hstring error = to_hstring(uint32_t(exception.code())) + L" " + exception.message();
+            // Logged once per distinct error; the heartbeat only keeps the latest one.
+            if (error != readError)
+            {
+                Trace(L"snapshot-read-error " + error);
+            }
+            readError = error;
             if (Now() - lastGood > 15000 && !stopped)
             {
                 active = false;
@@ -981,7 +1006,7 @@ struct WidgetApp : ApplicationT<WidgetApp>
     }
     void OnActivated(IActivatedEventArgs const &args)
     {
-        Trace(L"activation kind=" + to_hstring(int(args.Kind())));
+        Trace(L"activation kind=" + to_hstring(int(args.Kind())) + L" version=" + PackageVersion());
         auto activation = args.try_as<XboxGameBarWidgetActivatedEventArgs>();
         if (!activation)
         {

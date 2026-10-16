@@ -42,7 +42,14 @@ public sealed class DiagnosticReportExporter
                 new(LogRetention.LogsDirectory, new[] { "*.log", "*.log.previous", "*.json" }, "logs"),
                 new(
                     FindGameBarDirectory(),
-                    new[] { "component-error.txt", "component-diagnostics.txt", "widget-status.json" },
+                    new[]
+                    {
+                        "component-error.txt",
+                        "component-error.previous.txt",
+                        "component-diagnostics.txt",
+                        "component-diagnostics.previous.txt",
+                        "widget-status.json",
+                    },
                     "gamebar"
                 ),
                 new(new ScheduledShutdownService().DirectoryPath, new[] { "shutdown.log" }, "shutdown"),
