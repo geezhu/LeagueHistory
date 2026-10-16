@@ -6,6 +6,23 @@ namespace League;
 public partial class FormMain
 {
     private bool _exportingDiagnostics;
+    private UiHangMonitor? _hangMonitor;
+
+    private void StartHangMonitor()
+    {
+        _hangMonitor = new UiHangMonitor(
+            action => BeginInvoke(action),
+            () =>
+                $"游戏阶段 {_gameFlowWatcher?.CurrentPhase ?? "未知"}，客户端{(_uiManager?.LcuReady == true ? "已连接" : "未连接")}"
+        );
+        _hangMonitor.Start();
+    }
+
+    private void StopHangMonitor()
+    {
+        _hangMonitor?.Dispose();
+        _hangMonitor = null;
+    }
 
     private SettingRow CreateDiagnosticsRow()
     {
@@ -42,11 +59,14 @@ public partial class FormMain
         {
             button.Enabled = false;
         }
+        bool connected = _uiManager?.LcuReady == true;
         var state = new DiagnosticAppState(
-            _uiManager?.LcuReady == true,
+            connected,
             _uiManager?.IsGame == true,
             _loadingOverlay?.GameBarStatus ?? "",
-            _appConfig
+            _appConfig,
+            connected ? Globals.lcuClient?.Client : null,
+            _gameFlowWatcher?.CurrentPhase ?? "未知"
         );
         try
         {

@@ -12,6 +12,7 @@ internal static class DiagnosticReportChecks
         {
             await ExportAsync(root);
             ConfigIsSanitized();
+            await ClientInfoAsync();
         }
         finally
         {
@@ -79,6 +80,9 @@ internal static class DiagnosticReportChecks
         Check(report["environment"]?["screens"] is JArray { Count: > 0 }, "Report lists screens");
         Check(report["app"]?["lcuConnected"]?.Value<bool>() == true, "Report records the client connection");
         Check(report["app"]?["gameBar"]?.ToString() == "组件已连接", "Report records the Game Bar state");
+        Check(report["app"]?["phase"]?.ToString() == "未知", "Report records the game phase");
+        Check(report["client"]?["available"]?.Value<bool>() == false, "Without a client connection it says so");
+        Check(report["processes"]?["League of Legends"]?.Type == JTokenType.Integer, "Report counts game processes");
         Check(report["config"]?["EnableAutoSkinSelect"]?.Value<bool>() == true, "Report keeps ordinary settings");
         Check(report["files"] is JArray { Count: 2 }, "Report lists the included files");
     }
@@ -91,6 +95,49 @@ internal static class DiagnosticReportChecks
         Check(json["CustomSendContent"]?.ToString() == "（已去掉，3 字）", "Custom content is replaced by its length");
         Check(json["VoiceMicrophoneId"]?.ToString() == "已指定设备", "Microphone device IDs are not exported");
         Check(DiagnosticReportExporter.DescribeConfig(null).Type == JTokenType.Null, "Missing config stays null");
+    }
+
+    private static async Task ClientInfoAsync()
+    {
+        using var client = new HttpClient(new FakeClient()) { BaseAddress = new Uri("https://127.0.0.1:1/") };
+        var info = await DiagnosticReportExporter.DescribeClientAsync(client, default);
+        Check(info["gameVersion"]?.ToString() == "14.20.623.5122", "Game version comes from the client");
+        Check(
+            info["region"]?.ToString() == "TENCENT" && info["webRegion"]?.ToString() == "hn1",
+            "Region comes from the client"
+        );
+
+        using var failing = new HttpClient(new FakeClient(fail: true))
+        {
+            BaseAddress = new Uri("https://127.0.0.1:1/"),
+        };
+        var missing = await DiagnosticReportExporter.DescribeClientAsync(failing, default);
+        Check(
+            missing["gameVersion"]?.ToString() == "未取得（503）" && missing["region"]?.ToString() == "未取得（503）",
+            "A failing client records why the fields are missing"
+        );
+    }
+
+    private sealed class FakeClient(bool fail = false) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        )
+        {
+            if (fail)
+            {
+                return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable));
+            }
+
+            string body = request.RequestUri!.AbsolutePath switch
+            {
+                "/lol-patch/v1/game-version" => "\"14.20.623.5122\"",
+                "/riotclient/region-locale" => "{\"locale\":\"zh_CN\",\"region\":\"TENCENT\",\"webRegion\":\"hn1\"}",
+                _ => "{}",
+            };
+            return Task.FromResult(new HttpResponseMessage { Content = new StringContent(body) });
+        }
     }
 
     private static string Read(ZipArchive archive, string name)
