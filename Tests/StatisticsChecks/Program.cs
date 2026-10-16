@@ -87,6 +87,7 @@ internal static class Program
     private static void AddDataChecks(Dictionary<string, Action> checks)
     {
         checks["--client-checks"] = () => Background(ClientChecks.RunAsync);
+        checks["--lcu-service-checks"] = () => Background(LcuClientServiceChecks.RunAsync);
         checks["--item-set-checks"] = () => Background(ItemSetChecks.RunAsync);
         checks["--model-checks"] = () => Background(ModelChecks.RunAsync);
         checks["--sensevoice-checks"] = () => Background(SenseVoiceChecks.RunAsync);
