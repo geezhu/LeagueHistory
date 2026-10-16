@@ -79,4 +79,31 @@
 	  </None>
 	</ItemGroup>
 
+	<!-- The SDK already appends the commit to the product version. Record whether the working tree had
+	     uncommitted changes and when it was built, so Settings and diagnostic reports can show the exact source.
+	     Without git (e.g. building from a source archive) the state stays "unknown". -->
+	<Target Name="AddSourceStateMetadata" BeforeTargets="GetAssemblyAttributes">
+		<Exec Command="git status --porcelain" WorkingDirectory="$(MSBuildProjectDirectory)" ConsoleToMSBuild="true"
+		      StandardOutputImportance="low" StandardErrorImportance="low" IgnoreExitCode="true"
+		      Condition="Exists('$(MSBuildProjectDirectory)\.git')">
+			<Output TaskParameter="ConsoleOutput" PropertyName="SourceStatusOutput" />
+			<Output TaskParameter="ExitCode" PropertyName="SourceStatusExitCode" />
+		</Exec>
+		<PropertyGroup>
+			<SourceDirty>unknown</SourceDirty>
+			<SourceDirty Condition="'$(SourceStatusExitCode)' == '0' And '$(SourceStatusOutput)' == ''">false</SourceDirty>
+			<SourceDirty Condition="'$(SourceStatusExitCode)' == '0' And '$(SourceStatusOutput)' != ''">true</SourceDirty>
+		</PropertyGroup>
+		<ItemGroup>
+			<AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+				<_Parameter1>SourceDirty</_Parameter1>
+				<_Parameter2>$(SourceDirty)</_Parameter2>
+			</AssemblyAttribute>
+			<AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+				<_Parameter1>BuildTimeUtc</_Parameter1>
+				<_Parameter2>$([System.DateTime]::UtcNow.ToString("o"))</_Parameter2>
+			</AssemblyAttribute>
+		</ItemGroup>
+	</Target>
+
 </Project>

@@ -12,6 +12,7 @@ internal static class DefaultStatisticsSuite
     private static void DataChecks()
     {
         CoreUtilityChecks.Run();
+        BuildInfoChecks.Run();
         HistoryDataChecks.Run();
         TimelineDataChecks.Run();
         AramTeamScoreChecks.Run();
