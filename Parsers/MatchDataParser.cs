@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 using static League.FormMain;
 
@@ -49,7 +50,7 @@ namespace League.Parsers
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"解析比赛数据异常: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Data, "解析比赛数据异常", ex);
             }
 
             return result;

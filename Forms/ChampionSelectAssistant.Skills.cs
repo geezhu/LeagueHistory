@@ -1,5 +1,6 @@
 using League.Controls;
 using League.Infrastructure;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League;
@@ -73,7 +74,7 @@ internal sealed partial class ChampionSelectAssistant
         }
         catch (Exception error)
         {
-            System.Diagnostics.Debug.WriteLine($"Assistant skills: {error}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Assistant skills", error);
             if (!section.IsDisposed && !token.IsCancellationRequested)
             {
                 description.Visible = true;
@@ -211,7 +212,7 @@ internal sealed partial class ChampionSelectAssistant
         catch (Exception error)
         {
             // Optional artwork failure leaves the usable dark skill header in place.
-            System.Diagnostics.Debug.WriteLine($"Assistant skill artwork: {error}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Assistant skill artwork", error);
         }
     }
 
@@ -244,7 +245,7 @@ internal sealed partial class ChampionSelectAssistant
         catch (Exception error)
         {
             // The tooltip still describes this skill when its optional asset is missing.
-            System.Diagnostics.Debug.WriteLine($"Assistant skill icon: {error}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Assistant skill icon", error);
         }
     }
 }

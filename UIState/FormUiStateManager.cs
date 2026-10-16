@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using League.Controls;
 using League.Infrastructure;
+using League.Services;
 using League.UIHelpers;
 
 namespace League.UIState
@@ -446,7 +447,7 @@ namespace League.UIState
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Tab1Poller轮询异常: {ex}");
+                        AppLog.Shared.Warn(LogCategory.Ui, "Tab1Poller轮询异常", ex);
                     }
                 },
                 3000
@@ -482,7 +483,7 @@ namespace League.UIState
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"[SafeInvoke] {ex.Message}");
+                        AppLog.Shared.Warn(LogCategory.Ui, "[SafeInvoke]", ex);
                     }
                 }
             }
@@ -494,7 +495,7 @@ namespace League.UIState
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[SafeInvoke] {ex.Message}");
+                    AppLog.Shared.Warn(LogCategory.Ui, "[SafeInvoke]", ex);
                 }
             }
         }
@@ -515,7 +516,7 @@ namespace League.UIState
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[SafeInvokeSync] {ex.Message}");
+                    AppLog.Shared.Warn(LogCategory.Ui, "[SafeInvokeSync]", ex);
                 }
             }
             else
@@ -526,7 +527,7 @@ namespace League.UIState
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[SafeInvokeSync] {ex.Message}");
+                    AppLog.Shared.Warn(LogCategory.Ui, "[SafeInvokeSync]", ex);
                 }
             }
         }

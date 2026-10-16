@@ -167,7 +167,7 @@ internal sealed class ShutdownSettingsController : IDisposable
         }
         catch (Exception error)
         {
-            System.Diagnostics.Debug.WriteLine($"Shutdown settings read: {error}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Shutdown settings read", error);
             if (!_disposed)
             {
                 _schedulerState = SchedulerState.Failed;
@@ -287,7 +287,7 @@ internal sealed class ShutdownSettingsController : IDisposable
         }
         catch (Exception error)
         {
-            System.Diagnostics.Debug.WriteLine($"Shutdown settings mutation: {error}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Shutdown settings mutation", error);
             if (!_disposed)
             {
                 _result.Text = "操作未完成：" + error.Message;

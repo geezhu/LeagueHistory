@@ -10,6 +10,18 @@ public enum LogCategory
     Sgp,
     Update,
     Crash,
+
+    // 游戏阶段变化和对局流程。
+    Game,
+
+    // 自动接受、自动预选、换皮肤、结算后返回房间等替用户执行的操作。
+    Automation,
+
+    // 战绩、召唤师、英雄与图片等数据读取和解析。
+    Data,
+
+    // 界面展示和交互。
+    Ui,
 }
 
 /// <summary>
@@ -22,15 +34,21 @@ public sealed class AppLog
     public static AppLog Shared { get; } =
         new(() => Path.Combine(LogRetention.LogsDirectory, $"app-{DateTime.Now:yyyy-MM-dd}.log"));
 
+    // Identical warnings within this window are counted instead of written, e.g. a page of icons failing offline.
+    private const long RepeatWindowMilliseconds = 60_000;
+
     private readonly LogFileWriter _log;
     private readonly DiagnosticRedactor _redactor;
+    private readonly Func<long> _clock;
     private readonly Dictionary<string, string> _states = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (long Since, int Suppressed)> _repeats = new(StringComparer.Ordinal);
     private int _headerWritten;
 
-    public AppLog(Func<string> path, DiagnosticRedactor? redactor = null)
+    public AppLog(Func<string> path, DiagnosticRedactor? redactor = null, Func<long>? clock = null)
     {
         _log = new LogFileWriter(path, 4 * 1024 * 1024, 2000);
         _redactor = redactor ?? DiagnosticRedactor.Shared;
+        _clock = clock ?? (() => Environment.TickCount64);
     }
 
     public string CurrentPath => _log.CurrentPath;
@@ -38,10 +56,29 @@ public sealed class AppLog
     public void Info(LogCategory category, string message) => Write("info", category, message);
 
     public void Warn(LogCategory category, string message, Exception? error = null) =>
-        Write("warn", category, WithError(message, error, includeStack: false));
+        WriteUnlessRepeated("warn", category, WithError(message, error, includeStack: false));
 
     public void Error(LogCategory category, string message, Exception? error = null) =>
-        Write("error", category, WithError(message, error, includeStack: false));
+        WriteUnlessRepeated("error", category, WithError(message, error, includeStack: false));
+
+    private void WriteUnlessRepeated(string level, LogCategory category, string message)
+    {
+        string key = $"{level}|{category}|{message}";
+        long now = _clock();
+        int suppressed;
+        lock (_repeats)
+        {
+            if (_repeats.TryGetValue(key, out var seen) && now - seen.Since < RepeatWindowMilliseconds)
+            {
+                _repeats[key] = (seen.Since, seen.Suppressed + 1);
+                return;
+            }
+
+            suppressed = _repeats.TryGetValue(key, out seen) ? seen.Suppressed : 0;
+            _repeats[key] = (now, 0);
+        }
+        Write(level, category, suppressed > 0 ? $"{message}（此前 60 秒内又出现 {suppressed} 次）" : message);
+    }
 
     /// <summary>
     /// 同一件事只在状态变化时记一次，例如每 5 秒的连接轮询只记「客户端未启动 → 已找到客户端」。
@@ -58,6 +95,18 @@ public sealed class AppLog
             _states[key] = message;
         }
         Write("info", category, message);
+    }
+
+    /// <summary>忘记这些状态，下一次即使内容相同也会再记一次，例如进入新的一局选人。</summary>
+    public void ResetStates(params string[] keys)
+    {
+        lock (_states)
+        {
+            foreach (var key in keys)
+            {
+                _states.Remove(key);
+            }
+        }
     }
 
     /// <summary>崩溃时同步写入完整调用栈；进程可能马上退出，不能等后台写入。</summary>

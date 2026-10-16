@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using League.Controls;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Parsers
@@ -58,7 +59,7 @@ namespace League.Parsers
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"解析异常: {ex}");
+                AppLog.Shared.Warn(LogCategory.Data, "解析异常", ex);
                 return CreateEmptyPanel();
             }
             finally
@@ -213,7 +214,7 @@ namespace League.Parsers
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"加载海克斯符文 {id} 失败: {ex.Message}");
+                        AppLog.Shared.Warn(LogCategory.Data, $"加载海克斯符文 {id} 失败", ex);
                     }
                     finally
                     {
@@ -438,7 +439,7 @@ namespace League.Parsers
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("提取基础数据异常: " + ex.Message);
+                AppLog.Shared.Warn(LogCategory.Data, "提取基础数据异常", ex);
                 return null;
             }
         }
@@ -660,7 +661,7 @@ namespace League.Parsers
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("提取承伤数据异常: " + ex.Message);
+                AppLog.Shared.Warn(LogCategory.Data, "提取承伤数据异常", ex);
                 return (damageTaken: 0, damageTakenText: "0K |1");
             }
         }
@@ -916,7 +917,7 @@ namespace League.Parsers
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"创建玩家信息异常: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Data, "创建玩家信息异常", ex);
                 return null;
             }
         }

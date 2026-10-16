@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using League.Infrastructure;
+using League.Services;
 using Newtonsoft.Json;
 
 namespace League.PrimaryElection
@@ -74,7 +75,7 @@ namespace League.PrimaryElection
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[ChampionManager] 初始化失败: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Data, "[ChampionManager] 初始化失败", ex);
                 LoadError?.Invoke(this, ex.Message);
             }
         }
@@ -95,7 +96,7 @@ namespace League.PrimaryElection
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[ChampionManager] 读取本地版本文件失败: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Data, "[ChampionManager] 读取本地版本文件失败", ex);
             }
             return string.Empty;
         }
@@ -238,7 +239,7 @@ namespace League.PrimaryElection
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[ChampionManager] 缓存加载失败: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Data, "[ChampionManager] 缓存加载失败", ex);
                 return false;
             }
         }
@@ -264,7 +265,7 @@ namespace League.PrimaryElection
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[ChampionManager] 缓存保存失败: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Data, "[ChampionManager] 缓存保存失败", ex);
             }
         }
 

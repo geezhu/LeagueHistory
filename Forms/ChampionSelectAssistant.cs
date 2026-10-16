@@ -1093,7 +1093,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         }
         catch (Exception ex)
         {
-            Debug.WriteLine("符文应用后的聊天提示未发送：" + ex.GetType().Name);
+            AppLog.Shared.Warn(LogCategory.Ui, "符文应用后的聊天提示未发送", ex);
             if (!IsDisposed)
             {
                 _status.Text = $"方案 {choice} 已应用，聊天提示未发送。";
@@ -1173,7 +1173,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         catch (Exception ex)
         {
             // Work faults are observed; client cleanup must still complete.
-            Debug.WriteLine("Assistant cleanup: " + ex.GetType().Name);
+            AppLog.Shared.Warn(LogCategory.Ui, "Assistant cleanup", ex);
         }
         _opgg.Dispose();
         _am.Dispose();

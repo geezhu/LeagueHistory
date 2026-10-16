@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using League.Models;
+using League.Services;
 using League.States;
 using static League.FormMain;
 
@@ -188,7 +189,7 @@ namespace League.Controls
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Tab加载失败: {ex.Message}");
+                    AppLog.Shared.Warn(LogCategory.Ui, "Tab加载失败", ex);
                 }
             });
 
@@ -253,7 +254,7 @@ namespace League.Controls
                         }
                         catch (Exception ex)
                         {
-                            Debug.WriteLine($"[强制刷新异常] {ex}");
+                            AppLog.Shared.Warn(LogCategory.Ui, "[强制刷新异常]", ex);
                         }
                     },
                     TaskScheduler.FromCurrentSynchronizationContext()

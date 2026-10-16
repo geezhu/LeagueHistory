@@ -1,5 +1,6 @@
 ﻿using League.Clients;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -137,7 +138,7 @@ internal sealed class RecentActivityView : Control
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Recent activity: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Recent activity", ex);
             if (!IsDisposed && !token.IsCancellationRequested)
             {
                 _status = "近期统计加载失败，请稍后重新打开主页。";

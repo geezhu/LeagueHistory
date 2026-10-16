@@ -1,4 +1,5 @@
 using League.Models;
+using League.Services;
 
 namespace League;
 
@@ -448,7 +449,7 @@ internal sealed partial class ChampionSelectAssistant
         }
         catch (Exception error)
         {
-            System.Diagnostics.Debug.WriteLine("Mayhem augment icon: " + error.GetType().Name);
+            AppLog.Shared.Warn(LogCategory.Ui, "Mayhem augment icon", error);
             return;
         }
         if (token.IsCancellationRequested || card.IsDisposed)
@@ -564,7 +565,7 @@ internal sealed partial class ChampionSelectAssistant
         catch (Exception error)
         {
             // Optional icon failure leaves the actionable recommendation card visible.
-            System.Diagnostics.Debug.WriteLine("Mayhem spell icon: " + error.GetType().Name);
+            AppLog.Shared.Warn(LogCategory.Ui, "Mayhem spell icon", error);
         }
     }
 }

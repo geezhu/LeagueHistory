@@ -59,7 +59,7 @@ namespace League.Services
                         }
                         catch (Exception ex)
                         {
-                            Debug.WriteLine($"[关进程] {name} 失败: {ex.Message}");
+                            AppLog.Shared.Warn(LogCategory.Automation, $"[关进程] {name} 失败", ex);
                         }
                     }
                 }

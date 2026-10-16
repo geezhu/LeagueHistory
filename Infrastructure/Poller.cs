@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using League.Services;
 
 namespace League.Infrastructure
 {
@@ -27,7 +28,7 @@ namespace League.Infrastructure
                         }
                         catch (Exception ex)
                         {
-                            Debug.WriteLine($"[Poller异常] {ex}");
+                            AppLog.Shared.Warn(LogCategory.App, "[Poller异常]", ex);
                         }
 
                         try

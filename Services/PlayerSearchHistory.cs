@@ -34,7 +34,7 @@ public sealed class PlayerSearchHistory
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            Debug.WriteLine($"[SearchHistory] Load: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Data, "[SearchHistory] Load", ex);
         }
     }
 
@@ -90,7 +90,7 @@ public sealed class PlayerSearchHistory
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Debug.WriteLine($"[SearchHistory] Save: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Data, "[SearchHistory] Save", ex);
         }
         finally
         {

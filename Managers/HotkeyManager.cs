@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using League.Services;
 using static League.FormMain;
 
 namespace League.Managers
@@ -90,7 +91,7 @@ namespace League.Managers
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[HotkeyManager] 处理热键异常: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Automation, "[HotkeyManager] 处理热键异常", ex);
             }
         }
 

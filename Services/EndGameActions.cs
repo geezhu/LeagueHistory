@@ -32,11 +32,11 @@ namespace League.Services
                 var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
                 var response = await client.PostAsync(endpoint, content);
-                Debug.WriteLine($"[LCU Post] {endpoint} -> {(int)response.StatusCode}");
+                AppLog.Shared.Info(LogCategory.Automation, $"结算后操作 {endpoint} → {(int)response.StatusCode}");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[EndGameActions Post] {endpoint} 异常: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Automation, $"[EndGameActions Post] {endpoint} 异常", ex);
             }
         }
 
@@ -52,7 +52,7 @@ namespace League.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[SkipHonor] 失败: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Automation, "[SkipHonor] 失败", ex);
             }
         }
 
@@ -69,7 +69,7 @@ namespace League.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[DismissEndOfGameStats] 失败: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Automation, "[DismissEndOfGameStats] 失败", ex);
             }
         }
 
@@ -99,7 +99,7 @@ namespace League.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[ReturnToSpecificLobby] 异常: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Automation, "[ReturnToSpecificLobby] 异常", ex);
             }
         }
     }

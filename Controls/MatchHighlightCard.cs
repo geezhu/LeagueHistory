@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using League.Infrastructure;
+using League.Services;
 
 namespace League.Controls;
 
@@ -48,7 +49,7 @@ internal sealed class MatchHighlightCard : Control
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Highlight splash: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Highlight splash", ex);
         }
     }
 

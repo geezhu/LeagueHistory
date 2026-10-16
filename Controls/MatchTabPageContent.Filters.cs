@@ -1,4 +1,5 @@
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -98,7 +99,7 @@ public partial class MatchTabPageContent
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"战绩结果筛选失败：{ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "战绩结果筛选失败", ex);
         }
     }
 }

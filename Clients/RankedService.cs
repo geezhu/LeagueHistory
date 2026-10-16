@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Clients
@@ -40,7 +41,7 @@ namespace League.Clients
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"获取段位失败: {ex}");
+                AppLog.Shared.Warn(LogCategory.Data, "获取段位失败", ex);
                 return new JObject();
             }
         }

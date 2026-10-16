@@ -1,5 +1,6 @@
 using League.Controls;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League;
@@ -70,7 +71,7 @@ public partial class FormMain
         }
         catch (Exception error)
         {
-            System.Diagnostics.Debug.WriteLine($"Room match detail: {error}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Room match detail", error);
             if (!surface.IsDisposed)
             {
                 status.Text = "加载详情失败，请返回后重试。";

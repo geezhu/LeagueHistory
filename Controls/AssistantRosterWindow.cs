@@ -409,7 +409,7 @@ internal sealed class AssistantRosterWindow : Form
         }
         catch (Exception error)
         {
-            System.Diagnostics.Debug.WriteLine("Roster mastery: " + error.GetType().Name);
+            AppLog.Shared.Warn(LogCategory.Ui, "Roster mastery", error);
             if (!state.Label.IsDisposed && !state.Token.IsCancellationRequested)
             {
                 state.Label.Text = "成就暂不可用";
@@ -436,7 +436,7 @@ internal sealed class AssistantRosterWindow : Form
         catch (Exception error)
         {
             // Optional portraits do not prevent tier cards from displaying.
-            System.Diagnostics.Debug.WriteLine("Roster icon: " + error.GetType().Name);
+            AppLog.Shared.Warn(LogCategory.Ui, "Roster icon", error);
         }
     }
 

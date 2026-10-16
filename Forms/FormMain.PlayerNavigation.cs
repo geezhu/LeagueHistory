@@ -1,3 +1,4 @@
+using League.Services;
 using League.States;
 using Newtonsoft.Json.Linq;
 
@@ -61,7 +62,7 @@ public partial class FormMain
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Player profile navigation: {ex}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Player profile navigation", ex);
             if (!IsDisposed && !Disposing)
             {
                 MessageBox.Show(this, "查询失败: " + ex.Message);

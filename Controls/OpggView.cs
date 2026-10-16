@@ -602,7 +602,7 @@ internal sealed partial class OpggView : UserControl
         catch (Exception ex)
         {
             // Observe optional resource failures even after the waiting render has been cancelled.
-            System.Diagnostics.Debug.WriteLine($"OP.GG retired resource: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "OP.GG retired resource", ex);
         }
     }
 
@@ -635,7 +635,7 @@ internal sealed partial class OpggView : UserControl
         catch (Exception ex)
         {
             image?.Dispose();
-            System.Diagnostics.Debug.WriteLine($"OP.GG icon: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "OP.GG icon", ex);
             if (!_closing && !row.IsDisposed && !token.IsCancellationRequested)
             {
                 row.Controls.Add(new Label { AutoSize = true, Text = name });
@@ -738,7 +738,7 @@ internal sealed partial class OpggView : UserControl
         catch (Exception ex) when (ex is HttpRequestException or Newtonsoft.Json.JsonException)
         {
             // A disconnected or transient client response must not interrupt manual browsing.
-            System.Diagnostics.Debug.WriteLine($"OP.GG selection: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "OP.GG selection", ex);
         }
         finally
         {
@@ -850,7 +850,7 @@ internal sealed partial class OpggView : UserControl
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"OP.GG cleanup: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "OP.GG cleanup", ex);
         }
         _client.Dispose();
     }

@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using League.Caching;
 using League.Models;
+using League.Services;
 using League.States;
 using Newtonsoft.Json.Linq;
 
@@ -604,7 +605,7 @@ namespace League.Controls
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[InitiaRank异常] {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Ui, "[InitiaRank异常]", ex);
             }
         }
 
@@ -659,7 +660,7 @@ namespace League.Controls
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[ForceRefreshData异常] {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Ui, "[ForceRefreshData异常]", ex);
             }
             finally
             {
@@ -748,7 +749,7 @@ namespace League.Controls
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[GetProfileIconAsync异常] {ex.Message}");
+                    AppLog.Shared.Warn(LogCategory.Ui, "[GetProfileIconAsync异常]", ex);
                 }
 
                 if (newImage == null)
@@ -771,7 +772,7 @@ namespace League.Controls
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"[UpdateProfileIcon UI异常] {ex.Message}");
+                        AppLog.Shared.Warn(LogCategory.Ui, "[UpdateProfileIcon UI异常]", ex);
                         // 最后兜底
                         try
                         {
@@ -785,7 +786,7 @@ namespace League.Controls
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[UpdateProfileIcon 外层异常] {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Ui, "[UpdateProfileIcon 外层异常]", ex);
             }
         }
 
@@ -1104,7 +1105,7 @@ namespace League.Controls
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[UI清理异常] {ex.Message}");
+                    AppLog.Shared.Warn(LogCategory.Ui, "[UI清理异常]", ex);
                 }
             });
 

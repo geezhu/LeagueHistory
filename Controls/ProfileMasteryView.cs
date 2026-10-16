@@ -1,4 +1,5 @@
 ﻿using League.Clients;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -188,7 +189,7 @@ public sealed class ProfileMasteryView : UserControl
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"成就加载失败: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "成就加载失败", ex);
             if (!_closing && !token.IsCancellationRequested)
             {
                 _status.Text = "英雄成就加载失败，请重试。";
@@ -355,7 +356,7 @@ public sealed class ProfileMasteryView : UserControl
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"玩家资料加载失败: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "玩家资料加载失败", ex);
         }
     }
 

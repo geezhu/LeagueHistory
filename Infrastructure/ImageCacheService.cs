@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using League.Services;
 
 namespace League.Infrastructure
 {
@@ -51,7 +52,7 @@ namespace League.Infrastructure
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"图片缓存不可读 {cachePath}: {ex.Message}");
+                        AppLog.Shared.Warn(LogCategory.Data, $"图片缓存不可读 {cachePath}", ex);
                     }
                 }
                 try
@@ -73,13 +74,13 @@ namespace League.Infrastructure
                     catch (Exception ex)
                     {
                         // A disk-cache failure must not discard a successfully downloaded image.
-                        Debug.WriteLine($"图片缓存写入失败 {cachePath}: {ex.Message}");
+                        AppLog.Shared.Warn(LogCategory.Data, $"图片缓存写入失败 {cachePath}", ex);
                     }
                     return image;
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"图片加载失败 {iconPath}: {ex.Message}");
+                    AppLog.Shared.Warn(LogCategory.Data, $"图片加载失败 {iconPath}", ex);
                     return null;
                 }
             }

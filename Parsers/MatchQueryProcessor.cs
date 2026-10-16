@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using League.Managers;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 using static League.FormMain;
 
@@ -103,7 +104,7 @@ namespace League.Parsers
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[SafeFetch] 第{attempt}次失败: {ex.Message}");
+                    AppLog.Shared.Warn(LogCategory.Data, $"[SafeFetch] 第{attempt}次失败", ex);
                     if (attempt <= retryTimes)
                     {
                         await Task.Delay(800);

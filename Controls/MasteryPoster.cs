@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using League.Infrastructure;
+using League.Services;
 
 namespace League.Controls;
 
@@ -52,7 +53,7 @@ internal sealed class MasteryPoster : PictureBox
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Mastery poster: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Mastery poster", ex);
         }
     }
 

@@ -1,5 +1,6 @@
 ﻿using League.Clients;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -144,7 +145,7 @@ public sealed class TimelineView : UserControl
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"时间线解析失败: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "时间线解析失败", ex);
             if (!IsDisposed && !token.IsCancellationRequested)
             {
                 _status.Text = "时间线格式暂不支持，请重试。";

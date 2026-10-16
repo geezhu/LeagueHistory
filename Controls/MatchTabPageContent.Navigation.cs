@@ -1,4 +1,5 @@
 ﻿using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -127,7 +128,7 @@ public partial class MatchTabPageContent
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"详情切换失败：{ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "详情切换失败", ex);
         }
     }
 
@@ -168,7 +169,7 @@ public partial class MatchTabPageContent
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"详情准备失败：{ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "详情准备失败", ex);
             DiscardDetail(next);
             return;
         }
@@ -243,7 +244,7 @@ public partial class MatchTabPageContent
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"玩家主页打开失败：{ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "玩家主页打开失败", ex);
         }
     }
 

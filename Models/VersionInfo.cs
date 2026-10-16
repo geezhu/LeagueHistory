@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using League.Services;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace League.Models
@@ -78,7 +79,7 @@ namespace League.Models
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine(ex);
+                AppLog.Shared.Warn(LogCategory.App, "VersionInfo", ex);
                 return null;
             }
         }

@@ -3,6 +3,7 @@ using System.Drawing.Imaging;
 using League.Caching;
 using League.Models;
 using League.PrimaryElection;
+using League.Services;
 using Newtonsoft.Json.Linq;
 using static League.FormMain;
 
@@ -207,7 +208,7 @@ namespace League.ChampionSkin
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[ChampionSkinBrowser] 初始化失败: {ex}");
+                AppLog.Shared.Warn(LogCategory.Ui, "[ChampionSkinBrowser] 初始化失败", ex);
                 MessageBox.Show($"加载失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -305,7 +306,7 @@ namespace League.ChampionSkin
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[ChampionSkinBrowser] LoadOwnedSkinsAsync: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Ui, "[ChampionSkinBrowser] LoadOwnedSkinsAsync", ex);
             }
             return result;
         }

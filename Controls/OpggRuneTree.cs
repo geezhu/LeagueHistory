@@ -2,6 +2,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using League.Infrastructure;
 using League.Models;
+using League.Services;
 
 namespace League.Controls;
 
@@ -192,7 +193,7 @@ internal sealed class OpggRuneTree : Control
         catch (Exception ex)
         {
             // The shared cache task still needs its failure observed after render cancellation.
-            System.Diagnostics.Debug.WriteLine($"OP.GG retired rune: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "OP.GG retired rune", ex);
         }
     }
 

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Clients;
@@ -358,7 +359,7 @@ public sealed class AramMetaClient : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine("arammeta cache read: " + ex.Message);
+                    AppLog.Shared.Warn(LogCategory.Data, "arammeta cache read", ex);
                 }
             });
 
@@ -411,7 +412,7 @@ public sealed class AramMetaClient : IDisposable
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine("arammeta cache write: " + ex.Message);
+            AppLog.Shared.Warn(LogCategory.Data, "arammeta cache write", ex);
         }
         finally
         {

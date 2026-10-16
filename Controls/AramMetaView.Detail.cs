@@ -1,4 +1,5 @@
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -119,7 +120,7 @@ internal sealed partial class AramMetaView
         catch (Exception ex)
         {
             // Keep the recommendation usable with its placeholder when optional artwork fails.
-            System.Diagnostics.Debug.WriteLine($"arammeta image: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "arammeta image", ex);
             return null;
         }
         finally

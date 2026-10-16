@@ -1,5 +1,6 @@
 using League.Clients;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -110,7 +111,7 @@ public sealed class CareerStatisticsView : UserControl
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"统计解析失败: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "统计解析失败", ex);
             if (!IsDisposed && !token.IsCancellationRequested)
             {
                 _status.Text = "统计数据格式暂不支持，未使用不完整数据计算。";

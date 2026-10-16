@@ -2,6 +2,7 @@
 using System.IO.Compression;
 using League.Controls;
 using League.Models;
+using League.Services;
 using League.UIState;
 using Newtonsoft.Json.Linq;
 using static League.FormMain;
@@ -433,7 +434,7 @@ exit";
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"UI 预热失败: {ex}");
+                AppLog.Shared.Warn(LogCategory.Data, "UI 预热失败", ex);
             }
         }
 
@@ -456,7 +457,7 @@ exit";
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"后台预热失败: {ex}");
+                    AppLog.Shared.Warn(LogCategory.Data, "后台预热失败", ex);
                 }
             });
         }

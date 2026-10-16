@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using League.Services;
 using Newtonsoft.Json;
 
 namespace League.Clients
@@ -32,7 +33,7 @@ namespace League.Clients
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[自动接受] 异常: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Automation, "[自动接受] 异常", ex);
                 return false;
             }
         }
@@ -61,7 +62,7 @@ namespace League.Clients
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"选人界面发送失败: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Automation, "选人界面发送失败", ex);
                 return false;
             }
         }

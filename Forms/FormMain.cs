@@ -298,7 +298,7 @@ namespace League
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[就绪检查] 异常: {ex.Message}");
+                    AppLog.Shared.Warn(LogCategory.Ui, "[就绪检查] 异常", ex);
                 }
 
                 await Task.Delay(delayMs);
@@ -397,7 +397,7 @@ namespace League
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[英雄预加载] 失败: {ex.Message}");
+                    AppLog.Shared.Warn(LogCategory.Ui, "[英雄预加载] 失败", ex);
                 }
             }
 
@@ -801,7 +801,7 @@ namespace League
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[自动预选] 读取配置异常: {ex.Message}\n{ex.StackTrace}");
+                AppLog.Shared.Warn(LogCategory.Ui, "[自动预选] 读取配置异常", ex);
                 _preSelectedHeroes = new List<PreliminaryHero>();
                 return _preSelectedHeroes;
             }

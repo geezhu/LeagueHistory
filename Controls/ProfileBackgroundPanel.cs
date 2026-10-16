@@ -1,6 +1,7 @@
 using System.Drawing.Drawing2D;
 using League.Clients;
 using League.Infrastructure;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Controls;
@@ -117,7 +118,7 @@ internal sealed class ProfileBackgroundPanel : Panel
         catch (Exception ex)
         {
             // Background artwork is optional; the profile remains usable without it.
-            System.Diagnostics.Debug.WriteLine($"Profile background: {ex.GetType().Name}");
+            AppLog.Shared.Warn(LogCategory.Ui, "Profile background", ex);
         }
     }
 

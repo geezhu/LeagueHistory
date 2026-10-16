@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Infrastructure
@@ -34,7 +35,7 @@ namespace League.Infrastructure
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"海克斯符文加载异常: {ex.Message}");
+                AppLog.Shared.Warn(LogCategory.Data, "海克斯符文加载异常", ex);
                 _augments = new();
             }
         }
