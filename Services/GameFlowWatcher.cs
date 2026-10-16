@@ -85,7 +85,8 @@ namespace League.Services
         private void HandleLcuDisconnected()
         {
             _autoAccepter.Reset();
-            Debug.WriteLine("[GameFlowWatcher] 检测到 LCU 断开，准备重启连接轮询");
+            // Same key as the connection check, so the next successful connection is logged again.
+            AppLog.Shared.State(LogCategory.Connection, "lcu-api", "客户端连接断开，重新开始检测");
 
             _uiManager.LcuReady = false;
             _uiManager.IsGame = false;

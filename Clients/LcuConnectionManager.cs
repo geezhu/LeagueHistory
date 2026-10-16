@@ -31,7 +31,7 @@ namespace League.Clients
                 // 测试连接
                 if (await TestConnectionAsync())
                 {
-                    Debug.WriteLine("[LCU] 初始化成功，已连接 LCU API");
+                    Services.AppLog.Shared.State(Services.LogCategory.Connection, "lcu-api", "已连接客户端接口");
                     return (true, _lcuClient);
                 }
 
@@ -39,7 +39,11 @@ namespace League.Clients
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[LCU] 初始化异常: {ex.Message}");
+                Services.AppLog.Shared.State(
+                    Services.LogCategory.Connection,
+                    "lcu-api",
+                    $"客户端接口初始化异常：{ex.GetType().Name} HRESULT={ex.HResult:X8}"
+                );
                 return (false, null);
             }
         }
@@ -56,25 +60,28 @@ namespace League.Clients
                     return true;
                 }
 
-                Debug.WriteLine($"[LCU] LCU 返回异常状态码: {response.StatusCode}");
+                LogApiState($"客户端接口返回 {(int)response.StatusCode}（登录未完成时常见）");
                 return false;
             }
-            catch (TaskCanceledException ex)
+            catch (TaskCanceledException)
             {
-                Debug.WriteLine($"[LCU] 请求超时: {ex.Message}");
+                LogApiState("客户端接口 10 秒内没有响应");
                 return false;
             }
-            catch (HttpRequestException)
+            catch (HttpRequestException ex)
             {
-                Debug.WriteLine($"[LCU] 由于目标计算机积极拒绝，无法连接。");
+                LogApiState($"无法连接客户端接口：{ex.HttpRequestError}");
                 return false;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[LCU] 其他异常: {ex}");
+                LogApiState($"客户端接口测试异常：{ex.GetType().Name} HRESULT={ex.HResult:X8}");
                 return false;
             }
         }
+
+        private static void LogApiState(string message) =>
+            Services.AppLog.Shared.State(Services.LogCategory.Connection, "lcu-api", message);
 
         public void Dispose()
         {

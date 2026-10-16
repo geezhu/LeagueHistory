@@ -64,22 +64,32 @@ namespace League.Clients
             _lcuClient = lcu;
             if (!await LoadSessionAsync())
             {
+                LogInitState("战绩服务初始化未完成：登录会话尚未就绪");
                 return false;
             }
 
             if (!await LoadEntitlementsTokenAsync())
             {
+                LogInitState("战绩服务初始化未完成：未取得访问令牌");
                 return false;
             }
 
             if (string.IsNullOrEmpty(_puuid) || string.IsNullOrEmpty(_accessToken))
             {
+                LogInitState("战绩服务初始化未完成：账号信息不完整");
                 return false;
             }
 
             _sgpUrl = await LoadSgpEndpointAsync();
+            // The endpoint is the public regional service address, useful for telling servers apart.
+            LogInitState(
+                string.IsNullOrEmpty(_sgpUrl) ? "战绩服务初始化失败：未取得服务地址" : $"战绩服务已就绪：{_sgpUrl}"
+            );
             return !string.IsNullOrEmpty(_sgpUrl);
         }
+
+        private static void LogInitState(string message) =>
+            Services.AppLog.Shared.State(Services.LogCategory.Sgp, "sgp-init", message);
 
         public async Task<bool> LoadSessionAsync()
         {
@@ -179,16 +189,20 @@ namespace League.Clients
             }
 
             string fullUrl = BuildMatchHistoryUrl(puuid, startIndex, count, tag);
+            string failure = "";
             for (int attempt = 1; attempt <= 3; attempt++)
             {
-                var (outcome, games) = await TryFetchMatchesOnceAsync(fullUrl, attempt, cancellationToken);
+                var (outcome, games, reason) = await TryFetchMatchesOnceAsync(fullUrl, attempt, cancellationToken);
                 if (outcome == SgpAttempt.Succeeded)
                 {
+                    LogFetchState("战绩查询正常");
                     return games;
                 }
 
+                failure = reason;
                 if (outcome == SgpAttempt.TokenRefreshFailed)
                 {
+                    LogFetchState("战绩查询失败：访问令牌刷新失败");
                     return null;
                 }
 
@@ -199,9 +213,13 @@ namespace League.Clients
                 }
             }
 
-            Debug.WriteLine("SGP 多次重试后仍失败（服务器异常或网络不可用）");
+            // Logged once per change: ten cards failing for the same reason during maintenance leave one line.
+            LogFetchState($"战绩查询重试 3 次仍失败：{failure}");
             return null; // ★ 明确表示：请求失败，不是「没有战绩」
         }
+
+        private static void LogFetchState(string message) =>
+            Services.AppLog.Shared.State(Services.LogCategory.Sgp, "sgp-fetch", message);
 
         private enum SgpAttempt
         {
@@ -224,8 +242,9 @@ namespace League.Clients
 
         /// <summary>
         /// 一次限流请求。成功时返回 games（没有 games 字段时为空数组）；超时、网络错误和服务器错误可以重试。
+        /// 失败原因只含状态码或异常类型，不含请求地址里的玩家 ID。
         /// </summary>
-        private async Task<(SgpAttempt Outcome, JArray Games)> TryFetchMatchesOnceAsync(
+        private async Task<(SgpAttempt Outcome, JArray Games, string Failure)> TryFetchMatchesOnceAsync(
             string fullUrl,
             int attempt,
             CancellationToken cancellationToken
@@ -255,11 +274,12 @@ namespace League.Clients
 
                     // ★ 成功：有 games 就返回，没有就返回空数组（不要返回 null）
                     var games = json["games"] as JArray;
-                    return (SgpAttempt.Succeeded, games ?? new JArray());
+                    return (SgpAttempt.Succeeded, games ?? new JArray(), "");
                 }
 
                 string errorContent = await response.Content.ReadAsStringAsync(cts.Token);
                 Debug.WriteLine($"请求失败: {response.StatusCode} - {errorContent}");
+                string failure = $"服务器返回 {(int)response.StatusCode}";
 
                 // 401/403 再刷新 token
                 if (
@@ -268,9 +288,10 @@ namespace League.Clients
                 )
                 {
                     Debug.WriteLine("刷新 Token 失败");
-                    return (SgpAttempt.TokenRefreshFailed, null);
+                    return (SgpAttempt.TokenRefreshFailed, null, failure);
                 }
                 // 5xx / 503 等服务器错误：继续重试，最后仍失败则返回 null
+                return (SgpAttempt.Retry, null, failure);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -279,21 +300,22 @@ namespace League.Clients
             catch (TaskCanceledException tce)
             {
                 Debug.WriteLine($"SGP 查询超时（尝试 {attempt}/3）: {tce.Message}");
+                return (SgpAttempt.Retry, null, $"{RequestTimeoutSeconds} 秒超时");
             }
             catch (HttpRequestException hre)
             {
                 Debug.WriteLine($"HTTP 请求异常: {hre.Message} (Inner: {hre.InnerException?.Message})");
+                return (SgpAttempt.Retry, null, $"网络错误 {hre.HttpRequestError}");
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"其他异常: {ex.Message}");
+                return (SgpAttempt.Retry, null, $"{ex.GetType().Name} HRESULT={ex.HResult:X8}");
             }
             finally
             {
                 _sgpLimiter.Release();
             }
-
-            return (SgpAttempt.Retry, null);
         }
     }
 }
