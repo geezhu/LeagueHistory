@@ -1,5 +1,5 @@
-﻿using Newtonsoft.Json.Linq;
-using System.Diagnostics;
+﻿using System.Diagnostics;
+using Newtonsoft.Json.Linq;
 
 namespace League.Clients
 {
@@ -37,7 +37,7 @@ namespace League.Clients
                 Debug.WriteLine($"[LCU] 请求超时: {ex.Message}");
                 return null;
             }
-            catch (HttpRequestException ex) 
+            catch (HttpRequestException ex)
             {
                 Debug.WriteLine($"由于目标计算机积极拒绝，无法连接。");
                 return null;
@@ -66,7 +66,10 @@ namespace League.Clients
                 var content = await response.Content.ReadAsStringAsync(cancellationToken);
                 return JObject.Parse(content);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (TaskCanceledException ex)
             {
                 Debug.WriteLine($"[LCU] 请求超时: {ex.Message}");
@@ -96,7 +99,10 @@ namespace League.Clients
                 var content = await response.Content.ReadAsStringAsync(cancellationToken);
                 return JObject.Parse(content);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (TaskCanceledException ex)
             {
                 Debug.WriteLine($"[LCU] 请求超时: {ex.Message}");

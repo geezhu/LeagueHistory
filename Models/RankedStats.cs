@@ -1,19 +1,18 @@
-﻿
-using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json.Linq;
 
 namespace League.Models
 {
     public class RankedStats
     {
-        private const string SoloQueueKey = "RANKED_SOLO_5x5";  // 单双排
-        private const string FlexQueueKey = "RANKED_FLEX_SR";   // 灵活排位
+        private const string SoloQueueKey = "RANKED_SOLO_5x5"; // 单双排
+        private const string FlexQueueKey = "RANKED_FLEX_SR"; // 灵活排位
 
-        public string QueueType { get; private set; }   // 队列类型
-        public string Tier { get; private set; }    // 段位（如：黄金）
-        public string Division { get; private set; }    // 小段（如：IV）
-        public int Wins { get; private set; }   // 胜场
+        public string QueueType { get; private set; } // 队列类型
+        public string Tier { get; private set; } // 段位（如：黄金）
+        public string Division { get; private set; } // 小段（如：IV）
+        public int Wins { get; private set; } // 胜场
         public int Losses { get; private set; } // 负场
-        public int LeaguePoints { get; private set; }   // 胜点
+        public int LeaguePoints { get; private set; } // 胜点
 
         /// <summary>
         /// 只有接口确实返回胜负字段时才计算总场次和胜率。
@@ -33,9 +32,7 @@ namespace League.Models
         /// <summary>
         /// 胜率
         /// </summary>
-        public double WinRate => !IsUnknown && TotalGames > 0
-            ? Math.Round(Wins * 100.0 / TotalGames, 2)
-            : 0;
+        public double WinRate => !IsUnknown && TotalGames > 0 ? Math.Round(Wins * 100.0 / TotalGames, 2) : 0;
 
         /// <summary>
         /// 格式化显示的段位
@@ -70,7 +67,7 @@ namespace League.Models
             var result = new Dictionary<string, RankedStats>
             {
                 { "单双排", CreateFromQueueData(rankedJson?.SelectToken($"$.queueMap.{SoloQueueKey}")) },
-                { "灵活组排", CreateFromQueueData(rankedJson?.SelectToken($"$.queueMap.{FlexQueueKey}")) }
+                { "灵活组排", CreateFromQueueData(rankedJson?.SelectToken($"$.queueMap.{FlexQueueKey}")) },
             };
 
             // 确保至少返回空数据
@@ -91,16 +88,26 @@ namespace League.Models
             return new RankedStats
             {
                 QueueType = queueData["queueType"]?.ToString() ?? string.Empty,
-                HasRecord = queueData["wins"]?.Type == JTokenType.Integer && queueData["losses"]?.Type == JTokenType.Integer,
+                HasRecord =
+                    queueData["wins"]?.Type == JTokenType.Integer && queueData["losses"]?.Type == JTokenType.Integer,
                 HasWins = queueData["wins"]?.Type == JTokenType.Integer,
-                HighestTierDisplay = FormatHistoricalTier(queueData["highestTier"]?.ToString(), queueData["highestDivision"]?.ToString()),
-                HighestTierOrder = HistoricalOrder(queueData["highestTier"]?.ToString(), queueData["highestDivision"]?.ToString()),
-                PreviousSeasonDisplay = FormatHistoricalTier(queueData["previousSeasonEndTier"]?.ToString(), queueData["previousSeasonEndDivision"]?.ToString()),
+                HighestTierDisplay = FormatHistoricalTier(
+                    queueData["highestTier"]?.ToString(),
+                    queueData["highestDivision"]?.ToString()
+                ),
+                HighestTierOrder = HistoricalOrder(
+                    queueData["highestTier"]?.ToString(),
+                    queueData["highestDivision"]?.ToString()
+                ),
+                PreviousSeasonDisplay = FormatHistoricalTier(
+                    queueData["previousSeasonEndTier"]?.ToString(),
+                    queueData["previousSeasonEndDivision"]?.ToString()
+                ),
                 Tier = NormalizeTier(queueData["tier"]?.ToString()),
                 Division = NormalizeDivision(queueData["division"]?.ToString()),
                 Wins = queueData["wins"]?.ToObject<int>() ?? 0,
                 Losses = queueData["losses"]?.ToObject<int>() ?? 0,
-                LeaguePoints = queueData["leaguePoints"]?.ToObject<int>() ?? 0
+                LeaguePoints = queueData["leaguePoints"]?.ToObject<int>() ?? 0,
             };
         }
 
@@ -114,16 +121,16 @@ namespace League.Models
 
             var tierMap = new Dictionary<string, string>
             {
-                {"IRON", "坚韧黑铁"},
-                {"BRONZE", "英勇黄铜"},
-                {"SILVER", "不屈白银"},
-                {"GOLD", "荣耀黄金"},
-                {"PLATINUM", "华贵铂金"},
-                {"EMERALD", "流光翡翠"},
-                {"DIAMOND", "璀璨钻石"},
-                {"MASTER", "超凡大师"},
-                {"GRANDMASTER", "傲世宗师"},
-                {"CHALLENGER", "最强王者"}
+                { "IRON", "坚韧黑铁" },
+                { "BRONZE", "英勇黄铜" },
+                { "SILVER", "不屈白银" },
+                { "GOLD", "荣耀黄金" },
+                { "PLATINUM", "华贵铂金" },
+                { "EMERALD", "流光翡翠" },
+                { "DIAMOND", "璀璨钻石" },
+                { "MASTER", "超凡大师" },
+                { "GRANDMASTER", "傲世宗师" },
+                { "CHALLENGER", "最强王者" },
             };
 
             if (!tierMap.TryGetValue(Tier, out var chineseTier))
@@ -140,15 +147,40 @@ namespace League.Models
         /// </summary>
         private static string FormatHistoricalTier(string? tier, string? division)
         {
-            if (string.IsNullOrWhiteSpace(tier) || tier == "NONE") return "—";
+            if (string.IsNullOrWhiteSpace(tier) || tier == "NONE")
+                return "—";
             return new RankedStats { Tier = tier, Division = division ?? "" }.FormattedTier;
         }
 
         private static int HistoricalOrder(string? tier, string? division)
         {
-            var tiers = new[] { "IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD", "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER" };
+            var tiers = new[]
+            {
+                "IRON",
+                "BRONZE",
+                "SILVER",
+                "GOLD",
+                "PLATINUM",
+                "EMERALD",
+                "DIAMOND",
+                "MASTER",
+                "GRANDMASTER",
+                "CHALLENGER",
+            };
             int index = Array.IndexOf(tiers, tier);
-            return index < 0 ? 0 : (index + 1) * 10 + (division switch { "I" => 4, "II" => 3, "III" => 2, "IV" => 1, _ => 0 });
+            return index < 0
+                ? 0
+                : (index + 1) * 10
+                    + (
+                        division switch
+                        {
+                            "I" => 4,
+                            "II" => 3,
+                            "III" => 2,
+                            "IV" => 1,
+                            _ => 0,
+                        }
+                    );
         }
 
         private static string ToChineseDivision(string division)
@@ -159,7 +191,7 @@ namespace League.Models
                 "II" => "II",
                 "III" => "III",
                 "IV" => "IV",
-                _ => ""
+                _ => "",
             };
         }
 
@@ -168,9 +200,7 @@ namespace League.Models
         /// </summary>
         private static string NormalizeTier(string rawTier)
         {
-            return string.IsNullOrWhiteSpace(rawTier) || rawTier == "NONE"
-                ? "未定级"
-                : rawTier;
+            return string.IsNullOrWhiteSpace(rawTier) || rawTier == "NONE" ? "未定级" : rawTier;
         }
 
         /// <summary>
@@ -178,10 +208,7 @@ namespace League.Models
         /// </summary>
         private static string NormalizeDivision(string rawDivision)
         {
-            return rawDivision == "NA" || string.IsNullOrEmpty(rawDivision)
-                ? string.Empty
-                : rawDivision;
+            return rawDivision == "NA" || string.IsNullOrEmpty(rawDivision) ? string.Empty : rawDivision;
         }
     }
 }
-

@@ -1,7 +1,7 @@
-﻿using League.Managers;
+﻿using System.Diagnostics;
+using League.Managers;
 using League.Parsers;
 using League.UIState;
-using System.Diagnostics;
 using static League.FormMain;
 
 namespace League.Services
@@ -25,8 +25,12 @@ namespace League.Services
 
         private CancellationTokenSource? _watcherCts;
 
-        public GameFlowWatcher(FormMain form, FormUiStateManager uiManager,
-            PlayerCardManager cardManager, MatchQueryProcessor matchQueryProcessor)
+        public GameFlowWatcher(
+            FormMain form,
+            FormUiStateManager uiManager,
+            PlayerCardManager cardManager,
+            MatchQueryProcessor matchQueryProcessor
+        )
         {
             _form = form;
             _uiManager = uiManager;
@@ -49,7 +53,8 @@ namespace League.Services
         #region 启动与停止
         public async void StartGameflowWatcher()
         {
-            if (!_uiManager.LcuReady) return;
+            if (!_uiManager.LcuReady)
+                return;
 
             _watcherCts = new CancellationTokenSource();
 
@@ -100,13 +105,19 @@ namespace League.Services
         /// </summary>
         public async Task OnGameflowPhaseChanged(string phase, string? previousPhase)
         {
-            if ((phase is "EndOfGame" or "PreEndOfGame" or "WaitingForStats") && (previousPhase is "GameStart" or "InProgress" or "Reconnect"))
+            if (
+                (phase is "EndOfGame" or "PreEndOfGame" or "WaitingForStats")
+                && (previousPhase is "GameStart" or "InProgress" or "Reconnect")
+            )
                 Clients.ChampionMasteryService.Shared.Invalidate(_form.GetCurrentPuuid() ?? "");
-            if (phase != "ReadyCheck") _autoAccepter.Reset();
+            if (phase != "ReadyCheck")
+                _autoAccepter.Reset();
             try
             {
                 // 🔥 最重要的调试日志
-                Debug.WriteLine($"[Phase Changed] {previousPhase ?? "null"} → {phase} | 时间: {DateTime.Now:HH:mm:ss.fff}");
+                Debug.WriteLine(
+                    $"[Phase Changed] {previousPhase ?? "null"} → {phase} | 时间: {DateTime.Now:HH:mm:ss.fff}"
+                );
 
                 switch (phase)
                 {
@@ -130,7 +141,7 @@ namespace League.Services
                         _autoPickService.Stop();
                         _cardDisplayService.ClearSnapshots();
                         Debug.WriteLine($"[GameEnd Trigger] 检测到结束阶段: {phase}, previous={previousPhase}");
-                        await HandleGameEnd(previousPhase);  // 即使 previousPhase 为空也尝试处理
+                        await HandleGameEnd(previousPhase); // 即使 previousPhase 为空也尝试处理
                         break;
                     case "Lobby":
                     case "None":
@@ -138,8 +149,7 @@ namespace League.Services
                         _cardDisplayService.ClearSnapshots();
                         if (_cleanupService.ShouldReturnToLobby())
                         {
-                            Debug.WriteLine(
-                                $"[Lobby] 检测到刚结束游戏，开始返回模式 {Globals.CurrGameMod}");
+                            Debug.WriteLine($"[Lobby] 检测到刚结束游戏，开始返回模式 {Globals.CurrGameMod}");
 
                             await _cleanupService.ReturnToSpecificLobbyAsync();
                         }
@@ -170,16 +180,20 @@ namespace League.Services
             {
                 int delay = _form.GetAppConfig()?.AutoAcceptDelaySeconds ?? 0;
                 // 只允许 0 / 5 / 10，防止配置被改乱
-                if (delay != 5 && delay != 10) delay = 0;
+                if (delay != 5 && delay != 10)
+                    delay = 0;
 
                 _ = _autoAccepter.TryAcceptAsync(delay);
             }
 
-            FormUiStateManager.SafeInvoke(_form.imageTabControl1, () =>
-            {
-                _uiManager.SetLcuUiState(_uiManager.LcuReady, false);
-                _form.imageTabControl1.SelectedIndex = 1;
-            });
+            FormUiStateManager.SafeInvoke(
+                _form.imageTabControl1,
+                () =>
+                {
+                    _uiManager.SetLcuUiState(_uiManager.LcuReady, false);
+                    _form.imageTabControl1.SelectedIndex = 1;
+                }
+            );
         }
 
         private async Task HandleChampSelectStart()
@@ -205,11 +219,12 @@ namespace League.Services
             Debug.WriteLine($"[HandleGameEnd] 被调用 | previousPhase={previousPhase}");
 
             // 更宽松的判断逻辑（兼容各种跳变情况）
-            bool shouldHandle = previousPhase == "InProgress"
-                             || previousPhase == "WaitingForStats"
-                             || previousPhase == "ChampSelect"
-                             || previousPhase == "EndOfGame"
-                             || previousPhase == "PreEndOfGame";
+            bool shouldHandle =
+                previousPhase == "InProgress"
+                || previousPhase == "WaitingForStats"
+                || previousPhase == "ChampSelect"
+                || previousPhase == "EndOfGame"
+                || previousPhase == "PreEndOfGame";
 
             if (shouldHandle)
             {
@@ -218,8 +233,7 @@ namespace League.Services
                 {
                     _cleanupService.MarkGameJustEnded();
 
-                    Debug.WriteLine(
-                        $"[HandleGameEnd] 已标记游戏结束，等待Lobby后返回模式 {Globals.CurrGameMod}");
+                    Debug.WriteLine($"[HandleGameEnd] 已标记游戏结束，等待Lobby后返回模式 {Globals.CurrGameMod}");
                 }
 
                 await _cleanupService.HandleGameEndAsync(previousPhase);

@@ -9,8 +9,9 @@
             copy.Player.ChampionId = championId;
             return copy;
         }
+
         public PlayerInfo Player { get; set; }
-        public List<ListViewItem> MatchItems { get; set; } = new List<ListViewItem>();  
+        public List<ListViewItem> MatchItems { get; set; } = new List<ListViewItem>();
         public ImageList HeroIcons { get; set; } = new ImageList { ImageSize = new Size(20, 20) };
 
         //用于表示该对象是否来自缓存
@@ -30,6 +31,7 @@
 
         public PlayerBehavior Behavior { get; set; } = new PlayerBehavior();
     }
+
     public class MatchStat
     {
         public int Kills { get; set; }

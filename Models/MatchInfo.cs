@@ -12,19 +12,19 @@ namespace League.Models
 
         public string ResultText
         {
-            get
-            {
-                return IsRemake ? "重开" : _resultText;
-            }
+            get { return IsRemake ? "重开" : _resultText; }
             set
             {
                 _resultText = value;
-                ResultColor = value == "胜利" ? Color.FromArgb(38,139,113) : value == "重开" ? MatchResult.RemakeColor : Color.FromArgb(191,81,91);
+                ResultColor =
+                    value == "胜利" ? Color.FromArgb(38, 139, 113)
+                    : value == "重开" ? MatchResult.RemakeColor
+                    : Color.FromArgb(191, 81, 91);
             }
         }
 
-        public bool IsRemake => _resultText == "重开" || MatchResult.IsRemake(RawGameData,AllParticipants);
-        private Color _resultColor = Color.FromArgb(191,81,91);
+        public bool IsRemake => _resultText == "重开" || MatchResult.IsRemake(RawGameData, AllParticipants);
+        private Color _resultColor = Color.FromArgb(191, 81, 91);
         public Color ResultColor
         {
             get => IsRemake ? MatchResult.RemakeColor : _resultColor;
@@ -57,8 +57,7 @@ namespace League.Models
 
         public Image[] SummonerSpells { get; set; } = new Image[2];
 
-        public Item[] Items { get; set; } = (from _ in Enumerable.Range(0, 6)
-                                             select new Item()).ToArray();
+        public Item[] Items { get; set; } = (from _ in Enumerable.Range(0, 6) select new Item()).ToArray();
 
         public string GoldText { get; set; } = "";
 
@@ -72,11 +71,11 @@ namespace League.Models
 
         public List<PlayerInfo> RedTeam { get; set; } = new List<PlayerInfo>();
 
-        public RuneInfo[] PrimaryRunes { get; set; } = (from _ in Enumerable.Range(0, 4)
-                                                        select new RuneInfo()).ToArray();
+        public RuneInfo[] PrimaryRunes { get; set; } =
+            (from _ in Enumerable.Range(0, 4) select new RuneInfo()).ToArray();
 
-        public RuneInfo[] SecondaryRunes { get; set; } = (from _ in Enumerable.Range(0, 2)
-                                                          select new RuneInfo()).ToArray();
+        public RuneInfo[] SecondaryRunes { get; set; } =
+            (from _ in Enumerable.Range(0, 2) select new RuneInfo()).ToArray();
 
         public PlayerInfo SelfPlayer { get; set; } = new PlayerInfo();
 
@@ -102,8 +101,7 @@ namespace League.Models
 
         public string DamageTakenText { get; set; } = "";
 
-        public RuneInfo[] StatRunes { get; set; } = (from _ in Enumerable.Range(0, 3)
-                                                     select new RuneInfo()).ToArray();
+        public RuneInfo[] StatRunes { get; set; } = (from _ in Enumerable.Range(0, 3) select new RuneInfo()).ToArray();
 
         public string[] StatRuneNames { get; set; } = new string[3];
 
@@ -117,12 +115,9 @@ namespace League.Models
 
         public MatchInfo()
         {
-            PrimaryRunes = (from _ in Enumerable.Range(0, 4)
-                            select new RuneInfo()).ToArray();
-            SecondaryRunes = (from _ in Enumerable.Range(0, 2)
-                              select new RuneInfo()).ToArray();
-            Items = (from _ in Enumerable.Range(0, 6)
-                     select new Item()).ToArray();
+            PrimaryRunes = (from _ in Enumerable.Range(0, 4) select new RuneInfo()).ToArray();
+            SecondaryRunes = (from _ in Enumerable.Range(0, 2) select new RuneInfo()).ToArray();
+            Items = (from _ in Enumerable.Range(0, 6) select new Item()).ToArray();
             SpellNames = new string[2];
             SpellDescriptions = new string[2];
             ItemNames = new string[6];

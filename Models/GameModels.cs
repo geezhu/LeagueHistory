@@ -1,8 +1,6 @@
 ﻿namespace League.Models
 {
-    internal class GameModels
-    {
-    }
+    internal class GameModels { }
 
     //英雄
     public class Champion
@@ -38,8 +36,8 @@
     public class ProfileIcon
     {
         public int Id { get; set; }
-        public string Name { get; set; }         // 可选：例如显示名“默认头像123”
-        public string Description { get; set; }  // 可选：你可以填一些说明
+        public string Name { get; set; } // 可选：例如显示名“默认头像123”
+        public string Description { get; set; } // 可选：你可以填一些说明
     }
 
     //符文
@@ -56,5 +54,4 @@
         public string Name { get; set; }
         public string Description { get; set; }
     }
-
 }

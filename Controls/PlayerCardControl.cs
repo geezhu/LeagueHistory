@@ -5,6 +5,7 @@ namespace League.Controls
     public partial class PlayerCardControl : UserControl
     {
         public bool IsLoading { get; private set; }
+
         // 用来精准判断“这个卡片到底属于谁、选了什么英雄”
         public long CurrentSummonerId { get; set; } = 0;
         private int _currentChampionId;
@@ -13,17 +14,19 @@ namespace League.Controls
             get => _currentChampionId;
             set
             {
-                if (_currentChampionId == value) return;
+                if (_currentChampionId == value)
+                    return;
                 _currentChampionId = value;
-                if (_championBar.Parent != null) _ = RefreshChampionAsync();
+                if (_championBar.Parent != null)
+                    _ = RefreshChampionAsync();
             }
         }
-        public string CurrentPuuId { get; set; } ="";
+        public string CurrentPuuId { get; set; } = "";
         public int RetryCount { get; set; } = 0;
 
         // 保存完整玩家名称
         private string _fullPlayerName = "";
-        private readonly ToolTip _nameToolTip = new ToolTip();   // 只创建一次，解决慢的问题
+        private readonly ToolTip _nameToolTip = new ToolTip(); // 只创建一次，解决慢的问题
 
         public PlayerCardControl()
         {
@@ -38,11 +41,11 @@ namespace League.Controls
                     CopyFullPlayerName();
                 }
             };
-            lblPlayerName.Cursor = Cursors.Hand;   // 鼠标变成手型，提示可点击
+            lblPlayerName.Cursor = Cursors.Hand; // 鼠标变成手型，提示可点击
 
             // 初始化 Tooltip 属性（可选优化）
             _nameToolTip.AutoPopDelay = 4000;
-            _nameToolTip.InitialDelay = 300;      // 悬停多久开始显示（毫秒），越小越灵敏
+            _nameToolTip.InitialDelay = 300; // 悬停多久开始显示（毫秒），越小越灵敏
             _nameToolTip.ReshowDelay = 200;
             _nameToolTip.ShowAlways = true;
         }
@@ -64,7 +67,19 @@ namespace League.Controls
         /// 设置玩家信息
         /// </summary>
         /// <param name="fullName">完整名称（带#标签），用于点击复制。如果为 null 则使用 playerName</param>
-        public void SetPlayerInfo(string playerName, string soloRank, string flexRank, Image heroImage, string isPublic, List<ListViewItem> recentGames, Color nameColor, long summonerId = 0, int championId = 0, string puuid = "", string fullName = null)
+        public void SetPlayerInfo(
+            string playerName,
+            string soloRank,
+            string flexRank,
+            Image heroImage,
+            string isPublic,
+            List<ListViewItem> recentGames,
+            Color nameColor,
+            long summonerId = 0,
+            int championId = 0,
+            string puuid = "",
+            string fullName = null
+        )
         {
             // 保存关键标识（最重要！）
             CurrentSummonerId = summonerId;
@@ -90,11 +105,8 @@ namespace League.Controls
             var oldFont = lblPlayerName.Font;
 
             // 重新创建粗体字体
-            if (!oldFont.Bold) lblPlayerName.Font = new Font(
-                oldFont.FontFamily,
-                oldFont.Size,
-                FontStyle.Bold
-            );
+            if (!oldFont.Bold)
+                lblPlayerName.Font = new Font(oldFont.FontFamily, oldFont.Size, FontStyle.Bold);
 
             lblPlayerName.BorderStyle = BorderStyle.None;
 
@@ -129,14 +141,16 @@ namespace League.Controls
         private void UpdateNameToolTip()
         {
             // 不需要提示的情况
-            if (string.IsNullOrWhiteSpace(_fullPlayerName) ||
-                _fullPlayerName == "隐藏玩家" ||
-                _fullPlayerName == "加载中..." ||
-                _fullPlayerName == "失败" ||
-                _fullPlayerName.Contains("隐藏") ||
-                !_fullPlayerName.Contains("#"))   // 没有 # 标签的也不提示
+            if (
+                string.IsNullOrWhiteSpace(_fullPlayerName)
+                || _fullPlayerName == "隐藏玩家"
+                || _fullPlayerName == "加载中..."
+                || _fullPlayerName == "失败"
+                || _fullPlayerName.Contains("隐藏")
+                || !_fullPlayerName.Contains("#")
+            ) // 没有 # 标签的也不提示
             {
-                _nameToolTip.SetToolTip(lblPlayerName, null);   // 清除提示
+                _nameToolTip.SetToolTip(lblPlayerName, null); // 清除提示
                 return;
             }
 
@@ -150,11 +164,13 @@ namespace League.Controls
         private void CopyFullPlayerName()
         {
             // 隐藏/加载/失败状态不复制
-            if (string.IsNullOrWhiteSpace(_fullPlayerName) ||
-                _fullPlayerName == "隐藏玩家" ||
-                _fullPlayerName == "加载中..." ||
-                _fullPlayerName == "失败" ||
-                _fullPlayerName.Contains("隐藏"))
+            if (
+                string.IsNullOrWhiteSpace(_fullPlayerName)
+                || _fullPlayerName == "隐藏玩家"
+                || _fullPlayerName == "加载中..."
+                || _fullPlayerName == "失败"
+                || _fullPlayerName.Contains("隐藏")
+            )
             {
                 return;
             }
@@ -166,20 +182,21 @@ namespace League.Controls
                 // 可选反馈
                 string originalText = lblPlayerName.Text;
                 lblPlayerName.Text = "已复制!";
-                Task.Delay(700).ContinueWith(_ =>
-                {
-                    if (!IsDisposed && lblPlayerName != null)
+                Task.Delay(700)
+                    .ContinueWith(_ =>
                     {
-                        try
+                        if (!IsDisposed && lblPlayerName != null)
                         {
-                            if (lblPlayerName.InvokeRequired)
-                                lblPlayerName.Invoke(() => lblPlayerName.Text = originalText);
-                            else
-                                lblPlayerName.Text = originalText;
+                            try
+                            {
+                                if (lblPlayerName.InvokeRequired)
+                                    lblPlayerName.Invoke(() => lblPlayerName.Text = originalText);
+                                else
+                                    lblPlayerName.Text = originalText;
+                            }
+                            catch { }
                         }
-                        catch { }
-                    }
-                });
+                    });
             }
             catch (Exception ex)
             {
@@ -193,7 +210,7 @@ namespace League.Controls
         public void SetFullPlayerName(string fullName)
         {
             _fullPlayerName = fullName ?? "";
-            UpdateNameToolTip();   // 统一走这里
+            UpdateNameToolTip(); // 统一走这里
         }
     }
 }

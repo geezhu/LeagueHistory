@@ -1,8 +1,8 @@
-﻿using League.Controls;
+﻿using System.Diagnostics;
+using League.Controls;
 using League.Models;
 using League.UIState;
 using Newtonsoft.Json.Linq;
-using System.Diagnostics;
 using static League.FormMain;
 
 namespace League.Managers
@@ -55,7 +55,10 @@ namespace League.Managers
         {
             var result = MessageBox.Show(
                 $"点击确定将自动下载回放文件并开始播放比赛！\n比赛ID: {matchInfo.GameId}\n模式: {matchInfo.Mode}",
-                "查看回放", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+                "查看回放",
+                MessageBoxButtons.OKCancel,
+                MessageBoxIcon.Question
+            );
 
             if (result == DialogResult.OK)
             {
@@ -129,8 +132,12 @@ namespace League.Managers
         /// </summary>
         private void ShowDownloadReplayError()
         {
-            MessageBox.Show("下载失败，请检查是否为最近比赛或支持回放的模式。",
-                "下载失败", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+            MessageBox.Show(
+                "下载失败，请检查是否为最近比赛或支持回放的模式。",
+                "下载失败",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Exclamation
+            );
         }
         #endregion
 
@@ -159,40 +166,46 @@ namespace League.Managers
         /// </summary>
         public bool IsSummonersRiftOrAram(string queueTag)
         {
-            if (string.IsNullOrEmpty(queueTag)) return false;
+            if (string.IsNullOrEmpty(queueTag))
+                return false;
 
             string[] allowed = new[]
             {
                 // 排位
-                "q_420", "q_440",
-
+                "q_420",
+                "q_440",
                 // 匹配
-                "q_400", "q_430",
-
+                "q_400",
+                "q_430",
                 // 大乱斗 & 无限
-                "q_450", "q_900", "q_1900",
-
+                "q_450",
+                "q_900",
+                "q_1900",
                 // 快速模式
                 "q_480",
-
                 // 海克斯乱斗
-                "q_2400", "q_2450", "q_3270",
-
+                "q_2400",
+                "q_2450",
+                "q_3270",
                 // 人机（完整）
-                "q_830", "q_840", "q_850",
-                "q_870", "q_880", "q_890",
-
+                "q_830",
+                "q_840",
+                "q_850",
+                "q_870",
+                "q_880",
+                "q_890",
                 // 末日人机（已确认是5v5峡谷）
-                "q_950", "q_960",
-
+                "q_950",
+                "q_960",
                 // 其他标准5v5
-                "q_1020",  // 克隆大作战
-                "q_1300",  // 极限闪击
-                "q_1400",  // 终极魔典
-
+                "q_1020", // 克隆大作战
+                "q_1300", // 极限闪击
+                "q_1400", // 终极魔典
                 // 经典 / 训练
-                "q_4310", "q_4320",
-                "q_3140", "q_3100"
+                "q_4310",
+                "q_4320",
+                "q_3140",
+                "q_3100",
             };
 
             return allowed.Contains(queueTag);

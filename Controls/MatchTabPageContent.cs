@@ -1,9 +1,9 @@
-﻿using League.Caching;
+﻿using System.ComponentModel;
+using System.Diagnostics;
+using League.Caching;
 using League.Models;
 using League.States;
 using Newtonsoft.Json.Linq;
-using System.ComponentModel;
-using System.Diagnostics;
 
 namespace League.Controls
 {
@@ -27,7 +27,7 @@ namespace League.Controls
         private JArray _currentMatches;
 
         // 1. 添加一个字段，保存当前正在解析的任务（可选但推荐）
-        private Task _currentParsingTask;  // 新增这行
+        private Task _currentParsingTask; // 新增这行
 
         // 新增字段：跟踪已加载的图片资源
         private List<Image> _loadedImages = new List<Image>();
@@ -38,7 +38,7 @@ namespace League.Controls
 
         private bool _needsRefresh = false;
         private DateTime _lastRefreshTime = DateTime.MinValue;
-        private readonly TimeSpan _minimumRefreshInterval = TimeSpan.FromSeconds(2); // 最小刷新间隔                                               
+        private readonly TimeSpan _minimumRefreshInterval = TimeSpan.FromSeconds(2); // 最小刷新间隔
         private bool _isRefreshing = false; // 添加标志防止递归
         private string _summonerId; //保存该 Tab 的 summonerId
 
@@ -54,7 +54,8 @@ namespace League.Controls
             this.Dock = DockStyle.Fill;
 
             // 对 flowLayoutPanelRight 的设置
-            flowLayoutPanelRight.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            flowLayoutPanelRight.Anchor =
+                AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             flowLayoutPanelRight.AutoScroll = true;
             flowLayoutPanelRight.AutoSize = false; // 重要：关闭自动大小
 
@@ -95,9 +96,11 @@ namespace League.Controls
         }
 
         private bool _disposed;
+
         public void Dispose()
         {
-            if (_disposed) return;
+            if (_disposed)
+                return;
             _disposed = true;
             Cleanup();
             _loadSemaphore?.Dispose();
@@ -105,7 +108,8 @@ namespace League.Controls
             _updateCts?.Dispose();
             foreach (Control control in flowLayoutPanelRight.Controls)
             {
-                if (control is IDisposable disposable) disposable.Dispose();
+                if (control is IDisposable disposable)
+                    disposable.Dispose();
             }
             flowLayoutPanelRight.Dispose();
             GC.SuppressFinalize(this);
@@ -120,16 +124,18 @@ namespace League.Controls
 
             comboFilter.DisplayMember = "Text";
             comboFilter.ValueMember = "Value";
-            comboFilter.Items.AddRange(new[]
-            {
-                new QueueFilterItem { Text = "全部", Value = "" },
-                new QueueFilterItem { Text = "单双排位", Value = "q_420" },
-                new QueueFilterItem { Text = "灵活排位", Value = "q_440" },
-                new QueueFilterItem { Text = "匹配模式", Value = "q_430" },
-                new QueueFilterItem { Text = "极地大乱斗", Value = "q_450" },
-                new QueueFilterItem { Text = "海克斯大乱斗", Value = "q_2400" },
-                new QueueFilterItem { Text = "斗魂竞技场", Value = "q_1700" }
-            });
+            comboFilter.Items.AddRange(
+                new[]
+                {
+                    new QueueFilterItem { Text = "全部", Value = "" },
+                    new QueueFilterItem { Text = "单双排位", Value = "q_420" },
+                    new QueueFilterItem { Text = "灵活排位", Value = "q_440" },
+                    new QueueFilterItem { Text = "匹配模式", Value = "q_430" },
+                    new QueueFilterItem { Text = "极地大乱斗", Value = "q_450" },
+                    new QueueFilterItem { Text = "海克斯大乱斗", Value = "q_2400" },
+                    new QueueFilterItem { Text = "斗魂竞技场", Value = "q_1700" },
+                }
+            );
             comboFilter.SelectedIndex = 0;
         }
 
@@ -150,7 +156,7 @@ namespace League.Controls
                 "q_450" => "极地大乱斗",
                 "q_2400" => "海克斯大乱斗",
                 "q_1700" => "斗魂竞技场",
-                _ => "全部"
+                _ => "全部",
             };
         }
 
@@ -178,7 +184,8 @@ namespace League.Controls
 
         private async Task LoadDataAsync(bool resetPage = true)
         {
-            if (resetPage) _currentPage = 1;
+            if (resetPage)
+                _currentPage = 1;
             await UpdateMatchesDisplay();
         }
 
@@ -217,21 +224,26 @@ namespace League.Controls
                 TotalPages = (int)Math.Ceiling(200.0 / (double)_pageSize);
 
                 JArray matches;
-                if (_selectedWin.HasValue) matches = await LoadOutcomePage();
+                if (_selectedWin.HasValue)
+                    matches = await LoadOutcomePage();
                 else
                 {
                     matches = await this.LoadDataRequested(_puuid, startIndex, count, _selectedQueueId);
-                    if (matches != null && matches.Count < count) TotalPages = _currentPage;
+                    if (matches != null && matches.Count < count)
+                        TotalPages = _currentPage;
                     SafeInvoke(() => _filterScope.Text = $"第 {_currentPage} 页 · 按时间从新到旧");
                 }
-                Debug.WriteLine($"收到 {(matches == null ? "null(服务器异常)" : matches.Count.ToString())} 条数据，请求参数: startIndex={startIndex}, count={count}");
+                Debug.WriteLine(
+                    $"收到 {(matches == null ? "null(服务器异常)" : matches.Count.ToString())} 条数据，请求参数: startIndex={startIndex}, count={count}"
+                );
                 SafeInvoke(() => _pageNumber.Text = _currentPage.ToString());
 
                 if (matches == null)
                 {
                     ShowErrorMessage(
-                        "战绩服务器异常\n" +
-                        "客户端头像处对局记录查不到，那么这里也查不到，表示正在维护中（一般3-5小时会恢复）...");
+                        "战绩服务器异常\n"
+                            + "客户端头像处对局记录查不到，那么这里也查不到，表示正在维护中（一般3-5小时会恢复）..."
+                    );
                     SafeSetEnabled(btnPrev, _currentPage > 1);
                     SafeSetEnabled(btnNext, false);
                     return;
@@ -249,9 +261,10 @@ namespace League.Controls
                         // 第一页就没有
                         string modeName = GetSelectedFilterText();
                         // 「全部」时不写【全部】，文案更自然
-                        string msg = modeName == "全部"
-                            ? "没有匹配的比赛记录或玩家长时间未登录，所以暂时查不到..."
-                            : $"没有匹配的【{modeName}】比赛记录或玩家长时间未登录，所以暂时查不到...";
+                        string msg =
+                            modeName == "全部"
+                                ? "没有匹配的比赛记录或玩家长时间未登录，所以暂时查不到..."
+                                : $"没有匹配的【{modeName}】比赛记录或玩家长时间未登录，所以暂时查不到...";
 
                         ShowEmptyMessage(msg);
                     }
@@ -276,9 +289,10 @@ namespace League.Controls
                 Debug.WriteLine("[异常] " + ex.GetType().Name + ": " + ex.Message);
                 Debug.WriteLine(ex.StackTrace);
                 ShowErrorMessage(
-                    "加载失败：战绩服务器异常\n" +
-                    "客户端头像处对局记录查不到，那么这里也查不到\n\n" +
-                    $"详情：{ex.Message}");
+                    "加载失败：战绩服务器异常\n"
+                        + "客户端头像处对局记录查不到，那么这里也查不到\n\n"
+                        + $"详情：{ex.Message}"
+                );
                 SafeSetEnabled(btnPrev, _currentPage > 1);
                 SafeSetEnabled(btnNext, false);
             }
@@ -302,13 +316,16 @@ namespace League.Controls
                 CancellationToken token = _updateCts.Token;
                 if (flowLayoutPanelRight.InvokeRequired)
                 {
-                    await flowLayoutPanelRight.Invoke((Func<Task>)async delegate
-                    {
-                        if (!token.IsCancellationRequested)
-                        {
-                            await UpdateMatchListInternal(matches, token);
-                        }
-                    });
+                    await flowLayoutPanelRight.Invoke(
+                        (Func<Task>)
+                            async delegate
+                            {
+                                if (!token.IsCancellationRequested)
+                                {
+                                    await UpdateMatchListInternal(matches, token);
+                                }
+                            }
+                    );
                 }
                 else if (!token.IsCancellationRequested)
                 {
@@ -321,94 +338,107 @@ namespace League.Controls
             }
         }
 
-        
         // 修改 UpdateMatchListInternal 方法，跟踪解析的面板
         private async Task UpdateMatchListInternal(JArray matches, CancellationToken token)
         {
             // Keep the current detail alive while the next page is being parsed.
             var oldPanels = _allParsedPanels.ToArray();
 
-            var panels = await Task.Run(async () =>
-            {
-                var panelList = new List<Panel>();
-                int num = 1;
-                var tasks = matches.Cast<JObject>()
-                    .Select(match => ParsePanelRequested?.Invoke(match, _puuid, num++))
-                    .ToList();
-
-                _currentParsingTask = Task.WhenAll(tasks);
-
-                foreach (var t in tasks)
+            var panels = await Task.Run(
+                async () =>
                 {
-                    if (token.IsCancellationRequested) break;
+                    var panelList = new List<Panel>();
+                    int num = 1;
+                    var tasks = matches
+                        .Cast<JObject>()
+                        .Select(match => ParsePanelRequested?.Invoke(match, _puuid, num++))
+                        .ToList();
 
-                    try
+                    _currentParsingTask = Task.WhenAll(tasks);
+
+                    foreach (var t in tasks)
                     {
-                        var panel = await t.ConfigureAwait(false);
-                        if (panel != null)
+                        if (token.IsCancellationRequested)
+                            break;
+
+                        try
                         {
-                            panelList.Add(panel);
-                            _allParsedPanels.Add(new WeakReference(panel)); // 🔥 跟踪
+                            var panel = await t.ConfigureAwait(false);
+                            if (panel != null)
+                            {
+                                panelList.Add(panel);
+                                _allParsedPanels.Add(new WeakReference(panel)); // 🔥 跟踪
+                            }
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            break;
                         }
                     }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
-                }
 
-                _currentParsingTask = null;
-                return panelList;
-            }, token);
+                    _currentParsingTask = null;
+                    return panelList;
+                },
+                token
+            );
 
             // 清理时不再等待解析，取消后晚到的面板由这里释放，不再加入已清理的列表
             if (token.IsCancellationRequested)
             {
-                foreach (var panel in panels) panel.Dispose();
+                foreach (var panel in panels)
+                    panel.Dispose();
                 return;
             }
 
-            SafeInvoke(flowLayoutPanelRight, () =>
-            {
-                bool reopenDetail = _detailView != null;
-                if (reopenDetail)
+            SafeInvoke(
+                flowLayoutPanelRight,
+                () =>
                 {
-                    _selectedCard = null;
-                }
-                flowLayoutPanelRight.SuspendLayout();
-                try
-                {
-                    // 先清理旧的
-                    foreach (Control control in flowLayoutPanelRight.Controls.Cast<Control>().ToArray())
-                    {
-                        if (control is IDisposable disposable) disposable.Dispose();
-                    }
-                    flowLayoutPanelRight.Controls.Clear();
-
-                    // 添加新的
-                    flowLayoutPanelRight.Controls.AddRange(panels.ToArray());
-                    foreach (var reference in oldPanels)
-                    {
-                        if (reference.Target is Control old && !old.IsDisposed) old.Dispose();
-                        _allParsedPanels.Remove(reference);
-                    }
+                    bool reopenDetail = _detailView != null;
                     if (reopenDetail)
                     {
-                        var first = panels.OfType<MatchListPanel>().FirstOrDefault();
-                        if (first?.MatchInfo != null) OpenInlineMatch(first.MatchInfo);
-                        else ReturnToProfile();
+                        _selectedCard = null;
+                    }
+                    flowLayoutPanelRight.SuspendLayout();
+                    try
+                    {
+                        // 先清理旧的
+                        foreach (Control control in flowLayoutPanelRight.Controls.Cast<Control>().ToArray())
+                        {
+                            if (control is IDisposable disposable)
+                                disposable.Dispose();
+                        }
+                        flowLayoutPanelRight.Controls.Clear();
+
+                        // 添加新的
+                        flowLayoutPanelRight.Controls.AddRange(panels.ToArray());
+                        foreach (var reference in oldPanels)
+                        {
+                            if (reference.Target is Control old && !old.IsDisposed)
+                                old.Dispose();
+                            _allParsedPanels.Remove(reference);
+                        }
+                        if (reopenDetail)
+                        {
+                            var first = panels.OfType<MatchListPanel>().FirstOrDefault();
+                            if (first?.MatchInfo != null)
+                                OpenInlineMatch(first.MatchInfo);
+                            else
+                                ReturnToProfile();
+                        }
+                    }
+                    finally
+                    {
+                        flowLayoutPanelRight.ResumeLayout(true);
                     }
                 }
-                finally
-                {
-                    flowLayoutPanelRight.ResumeLayout(true);
-                }
-            });
+            );
         }
 
         public async Task SafeInitializeAsync(string puuid, string? summonerId = null)
         {
-            if (string.IsNullOrEmpty(puuid)) return;
+            if (string.IsNullOrEmpty(puuid))
+                return;
 
             _puuid = puuid;
             if (!string.IsNullOrEmpty(summonerId))
@@ -416,26 +446,47 @@ namespace League.Controls
 
             await Task.Delay(200);
 
-            SafeInvoke(() => { _masteryView.LoadPlayer(puuid); _profileBackground.LoadPlayer(puuid); _recentActivity.LoadPlayer(puuid); });
+            SafeInvoke(() =>
+            {
+                _masteryView.LoadPlayer(puuid);
+                _profileBackground.LoadPlayer(puuid);
+                _recentActivity.LoadPlayer(puuid);
+            });
 
             await LoadDataAsync();
         }
 
-
-        public async Task InitiaRank(string fullName, string profileIconId, string summonerLevel, string privacy, Dictionary<string, RankedStats> rankedStats, bool isOwnProfile = false)
+        public async Task InitiaRank(
+            string fullName,
+            string profileIconId,
+            string summonerLevel,
+            string privacy,
+            Dictionary<string, RankedStats> rankedStats,
+            bool isOwnProfile = false
+        )
         {
             // 检查是否在UI线程
             if (this.InvokeRequired)
             {
                 // 使用异步方式，避免死锁
-                await this.Invoke((Func<Task>)(() => InitiaRank(fullName, profileIconId, summonerLevel, privacy, rankedStats, isOwnProfile)));
+                await this.Invoke(
+                    (Func<Task>)(
+                        () => InitiaRank(fullName, profileIconId, summonerLevel, privacy, rankedStats, isOwnProfile)
+                    )
+                );
                 return;
             }
 
             try
             {
                 linkGameName.Tag = fullName;
-                League.UIHelpers.PlayerNamePresentation.Apply(linkGameName, fullName, privacy == "隐藏" ? false : privacy == "公开" ? true : null);
+                League.UIHelpers.PlayerNamePresentation.Apply(
+                    linkGameName,
+                    fullName,
+                    privacy == "隐藏" ? false
+                        : privacy == "公开" ? true
+                        : null
+                );
                 lblLevel.Text = $"等级：【{summonerLevel}】";
                 picChampionId.Level = summonerLevel;
                 lblPrivacy.Text = $"隐私：【{privacy}】";
@@ -485,7 +536,6 @@ namespace League.Controls
                 }
 
                 // 检查数据是否存在
-
             }
             catch (Exception ex)
             {
@@ -613,7 +663,8 @@ namespace League.Controls
         // 辅助方法：更新头像
         private async Task UpdateProfileIcon(int iconId)
         {
-            if (iconId <= 0) return;
+            if (iconId <= 0)
+                return;
 
             try
             {
@@ -627,7 +678,8 @@ namespace League.Controls
                     Debug.WriteLine($"[GetProfileIconAsync异常] {ex.Message}");
                 }
 
-                if (newImage == null) return;
+                if (newImage == null)
+                    return;
 
                 SafeInvoke(() =>
                 {
@@ -646,7 +698,13 @@ namespace League.Controls
                     {
                         Debug.WriteLine($"[UpdateProfileIcon UI异常] {ex.Message}");
                         // 最后兜底
-                        try { picChampionId.Image = new Bitmap(Profileicon.GetDefaultImageSafe() as Bitmap ?? new Bitmap(64, 64)); } catch { }
+                        try
+                        {
+                            picChampionId.Image = new Bitmap(
+                                Profileicon.GetDefaultImageSafe() as Bitmap ?? new Bitmap(64, 64)
+                            );
+                        }
+                        catch { }
                     }
                 });
             }
@@ -746,7 +804,6 @@ namespace League.Controls
             await UpdateMatchesDisplay();
         }
 
-
         // 你需要把这个事件委托保存为成员
         private EventHandler asyncComboPageChangedHandler;
 
@@ -764,7 +821,6 @@ namespace League.Controls
                 SafeSetEnabled(btnNext, false);
             }
         }
-        
 
         private void ShowErrorMessage(string message)
         {
@@ -773,8 +829,7 @@ namespace League.Controls
 
         private void ShowEmptyMessage(string? customMessage = null)
         {
-            string message = customMessage ??
-                "没有匹配的比赛记录或玩家长时间未登录，所以暂时查不到...";
+            string message = customMessage ?? "没有匹配的比赛记录或玩家长时间未登录，所以暂时查不到...";
 
             ShowStatusMessage(message, isError: false);
         }
@@ -809,7 +864,7 @@ namespace League.Controls
                     BackColor = Color.White,
                     ForeColor = isError ? Color.Red : Color.DarkOrange,
                     Padding = new Padding(12),
-                    Font = new Font("Microsoft YaHei UI", 10f)
+                    Font = new Font("Microsoft YaHei UI", 10f),
                 };
 
                 flowLayoutPanelRight.Controls.Add(label);
@@ -846,7 +901,8 @@ namespace League.Controls
         /// </summary>
         private void SafeInvoke(Control ctrl, Action action)
         {
-            if (ctrl == null || ctrl.IsDisposed || ctrl.Disposing) return;
+            if (ctrl == null || ctrl.IsDisposed || ctrl.Disposing)
+                return;
 
             try
             {
@@ -867,7 +923,8 @@ namespace League.Controls
         /// </summary>
         private void SafeInvoke(Action action)
         {
-            if (IsDisposed || Disposing) return;
+            if (IsDisposed || Disposing)
+                return;
 
             try
             {
@@ -882,10 +939,10 @@ namespace League.Controls
             }
         }
 
-
         private void SafeSetEnabled(Control ctrl, bool enabled)
         {
-            if (ctrl == null) return;
+            if (ctrl == null)
+                return;
             SafeInvoke(() =>
             {
                 if (!ctrl.IsDisposed)
@@ -895,12 +952,15 @@ namespace League.Controls
 
         private void SafeSetSelectedItem(ComboBox combo, object item)
         {
-            SafeInvoke(combo, () =>
-            {
-                combo.SelectedIndexChanged -= asyncComboPageChangedHandler;
-                combo.SelectedItem = item;
-                combo.SelectedIndexChanged += asyncComboPageChangedHandler;
-            });
+            SafeInvoke(
+                combo,
+                () =>
+                {
+                    combo.SelectedIndexChanged -= asyncComboPageChangedHandler;
+                    combo.SelectedItem = item;
+                    combo.SelectedIndexChanged += asyncComboPageChangedHandler;
+                }
+            );
         }
 
         // 修改 Cleanup 方法，增加深度清理
@@ -984,7 +1044,8 @@ namespace League.Controls
         // 🔥 新增：深度清理JArray
         private void DeepCleanJArray(JArray array)
         {
-            if (array == null) return;
+            if (array == null)
+                return;
 
             try
             {
@@ -1004,7 +1065,8 @@ namespace League.Controls
         // 🔥 新增：深度清理JObject
         private void DeepCleanJObject(JObject obj)
         {
-            if (obj == null) return;
+            if (obj == null)
+                return;
 
             try
             {
@@ -1050,6 +1112,7 @@ namespace League.Controls
         public string CurrentFilter => _selectedQueueId;
         #endregion
     }
+
     public class QueueFilterItem
     {
         public string Text { get; set; }

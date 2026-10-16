@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
 
-namespace League.Extensions 
+namespace League.Extensions
 {
     // 在 League.model 命名空间下，替换或新增这个扩展方法
     public static class ControlExtensions
@@ -8,7 +8,8 @@ namespace League.Extensions
         // 修复的同步版本
         public static void InvokeIfRequired(this Control control, Action action)
         {
-            if (control == null) throw new ArgumentNullException(nameof(control));
+            if (control == null)
+                throw new ArgumentNullException(nameof(control));
 
             // 重要：检查句柄是否已创建
             if (!control.IsHandleCreated || control.IsDisposed || control.Disposing)
@@ -35,7 +36,8 @@ namespace League.Extensions
         // 修复的异步版本
         public static async Task InvokeIfRequiredAsync(this Control control, Func<Task> asyncAction)
         {
-            if (control == null) throw new ArgumentNullException(nameof(control));
+            if (control == null)
+                throw new ArgumentNullException(nameof(control));
 
             // 重要：检查句柄是否已创建
             if (!control.IsHandleCreated || control.IsDisposed || control.Disposing)

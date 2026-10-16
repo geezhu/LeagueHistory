@@ -1,6 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
+using Newtonsoft.Json.Linq;
 
 namespace League.Clients
 {
@@ -24,7 +24,9 @@ namespace League.Clients
         {
             try
             {
-                var response = await _client.GetAsync($"/lol-summoner/v1/summoners?name={Uri.EscapeDataString(summonerName)}");
+                var response = await _client.GetAsync(
+                    $"/lol-summoner/v1/summoners?name={Uri.EscapeDataString(summonerName)}"
+                );
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -49,7 +51,10 @@ namespace League.Clients
         /// <summary>
         /// 根据召唤师ID查询召唤师信息
         /// </summary>
-        public async Task<JObject> GetSummonerByIdAsync(string summonerId, CancellationToken cancellationToken = default)
+        public async Task<JObject> GetSummonerByIdAsync(
+            string summonerId,
+            CancellationToken cancellationToken = default
+        )
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrEmpty(summonerId))
@@ -65,7 +70,10 @@ namespace League.Clients
 
             try
             {
-                using var response = await _client.GetAsync($"/lol-summoner/v1/summoners/{summonerId}", cancellationToken);
+                using var response = await _client.GetAsync(
+                    $"/lol-summoner/v1/summoners/{summonerId}",
+                    cancellationToken
+                );
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -81,7 +89,10 @@ namespace League.Clients
 
                 return summonerData;
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (TaskCanceledException ex)
             {
                 Debug.WriteLine($"[LCU] 请求超时: {ex.Message}");
@@ -122,16 +133,19 @@ namespace League.Clients
                 }
                 return obj;
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (TaskCanceledException ex)
             {
                 Debug.WriteLine($"[LCU] 请求超时: {ex.Message}");
-                return null;   // 不要 new JObject()
+                return null; // 不要 new JObject()
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"获取当前召唤师失败: {ex}");
-                return null;   // 不要 new JObject()
+                return null; // 不要 new JObject()
             }
         }
 

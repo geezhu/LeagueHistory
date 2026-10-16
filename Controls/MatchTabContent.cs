@@ -1,13 +1,14 @@
-﻿using League.Models;
+﻿using System.Diagnostics;
+using League.Models;
 using League.States;
-using System.Diagnostics;
 using static League.FormMain;
 
 namespace League.Controls
 {
     public partial class MatchTabContent : UserControl
     {
-        private Dictionary<TabPage, MatchTabPageContent> _tabPageContents = new Dictionary<TabPage, MatchTabPageContent>();
+        private Dictionary<TabPage, MatchTabPageContent> _tabPageContents =
+            new Dictionary<TabPage, MatchTabPageContent>();
 
         public ClosableTabControl MainTabControl => closableTabControl1;
 
@@ -68,7 +69,8 @@ namespace League.Controls
 
         private void PerformCloseTab(TabPage tab, bool force = false)
         {
-            if (tab == null) return;
+            if (tab == null)
+                return;
 
             string? puuid = tab.Tag as string;
             Debug.WriteLine($"[CloseTab] 执行关闭 -> Tab: {tab.Text} | PUUID: {puuid} | Force: {force}");
@@ -82,7 +84,8 @@ namespace League.Controls
 
             // 清理子控件
             foreach (Control c in tab.Controls)
-                if (c is IDisposable d) d.Dispose();
+                if (c is IDisposable d)
+                    d.Dispose();
             tab.Controls.Clear();
 
             // 移除并释放
@@ -95,14 +98,16 @@ namespace League.Controls
         /// </summary>
         public void CleanupAllTabs(bool isFormClosing = false)
         {
-            Debug.WriteLine($"[CleanupAllTabs] 调用 | 当前Tab数: {MainTabControl.TabPages.Count} | FormClosing={isFormClosing}");
+            Debug.WriteLine(
+                $"[CleanupAllTabs] 调用 | 当前Tab数: {MainTabControl.TabPages.Count} | FormClosing={isFormClosing}"
+            );
 
             if (isFormClosing)
             {
                 var tabs = MainTabControl.TabPages.Cast<TabPage>().ToList();
                 foreach (var tab in tabs)
                 {
-                    CloseTabForce(tab);   // 强制关闭所有，包括自己
+                    CloseTabForce(tab); // 强制关闭所有，包括自己
                 }
                 _tabPageContents.Clear();
                 Debug.WriteLine("[CleanupAllTabs] 窗体关闭清理完成");
@@ -116,9 +121,7 @@ namespace League.Controls
                 return;
             }
 
-            var tabsToClose = MainTabControl.TabPages.Cast<TabPage>()
-                                .Where(t => !IsSelfTab(t))
-                                .ToList();
+            var tabsToClose = MainTabControl.TabPages.Cast<TabPage>().Where(t => !IsSelfTab(t)).ToList();
 
             foreach (var tab in tabsToClose)
             {
@@ -139,7 +142,8 @@ namespace League.Controls
             string profileIconId,
             string summonerLevel,
             string privacy,
-            Dictionary<string, RankedStats> rankedStats)
+            Dictionary<string, RankedStats> rankedStats
+        )
         {
             if (string.IsNullOrWhiteSpace(puuid))
             {
@@ -157,32 +161,40 @@ namespace League.Controls
 
                     if (_tabPageContents.TryGetValue(page, out var existingContent))
                     {
-                        bool isCurrentPlayer = string.Equals(puuid, Globals.CurrentPuuid, StringComparison.OrdinalIgnoreCase);
+                        bool isCurrentPlayer = string.Equals(
+                            puuid,
+                            Globals.CurrentPuuid,
+                            StringComparison.OrdinalIgnoreCase
+                        );
 
                         if (RefreshState.ForceMatchRefresh && isCurrentPlayer)
                         {
                             Debug.WriteLine($"[强制刷新] 检测到 ForceMatchRefresh=true，正在刷新当前玩家战绩");
 
-                            existingContent.SetNeedsRefresh(true);   // 确保 MatchTabPageContent 有这个方法
+                            existingContent.SetNeedsRefresh(true); // 确保 MatchTabPageContent 有这个方法
 
                             // 延迟执行刷新
-                            Task.Delay(800).ContinueWith(async _ =>
-                            {
-                                try
-                                {
-                                    if (existingContent.NeedsRefresh)
+                            Task.Delay(800)
+                                .ContinueWith(
+                                    async _ =>
                                     {
-                                        await existingContent.ForceRefreshData(puuid);
-                                        existingContent.SetNeedsRefresh(false);
-                                        RefreshState.ForceMatchRefresh = false;   // 刷新完重置
-                                        Debug.WriteLine("[强制刷新] 当前玩家战绩刷新完成");
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    Debug.WriteLine($"[强制刷新异常] {ex}");
-                                }
-                            }, TaskScheduler.FromCurrentSynchronizationContext());
+                                        try
+                                        {
+                                            if (existingContent.NeedsRefresh)
+                                            {
+                                                await existingContent.ForceRefreshData(puuid);
+                                                existingContent.SetNeedsRefresh(false);
+                                                RefreshState.ForceMatchRefresh = false; // 刷新完重置
+                                                Debug.WriteLine("[强制刷新] 当前玩家战绩刷新完成");
+                                            }
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Debug.WriteLine($"[强制刷新异常] {ex}");
+                                        }
+                                    },
+                                    TaskScheduler.FromCurrentSynchronizationContext()
+                                );
                         }
                     }
                     return;
@@ -193,14 +205,18 @@ namespace League.Controls
             const int MAX_TABS = 20;
             if (MainTabControl.TabPages.Count >= MAX_TABS)
             {
-                var oldestNonSelf = MainTabControl.TabPages.Cast<TabPage>()
-                    .FirstOrDefault(t => !IsSelfTab(t));
+                var oldestNonSelf = MainTabControl.TabPages.Cast<TabPage>().FirstOrDefault(t => !IsSelfTab(t));
 
                 if (oldestNonSelf != null)
                     CloseTab(oldestNonSelf);
                 else
                 {
-                    MessageBox.Show($"已达到最大Tab数量({MAX_TABS})", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(
+                        $"已达到最大Tab数量({MAX_TABS})",
+                        "提示",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning
+                    );
                     return;
                 }
             }
@@ -218,14 +234,26 @@ namespace League.Controls
                 await ((FormMain)this.ParentForm).ParseGameToPanelAsync(match, summonerId, gameName, tagLine, index);
 
             string fullName = $"{gameName}#{tagLine}";
-            _ = tabContent.InitiaRank(fullName, profileIconId, summonerLevel, privacy, rankedStats,
-                string.Equals(puuid, Globals.CurrentPuuid, StringComparison.OrdinalIgnoreCase));
+            _ = tabContent.InitiaRank(
+                fullName,
+                profileIconId,
+                summonerLevel,
+                privacy,
+                rankedStats,
+                string.Equals(puuid, Globals.CurrentPuuid, StringComparison.OrdinalIgnoreCase)
+            );
 
             // 异步加载数据
             Task.Run(async () =>
             {
-                try { await tabContent.SafeInitializeAsync(puuid,summonerId); }
-                catch (Exception ex) { Debug.WriteLine($"Tab加载失败: {ex.Message}"); }
+                try
+                {
+                    await tabContent.SafeInitializeAsync(puuid, summonerId);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Tab加载失败: {ex.Message}");
+                }
             });
 
             newTab.Controls.Add(tabContent);

@@ -1,20 +1,21 @@
 ﻿using League.Models;
 
-namespace League.Networking 
+namespace League.Networking
 {
     public class PartyDetector
     {
         private readonly int _matchThreshold;
         private readonly Color[] _colorPool =
         {
-        Color.FromArgb(255, 0, 0),       // 红
-        Color.FromArgb(0, 0, 255),       // 深蓝
-    };
+            Color.FromArgb(255, 0, 0), // 红
+            Color.FromArgb(0, 0, 255), // 深蓝
+        };
 
         private Dictionary<string, string> parentMap = new Dictionary<string, string>();
         private int colorIndex = 0;
 
         public const int DefaultMatchThreshold = 2;
+
         public PartyDetector(int matchThreshold = DefaultMatchThreshold)
         {
             _matchThreshold = matchThreshold;
@@ -26,11 +27,10 @@ namespace League.Networking
             colorIndex = 0;
 
             // 过滤掉 Puuid 为空的，避免 Dictionary key 为 null
-            players = players
-                .Where(p => p?.Player != null && !string.IsNullOrEmpty(p.Player.Puuid))
-                .ToList();
+            players = players.Where(p => p?.Player != null && !string.IsNullOrEmpty(p.Player.Puuid)).ToList();
 
-            if (players.Count == 0) return;
+            if (players.Count == 0)
+                return;
 
             // 初始化并查集
             foreach (var p in players)
@@ -102,5 +102,4 @@ namespace League.Networking
                 parentMap[rootB] = rootA;
         }
     }
-
 }

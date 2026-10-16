@@ -1,5 +1,5 @@
-﻿using Newtonsoft.Json;
-using System.Diagnostics;
+﻿using System.Diagnostics;
+using Newtonsoft.Json;
 
 namespace League.Clients
 {
@@ -45,7 +45,8 @@ namespace League.Clients
             try
             {
                 var chatId = await _chatService.FindConversationIdAsync("championSelect");
-                if (string.IsNullOrEmpty(chatId)) return false;
+                if (string.IsNullOrEmpty(chatId))
+                    return false;
 
                 string[] lines = message.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
 
@@ -68,7 +69,8 @@ namespace League.Clients
         /// </summary>
         public async Task<bool> SendInGameMessageAsync(string message)
         {
-            if (_gameInputService == null) return false;
+            if (_gameInputService == null)
+                return false;
             return await _gameInputService.SendInGameMessageAsync(message);
         }
     }

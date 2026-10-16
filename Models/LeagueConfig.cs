@@ -13,6 +13,7 @@ namespace League.Models
         public int ChampionAnalysisCacheMinutes { get; set; } = 1440;
         public int ChampionMasteryCacheMinutes { get; set; } = 30;
         public string VoiceMicrophoneId { get; set; } = string.Empty;
+
         /// <summary>
         /// 游戏结束后自动退出并返回客户端
         /// </summary>
@@ -34,12 +35,12 @@ namespace League.Models
         public PreliminaryConfig Preliminary { get; set; } = new PreliminaryConfig();
 
         // 默认全开，确保升级后旧用户行为不变
-        public bool EnablePreliminaryInNormal { get; set; } = false;    // 匹配（盲选/征召）
-        public bool EnablePreliminaryInRanked { get; set; } = false;    // 排位（单双/灵活）
-        public bool EnablePreliminaryInAram { get; set; } = false;      // 大乱斗
+        public bool EnablePreliminaryInNormal { get; set; } = false; // 匹配（盲选/征召）
+        public bool EnablePreliminaryInRanked { get; set; } = false; // 排位（单双/灵活）
+        public bool EnablePreliminaryInAram { get; set; } = false; // 大乱斗
         public bool EnablePreliminaryInNexusBlitz { get; set; } = false; // 海克斯大乱斗（2400）
-        public bool EnablePreliminaryInUrf { get; set; } = false;          // 无限乱斗（900，随机）
-        public bool EnablePreliminaryInPickUrf { get; set; } = false;      // 无限火力（1900，自选）
+        public bool EnablePreliminaryInUrf { get; set; } = false; // 无限乱斗（900，随机）
+        public bool EnablePreliminaryInPickUrf { get; set; } = false; // 无限火力（1900，自选）
 
         /// <summary>
         /// 发送信息模式：1 = 自动发送战绩，2 = 发送自定义文本
@@ -64,13 +65,12 @@ namespace League.Models
         /// <summary>
         /// 发送战绩时是否隐藏自己
         /// </summary>
-        public bool HideSelfWhenSending { get; set; } = false;   // 默认隐藏自己
+        public bool HideSelfWhenSending { get; set; } = false; // 默认隐藏自己
 
         /// <summary>
         /// 发送战绩时是否使用英雄名称代替玩家名称
         /// </summary>
-        public bool UseChampionNameWhenSending { get; set; } = false;  // 默认使用英雄名
-
+        public bool UseChampionNameWhenSending { get; set; } = false; // 默认使用英雄名
 
         /// <summary>
         /// 自动跳过点赞界面

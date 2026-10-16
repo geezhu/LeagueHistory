@@ -1,6 +1,6 @@
-﻿using League.Models;
+﻿using System.Diagnostics;
+using League.Models;
 using Newtonsoft.Json.Linq;
-using System.Diagnostics;
 
 namespace League.Infrastructure
 {
@@ -57,7 +57,8 @@ namespace League.Infrastructure
         private void ProcessAugmentItem(JToken item, List<AugmentInfo> augments, Dictionary<string, string> descMap)
         {
             int id = item["id"]?.Value<int>() ?? 0;
-            if (id <= 0) return;
+            if (id <= 0)
+                return;
 
             string name = item["nameTRA"]?.ToString() ?? item["name"]?.ToString() ?? $"Augment {id}";
             string description = item["description"]?.ToString() ?? item["desc"]?.ToString() ?? "";
@@ -69,14 +70,16 @@ namespace League.Infrastructure
 
             if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(iconPath))
             {
-                augments.Add(new AugmentInfo
-                {
-                    Id = id,
-                    Name = name,
-                    Description = description,
-                    IconPath = iconPath,
-                    Rarity = item["rarity"]?.ToString() ?? "Unknown"
-                });
+                augments.Add(
+                    new AugmentInfo
+                    {
+                        Id = id,
+                        Name = name,
+                        Description = description,
+                        IconPath = iconPath,
+                        Rarity = item["rarity"]?.ToString() ?? "Unknown",
+                    }
+                );
             }
         }
 
@@ -95,23 +98,23 @@ namespace League.Infrastructure
             if (string.IsNullOrEmpty(augment.IconPath))
                 return (null, augment.Name, fullDesc);
 
-            using var image = await _imageCache.GetOrDownloadImageAsync(
-                augment.IconPath, "augments", $"{id}.png", id);
+            using var image = await _imageCache.GetOrDownloadImageAsync(augment.IconPath, "augments", $"{id}.png", id);
 
-            var displayImage = image == null ? null : League.UIHelpers.AugmentIconRenderer.Render(image, augment.Rarity);
+            var displayImage =
+                image == null ? null : League.UIHelpers.AugmentIconRenderer.Render(image, augment.Rarity);
             return (displayImage, augment.Name, fullDesc);
         }
 
         private static string CleanDescription(string desc) =>
-            string.IsNullOrEmpty(desc) ? "" :
-            desc.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ").Trim();
+            string.IsNullOrEmpty(desc) ? "" : desc.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ").Trim();
 
-        private static string RarityToChinese(string? rarity) => rarity?.ToLower() switch
-        {
-            "ksilver" => "白银",
-            "kgold" => "黄金",
-            "kprismatic" => "棱彩",
-            _ => "未知"
-        };
+        private static string RarityToChinese(string? rarity) =>
+            rarity?.ToLower() switch
+            {
+                "ksilver" => "白银",
+                "kgold" => "黄金",
+                "kprismatic" => "棱彩",
+                _ => "未知",
+            };
     }
 }

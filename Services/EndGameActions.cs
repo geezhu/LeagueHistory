@@ -1,7 +1,7 @@
-﻿using League.Clients;
-using Newtonsoft.Json;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text;
+using League.Clients;
+using Newtonsoft.Json;
 using static League.FormMain;
 
 namespace League.Services
@@ -23,7 +23,8 @@ namespace League.Services
             try
             {
                 var client = _lcuSession.Client;
-                if (client == null) return;
+                if (client == null)
+                    return;
 
                 string jsonBody = body == null ? "{}" : JsonConvert.SerializeObject(body);
                 var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
@@ -79,7 +80,11 @@ namespace League.Services
             {
                 await Task.Delay(500);
 
-                if (!string.IsNullOrEmpty(Globals.CurrGameMod) && int.TryParse(Globals.CurrGameMod, out int queueId) && queueId > 0)
+                if (
+                    !string.IsNullOrEmpty(Globals.CurrGameMod)
+                    && int.TryParse(Globals.CurrGameMod, out int queueId)
+                    && queueId > 0
+                )
                 {
                     await PostAsync("/lol-lobby/v2/lobby", new { queueId });
                     Debug.WriteLine($"[EndGameActions] ✅ 返回指定模式大厅 queueId = {queueId}");

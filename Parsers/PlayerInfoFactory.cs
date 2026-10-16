@@ -31,10 +31,10 @@ namespace League.Parsers
                     SoloRank = "隐藏",
                     FlexRank = "隐藏",
                     IsPublic = "隐藏",
-                    NameColor = Color.Gray
+                    NameColor = Color.Gray,
                 },
                 MatchItems = new List<ListViewItem>(),
-                HeroIcons = new ImageList()
+                HeroIcons = new ImageList(),
             };
         }
 
@@ -48,7 +48,8 @@ namespace League.Parsers
             try
             {
                 var path = AppDomain.CurrentDomain.BaseDirectory + "Assets\\Defaults\\Profile.png";
-                if (File.Exists(path)) return Image.FromFile(path);
+                if (File.Exists(path))
+                    return Image.FromFile(path);
             }
             catch { }
             return new Bitmap(64, 64);

@@ -1,7 +1,7 @@
-﻿using System.Net.Http.Headers;
-using System.Text;
+﻿using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Security;
-using System.Net;
+using System.Text;
 
 namespace League.Clients
 {
@@ -58,14 +58,14 @@ namespace League.Clients
                 AllowAutoRedirect = false,
                 SslOptions = new SslClientAuthenticationOptions
                 {
-                    RemoteCertificateValidationCallback = (sender, cert, chain, errors) => true
-                }
+                    RemoteCertificateValidationCallback = (sender, cert, chain, errors) => true,
+                },
             };
 
             _httpClient = new HttpClient(handler)
             {
                 DefaultRequestVersion = HttpVersion.Version11,
-                DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
+                DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact,
             };
 
             // 设置认证头
@@ -91,10 +91,7 @@ namespace League.Clients
         /// </summary>
         public async Task<HttpResponseMessage> PatchAsync(string requestUri, HttpContent content)
         {
-            var request = new HttpRequestMessage(new HttpMethod("PATCH"), requestUri)
-            {
-                Content = content
-            };
+            var request = new HttpRequestMessage(new HttpMethod("PATCH"), requestUri) { Content = content };
             return await SendAsync(request);
         }
 
@@ -109,7 +106,10 @@ namespace League.Clients
         /// <summary>
         /// 发送GET请求
         /// </summary>
-        public async Task<HttpResponseMessage> GetAsync(string requestUri, CancellationToken cancellationToken = default)
+        public async Task<HttpResponseMessage> GetAsync(
+            string requestUri,
+            CancellationToken cancellationToken = default
+        )
         {
             return await _httpClient.GetAsync(requestUri, cancellationToken);
         }

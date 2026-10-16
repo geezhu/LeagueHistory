@@ -1,6 +1,6 @@
-﻿using League.Caching;
+﻿using System.Diagnostics;
+using League.Caching;
 using League.Models;
-using System.Diagnostics;
 
 namespace League.ChampionSkin
 {
@@ -22,7 +22,6 @@ namespace League.ChampionSkin
 
         private static readonly Color SkinFrameNormal = Color.FromArgb(50, 50, 50);
         private static readonly Color SkinFrameSelected = Color.FromArgb(255, 40, 40); // 亮红
-
         #endregion
 
         #region 构造 / 注入
@@ -70,7 +69,8 @@ namespace League.ChampionSkin
 
         public void Bind(ChampionSkinCardModel model)
         {
-            if (model == null) return;
+            if (model == null)
+                return;
             if (picHero == null)
             {
                 Debug.WriteLine("[ChampionSkinCard] picHero 为 null，检查 Designer");
@@ -80,7 +80,8 @@ namespace League.ChampionSkin
             _championId = model.ChampionId;
             _defaultSkinId = model.DefaultSkinId;
 
-            bool prefOk = model.PreferredSkinId > 0
+            bool prefOk =
+                model.PreferredSkinId > 0
                 && model.PreferredSkinId % 1000 != 0
                 && model.Skins != null
                 && model.Skins.Any(s => s.SkinId == model.PreferredSkinId);
@@ -108,43 +109,52 @@ namespace League.ChampionSkin
 
         private void LoadHeroIcon(ChampionSkinCardModel model)
         {
-            if (picHero == null || _cache == null) return;
+            if (picHero == null || _cache == null)
+                return;
 
-            var img = _cache.GetOrLoad($"hero:{model.ChampionId}", () =>
-            {
-                string dir = Path.Combine(Application.StartupPath, "Assets", "champion");
-                foreach (var p in new[]
+            var img = _cache.GetOrLoad(
+                $"hero:{model.ChampionId}",
+                () =>
                 {
-                    Path.Combine(dir, $"{model.ChampionId}.png"),
-                    Path.Combine(dir, $"{(model.Name ?? "").Replace(" ", "").Replace("'", "")}.png"),
-                    Path.Combine(dir, $"{model.Alias}.png"),
-                })
-                {
-                    var scaled = SkinBrowserImageCache.LoadScaledFromFile(p, 150, 150);
-                    if (scaled != null) return scaled;
+                    string dir = Path.Combine(Application.StartupPath, "Assets", "champion");
+                    foreach (
+                        var p in new[]
+                        {
+                            Path.Combine(dir, $"{model.ChampionId}.png"),
+                            Path.Combine(dir, $"{(model.Name ?? "").Replace(" ", "").Replace("'", "")}.png"),
+                            Path.Combine(dir, $"{model.Alias}.png"),
+                        }
+                    )
+                    {
+                        var scaled = SkinBrowserImageCache.LoadScaledFromFile(p, 150, 150);
+                        if (scaled != null)
+                            return scaled;
+                    }
+                    return null;
                 }
-                return null;
-            });
+            );
 
-            if (img == null) return;
+            if (img == null)
+                return;
             picHero.SizeMode = PictureBoxSizeMode.Zoom;
             picHero.Image = img;
         }
 
         public void SetHeroImage(Image? image)
         {
-            if (IsDisposed || image == null || picHero == null) return;
+            if (IsDisposed || image == null || picHero == null)
+                return;
             if (InvokeRequired)
             {
                 BeginInvoke(() => SetHeroImage(image));
                 return;
             }
-            if (picHero.Image != null) return;
+            if (picHero.Image != null)
+                return;
 
             if (_cache != null)
             {
-                var img = _cache.GetOrLoad($"hero:{_championId}",
-                    () => SkinBrowserImageCache.Scale(image, 150, 150));
+                var img = _cache.GetOrLoad($"hero:{_championId}", () => SkinBrowserImageCache.Scale(image, 150, 150));
                 picHero.SizeMode = PictureBoxSizeMode.Zoom;
                 picHero.Image = img;
             }
@@ -160,7 +170,8 @@ namespace League.ChampionSkin
 
         private void ApplyHeroPreview()
         {
-            if (picHero == null) return;
+            if (picHero == null)
+                return;
 
             bool useSkin = _selectedSkinId > 0 && _selectedSkinId % 1000 != 0;
             if (useSkin && _cache != null)
@@ -168,8 +179,10 @@ namespace League.ChampionSkin
                 string? path = FindSkinFile(_selectedSkinId);
                 if (path != null)
                 {
-                    var skinImg = _cache.GetOrLoad($"skin:{_selectedSkinId}:150", () =>
-                        SkinBrowserImageCache.LoadScaledFromFile(path, 150, 150));
+                    var skinImg = _cache.GetOrLoad(
+                        $"skin:{_selectedSkinId}:150",
+                        () => SkinBrowserImageCache.LoadScaledFromFile(path, 150, 150)
+                    );
                     if (skinImg != null)
                     {
                         picHero.SizeMode = PictureBoxSizeMode.Zoom;
@@ -189,10 +202,16 @@ namespace League.ChampionSkin
         private void BuildSkinThumbs(List<SkinThumbItem>? skins)
         {
             ClearSkinFrames();
-            if (skins == null || skins.Count == 0) return;
+            if (skins == null || skins.Count == 0)
+                return;
 
             string champDir = Path.Combine(Application.StartupPath, "Assets", "champion");
-            var tip = new ToolTip { InitialDelay = 50, ReshowDelay = 50, AutoPopDelay = 5000 };
+            var tip = new ToolTip
+            {
+                InitialDelay = 50,
+                ReshowDelay = 50,
+                AutoPopDelay = 5000,
+            };
 
             foreach (var s in skins)
             {
@@ -204,7 +223,7 @@ namespace League.ChampionSkin
                     Margin = new Padding(2),
                     Padding = new Padding(3), // 选中时露出的边框更粗
                     BackColor = Color.FromArgb(50, 50, 50),
-                    Tag = s
+                    Tag = s,
                 };
                 var box = new PictureBox
                 {
@@ -213,33 +232,38 @@ namespace League.ChampionSkin
                     BorderStyle = BorderStyle.None,
                     Cursor = Cursors.Hand,
                     BackColor = Color.FromArgb(30, 30, 30),
-                    Tag = s
+                    Tag = s,
                 };
 
-                tip.SetToolTip(box, string.IsNullOrEmpty(s.Name)
-                    ? (isBase ? "默认" : s.SkinId.ToString())
-                    : s.Name);
+                tip.SetToolTip(box, string.IsNullOrEmpty(s.Name) ? (isBase ? "默认" : s.SkinId.ToString()) : s.Name);
 
                 if (isBase && _cache != null)
                 {
-                    box.Image = _cache.GetOrLoad($"hero:{_championId}:31", () =>
-                    {
-                        var full = _cache.Get($"hero:{_championId}");
-                        if (full != null)
-                            return SkinBrowserImageCache.Scale(full, 31, 31);
-                        return SkinBrowserImageCache.LoadScaledFromFile(
-                            Path.Combine(champDir, $"{_championId}.png"), 31, 31);
-                    });
+                    box.Image = _cache.GetOrLoad(
+                        $"hero:{_championId}:31",
+                        () =>
+                        {
+                            var full = _cache.Get($"hero:{_championId}");
+                            if (full != null)
+                                return SkinBrowserImageCache.Scale(full, 31, 31);
+                            return SkinBrowserImageCache.LoadScaledFromFile(
+                                Path.Combine(champDir, $"{_championId}.png"),
+                                31,
+                                31
+                            );
+                        }
+                    );
                 }
                 else if (_cache != null)
                 {
-                    box.Image = _cache.GetOrLoad($"skin:{s.SkinId}:31", () =>
-                    {
-                        string? p = FindSkinFile(s.SkinId);
-                        return p == null
-                            ? null
-                            : SkinBrowserImageCache.LoadScaledFromFile(p, 31, 31);
-                    });
+                    box.Image = _cache.GetOrLoad(
+                        $"skin:{s.SkinId}:31",
+                        () =>
+                        {
+                            string? p = FindSkinFile(s.SkinId);
+                            return p == null ? null : SkinBrowserImageCache.LoadScaledFromFile(p, 31, 31);
+                        }
+                    );
                 }
 
                 box.Click += SkinBox_Click;
@@ -256,27 +280,33 @@ namespace League.ChampionSkin
 
             foreach (Control c in flpSkins.Controls)
             {
-                if (c is not Panel frame || frame.Tag is not SkinThumbItem item) continue;
+                if (c is not Panel frame || frame.Tag is not SkinThumbItem item)
+                    continue;
                 frame.BackColor = SkinFrameNormal;
                 frame.Padding = new Padding(1);
-                if (item.SkinId == _selectedSkinId) target = frame;
-                if (item.IsBase || item.SkinId % 1000 == 0) baseFrame = frame;
+                if (item.SkinId == _selectedSkinId)
+                    target = frame;
+                if (item.IsBase || item.SkinId % 1000 == 0)
+                    baseFrame = frame;
             }
 
             target ??= baseFrame;
-            if (target == null) return;
+            if (target == null)
+                return;
 
             _selectedFrame = target;
-            target.Padding = new Padding(3);          // 加粗
-            target.BackColor = SkinFrameSelected;     // 亮红
+            target.Padding = new Padding(3); // 加粗
+            target.BackColor = SkinFrameSelected; // 亮红
             if (target.Tag is SkinThumbItem it)
                 _selectedSkinId = it.SkinId;
         }
 
         private void SkinBox_Click(object? sender, EventArgs e)
         {
-            if (sender is not PictureBox box) return;
-            if (box.Tag is not SkinThumbItem item) return;
+            if (sender is not PictureBox box)
+                return;
+            if (box.Tag is not SkinThumbItem item)
+                return;
 
             _selectedSkinId = item.SkinId;
 
@@ -305,10 +335,13 @@ namespace League.ChampionSkin
                 if (_cache != null)
                 {
                     string? path = FindSkinFile(item.SkinId);
-                    picHero.Image = path == null
-                        ? null
-                        : _cache.GetOrLoad($"skin:{item.SkinId}:150", () =>
-                            SkinBrowserImageCache.LoadScaledFromFile(path, 150, 150));
+                    picHero.Image =
+                        path == null
+                            ? null
+                            : _cache.GetOrLoad(
+                                $"skin:{item.SkinId}:150",
+                                () => SkinBrowserImageCache.LoadScaledFromFile(path, 150, 150)
+                            );
                 }
                 PreferredSkinChanged?.Invoke(_championId, item.SkinId);
             }
@@ -316,22 +349,25 @@ namespace League.ChampionSkin
 
         public void SetSkinImage(int skinId, Image? image)
         {
-            if (IsDisposed || image == null) return;
+            if (IsDisposed || image == null)
+                return;
             if (InvokeRequired)
             {
                 BeginInvoke(() => SetSkinImage(skinId, image));
                 return;
             }
 
-            Image? thumb = _cache != null
-                ? _cache.GetOrLoad($"skin:{skinId}:31",
-                    () => SkinBrowserImageCache.Scale(image, 31, 31))
-                : SkinBrowserImageCache.Scale(image, 31, 31);
+            Image? thumb =
+                _cache != null
+                    ? _cache.GetOrLoad($"skin:{skinId}:31", () => SkinBrowserImageCache.Scale(image, 31, 31))
+                    : SkinBrowserImageCache.Scale(image, 31, 31);
 
             foreach (Control c in flpSkins.Controls)
             {
-                if (c is not Panel frame || frame.Tag is not SkinThumbItem item) continue;
-                if (item.SkinId != skinId) continue;
+                if (c is not Panel frame || frame.Tag is not SkinThumbItem item)
+                    continue;
+                if (item.SkinId != skinId)
+                    continue;
 
                 if (frame.Controls.Count > 0 && frame.Controls[0] is PictureBox pb)
                     pb.Image = thumb;
@@ -339,15 +375,19 @@ namespace League.ChampionSkin
                 if (_selectedSkinId == skinId && _cache != null)
                 {
                     string? path = FindSkinFile(skinId);
-                    picHero.Image = _cache.GetOrLoad($"skin:{skinId}:150", () =>
-                    {
-                        if (path != null)
+                    picHero.Image = _cache.GetOrLoad(
+                        $"skin:{skinId}:150",
+                        () =>
                         {
-                            var fromFile = SkinBrowserImageCache.LoadScaledFromFile(path, 150, 150);
-                            if (fromFile != null) return fromFile;
+                            if (path != null)
+                            {
+                                var fromFile = SkinBrowserImageCache.LoadScaledFromFile(path, 150, 150);
+                                if (fromFile != null)
+                                    return fromFile;
+                            }
+                            return SkinBrowserImageCache.Scale(image, 150, 150);
                         }
-                        return SkinBrowserImageCache.Scale(image, 150, 150);
-                    });
+                    );
                 }
                 break;
             }

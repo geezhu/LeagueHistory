@@ -8,13 +8,17 @@ namespace League.UIState
 {
     public partial class DetailedViewLayoutManager : IDisposable
     {
-        private static readonly Dictionary<int, (Image, string, string)> _championCache = new Dictionary<int, (Image, string, string)>();
+        private static readonly Dictionary<int, (Image, string, string)> _championCache =
+            new Dictionary<int, (Image, string, string)>();
 
-        private static readonly Dictionary<int, (Image, string, string)> _spellCache = new Dictionary<int, (Image, string, string)>();
+        private static readonly Dictionary<int, (Image, string, string)> _spellCache =
+            new Dictionary<int, (Image, string, string)>();
 
-        private static readonly Dictionary<int, (Image, string, string)> _itemCache = new Dictionary<int, (Image, string, string)>();
+        private static readonly Dictionary<int, (Image, string, string)> _itemCache =
+            new Dictionary<int, (Image, string, string)>();
 
-        private static readonly Dictionary<int, (Image, string, string)> _runeCache = new Dictionary<int, (Image, string, string)>();
+        private static readonly Dictionary<int, (Image, string, string)> _runeCache =
+            new Dictionary<int, (Image, string, string)>();
 
         private const int PANEL_W = 1200;
 
@@ -37,7 +41,13 @@ namespace League.UIState
             _toolTip?.Dispose();
         }
 
-        public async Task<Panel> CreateDetailedPlayerPanel(JObject participant, MatchInfo matchInfo, int x, int y, int teamId)
+        public async Task<Panel> CreateDetailedPlayerPanel(
+            JObject participant,
+            MatchInfo matchInfo,
+            int x,
+            int y,
+            int teamId
+        )
         {
             (string name, bool isSelf) tuple = await GetPlayerInfoAsync(participant, matchInfo);
             string playerName = tuple.name;
@@ -48,11 +58,20 @@ namespace League.UIState
                 Location = new Point(x, y),
                 Size = new Size(1120, 44),
                 BorderStyle = BorderStyle.None,
-                BackColor = isSelf ? Color.FromArgb(232, 241, 253) : Color.White
+                BackColor = isSelf ? Color.FromArgb(232, 241, 253) : Color.White,
             };
             await PreloadAllAsync(participant, matchInfo); // 修改：传入matchInfo
             await RetryMissingAugmentsAsync(participant, matchInfo);
-            (int damage, int damageRank, int gold, int goldRank, double kp, int kpRank, int damageTaken, int damageTakenRank) ranks = CalculateRanks(participant, matchInfo);
+            (
+                int damage,
+                int damageRank,
+                int gold,
+                int goldRank,
+                double kp,
+                int kpRank,
+                int damageTaken,
+                int damageTakenRank
+            ) ranks = CalculateRanks(participant, matchInfo);
             panel.SuspendLayout();
             CreateScoreboardRow(panel, participant, playerName, isSelf, ranks, matchInfo);
             panel.ResumeLayout(performLayout: false);
@@ -64,7 +83,8 @@ namespace League.UIState
             string summonerId = participant["summonerId"]?.ToString();
             string riotName = participant["riotIdGameName"]?.ToString();
             string ritoTag = participant["riotIdTagline"]?.ToString();
-            bool isSelf = (!string.IsNullOrEmpty(matchInfo.CurrPuuid) && participant["puuid"]?.ToString() == matchInfo.CurrPuuid)
+            bool isSelf =
+                (!string.IsNullOrEmpty(matchInfo.CurrPuuid) && participant["puuid"]?.ToString() == matchInfo.CurrPuuid)
                 || (!string.IsNullOrEmpty(matchInfo.CurrSummonerId) && summonerId == matchInfo.CurrSummonerId);
             if (!string.IsNullOrEmpty(riotName) && !string.IsNullOrEmpty(ritoTag))
             {
@@ -83,45 +103,134 @@ namespace League.UIState
 
         private Color GetPanelBackColor(int teamId, bool isSelf)
         {
-            return isSelf ? Color.LightYellow : teamId switch
-            {
-                200 => Color.FromArgb(245, 240, 245),
-                100 => Color.FromArgb(200, 240, 245),
-                _ => Color.FloralWhite,
-            };
+            return isSelf
+                ? Color.LightYellow
+                : teamId switch
+                {
+                    200 => Color.FromArgb(245, 240, 245),
+                    100 => Color.FromArgb(200, 240, 245),
+                    _ => Color.FloralWhite,
+                };
         }
 
-        private void CreateAllUI(Panel panel, JObject participant, string playerName, bool isSelf, (int damage, int damageRank, int gold, int goldRank, double kp, int kpRank, int damageTaken, int damageTakenRank) ranks, MatchInfo matchInfo)
+        private void CreateAllUI(
+            Panel panel,
+            JObject participant,
+            string playerName,
+            bool isSelf,
+            (
+                int damage,
+                int damageRank,
+                int gold,
+                int goldRank,
+                double kp,
+                int kpRank,
+                int damageTaken,
+                int damageTakenRank
+            ) ranks,
+            MatchInfo matchInfo
+        )
         {
             CreateHeroImage(panel, participant);
             CreateFirstRowStats(panel, participant, playerName, isSelf, ranks);
             CreateSecondRowItems(panel, participant, matchInfo); // 修改：传入matchInfo
         }
 
-        private void CreateFirstRowStats(Panel panel, JObject participant, string playerName, bool isSelf, (int damage, int damageRank, int gold, int goldRank, double kp, int kpRank, int damageTaken, int damageTakenRank) ranks)
+        private void CreateFirstRowStats(
+            Panel panel,
+            JObject participant,
+            string playerName,
+            bool isSelf,
+            (
+                int damage,
+                int damageRank,
+                int gold,
+                int goldRank,
+                double kp,
+                int kpRank,
+                int damageTaken,
+                int damageTakenRank
+            ) ranks
+        )
         {
             // 调整：整体上移，给顶部留一点空间
             int baseY = 8;
 
-            Label nameLabel = CreateLabel(playerName, 80, baseY, 200, isSelf ? FontStyle.Bold : FontStyle.Regular, isSelf ? Color.Blue : Color.Black, 10f);
+            Label nameLabel = CreateLabel(
+                playerName,
+                80,
+                baseY,
+                200,
+                isSelf ? FontStyle.Bold : FontStyle.Regular,
+                isSelf ? Color.Blue : Color.Black,
+                10f
+            );
             panel.Controls.Add(nameLabel);
             panel.Controls.Add(CreateSeparator(290, baseY));
-            Label kdaLabel = CreateLabel($"数据: {participant["kills"]}/{participant["deaths"]}/{participant["assists"]}", 305, baseY, 130, FontStyle.Bold, Color.DeepSkyBlue, 10f);
+            Label kdaLabel = CreateLabel(
+                $"数据: {participant["kills"]}/{participant["deaths"]}/{participant["assists"]}",
+                305,
+                baseY,
+                130,
+                FontStyle.Bold,
+                Color.DeepSkyBlue,
+                10f
+            );
             panel.Controls.Add(kdaLabel);
             panel.Controls.Add(CreateSeparator(445, baseY));
-            Label damageLabel = CreateLabel($"伤害: {ranks.damage} (#{ranks.damageRank})", 460, baseY, 140, FontStyle.Regular, Color.OrangeRed, 10f);
+            Label damageLabel = CreateLabel(
+                $"伤害: {ranks.damage} (#{ranks.damageRank})",
+                460,
+                baseY,
+                140,
+                FontStyle.Regular,
+                Color.OrangeRed,
+                10f
+            );
             panel.Controls.Add(damageLabel);
             panel.Controls.Add(CreateSeparator(590, baseY));
-            Label goldLabel = CreateLabel($"经济: {ranks.gold} (#{ranks.goldRank})", 615, baseY, 130, FontStyle.Regular, Color.Goldenrod, 10f);
+            Label goldLabel = CreateLabel(
+                $"经济: {ranks.gold} (#{ranks.goldRank})",
+                615,
+                baseY,
+                130,
+                FontStyle.Regular,
+                Color.Goldenrod,
+                10f
+            );
             panel.Controls.Add(goldLabel);
             panel.Controls.Add(CreateSeparator(735, baseY));
-            Label csLabel = CreateLabel($"补刀: {participant["totalMinionsKilled"]}", 760, baseY, 90, FontStyle.Regular, Color.DarkGreen, 10f);
+            Label csLabel = CreateLabel(
+                $"补刀: {participant["totalMinionsKilled"]}",
+                760,
+                baseY,
+                90,
+                FontStyle.Regular,
+                Color.DarkGreen,
+                10f
+            );
             panel.Controls.Add(csLabel);
             panel.Controls.Add(CreateSeparator(850, baseY));
-            Label kpLabel = CreateLabel($"参团: {ranks.kp * 100.0:F1}% (#{ranks.kpRank})", 875, baseY, 130, FontStyle.Regular, Color.DodgerBlue, 10f);
+            Label kpLabel = CreateLabel(
+                $"参团: {ranks.kp * 100.0:F1}% (#{ranks.kpRank})",
+                875,
+                baseY,
+                130,
+                FontStyle.Regular,
+                Color.DodgerBlue,
+                10f
+            );
             panel.Controls.Add(kpLabel);
             // 注意：保留你原来的字段用法（我没有改逻辑）
-            Label damageTakenLabel = CreateLabel($"承伤: {ranks.damageTaken} (#{ranks.damageTakenRank})", 1010, baseY, 130, FontStyle.Regular, Color.MediumPurple, 10f);
+            Label damageTakenLabel = CreateLabel(
+                $"承伤: {ranks.damageTaken} (#{ranks.damageTakenRank})",
+                1010,
+                baseY,
+                130,
+                FontStyle.Regular,
+                Color.MediumPurple,
+                10f
+            );
             panel.Controls.Add(damageTakenLabel);
         }
 
@@ -139,7 +248,7 @@ namespace League.UIState
                         Size = new Size(50, 50),
                         Image = ImageProcessor.ResizeImage(info.Item1, 50, 50),
                         SizeMode = PictureBoxSizeMode.StretchImage,
-                        Tag = "英雄: " + info.Item2 + "\n\n" + StripHtmlTags(info.Item3)
+                        Tag = "英雄: " + info.Item2 + "\n\n" + StripHtmlTags(info.Item3),
                     };
                     _toolTip.SetToolTip(heroPic, heroPic.Tag?.ToString());
                     panel.Controls.Add(heroPic);
@@ -173,7 +282,11 @@ namespace League.UIState
             {
                 int spellId = participant[$"spell{i}Id"]?.Value<int>() ?? 0;
                 int x = startX + (i - 1) * 35;
-                if (spellId > 0 && _spellCache.TryGetValue(spellId, out (Image, string, string) info) && info.Item1 != null)
+                if (
+                    spellId > 0
+                    && _spellCache.TryGetValue(spellId, out (Image, string, string) info)
+                    && info.Item1 != null
+                )
                 {
                     PictureBox pic = CreatePictureBox(info, x, y, 30, 30, "召唤师技能: " + info.Item2);
                     panel.Controls.Add(pic);
@@ -191,7 +304,11 @@ namespace League.UIState
             {
                 int itemId = participant[$"item{i}"]?.Value<int>() ?? 0;
                 int x = startX + i * 35;
-                if (itemId > 0 && _itemCache.TryGetValue(itemId, out (Image, string, string) info) && info.Item1 != null)
+                if (
+                    itemId > 0
+                    && _itemCache.TryGetValue(itemId, out (Image, string, string) info)
+                    && info.Item1 != null
+                )
                 {
                     string itemType = i == 6 ? "饰品" : "装备";
                     PictureBox pic = CreatePictureBox(info, x, y, 30, 30, itemType + ": " + info.Item2);
@@ -231,8 +348,10 @@ namespace League.UIState
 
                 // 方法2：通过游戏模式字段判断
                 string gameMode = participant["gameMode"]?.ToString() ?? "";
-                if (gameMode.Contains("cherry", StringComparison.OrdinalIgnoreCase) ||
-                    gameMode.Contains("hextech", StringComparison.OrdinalIgnoreCase))
+                if (
+                    gameMode.Contains("cherry", StringComparison.OrdinalIgnoreCase)
+                    || gameMode.Contains("hextech", StringComparison.OrdinalIgnoreCase)
+                )
                     return true;
 
                 // 方法3：如果有海克斯符文数据，也认为是海克斯大乱斗
@@ -266,7 +385,7 @@ namespace League.UIState
                         Size = new Size(30, 30),
                         BackColor = Color.Black, // 设置黑色背景
                         SizeMode = PictureBoxSizeMode.StretchImage,
-                        Tag = (augment.name ?? "未知符文") + "\n\n" + StripHtmlTags(augment.longDesc ?? "")
+                        Tag = (augment.name ?? "未知符文") + "\n\n" + StripHtmlTags(augment.longDesc ?? ""),
                     };
 
                     // 设置图片（透明PNG在黑色背景上会显示得更清晰）
@@ -306,19 +425,35 @@ namespace League.UIState
             {
                 if (matchInfo.AllPlayersAugments.TryGetValue(participantPuuid, out var augments))
                 {
-                    if (ids.Length == 0) return augments ?? Array.Empty<RuneInfo>();
-                    return ids.Select(id => augments?.FirstOrDefault(a => a.id == id)
-                        ?? new RuneInfo { id = id, name = $"海克斯 {id}", longDesc = "图片暂未加载" }).ToArray();
+                    if (ids.Length == 0)
+                        return augments ?? Array.Empty<RuneInfo>();
+                    return ids.Select(id =>
+                            augments?.FirstOrDefault(a => a.id == id)
+                            ?? new RuneInfo
+                            {
+                                id = id,
+                                name = $"海克斯 {id}",
+                                longDesc = "图片暂未加载",
+                            }
+                        )
+                        .ToArray();
                 }
             }
 
             // 备用方案：如果AllPlayersAugments中没有，尝试从participant数据中提取
-            return ids.Select(id => new RuneInfo { id = id, name = $"海克斯 {id}", longDesc = "图片暂未加载" }).ToArray();
+            return ids.Select(id => new RuneInfo
+                {
+                    id = id,
+                    name = $"海克斯 {id}",
+                    longDesc = "图片暂未加载",
+                })
+                .ToArray();
         }
 
         private async Task RetryMissingAugmentsAsync(JObject participant, MatchInfo matchInfo)
         {
-            if (!IsHextechArenaMode(participant)) return;
+            if (!IsHextechArenaMode(participant))
+                return;
             var augments = GetSelfAugments(participant, matchInfo);
             foreach (var augment in augments.Where(a => a.Icon == null))
             {
@@ -329,13 +464,18 @@ namespace League.UIState
                     augment.name = name;
                     augment.longDesc = image == null ? description + "\n图片未加载，请重新打开详情重试" : description;
                 }
-                catch (Exception ex) { Debug.WriteLine($"海克斯 {augment.id} 重试失败: {ex.Message}"); }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"海克斯 {augment.id} 重试失败: {ex.Message}");
+                }
             }
             string? puuid = participant["puuid"]?.ToString();
             if (!string.IsNullOrEmpty(puuid))
             {
-                lock (matchInfo.AllPlayersAugments) matchInfo.AllPlayersAugments[puuid] = augments;
-                if (puuid == matchInfo.CurrPuuid) matchInfo.Augments = augments;
+                lock (matchInfo.AllPlayersAugments)
+                    matchInfo.AllPlayersAugments[puuid] = augments;
+                if (puuid == matchInfo.CurrPuuid)
+                    matchInfo.Augments = augments;
             }
         }
 
@@ -404,7 +544,7 @@ namespace League.UIState
                 participant["playerAugment3"]?.Value<int>() ?? 0,
                 participant["playerAugment4"]?.Value<int>() ?? 0,
                 participant["playerAugment5"]?.Value<int>() ?? 0,
-                participant["playerAugment6"]?.Value<int>() ?? 0
+                participant["playerAugment6"]?.Value<int>() ?? 0,
             };
 
             return augIds.Where(x => x > 0).ToArray();
@@ -416,7 +556,14 @@ namespace League.UIState
             return _runeCache.TryGetValue(runeId, out info);
         }
 
-        private PictureBox CreatePictureBox((Image, string, string) info, int x, int y, int width, int height, string tooltipPrefix)
+        private PictureBox CreatePictureBox(
+            (Image, string, string) info,
+            int x,
+            int y,
+            int width,
+            int height,
+            string tooltipPrefix
+        )
         {
             PictureBox pic = new PictureBox
             {
@@ -424,7 +571,7 @@ namespace League.UIState
                 Size = new Size(width, height),
                 Image = ImageProcessor.ResizeImage(info.Item1, width, height),
                 SizeMode = PictureBoxSizeMode.StretchImage,
-                Tag = tooltipPrefix + "\n\n" + StripHtmlTags(info.Item3)
+                Tag = tooltipPrefix + "\n\n" + StripHtmlTags(info.Item3),
             };
             _toolTip.SetToolTip(pic, pic.Tag?.ToString());
             return pic;
@@ -439,7 +586,7 @@ namespace League.UIState
                 Size = new Size(width, 25),
                 Font = new Font("微软雅黑", fontSize, style),
                 ForeColor = color,
-                TextAlign = ContentAlignment.MiddleLeft
+                TextAlign = ContentAlignment.MiddleLeft,
             };
         }
 
@@ -449,7 +596,7 @@ namespace League.UIState
             {
                 Location = new Point(x, y),
                 Size = new Size(1, 21),
-                BackColor = Color.LightGray
+                BackColor = Color.LightGray,
             };
         }
 
@@ -460,7 +607,7 @@ namespace League.UIState
                 Location = new Point(x, y),
                 Size = new Size(width, height),
                 BackColor = Color.Transparent,
-                BorderStyle = BorderStyle.FixedSingle
+                BorderStyle = BorderStyle.FixedSingle,
             };
             panel.Controls.Add(placeholder);
         }
@@ -472,7 +619,7 @@ namespace League.UIState
                 Location = new Point(x, y),
                 Size = new Size(width, height),
                 BackColor = Color.Yellow,
-                BorderStyle = BorderStyle.FixedSingle
+                BorderStyle = BorderStyle.FixedSingle,
             };
             Label label = new Label
             {
@@ -480,12 +627,11 @@ namespace League.UIState
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleCenter,
                 Font = new Font("微软雅黑", 7f, FontStyle.Bold),
-                ForeColor = Color.Red
+                ForeColor = Color.Red,
             };
             placeholder.Controls.Add(label);
             panel.Controls.Add(placeholder);
         }
-
 
         // 修改：简化预加载，海克斯符文不需要重新加载
         private async Task PreloadAllAsync(JObject participant, MatchInfo matchInfo)
@@ -494,7 +640,9 @@ namespace League.UIState
             int championId = participant["championId"]?.Value<int>() ?? 0;
             if (championId > 0 && !_championCache.ContainsKey(championId))
             {
-                tasks.Add(PreloadResourceAsync(championId, _championCache, FormMain.Globals.resLoading.GetChampionInfoAsync));
+                tasks.Add(
+                    PreloadResourceAsync(championId, _championCache, FormMain.Globals.resLoading.GetChampionInfoAsync)
+                );
             }
 
             for (int i = 1; i <= 2; i++)
@@ -502,7 +650,9 @@ namespace League.UIState
                 int spellId = participant[$"spell{i}Id"]?.Value<int>() ?? 0;
                 if (spellId > 0 && !_spellCache.ContainsKey(spellId))
                 {
-                    tasks.Add(PreloadResourceAsync(spellId, _spellCache, FormMain.Globals.resLoading.GetSpellInfoAsync));
+                    tasks.Add(
+                        PreloadResourceAsync(spellId, _spellCache, FormMain.Globals.resLoading.GetSpellInfoAsync)
+                    );
                 }
             }
 
@@ -521,7 +671,9 @@ namespace League.UIState
             if (!isHextechArena)
             {
                 // 只有普通模式才需要预加载符文
-                (RuneInfo[] Primary, RuneInfo[] Secondary, RuneInfo[] Shards) runesData = LoadRunesForParticipant(participant);
+                (RuneInfo[] Primary, RuneInfo[] Secondary, RuneInfo[] Shards) runesData = LoadRunesForParticipant(
+                    participant
+                );
                 PreloadRuneArray(runesData.Primary, tasks);
                 PreloadRuneArray(runesData.Secondary, tasks);
                 PreloadRuneArray(runesData.Shards, tasks);
@@ -545,7 +697,11 @@ namespace League.UIState
             }
         }
 
-        private async Task PreloadResourceAsync(int resourceId, Dictionary<int, (Image, string, string)> cache, Func<int, Task<(Image, string, string)>> loader)
+        private async Task PreloadResourceAsync(
+            int resourceId,
+            Dictionary<int, (Image, string, string)> cache,
+            Func<int, Task<(Image, string, string)>> loader
+        )
         {
             try
             {
@@ -565,17 +721,50 @@ namespace League.UIState
             }
         }
 
-        private (int damage, int damageRank, int gold, int goldRank, double kp, int kpRank, int damageTaken, int damageTakenRank) CalculateRanks(JObject participant, MatchInfo matchInfo)
+        private (
+            int damage,
+            int damageRank,
+            int gold,
+            int goldRank,
+            double kp,
+            int kpRank,
+            int damageTaken,
+            int damageTakenRank
+        ) CalculateRanks(JObject participant, MatchInfo matchInfo)
         {
             List<JObject> allParticipants = matchInfo.AllParticipants;
             int currentDamage = participant["totalDamageDealtToChampions"]?.Value<int>() ?? 0;
             int currentGold = participant["goldEarned"]?.Value<int>() ?? 0;
             double currentKP = (participant["challenges"]?["killParticipation"]?.Value<double>()).GetValueOrDefault();
             int currentDamageTaken = participant["totalDamageTaken"]?.Value<int>() ?? 0;
-            return (damage: currentDamage, damageRank: GetRank(allParticipants.Select((p) => p["totalDamageDealtToChampions"]?.Value<int>() ?? 0).ToList(), currentDamage), gold: currentGold, goldRank: GetRank(allParticipants.Select((p) => p["goldEarned"]?.Value<int>() ?? 0).ToList(), currentGold), kp: currentKP, kpRank: GetRank(allParticipants.Select((p) => (p["challenges"]?["killParticipation"]?.Value<double>()).GetValueOrDefault()).ToList(), currentKP), damageTaken: currentDamageTaken, damageTakenRank: GetRank(allParticipants.Select((p) => p["totalDamageTaken"]?.Value<int>() ?? 0).ToList(), currentDamageTaken));
+            return (
+                damage: currentDamage,
+                damageRank: GetRank(
+                    allParticipants.Select((p) => p["totalDamageDealtToChampions"]?.Value<int>() ?? 0).ToList(),
+                    currentDamage
+                ),
+                gold: currentGold,
+                goldRank: GetRank(
+                    allParticipants.Select((p) => p["goldEarned"]?.Value<int>() ?? 0).ToList(),
+                    currentGold
+                ),
+                kp: currentKP,
+                kpRank: GetRank(
+                    allParticipants
+                        .Select((p) => (p["challenges"]?["killParticipation"]?.Value<double>()).GetValueOrDefault())
+                        .ToList(),
+                    currentKP
+                ),
+                damageTaken: currentDamageTaken,
+                damageTakenRank: GetRank(
+                    allParticipants.Select((p) => p["totalDamageTaken"]?.Value<int>() ?? 0).ToList(),
+                    currentDamageTaken
+                )
+            );
         }
 
-        private int GetRank<T>(List<T> allValues, T currentValue) where T : IComparable
+        private int GetRank<T>(List<T> allValues, T currentValue)
+            where T : IComparable
         {
             List<T> sorted = allValues.OrderByDescending((v) => v).ToList();
             for (int i = 0; i < sorted.Count; i++)
@@ -588,33 +777,45 @@ namespace League.UIState
             return sorted.Count;
         }
 
-        private (RuneInfo[] Primary, RuneInfo[] Secondary, RuneInfo[] Shards) LoadRunesForParticipant(JObject participant)
+        private (RuneInfo[] Primary, RuneInfo[] Secondary, RuneInfo[] Shards) LoadRunesForParticipant(
+            JObject participant
+        )
         {
             JToken perks = participant["perks"];
             if (!(perks?["styles"] is JArray styles))
             {
                 return (Primary: null, Secondary: null, Shards: null);
             }
-            RuneInfo[] primaryRunes = (from r in styles.FirstOrDefault((s) => s["description"]?.ToString() == "primaryStyle")?["selections"]?.Cast<JObject>().Take(4).Select(delegate (JObject selection)
-            {
-                int num = selection["perk"]?.Value<int>() ?? 0;
-                return num > 0 ? new RuneInfo
-                {
-                    RuneId = num
-                } : null;
-            })
-                                       where r != null
-                                       select r).ToArray();
-            RuneInfo[] secondaryRunes = (from r in styles.FirstOrDefault((s) => s["description"]?.ToString() == "subStyle")?["selections"]?.Cast<JObject>().Take(2).Select(delegate (JObject selection)
-            {
-                int num = selection["perk"]?.Value<int>() ?? 0;
-                return num > 0 ? new RuneInfo
-                {
-                    RuneId = num
-                } : null;
-            })
-                                         where r != null
-                                         select r).ToArray();
+            RuneInfo[] primaryRunes = (
+                from r in styles
+                    .FirstOrDefault((s) => s["description"]?.ToString() == "primaryStyle")
+                    ?["selections"]?.Cast<JObject>()
+                    .Take(4)
+                    .Select(
+                        delegate(JObject selection)
+                        {
+                            int num = selection["perk"]?.Value<int>() ?? 0;
+                            return num > 0 ? new RuneInfo { RuneId = num } : null;
+                        }
+                    )
+                where r != null
+                select r
+            ).ToArray();
+            RuneInfo[] secondaryRunes = (
+                from r in styles
+                    .FirstOrDefault((s) => s["description"]?.ToString() == "subStyle")
+                    ?["selections"]?.Cast<JObject>()
+                    .Take(2)
+                    .Select(
+                        delegate(JObject selection)
+                        {
+                            int num = selection["perk"]?.Value<int>() ?? 0;
+                            return num > 0 ? new RuneInfo { RuneId = num } : null;
+                        }
+                    )
+                where r != null
+                select r
+            ).ToArray();
             JToken statPerks = perks["statPerks"];
             RuneInfo[] shards = null;
             if (statPerks != null)
@@ -623,23 +824,26 @@ namespace League.UIState
                 {
                     CreateShard(statPerks["offense"]?.Value<int>() ?? 0),
                     CreateShard(statPerks["flex"]?.Value<int>() ?? 0),
-                    CreateShard(statPerks["defense"]?.Value<int>() ?? 0)
-                }.Where((r) => r != null).ToArray();
+                    CreateShard(statPerks["defense"]?.Value<int>() ?? 0),
+                }
+                    .Where((r) => r != null)
+                    .ToArray();
             }
             return (Primary: primaryRunes, Secondary: secondaryRunes, Shards: shards);
         }
 
         private RuneInfo CreateShard(int shardId)
         {
-            return shardId > 0 ? new RuneInfo
-            {
-                RuneId = shardId
-            } : null;
+            return shardId > 0 ? new RuneInfo { RuneId = shardId } : null;
         }
 
         private string StripHtmlTags(string input)
         {
-            return string.IsNullOrEmpty(input) ? string.Empty : Regex.Replace(input.Replace("<br>", "\n").Replace("<br/>", "\n").Replace("<br />", "\n"), "<.*?>", "").Trim();
+            return string.IsNullOrEmpty(input)
+                ? string.Empty
+                : Regex
+                    .Replace(input.Replace("<br>", "\n").Replace("<br/>", "\n").Replace("<br />", "\n"), "<.*?>", "")
+                    .Trim();
         }
     }
 }

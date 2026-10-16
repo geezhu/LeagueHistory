@@ -1,5 +1,5 @@
-﻿using Newtonsoft.Json.Linq;
-using System.Diagnostics;
+﻿using System.Diagnostics;
+using Newtonsoft.Json.Linq;
 
 namespace League.Clients
 {
@@ -18,7 +18,10 @@ namespace League.Clients
         /// <summary>
         /// 获取排位统计数据
         /// </summary>
-        public async Task<JObject> GetCurrentRankedStatsAsync(string puuid, CancellationToken cancellationToken = default)
+        public async Task<JObject> GetCurrentRankedStatsAsync(
+            string puuid,
+            CancellationToken cancellationToken = default
+        )
         {
             try
             {
@@ -26,7 +29,10 @@ namespace League.Clients
                 var content = await response.Content.ReadAsStringAsync(cancellationToken);
                 return JObject.Parse(content);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (TaskCanceledException ex)
             {
                 Debug.WriteLine($"[LCU] 请求超时: {ex.Message}");

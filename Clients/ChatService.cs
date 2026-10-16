@@ -1,7 +1,7 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using System;
+﻿using System;
 using System.Diagnostics;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace League.Clients
 {
@@ -22,19 +22,13 @@ namespace League.Clients
         /// </summary>
         public async Task<bool> SendMessageAsync(string conversationId, string message)
         {
-            var payload = new
-            {
-                body = message
-            };
+            var payload = new { body = message };
 
             string json = JsonConvert.SerializeObject(payload);
 
             var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
-            var resp = await _client.PostAsync(
-                $"/lol-chat/v1/conversations/{conversationId}/messages",
-                content
-            );
+            var resp = await _client.PostAsync($"/lol-chat/v1/conversations/{conversationId}/messages", content);
 
             if (!resp.IsSuccessStatusCode)
             {
@@ -56,7 +50,7 @@ namespace League.Clients
                 "game" => new[] { "game", "champSelect", "customGame", "practiceTool", "inProgress" },
                 "champselect" => new[] { "champSelect", "championSelect", "inProgress" },
                 "ingame" => new[] { "inProgress", "game", "champSelect" },
-                _ => new[] { type }
+                _ => new[] { type },
             };
 
             for (int attempt = 1; attempt <= maxRetries; attempt++)
@@ -111,22 +105,26 @@ namespace League.Clients
                             else if (target.Equals("inprogress", StringComparison.OrdinalIgnoreCase))
                             {
                                 // 检查是否是游戏进行中状态
-                                if (gameStatus.Equals("inProgress", StringComparison.OrdinalIgnoreCase) ||
-                                    convState.Equals("active", StringComparison.OrdinalIgnoreCase) ||
-                                    convName.Contains("游戏进行中") ||
-                                    convName.Contains("正在游戏中"))
+                                if (
+                                    gameStatus.Equals("inProgress", StringComparison.OrdinalIgnoreCase)
+                                    || convState.Equals("active", StringComparison.OrdinalIgnoreCase)
+                                    || convName.Contains("游戏进行中")
+                                    || convName.Contains("正在游戏中")
+                                )
                                 {
                                     match = true;
                                 }
                             }
                             // 4. 匹配游戏名称关键词
-                            else if (convName.Contains("召唤师峡谷") ||
-                                     convName.Contains("扭曲丛林") ||
-                                     convName.Contains("极地大乱斗") ||
-                                     convName.Contains("ARAM") ||
-                                     convName.Contains("匹配") ||
-                                     convName.Contains("排位") ||
-                                     convName.Contains("自定义"))
+                            else if (
+                                convName.Contains("召唤师峡谷")
+                                || convName.Contains("扭曲丛林")
+                                || convName.Contains("极地大乱斗")
+                                || convName.Contains("ARAM")
+                                || convName.Contains("匹配")
+                                || convName.Contains("排位")
+                                || convName.Contains("自定义")
+                            )
                             {
                                 match = true;
                             }
@@ -136,7 +134,9 @@ namespace League.Clients
                                 string? id = conv["id"]?.ToString();
                                 if (!string.IsNullOrEmpty(id))
                                 {
-                                    Debug.WriteLine($"[Chat] 找到会话: type={convType}, gameStatus={gameStatus}, state={convState}, name={convName}, id={id}");
+                                    Debug.WriteLine(
+                                        $"[Chat] 找到会话: type={convType}, gameStatus={gameStatus}, state={convState}, name={convName}, id={id}"
+                                    );
                                     return id;
                                 }
                             }
@@ -151,7 +151,7 @@ namespace League.Clients
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[Chat] 查找会话异常: { ex}");
+                    Debug.WriteLine($"[Chat] 查找会话异常: {ex}");
                 }
             }
 

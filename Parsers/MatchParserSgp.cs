@@ -1,7 +1,7 @@
-﻿using League.Controls;
+﻿using System.Diagnostics;
+using League.Controls;
 using League.Models;
 using Newtonsoft.Json.Linq;
-using System.Diagnostics;
 
 namespace League.Parsers
 {
@@ -16,14 +16,23 @@ namespace League.Parsers
             public string Description { get; set; }
         }
 
-        private const int MAX_CONCURRENT_PARSING = 10;  // 增加到10
+        private const int MAX_CONCURRENT_PARSING = 10; // 增加到10
 
-        private static readonly SemaphoreSlim _semaphore = new SemaphoreSlim(MAX_CONCURRENT_PARSING, MAX_CONCURRENT_PARSING);
+        private static readonly SemaphoreSlim _semaphore = new SemaphoreSlim(
+            MAX_CONCURRENT_PARSING,
+            MAX_CONCURRENT_PARSING
+        );
 
         public event Action<string> PlayerIconClicked;
 
         // 修改解析方法，使用 SemaphoreSlim 替代 lock
-        public async Task<Panel> ParseGameToPanelFromSgpAsync(JObject game, string summonerId, string gameName, string tagLine, int index)
+        public async Task<Panel> ParseGameToPanelFromSgpAsync(
+            JObject game,
+            string summonerId,
+            string gameName,
+            string tagLine,
+            int index
+        )
         {
             // 使用 SemaphoreSlim 控制并发，而不是直接跳过
             await _semaphore.WaitAsync();
@@ -41,7 +50,7 @@ namespace League.Parsers
                 }
 
                 MatchListPanel panel = new MatchListPanel(matchInfo);
-                panel.PlayerIconClicked += delegate (string summonerId)
+                panel.PlayerIconClicked += delegate(string summonerId)
                 {
                     PlayerIconClicked?.Invoke(summonerId);
                 };
@@ -60,7 +69,13 @@ namespace League.Parsers
             }
         }
 
-        private async Task<MatchInfo> ParseGameDataLightweight(JObject game, string summonerId, string gameName, string tagLine, int index)
+        private async Task<MatchInfo> ParseGameDataLightweight(
+            JObject game,
+            string summonerId,
+            string gameName,
+            string tagLine,
+            int index
+        )
         {
             var (gameJson, participants) = ParseJsonStructure(game);
             if (participants == null || participants.Count == 0)
@@ -74,12 +89,28 @@ namespace League.Parsers
                 return null;
             }
             long gameId = ((long?)gameJson["gameId"]).GetValueOrDefault();
-            (string currPuuid, string currSummonerId, bool isWin, int teamId, int duration, DateTime createTime, int kills, int deaths, int assists, int goldEarned, int damageToChampions, double killParticipation, string mode, string queueId)? basicData = ExtractBasicMatchData(gameJson, selfParticipant, participants);
+            (
+                string currPuuid,
+                string currSummonerId,
+                bool isWin,
+                int teamId,
+                int duration,
+                DateTime createTime,
+                int kills,
+                int deaths,
+                int assists,
+                int goldEarned,
+                int damageToChampions,
+                double killParticipation,
+                string mode,
+                string queueId
+            )? basicData = ExtractBasicMatchData(gameJson, selfParticipant, participants);
             if (!basicData.HasValue)
             {
                 return null;
             }
-            (string, string, bool, int, int, DateTime, int, int, int, int, int, double, string, string) value = basicData.Value;
+            (string, string, bool, int, int, DateTime, int, int, int, int, int, double, string, string) value =
+                basicData.Value;
             string currPuuid = value.Item1;
             string currSummonerId = value.Item2;
             bool isWin = value.Item3;
@@ -94,20 +125,72 @@ namespace League.Parsers
             double killParticipation = value.Rest.Item5;
             string mode = value.Rest.Item6;
             string queueId = value.Rest.Item7;
-            (int, int, int) tuple2 = CalculateRanks(participants, selfParticipant, damageToChampions, goldEarned, killParticipation);
+            (int, int, int) tuple2 = CalculateRanks(
+                participants,
+                selfParticipant,
+                damageToChampions,
+                goldEarned,
+                killParticipation
+            );
             int damageRank = tuple2.Item1;
             int goldRank = tuple2.Item2;
             int kpRank = tuple2.Item3;
             (int, string) tuple3 = ExtractDamageTakenData(selfParticipant, participants);
             _ = tuple3.Item1;
             string damageTakenText = tuple3.Item2;
-            (Image champIcon, string champName, Image spellImg1, Image spellImg2, string spellName1, string spellDesc1, string spellName2, string spellDesc2, RuneInfo[] primaryRunes, RuneInfo[] secondaryRunes, RuneInfo[] statRunes, Item[] items) resources = await LoadEssentialResourcesSimple(selfParticipant);
+            (
+                Image champIcon,
+                string champName,
+                Image spellImg1,
+                Image spellImg2,
+                string spellName1,
+                string spellDesc1,
+                string spellName2,
+                string spellDesc2,
+                RuneInfo[] primaryRunes,
+                RuneInfo[] secondaryRunes,
+                RuneInfo[] statRunes,
+                Item[] items
+            ) resources = await LoadEssentialResourcesSimple(selfParticipant);
 
             // 修改：加载所有玩家的海克斯符文
             var allPlayersAugments = await LoadAllPlayersAugmentsAsync(allParticipants);
-            var selfAugments = allPlayersAugments.ContainsKey(currPuuid) ? allPlayersAugments[currPuuid] : Array.Empty<RuneInfo>();
+            var selfAugments = allPlayersAugments.ContainsKey(currPuuid)
+                ? allPlayersAugments[currPuuid]
+                : Array.Empty<RuneInfo>();
 
-            MatchInfo matchInfo = CreateMatchInfo(index, gameId, currPuuid, currSummonerId, isWin, teamId, duration, createTime, kills, deaths, assists, $"{damageToChampions / 1000f:0.#}K |{damageRank}", $"{goldEarned / 1000f:0.#}K |{goldRank}", $"{killParticipation:P0} |{kpRank}", damageTakenText, mode, queueId, resources.champIcon, resources.champName, resources.spellImg1, resources.spellImg2, resources.primaryRunes, resources.secondaryRunes, resources.statRunes, resources.items, gameName.Contains("#") ? gameName.Substring(0, gameName.IndexOf('#')) : gameName, game, allParticipants, selfAugments, allPlayersAugments);
+            MatchInfo matchInfo = CreateMatchInfo(
+                index,
+                gameId,
+                currPuuid,
+                currSummonerId,
+                isWin,
+                teamId,
+                duration,
+                createTime,
+                kills,
+                deaths,
+                assists,
+                $"{damageToChampions / 1000f:0.#}K |{damageRank}",
+                $"{goldEarned / 1000f:0.#}K |{goldRank}",
+                $"{killParticipation:P0} |{kpRank}",
+                damageTakenText,
+                mode,
+                queueId,
+                resources.champIcon,
+                resources.champName,
+                resources.spellImg1,
+                resources.spellImg2,
+                resources.primaryRunes,
+                resources.secondaryRunes,
+                resources.statRunes,
+                resources.items,
+                gameName.Contains("#") ? gameName.Substring(0, gameName.IndexOf('#')) : gameName,
+                game,
+                allParticipants,
+                selfAugments,
+                allPlayersAugments
+            );
             matchInfo.SpellNames[0] = resources.spellName1;
             matchInfo.RawGameData = (JObject)(gameJson?["info"] as JObject ?? gameJson ?? game).DeepClone();
             matchInfo.SpellDescriptions[0] = resources.spellDesc1;
@@ -134,7 +217,8 @@ namespace League.Parsers
                     {
                         int[] augmentIds = ExtractAugments(participant);
                         var augments = await LoadAugmentsAsync(augmentIds);
-                        lock (allAugments) allAugments[puuid] = augments;
+                        lock (allAugments)
+                            allAugments[puuid] = augments;
                     }
                 }
                 finally
@@ -150,25 +234,40 @@ namespace League.Parsers
         // 修改海克斯符文加载方法，确保正确处理空值
         private async Task<RuneInfo[]> LoadAugmentsAsync(int[] augmentIds)
         {
-            if (augmentIds == null || augmentIds.Length == 0) return Array.Empty<RuneInfo>();
+            if (augmentIds == null || augmentIds.Length == 0)
+                return Array.Empty<RuneInfo>();
             using var semaphore = new SemaphoreSlim(3);
-            var tasks = augmentIds.Where(id => id > 0).Select(async id =>
-            {
-                var rune = new RuneInfo { id = id, name = $"海克斯 {id}", longDesc = "图片加载失败，打开详情时将重试" };
-                await semaphore.WaitAsync();
-                try
+            var tasks = augmentIds
+                .Where(id => id > 0)
+                .Select(async id =>
                 {
-                    var (img, name, desc) = await FormMain.Globals.resLoading.GetAugmentInfoAsync(id);
-                    rune.Icon = img;
-                    rune.name = name;
-                    rune.longDesc = img == null ? desc + "\n图片未加载，打开详情时将重试" : desc;
-                }
-                catch (Exception ex) { Debug.WriteLine($"加载海克斯符文 {id} 失败: {ex.Message}"); }
-                finally { semaphore.Release(); }
-                return rune; // Keep its ID and position even when the image is missing.
-            });
+                    var rune = new RuneInfo
+                    {
+                        id = id,
+                        name = $"海克斯 {id}",
+                        longDesc = "图片加载失败，打开详情时将重试",
+                    };
+                    await semaphore.WaitAsync();
+                    try
+                    {
+                        var (img, name, desc) = await FormMain.Globals.resLoading.GetAugmentInfoAsync(id);
+                        rune.Icon = img;
+                        rune.name = name;
+                        rune.longDesc = img == null ? desc + "\n图片未加载，打开详情时将重试" : desc;
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"加载海克斯符文 {id} 失败: {ex.Message}");
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                    return rune; // Keep its ID and position even when the image is missing.
+                });
             return await Task.WhenAll(tasks);
         }
+
         // 修改 ExtractAugments 方法，确保正确处理空值
         private int[] ExtractAugments(JObject participant)
         {
@@ -184,12 +283,11 @@ namespace League.Parsers
                 participant["playerAugment3"]?.Value<int>() ?? 0,
                 participant["playerAugment4"]?.Value<int>() ?? 0,
                 participant["playerAugment5"]?.Value<int>() ?? 0,
-                participant["playerAugment6"]?.Value<int>() ?? 0
+                participant["playerAugment6"]?.Value<int>() ?? 0,
             };
 
             return augIds.Where(x => x > 0).ToArray();
         }
-
 
         private (JObject gameJson, JArray participants) ParseJsonStructure(JObject game)
         {
@@ -208,8 +306,12 @@ namespace League.Parsers
             return (gameJson, participants);
         }
 
-        
-        private JObject FindSelfParticipant(List<JObject> participants, string summonerId, string gameName, string tagLine)
+        private JObject FindSelfParticipant(
+            List<JObject> participants,
+            string summonerId,
+            string gameName,
+            string tagLine
+        )
         {
             if (participants == null || participants.Count == 0)
             {
@@ -221,8 +323,9 @@ namespace League.Parsers
             // 方案1：优先使用summonerId进行精确匹配（最可靠）
             if (!string.IsNullOrEmpty(summonerId))
             {
-                self = participants.FirstOrDefault((p) =>
-                    string.Equals(p["summonerId"]?.ToString(), summonerId, StringComparison.OrdinalIgnoreCase));
+                self = participants.FirstOrDefault(
+                    (p) => string.Equals(p["summonerId"]?.ToString(), summonerId, StringComparison.OrdinalIgnoreCase)
+                );
 
                 if (self != null)
                 {
@@ -242,9 +345,11 @@ namespace League.Parsers
             // 保持原有的名称匹配逻辑，但只在summonerId匹配失败时使用
 
             // 尝试完整的Riot ID匹配
-            self = participants.FirstOrDefault((p) =>
-                string.Equals(p["riotIdGameName"]?.ToString(), gameName, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(p["riotIdTagline"]?.ToString(), tagLine, StringComparison.OrdinalIgnoreCase));
+            self = participants.FirstOrDefault(
+                (p) =>
+                    string.Equals(p["riotIdGameName"]?.ToString(), gameName, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(p["riotIdTagline"]?.ToString(), tagLine, StringComparison.OrdinalIgnoreCase)
+            );
 
             if (self != null)
             {
@@ -253,8 +358,9 @@ namespace League.Parsers
             }
 
             // 尝试只匹配gameName
-            self = participants.FirstOrDefault((p) =>
-                string.Equals(p["riotIdGameName"]?.ToString(), gameName, StringComparison.OrdinalIgnoreCase));
+            self = participants.FirstOrDefault(
+                (p) => string.Equals(p["riotIdGameName"]?.ToString(), gameName, StringComparison.OrdinalIgnoreCase)
+            );
 
             if (self != null)
             {
@@ -263,8 +369,9 @@ namespace League.Parsers
             }
 
             // 尝试匹配summonerName
-            self = participants.FirstOrDefault((p) =>
-                string.Equals(p["summonerName"]?.ToString(), gameName, StringComparison.OrdinalIgnoreCase));
+            self = participants.FirstOrDefault(
+                (p) => string.Equals(p["summonerName"]?.ToString(), gameName, StringComparison.OrdinalIgnoreCase)
+            );
 
             if (self != null)
             {
@@ -273,9 +380,11 @@ namespace League.Parsers
             }
 
             // 模糊匹配
-            self = participants.FirstOrDefault((p) =>
-                (p["riotIdGameName"]?.ToString() ?? "").IndexOf(gameName, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                (p["summonerName"]?.ToString() ?? "").IndexOf(gameName, StringComparison.OrdinalIgnoreCase) >= 0);
+            self = participants.FirstOrDefault(
+                (p) =>
+                    (p["riotIdGameName"]?.ToString() ?? "").IndexOf(gameName, StringComparison.OrdinalIgnoreCase) >= 0
+                    || (p["summonerName"]?.ToString() ?? "").IndexOf(gameName, StringComparison.OrdinalIgnoreCase) >= 0
+            );
 
             if (self != null)
             {
@@ -298,10 +407,12 @@ namespace League.Parsers
                 string participantSummonerId = p["summonerId"]?.ToString();
                 string puuid = p["puuid"]?.ToString();
 
-                Debug.WriteLine($"  [{i}] RiotID: {riotName}#{riotTag} | " +
-                               $"SummonerName: {summonerName} | " +
-                               $"SummonerId: {participantSummonerId} | " +
-                               $"PUUID: {puuid?.Substring(0, Math.Min(8, puuid?.Length ?? 0))}...");
+                Debug.WriteLine(
+                    $"  [{i}] RiotID: {riotName}#{riotTag} | "
+                        + $"SummonerName: {summonerName} | "
+                        + $"SummonerId: {participantSummonerId} | "
+                        + $"PUUID: {puuid?.Substring(0, Math.Min(8, puuid?.Length ?? 0))}..."
+                );
             }
 
             // 作为最后的手段，返回第一个参与者
@@ -309,8 +420,22 @@ namespace League.Parsers
             return participants.FirstOrDefault();
         }
 
-
-        private (string currPuuid, string currSummonerId, bool isWin, int teamId, int duration, DateTime createTime, int kills, int deaths, int assists, int goldEarned, int damageToChampions, double killParticipation, string mode, string queueId)? ExtractBasicMatchData(JObject gameJson, JObject selfParticipant, JArray participants)
+        private (
+            string currPuuid,
+            string currSummonerId,
+            bool isWin,
+            int teamId,
+            int duration,
+            DateTime createTime,
+            int kills,
+            int deaths,
+            int assists,
+            int goldEarned,
+            int damageToChampions,
+            double killParticipation,
+            string mode,
+            string queueId
+        )? ExtractBasicMatchData(JObject gameJson, JObject selfParticipant, JArray participants)
         {
             try
             {
@@ -321,15 +446,35 @@ namespace League.Parsers
                 int teamId = selfParticipant["teamId"]?.Value<int>() ?? 100;
                 int duration = info["gameDuration"]?.Value<int>() ?? 0;
                 long gameStart = info["gameStartTimestamp"]?.Value<long>() ?? info["gameCreation"]?.Value<long>() ?? 0;
-                DateTime createTime = gameStart > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(gameStart).LocalDateTime : DateTime.MinValue;
+                DateTime createTime =
+                    gameStart > 0
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(gameStart).LocalDateTime
+                        : DateTime.MinValue;
                 int kills = selfParticipant["kills"]?.Value<int>() ?? 0;
                 int deaths = selfParticipant["deaths"]?.Value<int>() ?? 0;
                 int assists = selfParticipant["assists"]?.Value<int>() ?? 0;
                 int goldEarned = selfParticipant["goldEarned"]?.Value<int>() ?? 0;
                 int damageToChampions = selfParticipant["totalDamageDealtToChampions"]?.Value<int>() ?? 0;
-                double killParticipation = (selfParticipant["challenges"]?["killParticipation"]?.Value<double>()).GetValueOrDefault();
+                double killParticipation = (
+                    selfParticipant["challenges"]?["killParticipation"]?.Value<double>()
+                ).GetValueOrDefault();
                 var (mode, queueId) = ExtractGameMode(info as JObject);
-                return (currPuuid, currSummonerId, isWin, teamId, duration, createTime, kills, deaths, assists, goldEarned, damageToChampions, killParticipation, mode, queueId);
+                return (
+                    currPuuid,
+                    currSummonerId,
+                    isWin,
+                    teamId,
+                    duration,
+                    createTime,
+                    kills,
+                    deaths,
+                    assists,
+                    goldEarned,
+                    damageToChampions,
+                    killParticipation,
+                    mode,
+                    queueId
+                );
             }
             catch (Exception ex)
             {
@@ -348,27 +493,21 @@ namespace League.Parsers
         /// </summary>
         private (string mode, string queueId) ExtractGameMode(JObject gameJson)
         {
-            int queue = gameJson["queueId"]?.Value<int>()
-                ?? gameJson["info"]?["queueId"]?.Value<int>()
-                ?? 0;
+            int queue = gameJson["queueId"]?.Value<int>() ?? gameJson["info"]?["queueId"]?.Value<int>() ?? 0;
             string queueId = queue > 0 ? $"q_{queue}" : "";
-            string gameMode = gameJson["gameMode"]?.ToString()
-                ?? gameJson["info"]?["gameMode"]?.ToString();
-            string gameType = gameJson["gameType"]?.ToString()
-                ?? gameJson["info"]?["gameType"]?.ToString();
+            string gameMode = gameJson["gameMode"]?.ToString() ?? gameJson["info"]?["gameMode"]?.ToString();
+            string gameType = gameJson["gameType"]?.ToString() ?? gameJson["info"]?["gameType"]?.ToString();
 
             /* =========================
              * 1️⃣ 自定义（最高优先级）
              * ========================= */
             if (gameType == "CUSTOM_GAME")
             {
-                if (queue == 4310 ||
-                    string.Equals(gameMode, "JADE", StringComparison.OrdinalIgnoreCase))
+                if (queue == 4310 || string.Equals(gameMode, "JADE", StringComparison.OrdinalIgnoreCase))
                 {
                     return ("经典峡谷", queueId);
                 }
-                if (queue == 3270 ||
-                    string.Equals(gameMode, "KIWI", StringComparison.OrdinalIgnoreCase))
+                if (queue == 3270 || string.Equals(gameMode, "KIWI", StringComparison.OrdinalIgnoreCase))
                 {
                     return ("自定义海克斯", queueId);
                 }
@@ -380,7 +519,7 @@ namespace League.Parsers
                     "classic" => ("自定义峡谷", queueId),
                     "aram" => ("自定义大乱斗", queueId),
                     "cherry" => ("自定义海克斯", queueId),
-                    _ => ("自定义", queueId)
+                    _ => ("自定义", queueId),
                 };
             }
 
@@ -390,62 +529,97 @@ namespace League.Parsers
             switch (queue)
             {
                 // ========== 排位 ==========
-                case 420: return ("单双排", queueId);
-                case 440: return ("灵活排位", queueId);
+                case 420:
+                    return ("单双排", queueId);
+                case 440:
+                    return ("灵活排位", queueId);
 
                 // ========== 匹配 ==========
-                case 400: return ("匹配征召", queueId);
-                case 430: return ("匹配盲选", queueId);
+                case 400:
+                    return ("匹配征召", queueId);
+                case 430:
+                    return ("匹配盲选", queueId);
 
                 // ========== 大乱斗 & 无限 ==========
-                case 450: return ("大乱斗", queueId);
-                case 900: return ("无限乱斗", queueId);
-                case 1900: return ("自选无限火力", queueId);
+                case 450:
+                    return ("大乱斗", queueId);
+                case 900:
+                    return ("无限乱斗", queueId);
+                case 1900:
+                    return ("自选无限火力", queueId);
 
                 // ========== 快速模式 ==========
-                case 480: return ("快速模式", queueId);
+                case 480:
+                    return ("快速模式", queueId);
 
                 // ========== 斗魂 / 海克斯 ==========
-                case 1700: return ("斗魂竞技场", queueId);
-                case 2400: return ("海克斯乱斗", queueId);
-                case 2450: return ("经典海克斯乱斗", queueId);
+                case 1700:
+                    return ("斗魂竞技场", queueId);
+                case 2400:
+                    return ("海克斯乱斗", queueId);
+                case 2450:
+                    return ("经典海克斯乱斗", queueId);
 
                 // ========== 其他特殊模式 ==========
-                case 1020: return ("克隆大作战", queueId);
-                case 1300: return ("极限闪击", queueId);
-                case 1400: return ("终极魔典", queueId);
-                case 700: return ("冠军杯赛", queueId);
+                case 1020:
+                    return ("克隆大作战", queueId);
+                case 1300:
+                    return ("极限闪击", queueId);
+                case 1400:
+                    return ("终极魔典", queueId);
+                case 700:
+                    return ("冠军杯赛", queueId);
 
                 // ========== 人机（完整） ==========
-                case 830: return ("人机入门", queueId);
-                case 840: return ("人机新手", queueId);
-                case 850: return ("人机中等", queueId);
-                case 870: return ("人机入门", queueId);
-                case 880: return ("人机新手", queueId);
-                case 890: return ("人机中等", queueId);
+                case 830:
+                    return ("人机入门", queueId);
+                case 840:
+                    return ("人机新手", queueId);
+                case 850:
+                    return ("人机中等", queueId);
+                case 870:
+                    return ("人机入门", queueId);
+                case 880:
+                    return ("人机新手", queueId);
+                case 890:
+                    return ("人机中等", queueId);
 
                 // ========== 新手教程 ==========
-                case 2000: return ("新手教程1", queueId);
-                case 2010: return ("新手教程2", queueId);
-                case 2020: return ("新手教程3", queueId);
+                case 2000:
+                    return ("新手教程1", queueId);
+                case 2010:
+                    return ("新手教程2", queueId);
+                case 2020:
+                    return ("新手教程3", queueId);
 
                 // ========== 云顶之弈 ==========
-                case 1090: return ("云顶匹配", queueId);
-                case 1100: return ("云顶排位", queueId);
-                case 1130: return ("云顶疾速", queueId);
-                case 1160: return ("云顶双人", queueId);
+                case 1090:
+                    return ("云顶匹配", queueId);
+                case 1100:
+                    return ("云顶排位", queueId);
+                case 1130:
+                    return ("云顶疾速", queueId);
+                case 1160:
+                    return ("云顶双人", queueId);
 
                 // ========== 自定义 / 训练 / 经典 ==========
-                case 0: return ("自定义", queueId);
-                case 3100: return ("自定义峡谷", queueId);
-                case 3140: return ("训练模式", queueId);
-                case 3270: return ("自定义海克斯", queueId);
-                case 4310: return ("经典峡谷", queueId);
-                case 4320: return ("经典人机", queueId);
+                case 0:
+                    return ("自定义", queueId);
+                case 3100:
+                    return ("自定义峡谷", queueId);
+                case 3140:
+                    return ("训练模式", queueId);
+                case 3270:
+                    return ("自定义海克斯", queueId);
+                case 4310:
+                    return ("经典峡谷", queueId);
+                case 4320:
+                    return ("经典人机", queueId);
 
                 // ========== 末日人机 ==========
                 case 950:
-                case 960: return ("末日人机", queueId);
+                case 960:
+                    return ("末日人机", queueId);
             }
 
             /* =========================
@@ -467,40 +641,51 @@ namespace League.Parsers
                     "jade" => ("经典峡谷", queueId),
                     "urf" => ("无限乱斗", queueId),
                     "tutorial" => ("新手教程", queueId),
-                    _ => ($"未知模式({queue})", queueId)
+                    _ => ($"未知模式({queue})", queueId),
                 };
             }
 
             return ($"未知模式({queue})", queueId);
         }
 
-        private (int damageRank, int goldRank, int kpRank) CalculateRanks(JArray participants, JObject selfParticipant, int selfDamage, int selfGold, double selfKP)
+        private (int damageRank, int goldRank, int kpRank) CalculateRanks(
+            JArray participants,
+            JObject selfParticipant,
+            int selfDamage,
+            int selfGold,
+            double selfKP
+        )
         {
             if (participants == null)
             {
                 return (damageRank: 1, goldRank: 1, kpRank: 1);
             }
-            var allStats = participants.Cast<JObject>().Select(delegate (JObject p)
-            {
-                int damage = p["totalDamageDealtToChampions"]?.Value<int>() ?? 0;
-                int gold = p["goldEarned"]?.Value<int>() ?? 0;
-                double num = 0.0;
-                JToken jToken = p["challenges"];
-                if (jToken != null)
-                {
-                    num = jToken["killParticipation"]?.Value<double>() ?? 0.0;
-                }
-                if (num == 0.0)
-                {
-                    num = p["killParticipation"]?.Value<double>() ?? 0.0;
-                }
-                return new
-                {
-                    Damage = damage,
-                    Gold = gold,
-                    KP = num
-                };
-            }).ToList();
+            var allStats = participants
+                .Cast<JObject>()
+                .Select(
+                    delegate(JObject p)
+                    {
+                        int damage = p["totalDamageDealtToChampions"]?.Value<int>() ?? 0;
+                        int gold = p["goldEarned"]?.Value<int>() ?? 0;
+                        double num = 0.0;
+                        JToken jToken = p["challenges"];
+                        if (jToken != null)
+                        {
+                            num = jToken["killParticipation"]?.Value<double>() ?? 0.0;
+                        }
+                        if (num == 0.0)
+                        {
+                            num = p["killParticipation"]?.Value<double>() ?? 0.0;
+                        }
+                        return new
+                        {
+                            Damage = damage,
+                            Gold = gold,
+                            KP = num,
+                        };
+                    }
+                )
+                .ToList();
             int damageRank = GetRankInt(allStats.Select(s => s.Damage).ToList(), selfDamage);
             int goldRank = GetRankInt(allStats.Select(s => s.Gold).ToList(), selfGold);
             int kpRank = GetRankDouble(allStats.Select(s => s.KP).ToList(), selfKP);
@@ -540,7 +725,8 @@ namespace League.Parsers
             return sorted.Count;
         }
 
-        private int GetRank<T>(List<T> allValues, T currentValue) where T : IComparable
+        private int GetRank<T>(List<T> allValues, T currentValue)
+            where T : IComparable
         {
             List<T> sorted = allValues.OrderByDescending((v) => v).ToList();
             for (int i = 0; i < sorted.Count; i++)
@@ -553,7 +739,10 @@ namespace League.Parsers
             return sorted.Count;
         }
 
-        private (int damageTaken, string damageTakenText) ExtractDamageTakenData(JObject selfParticipant, JArray participants)
+        private (int damageTaken, string damageTakenText) ExtractDamageTakenData(
+            JObject selfParticipant,
+            JArray participants
+        )
         {
             try
             {
@@ -575,8 +764,10 @@ namespace League.Parsers
             {
                 return 1;
             }
-            List<int> allDamageTaken = (from JObject p in participants
-                                        select p["totalDamageTaken"]?.Value<int>() ?? 0).ToList();
+            List<int> allDamageTaken = (
+                from JObject p in participants
+                select p["totalDamageTaken"]?.Value<int>() ?? 0
+            ).ToList();
             return GetRank(allDamageTaken, selfDamageTaken);
         }
 
@@ -596,37 +787,55 @@ namespace League.Parsers
             {
                 statPerks["offense"]?.Value<int>() ?? 0,
                 statPerks["flex"]?.Value<int>() ?? 0,
-                statPerks["defense"]?.Value<int>() ?? 0
+                statPerks["defense"]?.Value<int>() ?? 0,
             };
-            IEnumerable<Task<RuneInfo>> statRuneTasks = statRuneIds.Select(async delegate (int runeId, int index)
-            {
-                if (runeId <= 0)
+            IEnumerable<Task<RuneInfo>> statRuneTasks = statRuneIds.Select(
+                async delegate(int runeId, int index)
                 {
-                    return new RuneInfo();
+                    if (runeId <= 0)
+                    {
+                        return new RuneInfo();
+                    }
+                    var (image, name, description) = await FormMain.Globals.resLoading.GetRuneInfoAsync(runeId);
+                    return new RuneInfo
+                    {
+                        id = runeId, // 或 RuneId = runeId
+                        RuneId = runeId,
+                        Icon = image,
+                        name = name, // 补上小写
+                        Name = name,
+                        longDesc = description,
+                        Description = description,
+                    };
                 }
-                var (image, name, description) = await FormMain.Globals.resLoading.GetRuneInfoAsync(runeId);
-                return new RuneInfo
-                {
-                    id = runeId,          // 或 RuneId = runeId
-                    RuneId = runeId,
-                    Icon = image,
-                    name = name,          // 补上小写
-                    Name = name,
-                    longDesc = description,
-                    Description = description
-                };
-            });
+            );
             return await Task.WhenAll(statRuneTasks);
         }
 
-        private async Task<(Image champIcon, string champName, Image spellImg1, Image spellImg2, string spellName1, string spellDesc1, string spellName2, string spellDesc2, RuneInfo[] primaryRunes, RuneInfo[] secondaryRunes, RuneInfo[] statRunes, Item[] items)> LoadEssentialResourcesSimple(JObject participant)
+        private async Task<(
+            Image champIcon,
+            string champName,
+            Image spellImg1,
+            Image spellImg2,
+            string spellName1,
+            string spellDesc1,
+            string spellName2,
+            string spellDesc2,
+            RuneInfo[] primaryRunes,
+            RuneInfo[] secondaryRunes,
+            RuneInfo[] statRunes,
+            Item[] items
+        )> LoadEssentialResourcesSimple(JObject participant)
         {
             int championId = participant["championId"]?.Value<int>() ?? 0;
             int spell1Id = participant["spell1Id"]?.Value<int>() ?? 0;
             int spell2Id = participant["spell2Id"]?.Value<int>() ?? 0;
-            Task<(Image image, string name, string description)> championTask = FormMain.Globals.resLoading.GetChampionInfoAsync(championId);
-            Task<(Image image, string name, string description)> spell1Task = FormMain.Globals.resLoading.GetSpellInfoAsync(spell1Id);
-            Task<(Image image, string name, string description)> spell2Task = FormMain.Globals.resLoading.GetSpellInfoAsync(spell2Id);
+            Task<(Image image, string name, string description)> championTask =
+                FormMain.Globals.resLoading.GetChampionInfoAsync(championId);
+            Task<(Image image, string name, string description)> spell1Task =
+                FormMain.Globals.resLoading.GetSpellInfoAsync(spell1Id);
+            Task<(Image image, string name, string description)> spell2Task =
+                FormMain.Globals.resLoading.GetSpellInfoAsync(spell2Id);
             Task<(RuneInfo[] Primary, RuneInfo[] Secondary)> runesTask = LoadRunesSimpleAsync(participant);
             Task<RuneInfo[]> statRunesTask = LoadStatRunesAsync(participant);
             Task<Item[]> itemsTask = LoadItemsSimpleAsync(participant);
@@ -637,7 +846,20 @@ namespace League.Parsers
             RuneInfo[] primaryRunes;
             RuneInfo[] secondaryRunes;
             (primaryRunes, secondaryRunes) = await runesTask;
-            return (champIcon, champName, spellImg1, spellImg2, spellName1, spellDesc1, spellName2, spellDesc2, primaryRunes, secondaryRunes, statRunes: await statRunesTask, items: await itemsTask);
+            return (
+                champIcon,
+                champName,
+                spellImg1,
+                spellImg2,
+                spellName1,
+                spellDesc1,
+                spellName2,
+                spellDesc2,
+                primaryRunes,
+                secondaryRunes,
+                statRunes: await statRunesTask,
+                items: await itemsTask
+            );
         }
 
         private async Task<(RuneInfo[] Primary, RuneInfo[] Secondary)> LoadRunesSimpleAsync(JObject participant)
@@ -652,7 +874,13 @@ namespace League.Parsers
                 return (Primary: null, Secondary: null);
             }
             JToken primaryStyle = styles.FirstOrDefault((s) => s["description"]?.ToString() == "primaryStyle");
-            return new ValueTuple<RuneInfo[], RuneInfo[]>(item2: await LoadRuneStyleAsync(styles.FirstOrDefault((s) => s["description"]?.ToString() == "subStyle"), 2), item1: await LoadRuneStyleAsync(primaryStyle, 4));
+            return new ValueTuple<RuneInfo[], RuneInfo[]>(
+                item2: await LoadRuneStyleAsync(
+                    styles.FirstOrDefault((s) => s["description"]?.ToString() == "subStyle"),
+                    2
+                ),
+                item1: await LoadRuneStyleAsync(primaryStyle, 4)
+            );
         }
 
         private async Task<RuneInfo[]> LoadRuneStyleAsync(JToken style, int maxCount)
@@ -665,50 +893,65 @@ namespace League.Parsers
             {
                 return null;
             }
-            IEnumerable<Task<RuneInfo>> runeTasks = selections.Cast<JObject>().Take(maxCount).Select(async delegate (JObject selection)
-            {
-                int runeId = selection["perk"]?.Value<int>() ?? 0;
-                if (runeId <= 0)
-                {
-                    return null;
-                }
-                var (image, name, description) = await FormMain.Globals.resLoading.GetRuneInfoAsync(runeId);
-                return new RuneInfo
-                {
-                    id = runeId,          // 或 RuneId = runeId
-                    RuneId = runeId,
-                    Icon = image,
-                    name = name,          // 补上小写
-                    Name = name,
-                    longDesc = description,
-                    Description = description
-                };
-            });
+            IEnumerable<Task<RuneInfo>> runeTasks = selections
+                .Cast<JObject>()
+                .Take(maxCount)
+                .Select(
+                    async delegate(JObject selection)
+                    {
+                        int runeId = selection["perk"]?.Value<int>() ?? 0;
+                        if (runeId <= 0)
+                        {
+                            return null;
+                        }
+                        var (image, name, description) = await FormMain.Globals.resLoading.GetRuneInfoAsync(runeId);
+                        return new RuneInfo
+                        {
+                            id = runeId, // 或 RuneId = runeId
+                            RuneId = runeId,
+                            Icon = image,
+                            name = name, // 补上小写
+                            Name = name,
+                            longDesc = description,
+                            Description = description,
+                        };
+                    }
+                );
             return (await Task.WhenAll(runeTasks)).Where((r) => r != null).ToArray();
         }
 
         private async Task<Item[]> LoadItemsSimpleAsync(JObject participant)
         {
-            IEnumerable<Task<Item>> itemTasks = Enumerable.Range(0, 6).Select(async delegate (int i)
-            {
-                int itemId = participant[$"item{i}"]?.Value<int>() ?? 0;
-                if (itemId <= 0)
-                {
-                    return null;
-                }
-                var (image, name, desc) = await FormMain.Globals.resLoading.GetItemInfoAsync(itemId);
-                return new Item
-                {
-                    Id = itemId,
-                    Icon = image,
-                    Name = name,
-                    Description = desc
-                };
-            });
+            IEnumerable<Task<Item>> itemTasks = Enumerable
+                .Range(0, 6)
+                .Select(
+                    async delegate(int i)
+                    {
+                        int itemId = participant[$"item{i}"]?.Value<int>() ?? 0;
+                        if (itemId <= 0)
+                        {
+                            return null;
+                        }
+                        var (image, name, desc) = await FormMain.Globals.resLoading.GetItemInfoAsync(itemId);
+                        return new Item
+                        {
+                            Id = itemId,
+                            Icon = image,
+                            Name = name,
+                            Description = desc,
+                        };
+                    }
+                );
             return (await Task.WhenAll(itemTasks)).Where((item) => item != null).ToArray();
         }
 
-        private async Task LoadTeamMembers(MatchInfo matchInfo, List<JObject> participants, string summonerId, string selfGameName, string selfTagLine)
+        private async Task LoadTeamMembers(
+            MatchInfo matchInfo,
+            List<JObject> participants,
+            string summonerId,
+            string selfGameName,
+            string selfTagLine
+        )
         {
             List<PlayerInfo> blueTeam = new List<PlayerInfo>();
             List<PlayerInfo> redTeam = new List<PlayerInfo>();
@@ -735,7 +978,12 @@ namespace League.Parsers
         }
 
         // 更新CreatePlayerInfo方法签名
-        private async Task<PlayerInfo> CreatePlayerInfo(JObject participant, string summonerId, string selfGameName, string selfTagLine)
+        private async Task<PlayerInfo> CreatePlayerInfo(
+            JObject participant,
+            string summonerId,
+            string selfGameName,
+            string selfTagLine
+        )
         {
             try
             {
@@ -756,7 +1004,7 @@ namespace League.Parsers
                     Avatar = champIcon,
                     SummonerId = participantSummonerId,
                     TeamId = teamId,
-                    IsSelf = isSelf
+                    IsSelf = isSelf,
                 };
             }
             catch (Exception ex)
@@ -765,7 +1013,6 @@ namespace League.Parsers
                 return null;
             }
         }
-
 
         private string GetDisplayNameFromParticipant(JObject p)
         {
@@ -815,7 +1062,38 @@ namespace League.Parsers
             return false;
         }
 
-        private MatchInfo CreateMatchInfo(int index, long gameId, string currPuuid, string currSummonerId, bool isWin, int teamId, int duration, DateTime createTime, int kills, int deaths, int assists, string damageText, string goldText, string kpText, string damageTakenText, string mode, string queueId, Image champIcon, string champName, Image spellImg1, Image spellImg2, RuneInfo[] primaryRunes, RuneInfo[] secondaryRunes, RuneInfo[] statRunes, Item[] items, string selfName, JObject rawGameData, List<JObject> allParticipants, RuneInfo[] augments, Dictionary<string, RuneInfo[]> allPlayersAugments)
+        private MatchInfo CreateMatchInfo(
+            int index,
+            long gameId,
+            string currPuuid,
+            string currSummonerId,
+            bool isWin,
+            int teamId,
+            int duration,
+            DateTime createTime,
+            int kills,
+            int deaths,
+            int assists,
+            string damageText,
+            string goldText,
+            string kpText,
+            string damageTakenText,
+            string mode,
+            string queueId,
+            Image champIcon,
+            string champName,
+            Image spellImg1,
+            Image spellImg2,
+            RuneInfo[] primaryRunes,
+            RuneInfo[] secondaryRunes,
+            RuneInfo[] statRunes,
+            Item[] items,
+            string selfName,
+            JObject rawGameData,
+            List<JObject> allParticipants,
+            RuneInfo[] augments,
+            Dictionary<string, RuneInfo[]> allPlayersAugments
+        )
         {
             MatchInfo matchInfo = new MatchInfo();
             matchInfo.Index = index;
@@ -840,7 +1118,7 @@ namespace League.Parsers
             matchInfo.Items = items ?? new Item[0];
             matchInfo.PrimaryRunes = primaryRunes ?? new RuneInfo[0];
             matchInfo.SecondaryRunes = secondaryRunes ?? new RuneInfo[0];
-            matchInfo.Augments = augments ?? Array.Empty<RuneInfo>();  // 当前玩家的海克斯符文
+            matchInfo.Augments = augments ?? Array.Empty<RuneInfo>(); // 当前玩家的海克斯符文
             matchInfo.AllPlayersAugments = allPlayersAugments ?? new Dictionary<string, RuneInfo[]>(); // 所有玩家的海克斯符文
             matchInfo.StatRunes = statRunes ?? new RuneInfo[3];
             matchInfo.BlueTeam = new List<PlayerInfo>();
@@ -850,7 +1128,7 @@ namespace League.Parsers
                 FullName = selfName,
                 Avatar = champIcon,
                 TeamId = teamId,
-                IsSelf = true
+                IsSelf = true,
             };
             matchInfo.AllParticipants = allParticipants;
             return matchInfo;
@@ -869,10 +1147,7 @@ namespace League.Parsers
 
         private Panel CreateEmptyPanel()
         {
-            return new Panel
-            {
-                Size = new Size(0, 0)
-            };
+            return new Panel { Size = new Size(0, 0) };
         }
     }
 }

@@ -1,8 +1,8 @@
-﻿using League.Models;
+﻿using System.Diagnostics;
+using System.Text;
+using League.Models;
 using League.PrimaryElection;
 using Newtonsoft.Json.Linq;
-using System.Diagnostics;
-using System.Text;
 
 namespace League.Services
 {
@@ -10,15 +10,18 @@ namespace League.Services
     {
         private readonly Func<Dictionary<long, PlayerMatchInfo>> _getCachedPlayerInfos;
         private readonly ChampionManager _championManager;
-        private readonly bool _hideSelf;   // 是否隐藏自己
+        private readonly bool _hideSelf; // 是否隐藏自己
 
         private string _myPuuid = string.Empty;
 
-        public ChatMessageBuilder(Func<Dictionary<long, PlayerMatchInfo>> getCachedPlayerInfos,
-                                  ChampionManager championManager,
-                                  bool hideSelf = true)
+        public ChatMessageBuilder(
+            Func<Dictionary<long, PlayerMatchInfo>> getCachedPlayerInfos,
+            ChampionManager championManager,
+            bool hideSelf = true
+        )
         {
-            _getCachedPlayerInfos = getCachedPlayerInfos ?? throw new ArgumentNullException(nameof(getCachedPlayerInfos));
+            _getCachedPlayerInfos =
+                getCachedPlayerInfos ?? throw new ArgumentNullException(nameof(getCachedPlayerInfos));
             _championManager = championManager ?? throw new ArgumentNullException(nameof(championManager));
             _hideSelf = hideSelf;
         }
@@ -101,7 +104,8 @@ namespace League.Services
                     continue;
 
                 long sid = p["summonerId"]?.Value<long>() ?? 0;
-                if (sid == 0) continue;
+                if (sid == 0)
+                    continue;
 
                 if (!infos.TryGetValue(sid, out var info) || info?.Player == null)
                     continue;
@@ -133,10 +137,14 @@ namespace League.Services
 
             var details = new List<string>();
             var b = info.Behavior;
-            if (b?.AvgMissingPings > 0) details.Add($"发问号 {b.AvgMissingPings:F1}");
-            if (b?.AvgVisionPings > 0) details.Add($"发提醒 {b.AvgVisionPings:F1}");
-            if (b?.AvgGetBackPings > 0) details.Add($"发撤退 {b.AvgGetBackPings:F1}");
-            if (b?.AvgDangerPings > 0) details.Add($"发危险 {b.AvgDangerPings:F1}");
+            if (b?.AvgMissingPings > 0)
+                details.Add($"发问号 {b.AvgMissingPings:F1}");
+            if (b?.AvgVisionPings > 0)
+                details.Add($"发提醒 {b.AvgVisionPings:F1}");
+            if (b?.AvgGetBackPings > 0)
+                details.Add($"发撤退 {b.AvgGetBackPings:F1}");
+            if (b?.AvgDangerPings > 0)
+                details.Add($"发危险 {b.AvgDangerPings:F1}");
 
             string detailStr = details.Count > 0 ? $" | {string.Join(" | ", details)}" : "";
             return baseStr + detailStr + $" 特征 [{behavior}]";
@@ -159,10 +167,14 @@ namespace League.Services
 
             var details = new List<string>();
             var b = info.Behavior;
-            if (b?.AvgMissingPings > 0) details.Add($"发问号 {b.AvgMissingPings:F1}");
-            if (b?.AvgVisionPings > 0) details.Add($"发提醒 {b.AvgVisionPings:F1}");
-            if (b?.AvgGetBackPings > 0) details.Add($"发撤退 {b.AvgGetBackPings:F1}");
-            if (b?.AvgDangerPings > 0) details.Add($"发危险 {b.AvgDangerPings:F1}");
+            if (b?.AvgMissingPings > 0)
+                details.Add($"发问号 {b.AvgMissingPings:F1}");
+            if (b?.AvgVisionPings > 0)
+                details.Add($"发提醒 {b.AvgVisionPings:F1}");
+            if (b?.AvgGetBackPings > 0)
+                details.Add($"发撤退 {b.AvgGetBackPings:F1}");
+            if (b?.AvgDangerPings > 0)
+                details.Add($"发危险 {b.AvgDangerPings:F1}");
 
             string detailStr = details.Count > 0 ? $" | {string.Join(" | ", details)}" : "";
             return baseStr + detailStr + $" 特征 [{behavior}]";

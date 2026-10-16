@@ -1,8 +1,8 @@
-﻿using League.Extensions;
+﻿using System.Diagnostics;
+using League.Extensions;
 using League.Managers;
 using League.States;
 using League.UIState;
-using System.Diagnostics;
 using static League.FormMain;
 
 namespace League.Services
@@ -22,6 +22,7 @@ namespace League.Services
         private bool _gameJustEnded = false;
 
         public void MarkGameJustEnded() => _gameJustEnded = true;
+
         public bool ShouldReturnToLobby() => _gameJustEnded;
 
         public GameEndCleanupService(FormMain form, PlayerCardManager cardManager, FormUiStateManager uiManager)
@@ -37,11 +38,12 @@ namespace League.Services
             Debug.WriteLine($"[HandleGameEndAsync] 被调用 | previousPhase = {previousPhase}");
 
             // ==================== 游戏结束检测 ====================
-            bool isGameEndTransition = previousPhase == "InProgress" ||
-                                       previousPhase == "WaitingForStats" ||
-                                       previousPhase == "ChampSelect" ||
-                                       previousPhase == "EndOfGame" ||
-                                       previousPhase == "PreEndOfGame";
+            bool isGameEndTransition =
+                previousPhase == "InProgress"
+                || previousPhase == "WaitingForStats"
+                || previousPhase == "ChampSelect"
+                || previousPhase == "EndOfGame"
+                || previousPhase == "PreEndOfGame";
 
             if (!isGameEndTransition)
             {
@@ -60,7 +62,7 @@ namespace League.Services
             await ExecuteSkipActionsAsync();
 
             // ==================== 原有清理逻辑（异步不阻塞跳过） ====================
-            _ = OnGameEnd();   // 使用 fire-and-forget，避免阻塞
+            _ = OnGameEnd(); // 使用 fire-and-forget，避免阻塞
         }
 
         /// <summary>
@@ -69,21 +71,22 @@ namespace League.Services
         private async Task ExecuteSkipActionsAsync()
         {
             var config = _form.GetAppConfig();
-            if (config == null) return;
+            if (config == null)
+                return;
 
             try
             {
                 // 跳过点赞界面
                 if (config.EnableSkipHonor && _endGameActions != null)
                 {
-                    await Task.Delay(300);        // 进一步提前
+                    await Task.Delay(300); // 进一步提前
                     await _endGameActions.SkipHonorAsync();
                 }
 
                 // 跳过结算界面
                 if (config.EnableSkipEndOfGameStats && _endGameActions != null)
                 {
-                    await Task.Delay(300);        // 结算界面通常比点赞晚一点
+                    await Task.Delay(300); // 结算界面通常比点赞晚一点
                     await _endGameActions.DismissEndOfGameStatsAsync();
                 }
             }
@@ -95,12 +98,13 @@ namespace League.Services
 
         public async Task ReturnToSpecificLobbyAsync()
         {
-            if (_endGameActions == null) return;
+            if (_endGameActions == null)
+                return;
             try
             {
                 await Task.Delay(600);
                 await _endGameActions.ReturnToSpecificLobbyAsync();
-                _gameJustEnded = false;   // 执行完重置
+                _gameJustEnded = false; // 执行完重置
             }
             catch (Exception ex)
             {
@@ -121,7 +125,7 @@ namespace League.Services
                 RefreshState.ForceMatchRefresh = true;
             }
 
-            await Task.Delay(800);   // 适当保留一点延迟给战绩刷新
+            await Task.Delay(800); // 适当保留一点延迟给战绩刷新
 
             _form.InvokeIfRequired(async () =>
             {

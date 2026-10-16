@@ -9,7 +9,6 @@ namespace League.Services
     /// </summary>
     public class ClientUtilityService
     {
-        
         #region 重启 UX / 关大厅进程
 
         public async Task<(bool Success, string Message)> RestartUxAsync()
@@ -17,7 +16,8 @@ namespace League.Services
             try
             {
                 var client = Globals.lcuClient?.Client;
-                if (client == null) return (false, "LCU 未连接");
+                if (client == null)
+                    return (false, "LCU 未连接");
 
                 string? phase = await Globals.lcuClient.GetGameflowPhase();
                 if (phase == "InProgress")
@@ -38,7 +38,9 @@ namespace League.Services
         public (bool AnyKilled, string Message) CloseAllClients()
         {
             int killed = 0;
-            foreach (var name in new[] { "LeagueClient", "LeagueClientUx", "LeagueClientUxRender" , "League of Legends" })
+            foreach (
+                var name in new[] { "LeagueClient", "LeagueClientUx", "LeagueClientUxRender", "League of Legends" }
+            )
             {
                 try
                 {
@@ -59,9 +61,7 @@ namespace League.Services
                 }
                 catch { }
             }
-            return killed > 0
-                ? (true, $"已结束 {killed} 个进程")
-                : (false, "未找到运行中的客户端进程");
+            return killed > 0 ? (true, $"已结束 {killed} 个进程") : (false, "未找到运行中的客户端进程");
         }
 
         #endregion

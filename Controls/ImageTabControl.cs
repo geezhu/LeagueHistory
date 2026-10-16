@@ -11,8 +11,13 @@ namespace League.Controls
         public ImageTabControl()
         {
             // 控件支持设计器
-            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
-                     ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true);
+            SetStyle(
+                ControlStyles.AllPaintingInWmPaint
+                    | ControlStyles.OptimizedDoubleBuffer
+                    | ControlStyles.ResizeRedraw
+                    | ControlStyles.UserPaint,
+                true
+            );
 
             // 设置 TabControl 样式
             Alignment = TabAlignment.Left;
@@ -35,9 +40,7 @@ namespace League.Controls
 
             // 绘制分隔线
             DrawSeparatorLine(e.Graphics);
-
         }
-
 
         private void DrawTabImage(Graphics g, int index)
         {
@@ -103,7 +106,6 @@ namespace League.Controls
                 }
             }
         }
-
 
         private Image GetTabImage(TabPage page)
         {

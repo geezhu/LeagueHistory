@@ -1,7 +1,7 @@
+using System.Diagnostics;
 using League.Controls;
 using League.Infrastructure;
 using League.UIHelpers;
-using System.Diagnostics;
 
 namespace League.UIState
 {
@@ -44,54 +44,57 @@ namespace League.UIState
         /// </summary>
         public void ShowLoadingIndicator()
         {
-            SafeInvoke(_form, () =>
-            {
-                // 已经在显示中则跳过
-                if (_isShowingLoading && _loadingOverlay != null && !_loadingOverlay.IsDisposed)
-                    return;
-
-                // 清理旧的（防止竞态）
-                CleanupCurrentLoadingOverlay();
-
-                _isShowingLoading = true;
-
-                // 创建加载遮罩
-                _loadingOverlay = new Panel
+            SafeInvoke(
+                _form,
+                () =>
                 {
-                    Size = new Size((int)(_form.Width * 0.6), (int)(_form.Height * 0.4)),
-                    BackColor = Color.FromArgb(0, 255, 255, 255),
-                    BorderStyle = BorderStyle.FixedSingle,
-                    Visible = false
-                };
+                    // 已经在显示中则跳过
+                    if (_isShowingLoading && _loadingOverlay != null && !_loadingOverlay.IsDisposed)
+                        return;
 
-                // 居中
-                _loadingOverlay.Location = new Point(
-                    (_form.ClientSize.Width - _loadingOverlay.Width) / 2,
-                    (_form.ClientSize.Height - _loadingOverlay.Height) / 2
-                );
+                    // 清理旧的（防止竞态）
+                    CleanupCurrentLoadingOverlay();
 
-                // 提示文本
-                var lbl = new Label
-                {
-                    Text = "正在加载，请稍候...",
-                    Font = new Font("微软雅黑", 12, FontStyle.Regular),
-                    ForeColor = Color.DimGray,
-                    AutoSize = true,
-                    BackColor = Color.Transparent
-                };
+                    _isShowingLoading = true;
 
-                lbl.Location = new Point(
-                    (_loadingOverlay.Width - lbl.Width) / 2,
-                    (_loadingOverlay.Height - lbl.Height) / 2
-                );
+                    // 创建加载遮罩
+                    _loadingOverlay = new Panel
+                    {
+                        Size = new Size((int)(_form.Width * 0.6), (int)(_form.Height * 0.4)),
+                        BackColor = Color.FromArgb(0, 255, 255, 255),
+                        BorderStyle = BorderStyle.FixedSingle,
+                        Visible = false,
+                    };
 
-                _loadingOverlay.Controls.Add(lbl);
-                _form.Controls.Add(_loadingOverlay);
-                _loadingOverlay.BringToFront();
-                _loadingOverlay.Visible = true;
+                    // 居中
+                    _loadingOverlay.Location = new Point(
+                        (_form.ClientSize.Width - _loadingOverlay.Width) / 2,
+                        (_form.ClientSize.Height - _loadingOverlay.Height) / 2
+                    );
 
-                StartFadeInAnimation();
-            });
+                    // 提示文本
+                    var lbl = new Label
+                    {
+                        Text = "正在加载，请稍候...",
+                        Font = new Font("微软雅黑", 12, FontStyle.Regular),
+                        ForeColor = Color.DimGray,
+                        AutoSize = true,
+                        BackColor = Color.Transparent,
+                    };
+
+                    lbl.Location = new Point(
+                        (_loadingOverlay.Width - lbl.Width) / 2,
+                        (_loadingOverlay.Height - lbl.Height) / 2
+                    );
+
+                    _loadingOverlay.Controls.Add(lbl);
+                    _form.Controls.Add(_loadingOverlay);
+                    _loadingOverlay.BringToFront();
+                    _loadingOverlay.Visible = true;
+
+                    StartFadeInAnimation();
+                }
+            );
         }
 
         private void StartFadeInAnimation()
@@ -138,44 +141,47 @@ namespace League.UIState
         /// </summary>
         public void HideLoadingIndicator()
         {
-            SafeInvoke(_form, () =>
-            {
-                if (!_isShowingLoading || _loadingOverlay == null)
-                    return;
-
-                _isShowingLoading = false;
-
-                var timer = new System.Windows.Forms.Timer { Interval = 20 };
-                int alpha = 160;
-
-                timer.Tick += (s, e) =>
+            SafeInvoke(
+                _form,
+                () =>
                 {
-                    if (_loadingOverlay == null || _loadingOverlay.IsDisposed)
-                    {
-                        timer.Stop();
-                        timer.Dispose();
+                    if (!_isShowingLoading || _loadingOverlay == null)
                         return;
-                    }
 
-                    alpha -= 20;
-                    if (alpha <= 0)
+                    _isShowingLoading = false;
+
+                    var timer = new System.Windows.Forms.Timer { Interval = 20 };
+                    int alpha = 160;
+
+                    timer.Tick += (s, e) =>
                     {
-                        timer.Stop();
-                        timer.Dispose();
-                        CleanupCurrentLoadingOverlay();
-                    }
-                    else
-                    {
-                        try
+                        if (_loadingOverlay == null || _loadingOverlay.IsDisposed)
                         {
-                            _loadingOverlay.BackColor = Color.FromArgb(alpha, 255, 255, 255);
+                            timer.Stop();
+                            timer.Dispose();
+                            return;
                         }
-                        catch { }
-                    }
-                };
 
-                timer.Start();
-            });
+                        alpha -= 20;
+                        if (alpha <= 0)
+                        {
+                            timer.Stop();
+                            timer.Dispose();
+                            CleanupCurrentLoadingOverlay();
+                        }
+                        else
+                        {
+                            try
+                            {
+                                _loadingOverlay.BackColor = Color.FromArgb(alpha, 255, 255, 255);
+                            }
+                            catch { }
+                        }
+                    };
+
+                    timer.Start();
+                }
+            );
         }
 
         /// <summary>
@@ -228,29 +234,37 @@ namespace League.UIState
 
         private void ClearAllStatusMessages(Control parentControl)
         {
-            SafeInvoke(parentControl, () =>
-            {
-                var statusPanels = parentControl.Controls.OfType<Panel>()
-                    .Where(p => p != _form.tableLayoutPanel1 && p != _loadingOverlay)
-                    .ToList();
-
-                foreach (var panel in statusPanels)
+            SafeInvoke(
+                parentControl,
+                () =>
                 {
-                    if (IsStatusPanel(panel))
+                    var statusPanels = parentControl
+                        .Controls.OfType<Panel>()
+                        .Where(p => p != _form.tableLayoutPanel1 && p != _loadingOverlay)
+                        .ToList();
+
+                    foreach (var panel in statusPanels)
                     {
-                        parentControl.Controls.Remove(panel);
-                        panel.Dispose();
+                        if (IsStatusPanel(panel))
+                        {
+                            parentControl.Controls.Remove(panel);
+                            panel.Dispose();
+                        }
                     }
                 }
-            });
+            );
         }
 
         private bool IsStatusPanel(Panel panel)
         {
             var labels = panel.Controls.OfType<Label>();
-            if (labels.Any(l => l.Text.Contains("正在检测客户端连接") ||
-                   l.Text.Contains("正在重新连接") ||
-                   l.Text.Contains("正在等待加入游戏")))
+            if (
+                labels.Any(l =>
+                    l.Text.Contains("正在检测客户端连接")
+                    || l.Text.Contains("正在重新连接")
+                    || l.Text.Contains("正在等待加入游戏")
+                )
+            )
             {
                 return true;
             }
@@ -267,7 +281,7 @@ namespace League.UIState
             {
                 Width = 580,
                 Height = 280,
-                BackColor = Color.Transparent
+                BackColor = Color.Transparent,
             };
 
             Label label = new Label
@@ -276,7 +290,7 @@ namespace League.UIState
                 TextAlign = ContentAlignment.MiddleCenter,
                 Dock = DockStyle.Top,
                 Height = 50,
-                Font = new Font("微软雅黑", 12f, FontStyle.Bold)
+                Font = new Font("微软雅黑", 12f, FontStyle.Bold),
             };
 
             ProgressBar progress = new ProgressBar
@@ -284,7 +298,7 @@ namespace League.UIState
                 Style = ProgressBarStyle.Marquee,
                 Width = 220,
                 Height = 30,
-                MarqueeAnimationSpeed = 30
+                MarqueeAnimationSpeed = 30,
             };
             progress.Left = (containerPanel.Width - progress.Width) / 2;
             progress.Top = label.Bottom + 10;
@@ -296,18 +310,21 @@ namespace League.UIState
             {
                 var launchers = new League.Controls.LolLauncherPanel
                 {
-                    Left = 0, Top = progress.Bottom + 8, Width = containerPanel.Width
+                    Left = 0,
+                    Top = progress.Bottom + 8,
+                    Width = containerPanel.Width,
                 };
                 containerPanel.Controls.Add(launchers);
-                containerPanel.Height=launchers.Bottom+16;
-                launchers.SizeChanged+=(_,_)=>containerPanel.Height=launchers.Bottom+16;
+                containerPanel.Height = launchers.Bottom + 16;
+                launchers.SizeChanged += (_, _) => containerPanel.Height = launchers.Bottom + 16;
             }
             return containerPanel;
         }
 
         private void OpenFolder(string exePath)
         {
-            if (string.IsNullOrEmpty(exePath)) return;
+            if (string.IsNullOrEmpty(exePath))
+                return;
             try
             {
                 string? dir = Path.GetDirectoryName(exePath);
@@ -354,7 +371,8 @@ namespace League.UIState
         public void HandleImageTabControlMouseMove(object? sender, MouseEventArgs e)
         {
             var tabControl = sender as ImageTabControl;
-            if (tabControl == null) return;
+            if (tabControl == null)
+                return;
 
             for (int i = 0; i < tabControl.TabPages.Count; i++)
             {
@@ -365,8 +383,13 @@ namespace League.UIState
                     {
                         _lastIndex = i;
                         Point clientPos = tabControl.PointToClient(Cursor.Position);
-                        _toolTip.Show(tabControl.TabPages[i].Text, tabControl,
-                            clientPos.X + 10, clientPos.Y + 10, 1500);
+                        _toolTip.Show(
+                            tabControl.TabPages[i].Text,
+                            tabControl,
+                            clientPos.X + 10,
+                            clientPos.Y + 10,
+                            1500
+                        );
                     }
                     return;
                 }
@@ -396,17 +419,20 @@ namespace League.UIState
 
         private void StartTab1Polling(Poller poller)
         {
-            poller.Start(async () =>
-            {
-                try
+            poller.Start(
+                async () =>
                 {
-                    SetLcuUiState(LcuReady, IsGame);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Tab1Poller轮询异常: {ex}");
-                }
-            }, 3000);
+                    try
+                    {
+                        SetLcuUiState(LcuReady, IsGame);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Tab1Poller轮询异常: {ex}");
+                    }
+                },
+                3000
+            );
         }
 
         #endregion
@@ -430,14 +456,26 @@ namespace League.UIState
                 }
                 else
                 {
-                    try { action(); }
-                    catch (Exception ex) { Debug.WriteLine($"[SafeInvoke] {ex.Message}"); }
+                    try
+                    {
+                        action();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[SafeInvoke] {ex.Message}");
+                    }
                 }
             }
             else
             {
-                try { action(); }
-                catch (Exception ex) { Debug.WriteLine($"[SafeInvoke] {ex.Message}"); }
+                try
+                {
+                    action();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[SafeInvoke] {ex.Message}");
+                }
             }
         }
 
@@ -448,13 +486,25 @@ namespace League.UIState
                 return;
             if (control.IsHandleCreated && control.InvokeRequired)
             {
-                try { control.Invoke(action); }
-                catch (Exception ex) { Debug.WriteLine($"[SafeInvokeSync] {ex.Message}"); }
+                try
+                {
+                    control.Invoke(action);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[SafeInvokeSync] {ex.Message}");
+                }
             }
             else
             {
-                try { action(); }
-                catch (Exception ex) { Debug.WriteLine($"[SafeInvokeSync] {ex.Message}"); }
+                try
+                {
+                    action();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[SafeInvokeSync] {ex.Message}");
+                }
             }
         }
 
