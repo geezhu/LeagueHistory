@@ -5,7 +5,7 @@ internal static class DefaultStatisticsSuite
         DataChecks();
         WinFormsCheckHost.Run(UiChecks);
         Console.WriteLine(
-            "PASS: identity, remakes, duplicates, missing values, SGP wrapper, team mapping, frame gaps, events, cancellation, privacy, fallback scope, room history filters/cache, WinForms controls."
+            "PASS: identity, remakes, duplicates, missing values, SGP wrapper, team mapping, frame gaps, events, cancellation, privacy, fallback scope, room history filters/cache, WinForms controls, and the offline parsing, Game Bar, overlay and settings checks."
         );
     }
 
@@ -41,6 +41,33 @@ internal static class DefaultStatisticsSuite
         Task.Run(ItemSetChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(AramBalanceChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(LcuClientServiceChecks.RunAsync).GetAwaiter().GetResult();
+        OfflineChecks();
+    }
+
+    /// <summary>
+    /// Checks that were written but never ran here, so their code counted as uncovered. They cover parsing, the Game
+    /// Bar, the overlays and settings and need neither a running client nor a voice model; the checks that do stay
+    /// behind their own command.
+    /// </summary>
+    private static void OfflineChecks()
+    {
+        DeathTimingChecks.Run();
+        TurretChecks.Run();
+        GameQueueChecks.Run();
+        LeagueConfigChecks.Run();
+        ShutdownSettingsChecks.Run();
+        Task.Run(ControlChecks.Run).GetAwaiter().GetResult();
+        Task.Run(GameBarBridgeChecks.Run).GetAwaiter().GetResult();
+        Task.Run(GameBarCompositionChecks.Run).GetAwaiter().GetResult();
+        Task.Run(StaleSessionChecks.Run).GetAwaiter().GetResult();
+        Task.Run(OverlayChampionDetailChecks.Run).GetAwaiter().GetResult();
+        Task.Run(OverlayRecordChecks.Run).GetAwaiter().GetResult();
+        Task.Run(OverlayTierChatChecks.Run).GetAwaiter().GetResult();
+        Task.Run(OverlayVoiceChatChecks.Run).GetAwaiter().GetResult();
+        Task.Run(LoadingRosterIdentityChecks.Run).GetAwaiter().GetResult();
+        Task.Run(ChampionMasteryChecks.RunAsync).GetAwaiter().GetResult();
+        Task.Run(ModelChecks.RunAsync).GetAwaiter().GetResult();
+        Task.Run(ClientChecks.RunAsync).GetAwaiter().GetResult();
     }
 
     private static void UiChecks()
@@ -66,5 +93,27 @@ internal static class DefaultStatisticsSuite
         ProfileViewChecks.Run();
         RoomViewChecks.Run();
         LauncherInstallationChecks.Run();
+        OfflineUiChecks();
+    }
+
+    /// <summary>The interface halves of the checks above: layouts, navigation, overlays and settings surfaces.</summary>
+    private static void OfflineUiChecks()
+    {
+        AramMetaViewLifecycleChecks.Run();
+        AssistantLifecycleChecks.Run();
+        HistoryNavigationChecks.Run();
+        HistoryPresentationChecks.Run();
+        LoadingOverlayChecks.Run();
+        LoadingViewChecks.Run();
+        MainNavigationChecks.Run();
+        OpggViewLifecycleChecks.Run();
+        OverlayLifecycleChecks.Run();
+        ProfilePresentationChecks.Run();
+        ProfileSurfaceChecks.Run();
+        ScoreboardLayoutChecks.Run();
+        SelectionControlChecks.Run();
+        SettingsSurfaceChecks.Run();
+        ShutdownUiChecks.Run();
+        VoiceSettingsChecks.Run();
     }
 }
