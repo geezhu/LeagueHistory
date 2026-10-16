@@ -668,13 +668,19 @@ internal sealed partial class ChampionSelectAssistant : Form
         }
     }
 
+    /// <summary>
+    /// The queue whose statistics apply. Custom games have no matchmaking queue (-1), so their game mode decides
+    /// (KIWI is Mayhem, ARAM, URF and so on); Mayhem's other queue 3270 counts as 2400.
+    /// </summary>
+    internal static int SessionQueue(JObject flow) => GameQueues.Effective(flow["gameData"]);
+
     private void ApplyChampionSession(JObject flow, JObject session)
     {
         _pollFailures = 0;
         _lastSessionRead = Environment.TickCount64;
         _selecting = true;
         _voiceButton.Enabled = !_openingVoice;
-        int queue = (int?)flow["gameData"]?["queue"]?["id"] ?? 0;
+        int queue = SessionQueue(flow);
         _queue = queue;
         UpdateRoster(session, queue);
         var own = (session["myTeam"] as JArray)

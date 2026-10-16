@@ -10,6 +10,7 @@ public sealed class TeamCardDisplayService
     private readonly PlayerCardManager _cards;
     private CancellationTokenSource? _gameSessionLoad;
     private string _selectionQueue = "";
+    private string _selectionRawQueue = "";
     private bool _fromChampionSelect;
 
     public TeamCardDisplayService(FormMain form, PlayerCardManager cardManager)
@@ -24,6 +25,7 @@ public sealed class TeamCardDisplayService
         _cards.BeginSession();
         _fromChampionSelect = true;
         _selectionQueue = "";
+        _selectionRawQueue = "";
         _form._cachedMyTeam = new JArray();
         _form._cachedEnemyTeam = new JArray();
         await _cards.ClearCardsAsync();
@@ -47,11 +49,18 @@ public sealed class TeamCardDisplayService
             return;
         }
 
-        string queue = session.Value<string>("queueId") ?? _selectionQueue;
-        if (string.IsNullOrEmpty(queue) || queue == "0")
+        // A custom game (-1) or a queue without its own history filter (Mayhem's 3270) is resolved from the game mode
+        // once per champion select; later snapshots reuse it.
+        string raw = session.Value<string>("queueId") ?? "";
+        string queue = raw.Length > 0 && raw == _selectionRawQueue ? _selectionQueue : raw;
+        if (queue != _selectionQueue || queue.Length == 0)
         {
-            var game = await Globals.lcuClient.GetGameSession(deadline.Token);
-            queue = game?["gameData"]?["queue"]?.Value<string>("id") ?? "";
+            if (string.IsNullOrEmpty(queue) || League.Parsers.PlayerMatchDataFetcher.GetQueueFilter(queue).Length == 0)
+            {
+                var game = await Globals.lcuClient.GetGameSession(deadline.Token);
+                string resolved = GameQueues.ForHistory(game?["gameData"]);
+                queue = resolved.Length > 0 ? resolved : queue;
+            }
         }
         token.ThrowIfCancellationRequested();
         if (generation != _cards.Generation)
@@ -60,6 +69,7 @@ public sealed class TeamCardDisplayService
         }
 
         _selectionQueue = queue;
+        _selectionRawQueue = raw;
         _form._cachedMyTeam = RoomPlayerLoader.Normalize(team);
         // Reconcile every snapshot. The loader keeps completed and in-flight players unchanged.
         await _cards.UpdateTeamAsync(team, true, generation, queue);
@@ -193,9 +203,14 @@ public sealed class TeamCardDisplayService
             return RosterAttempt.Unavailable;
         }
 
-        string queue = data?["queue"]?.Value<string>("id") ?? "";
-        Globals.CurrGameMod = queue;
-        AppLog.Shared.State(LogCategory.Game, "game-queue", $"对局队列 {queue}，双方 {one.Count}+{two.Count} 人");
+        // Returning to the lobby after the game needs the client's own queue; the cards use the one for statistics.
+        Globals.CurrGameMod = data?["queue"]?.Value<string>("id") ?? "";
+        string queue = GameQueues.ForHistory(data);
+        AppLog.Shared.State(
+            LogCategory.Game,
+            "game-queue",
+            $"对局队列 {Globals.CurrGameMod}（统计按 {queue}），双方 {one.Count}+{two.Count} 人"
+        );
         var resolved = RoomPlayerLoader.ResolveGameTeams((JObject)data!);
         var ours = inOne ? resolved.One : resolved.Two;
         var theirs = WithoutAllies(ours, inOne ? resolved.Two : resolved.One);

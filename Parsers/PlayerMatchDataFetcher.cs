@@ -53,7 +53,8 @@ namespace League.Parsers
             try
             {
                 var session = await Globals.lcuClient.GetGameSession(cancellationToken);
-                var queueId = session?["gameData"]?["queue"]?["id"]?.ToString();
+                // Custom games report queue -1; their game mode picks the history filter.
+                var queueId = GameQueues.ForHistory(session?["gameData"]);
                 if (!string.IsNullOrEmpty(queueId) && queueId != "0")
                 {
                     return queueId;

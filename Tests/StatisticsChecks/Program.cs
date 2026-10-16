@@ -206,6 +206,7 @@ internal static class Program
         checks["--preliminary-checks"] = () => Ui(PreliminaryChecks.Run);
         checks["--gamebar-composition-checks"] = () => Background(GameBarCompositionChecks.Run);
         checks["--stale-session-checks"] = () => Background(StaleSessionChecks.Run);
+        checks["--game-queue-checks"] = () => Background(GameQueueChecks.Run);
         checks["--minion-wave-checks"] = MinionWaveChecks.Run;
         checks["--death-timing-checks"] = DeathTimingChecks.Run;
         checks["--turret-checks"] = TurretChecks.Run;
@@ -245,6 +246,7 @@ internal static class Program
         ControlChecks.Run();
         GameBarCompositionChecks.Run();
         StaleSessionChecks.Run();
+        GameQueueChecks.Run();
         OverlayVoiceChatChecks.Run();
     }
 
