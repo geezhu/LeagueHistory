@@ -48,17 +48,17 @@ internal static class AssistantChecks
         Rectangle Tab(Rectangle client, Rectangle panel) =>
             (Rectangle)tabPlace.Invoke(null, new object[] { client, screen, panel, new Size(26, 120) })!;
         var leftClient = new Rectangle(500, 100, 800, 700);
-        var leftPanel = Place(leftClient, screen, new Size(320, 630), 26);
+        var leftPanel = Place(leftClient, screen, new Size(320, 630), 0);
         var leftTab = Tab(leftClient, leftPanel);
-        if (leftPanel.Right != leftTab.Left || leftTab.Right != leftClient.Left || leftTab.Top != 390)
+        if (leftPanel.Right != leftClient.Left || leftTab.Right != leftClient.Left || leftTab.Top != 390)
         {
-            throw new Exception($"Edge tab must sit between a left panel and the client: {leftPanel} {leftTab}");
+            throw new Exception($"Panel and closed tab must sit flush against the client: {leftPanel} {leftTab}");
         }
 
         var rightClient = new Rectangle(100, 100, 1000, 700);
-        var rightPanel = Place(rightClient, screen, new Size(320, 630), 26);
+        var rightPanel = Place(rightClient, screen, new Size(320, 630), 0);
         var rightTab = Tab(rightClient, rightPanel);
-        if (rightTab.Left != rightClient.Right || rightTab.Right != rightPanel.Left)
+        if (rightPanel.Left != rightClient.Right || rightTab.Left != rightClient.Right)
         {
             throw new Exception($"Edge tab must follow a right-side panel: {rightPanel} {rightTab}");
         }

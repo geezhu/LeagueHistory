@@ -264,16 +264,14 @@ internal sealed partial class ChampionSelectAssistant : Form
     {
         var toggle = new Controls.AssistantToggleTab(Font);
         toggle.Size = toggle.PreferredTabSize(Dip(TabWidth), Dip(8));
-        toggle.Toggled += (_, _) => SetPanelOpen(!_panelOpen);
-        _tips.SetToolTip(toggle, "收起选人助手；每次进入选人默认打开。");
+        toggle.Toggled += (_, _) => SetPanelOpen(true);
+        _tips.SetToolTip(toggle, "展开选人助手");
         return toggle;
     }
 
     private void SetPanelOpen(bool open)
     {
         _panelOpen = open;
-        _toggle.Open = open;
-        _tips.SetToolTip(_toggle, open ? "收起选人助手；每次进入选人默认打开。" : "展开选人助手");
         if (!open)
         {
             CloseVoiceInput();
@@ -381,7 +379,7 @@ internal sealed partial class ChampionSelectAssistant : Form
         );
     }
 
-    /// <summary>The tab sits in the gap between the client and the side the panel uses.</summary>
+    /// <summary>The collapsed tab sits against the client edge on the side the panel uses.</summary>
     internal static Rectangle TabPlacement(Rectangle client, Rectangle screen, Rectangle panel, Size size)
     {
         int x = panel.Left >= client.Right ? client.Right : client.Left - size.Width;
@@ -501,12 +499,18 @@ internal sealed partial class ChampionSelectAssistant : Form
         var client = Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom);
         var screen = Screen.FromHandle(handle).WorkingArea;
         int wanted = PanelHeight();
-        var panel = Placement(client, screen, new Size(Width, wanted), _toggle.Width);
+        // The open panel sits flush against the client; the tab only appears once it is closed.
+        var panel = Placement(client, screen, new Size(Width, wanted), 0);
         _toggle.PanelOnLeft = panel.Left < client.Left;
-        PlaceToggle(handle, TabPlacement(client, screen, panel, _toggle.Size));
         if (!_panelOpen)
         {
+            PlaceToggle(handle, TabPlacement(client, screen, panel, _toggle.Size));
             return;
+        }
+
+        if (_toggle.Visible)
+        {
+            _toggle.Hide();
         }
 
         if (_moving)
@@ -773,7 +777,6 @@ internal sealed partial class ChampionSelectAssistant : Form
         ClearRoster();
         HideAttached();
         _panelOpen = true;
-        _toggle.Open = true;
         _windowLayer.Detach();
         _toggleLayer.Detach();
     }
