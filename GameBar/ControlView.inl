@@ -142,6 +142,7 @@ void SaveControlSettings()
     settings.Insert(L"survivalSound", JsonValue::CreateBooleanValue(enemySound));
     settings.Insert(L"allySound", JsonValue::CreateBooleanValue(allySound));
     settings.Insert(L"summonerSound", JsonValue::CreateBooleanValue(summonerSound));
+    settings.Insert(L"cannonSound", JsonValue::CreateStringValue(cannonSound));
     pendingControlSettings = settings.Stringify();
     WriteControlSettings();
 }

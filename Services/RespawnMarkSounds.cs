@@ -75,6 +75,9 @@ public sealed class RespawnMarkSounds : IDisposable
 
     /// <summary>A summoner spell coming back: three rising notes, apart from the respawn chimes.</summary>
     public static readonly Lazy<byte[]> SummonerReadyWave = new(() => Tone(784, 988, 1175));
+
+    /// <summary>A cannon wave: two low notes, unlike the rising chimes.</summary>
+    public static readonly Lazy<byte[]> CannonWave = new(() => Tone(523, 392));
     private SoundPlayer? _player;
 
     // SoundPlayer.Play returns at once and plays on its own thread; a new chime replaces one still playing.

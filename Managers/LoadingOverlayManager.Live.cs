@@ -46,6 +46,7 @@ internal sealed partial class LoadingOverlayManager
         _deadPlayers.Clear();
         _respawnChecks = 0;
         _respawnSounds.Reset();
+        _cannonAlerts.Reset();
         _augmentSelections = [];
         _ultimateHaste = new Dictionary<string, double>();
         _liveMode = "";
@@ -87,6 +88,7 @@ internal sealed partial class LoadingOverlayManager
         ReportUnknownStructures(waves);
         CheckRespawnFormula(snapshot);
         _ = UpdateRespawnSoundsAsync(roster, snapshot, _generation);
+        AnnounceCannonWave(waves, snapshot.Time);
         _ = ReadAugmentSelectionsAsync(_generation);
         if (UseGameBar)
         {

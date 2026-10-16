@@ -17,8 +17,59 @@ internal static class MinionWaveChecks
         CheckDeathTimes();
         CheckChat();
         CheckProgress();
+        CheckCannonSound();
         Console.WriteLine(
-            "PASS: minion wave schedule, cannon phases, bounty growth, structure names, arrivals, death timers, team chat lines and lane progress."
+            "PASS: minion wave schedule, cannon phases, bounty growth, structure names, arrivals, death timers, team chat lines, lane progress and cannon sound."
+        );
+    }
+
+    // Waves every 30 s from 65 s; every third is a cannon wave. A crossing is announced once; a first poll or a jump
+    // after a stall only remembers the schedule.
+    private static void CheckCannonSound()
+    {
+        WaveSpawn[] Upcoming(double now) =>
+            Enumerable
+                .Range(1, 12)
+                .Select(n => new WaveSpawn(n, 65 + (n - 1) * 30, 3, 3, n % 3 == 0 ? 1 : 0))
+                .Where(s => s.Time > now)
+                .Take(4)
+                .ToArray();
+        List<double> Sounds(string mode, double from, double to, double step = 1)
+        {
+            var alerts = new CannonWaveAlerts();
+            var sounded = new List<double>();
+            for (double t = from; t <= to; t += step)
+            {
+                if (alerts.Update(Upcoming(t), t, mode))
+                {
+                    sounded.Add(t);
+                }
+            }
+
+            return sounded;
+        }
+
+        // Cannon waves spawn at 125 and 215; the waves before them at 95 and 185.
+        Check(
+            Sounds(CannonSoundModes.Spawn, 60, 220).SequenceEqual([125, 215]),
+            "Spawn mode sounds as cannon waves spawn"
+        );
+        Check(Sounds(CannonSoundModes.Next, 60, 220).SequenceEqual([95, 185]), "Next mode sounds one wave earlier");
+        Check(Sounds(CannonSoundModes.Off, 60, 220).Count == 0, "Off stays quiet");
+        Check(Sounds(CannonSoundModes.Spawn, 125, 130).Count == 0, "Starting on a spawn second is not a crossing");
+        Check(
+            Sounds(CannonSoundModes.Spawn, 120, 220, 10).Count == 0,
+            "Polls more than five seconds apart only remember"
+        );
+
+        Check(
+            ControlSettings.Parse(JObject.Parse("""{"protocol":1,"survivalSound":true}"""))?.CannonSound == "off"
+                && ControlSettings
+                    .Parse(JObject.Parse("""{"protocol":1,"survivalSound":true,"cannonSound":"next"}"""))
+                    ?.CannonSound == "next"
+                && ControlSettings.Parse(JObject.Parse("""{"protocol":1,"survivalSound":true,"cannonSound":"loud"}"""))
+                    == null,
+            "The cannon setting defaults to off and rejects unknown modes"
         );
     }
 
