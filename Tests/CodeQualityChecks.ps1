@@ -8,22 +8,12 @@ function Assert-QualityCheck {
     if (!$Condition) { throw $Message }
 }
 
-& (Join-Path $repository 'Scripts/Update-CodeQualityScope.ps1') -Check
+& (Join-Path $repository 'Scripts/Update-CodeQualityConfig.ps1') -Check
 $editor = Get-Content -LiteralPath (Join-Path $repository '.editorconfig') -Raw
-foreach ($path in $configuration.upstreamFiles | Where-Object { $_ -notmatch '/' }) {
-    $sections = @([regex]::Matches($editor, '(?m)^\[([^\r\n]+)\]') | ForEach-Object { $_.Groups[1].Value })
-    $rootSections = @($sections | Where-Object { $_ -match [regex]::Escape($path) })
-    Assert-QualityCheck ($rootSections.Count -eq 1 -and $rootSections[0].StartsWith('/')) "Root exclusion must be anchored: $path"
-}
-foreach ($path in $configuration.upstreamFiles) {
-    $rejected = $false
-    try {
-        Get-CodeQualitySelection $repository $configuration '' @($path) | Out-Null
-    } catch {
-        $rejected = $_.Exception.Message -like 'Upstream file is excluded*'
-    }
-    Assert-QualityCheck $rejected "Upstream file was not rejected: $path"
-}
+$sections = @([regex]::Matches($editor, '(?m)^\[([^\]\r\n]+)\]') | ForEach-Object { $_.Groups[1].Value })
+Assert-QualityCheck ($sections.Count -eq 1 -and $sections[0] -eq '*.cs') 'Every C# source must share one rule section.'
+$ignored = @(Get-Content -LiteralPath (Join-Path $repository '.csharpierignore') | Where-Object { $_ -match '\.cs$' })
+Assert-QualityCheck (!($ignored | Where-Object { $_ -notmatch '\*\.(Designer|g|g\.i)\.cs$' })) 'Only generated C# may skip formatting.'
 
 $voicePath = 'Services/SenseVoiceSession.cs'
 $selected = @(Get-CodeQualitySelection $repository $configuration '' @($voicePath))
@@ -55,15 +45,12 @@ foreach ($version in @('1.0.0', '2.1.0')) {
 }
 
 $all = @(Get-CodeQualitySelection $repository $configuration '' @())
-foreach ($path in $configuration.upstreamFiles) {
-    Assert-QualityCheck ($path -notin $all) "The default run included upstream code: $path"
-}
-# The default run covers every tracked source outside the baseline list, with no list to fall behind.
-$newSources = @(git -C $repository ls-files | Where-Object {
-    $_ -match '\.(cs|cpp|h|hpp|inl)$' -and $_ -notmatch '(^|/)(bin|obj)/|\.(Designer|g|g\.i)\.cs$' -and
-    $_ -notin $configuration.upstreamFiles
+# The default run covers every tracked source, upstream or not, with no list to fall behind.
+$sources = @(git -C $repository ls-files | Where-Object {
+    $_ -match '\.(cs|cpp|h|hpp|inl)$' -and $_ -notmatch '(^|/)(bin|obj)/|\.(Designer|g|g\.i)\.cs$'
 })
-$skipped = @($newSources | Where-Object { $_ -notin $all })
-Assert-QualityCheck ($newSources.Count -gt 0 -and $skipped.Count -eq 0) ('The default run skipped: ' + ($skipped -join ', '))
+$skipped = @($sources | Where-Object { $_ -notin $all })
+Assert-QualityCheck ($sources.Count -gt 0 -and $skipped.Count -eq 0) ('The default run skipped: ' + ($skipped -join ', '))
+Assert-QualityCheck ('Forms/FormMain.cs' -in $all) 'Files that came from upstream must be checked too.'
 
-Write-Output ('PASS: all ' + $configuration.upstreamFiles.Count + ' upstream source paths rejected; new-source selection and path boundaries verified.')
+Write-Output ('PASS: all ' + $sources.Count + ' sources selected; path boundaries and SARIF parsing verified.')

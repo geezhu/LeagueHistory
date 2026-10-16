@@ -18,17 +18,10 @@ function Get-CodeQualitySelection {
         [string[]]$Files
     )
 
-    $protectedPaths = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-    foreach ($path in $Configuration.upstreamFiles) { [void]$protectedPaths.Add($path) }
-
     if ($Files) {
         $candidates = @($Files | ForEach-Object { Get-CodeQualityRelativePath $Repository $_ })
-        foreach ($path in $candidates) {
-            if ($protectedPaths.Contains($path)) { throw "Upstream file is excluded from code quality changes: $path" }
-        }
     } else {
-        # Every source outside the baseline list is checked by default, whoever wrote it; a base reference
-        # narrows the run to its changes.
+        # Every source is checked by default, whoever wrote it; a base reference narrows the run to its changes.
         [string[]]$arguments = if ($BaseRef) {
             @('diff', '--name-only', '--diff-filter=ACMR', "$BaseRef...HEAD")
         } else {
@@ -44,7 +37,6 @@ function Get-CodeQualitySelection {
     return @($candidates | Where-Object {
         $_ -match '\.(cs|cpp|h|hpp|inl)$' -and
         $_ -notmatch '(^|/)(bin|obj)/|\.(Designer|g|g\.i)\.cs$' -and
-        !$protectedPaths.Contains($_) -and
         (Test-Path -LiteralPath (Join-Path $Repository $_) -PathType Leaf)
     } | Sort-Object -Unique)
 }
@@ -104,9 +96,8 @@ function Invoke-QualityCommand {
 }
 
 # Rebuilds each project with the pinned Meziantou analyzer and returns the parsed SARIF reports.
-# $GlobalConfig, when given, replaces the repository .editorconfig files for the whole build.
 function Invoke-CodeQualityAnalysis {
-    param([string]$Repository, [string[]]$Projects, [string]$GlobalConfig = '')
+    param([string]$Repository, [string[]]$Projects)
 
     Invoke-QualityCommand 'dotnet' @('restore', (Join-Path $Repository 'Tools/CodeQuality/CodeQuality.proj'), '--verbosity', 'quiet')
     $assetsPath = Join-Path $Repository 'Tools/CodeQuality/obj/project.assets.json'
@@ -134,7 +125,6 @@ function Invoke-CodeQualityAnalysis {
             "-p:CustomBeforeMicrosoftCommonTargets=$targets", "-p:CodeQualityAnalyzer=$analyzer",
             "-p:CodeQualityDefaults=$defaults", '-p:EnforceCodeStyleInBuild=true', "-p:ErrorLog=$report%2cversion=2.1",
             "-p:CodeQualityOutput=$build")
-        if ($GlobalConfig) { $arguments += @('-p:DiscoverEditorConfigFiles=false', "-p:CodeQualityGlobalConfig=$GlobalConfig") }
         if ($project -ne 'League.csproj') { $arguments += '-p:BuildProjectReferences=false' }
         & dotnet @arguments *> $log
         if ($LASTEXITCODE -ne 0) {
