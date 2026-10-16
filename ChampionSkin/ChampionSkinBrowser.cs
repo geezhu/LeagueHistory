@@ -32,7 +32,11 @@ namespace League.ChampionSkin
         private readonly CheckBox _hasSkinOnly = new();
         private readonly Label _stats = new();
         private readonly SkinBrowserButton _clearAll = new();
-        private readonly ChampionGridView _grid = new();
+        private readonly ChampionGridView<ChampionSkinCardModel> _grid = new()
+        {
+            Badge = m => m.NonDefaultSkinCount > 0 ? m.NonDefaultSkinCount.ToString() : null,
+            Marked = m => m.PreferredSkinId > 0,
+        };
         private readonly SkinSplashView _splash = new();
         private readonly SkinStripView _strip = new();
         private readonly SkinBrowserButton _setPreferred = new(primary: true);
@@ -70,6 +74,7 @@ namespace League.ChampionSkin
                 ColumnCount = 1,
                 RowCount = 2,
             };
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             root.Controls.Add(BuildToolbar(), 0, 0);
@@ -159,6 +164,7 @@ namespace League.ChampionSkin
                 RowCount = 3,
                 Margin = new Padding(0),
             };
+            detail.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             detail.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             detail.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(176)));
             detail.RowStyles.Add(new RowStyle(SizeType.AutoSize));

@@ -3,8 +3,10 @@
 namespace League.PrimaryElection
 {
     // Champion.cs - 英雄基本信息模型
-    public class PrimaryChampion
+    public class PrimaryChampion : League.ChampionSkin.IChampionGridItem
     {
+        int League.ChampionSkin.IChampionGridItem.ChampionId => Id;
+
         public int Id { get; set; }
         public string Alias { get; set; } = string.Empty; // 英文名，如 Vayne
         public string Name { get; set; } = string.Empty; // 中文名，如 暗夜猎手

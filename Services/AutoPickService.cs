@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using League.PrimaryElection;
 using Newtonsoft.Json.Linq;
 using static League.FormMain;
 
@@ -118,8 +119,8 @@ namespace League.Services
                 return;
             }
 
-            var preList = await _form.GetPreSelectedHeroesAsync();
-            if (!preList.Any())
+            var lists = await _form.GetPreliminaryConfigAsync();
+            if (!PreliminaryLists.AnyHeroes(lists))
             {
                 LogPickState("自动预选：预选列表为空");
                 return;
@@ -151,10 +152,19 @@ namespace League.Services
                 return;
             }
 
-            // 有板凳席的乱斗类模式：大乱斗、海克斯、无限乱斗 → 抢英雄
-            if (queueId == 450 || queueId == 2400 || queueId == 900)
+            var (listKey, preList) = PreliminaryLists.Resolve(lists, queueId, AssignedPosition(session));
+            if (preList.Count == 0)
             {
-                LogPickState($"自动预选：队列 {queueId} 从板凳席换优先英雄");
+                LogPickState($"自动预选：「{PreliminaryLists.NameOf(listKey)}」列表为空");
+                return;
+            }
+
+            // 有板凳席的乱斗类模式：大乱斗、海克斯、无限乱斗 → 抢英雄
+            if (PreliminaryLists.IsBenchQueue(queueId))
+            {
+                LogPickState(
+                    $"自动预选：队列 {queueId} 按「{PreliminaryLists.NameOf(listKey)}」列表从板凳席换优先英雄"
+                );
                 await Globals.lcuClient.AutoSwapToHighestPriorityAsync(preList);
                 return;
             }
@@ -165,11 +175,20 @@ namespace League.Services
                 return;
             }
 
+            LogPickState($"自动预选：队列 {queueId} 使用「{PreliminaryLists.NameOf(listKey)}」列表");
             bool success = await Globals.lcuClient.AutoDeclareIntentAsync(preList);
             if (success)
             {
                 _hasAutoPreliminated = true;
             }
+        }
+
+        // The local player's assigned lane (top, jungle, middle, bottom, utility); empty in blind pick.
+        private static string? AssignedPosition(JObject session)
+        {
+            var cell = session["localPlayerCellId"]?.Value<int>();
+            var self = (session["myTeam"] as JArray)?.FirstOrDefault(p => p["cellId"]?.Value<int>() == cell);
+            return self?["assignedPosition"]?.ToString().ToLowerInvariant();
         }
 
         // Same key as ChampionSelectService, so the log reads as one sequence of auto-pick outcomes.

@@ -146,7 +146,7 @@ internal static class SkinBrowserChecks
         form.Show();
         PumpUntil(() => form.Loading.IsCompleted && Splash(form).Image != null);
 
-        var grid = Field<ChampionGridView>(form, "_grid");
+        var grid = Field<ChampionGridView<ChampionSkinCardModel>>(form, "_grid");
         var strip = Field<SkinStripView>(form, "_strip");
         Check(grid.Items.Count == 4 && grid.Selected == grid.Items[0], "Owned champions listed; the first is selected");
         grid.SelectChampion(99);

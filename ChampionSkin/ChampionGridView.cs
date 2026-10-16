@@ -1,12 +1,20 @@
-using League.Models;
-
 namespace League.ChampionSkin
 {
+    /// <summary>A champion the grid can show.</summary>
+    public interface IChampionGridItem
+    {
+        int ChampionId { get; }
+
+        string Name { get; }
+    }
+
     /// <summary>
-    /// The champion list as one painted grid: icon, name, the number of owned skins and a star for a chosen automatic
-    /// skin. Only visible rows are drawn, so filtering and scrolling stay quick with every champion listed.
+    /// The champion list as one painted grid: icon, name, a badge in the top right and a mark in the bottom left,
+    /// whose meaning the owner sets (the skin browser shows owned skins and the automatic skin, preselection the
+    /// priority). Only visible rows are drawn, so filtering and scrolling stay quick with every champion listed.
     /// </summary>
-    public sealed class ChampionGridView : Control
+    public sealed class ChampionGridView<T> : Control
+        where T : class, IChampionGridItem
     {
         private const int CellWidth = 80;
         private const int CellHeight = 98;
@@ -15,7 +23,7 @@ namespace League.ChampionSkin
         private readonly ThinScrollBar _scroll = new(vertical: true);
         private readonly Font _nameFont = new(SkinBrowserTheme.FontName, 9F);
         private readonly Font _badgeFont = new(SkinBrowserTheme.FontName, 7.5F, FontStyle.Bold);
-        private IReadOnlyList<ChampionSkinCardModel> _items = [];
+        private IReadOnlyList<T> _items = [];
         private int _selected = -1;
         private int _hover = -1;
 
@@ -37,12 +45,23 @@ namespace League.ChampionSkin
 
         public event EventHandler? SelectionChanged;
 
-        public ChampionSkinCardModel? Selected => _selected >= 0 && _selected < _items.Count ? _items[_selected] : null;
+        /// <summary>A champion was clicked or Enter was pressed on it; arrow keys only move the selection.</summary>
+        public event EventHandler? ItemActivated;
 
-        public IReadOnlyList<ChampionSkinCardModel> Items => _items;
+        public T? Selected => _selected >= 0 && _selected < _items.Count ? _items[_selected] : null;
+
+        public IReadOnlyList<T> Items => _items;
+
+        /// <summary>Text for the top-right badge, or null for none.</summary>
+        public Func<T, string?> Badge { get; set; } = _ => null;
+
+        /// <summary>Whether to draw <see cref="MarkGlyph"/> in the bottom-left corner.</summary>
+        public Func<T, bool> Marked { get; set; } = _ => false;
+
+        public string MarkGlyph { get; set; } = "★";
 
         /// <summary>Shows a new list and keeps the selected champion when it is still listed, else the first.</summary>
-        public void SetItems(IReadOnlyList<ChampionSkinCardModel> items)
+        public void SetItems(IReadOnlyList<T> items)
         {
             int keep = Selected?.ChampionId ?? 0;
             _items = items;
@@ -182,6 +201,7 @@ namespace League.ChampionSkin
             if (index >= 0)
             {
                 SelectIndex(index);
+                ItemActivated?.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -202,7 +222,7 @@ namespace League.ChampionSkin
         }
 
         protected override bool IsInputKey(Keys keyData) =>
-            keyData is Keys.Left or Keys.Right or Keys.Up or Keys.Down || base.IsInputKey(keyData);
+            keyData is Keys.Left or Keys.Right or Keys.Up or Keys.Down or Keys.Enter || base.IsInputKey(keyData);
 
         protected override void OnKeyDown(KeyEventArgs e)
         {
@@ -215,6 +235,13 @@ namespace League.ChampionSkin
                 Keys.Down => Columns,
                 _ => 0,
             };
+            if (e.KeyCode == Keys.Enter && Selected != null)
+            {
+                ItemActivated?.Invoke(this, EventArgs.Empty);
+                e.Handled = true;
+                return;
+            }
+
             if (step != 0 && _items.Count > 0)
             {
                 SelectIndex(Math.Clamp(Math.Max(0, _selected) + step, 0, _items.Count - 1));
@@ -255,7 +282,7 @@ namespace League.ChampionSkin
             _scroll.Paint(g, Track, Track.Contains(PointToClient(MousePosition)));
         }
 
-        private void PaintCell(Graphics g, Rectangle cell, ChampionSkinCardModel model, bool selected, bool hover)
+        private void PaintCell(Graphics g, Rectangle cell, T model, bool selected, bool hover)
         {
             var inner = Rectangle.Inflate(cell, -S(3), -S(3));
             if (selected || hover)
@@ -302,13 +329,10 @@ namespace League.ChampionSkin
             );
         }
 
-        // Top right: owned skins besides the default. Bottom left: a star when an automatic skin is chosen.
-        private void PaintBadges(Graphics g, Rectangle icon, ChampionSkinCardModel model)
+        private void PaintBadges(Graphics g, Rectangle icon, T model)
         {
-            int count = model.NonDefaultSkinCount;
-            if (count > 0)
+            if (Badge(model) is { Length: > 0 } text)
             {
-                string text = count.ToString();
                 var size = TextRenderer.MeasureText(g, text, _badgeFont, Size.Empty, TextFormatFlags.NoPadding);
                 var badge = new Rectangle(icon.Right - size.Width - S(6), icon.Top - S(4), size.Width + S(8), S(16));
                 using var fill = new SolidBrush(SkinBrowserTheme.Badge);
@@ -323,14 +347,14 @@ namespace League.ChampionSkin
                 );
             }
 
-            if (model.PreferredSkinId > 0)
+            if (Marked(model))
             {
                 var star = new Rectangle(icon.Left - S(4), icon.Bottom - S(14), S(18), S(18));
                 using var fill = new SolidBrush(Color.FromArgb(220, 17, 21, 26));
                 g.FillEllipse(fill, star);
                 TextRenderer.DrawText(
                     g,
-                    "★",
+                    MarkGlyph,
                     _badgeFont,
                     star,
                     SkinBrowserTheme.GoldBright,

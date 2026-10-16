@@ -177,6 +177,7 @@ internal static class Program
         checks["--control-checks"] = () => Background(ControlChecks.Run);
         checks["--overlay-party-checks"] = () => Ui(OverlayPartyChecks.Run);
         checks["--skin-browser-checks"] = () => Ui(SkinBrowserChecks.Run);
+        checks["--preliminary-checks"] = () => Ui(PreliminaryChecks.Run);
         checks["--minion-wave-checks"] = MinionWaveChecks.Run;
         checks["--death-timing-checks"] = DeathTimingChecks.Run;
         checks["--turret-checks"] = TurretChecks.Run;

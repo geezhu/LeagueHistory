@@ -1,8 +1,9 @@
+using League.ChampionSkin;
 using League.PrimaryElection;
 
 namespace League.Models
 {
-    public class ChampionSkinCardModel
+    public class ChampionSkinCardModel : IChampionGridItem
     {
         public int ChampionId { get; set; }
         public string Name { get; set; } = "";
