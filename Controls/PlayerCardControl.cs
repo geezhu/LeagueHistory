@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace League.Controls
 {
     public partial class PlayerCardControl : UserControl
@@ -27,6 +29,22 @@ namespace League.Controls
         {
             InitializeComponent();
             ConfigureCardLayout();
+
+            // 左键名字已用于打开玩家战绩（ConfigureCardLayout），复制完整名称改用右键，避免一次点击触发两种操作。
+            lblPlayerName.MouseUp += (_, e) =>
+            {
+                if (e.Button == MouseButtons.Right)
+                {
+                    CopyFullPlayerName();
+                }
+            };
+            lblPlayerName.Cursor = Cursors.Hand;   // 鼠标变成手型，提示可点击
+
+            // 初始化 Tooltip 属性（可选优化）
+            _nameToolTip.AutoPopDelay = 4000;
+            _nameToolTip.InitialDelay = 300;      // 悬停多久开始显示（毫秒），越小越灵敏
+            _nameToolTip.ReshowDelay = 200;
+            _nameToolTip.ShowAlways = true;
         }
 
         private void SetLabelBackColor()
@@ -170,13 +188,13 @@ namespace League.Controls
             }
 
             // 正常玩家才显示
-            _nameToolTip.SetToolTip(lblPlayerName, $"点击复制完整名称：\n{_fullPlayerName}");
+            _nameToolTip.SetToolTip(lblPlayerName, $"点击查看战绩，右键复制完整名称：\n{_fullPlayerName}");
         }
 
         /// <summary>
-        /// 点击玩家名字 → 复制完整名称到剪贴板
+        /// 右键玩家名字 → 复制完整名称到剪贴板
         /// </summary>
-        private void LblPlayerName_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        private void CopyFullPlayerName()
         {
             // 隐藏/加载/失败状态不复制
             if (string.IsNullOrWhiteSpace(_fullPlayerName) ||

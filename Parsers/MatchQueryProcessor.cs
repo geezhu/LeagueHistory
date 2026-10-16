@@ -185,7 +185,8 @@ namespace League.Parsers
                 ChampionId = championId,
                 ChampionName = Globals.resLoading.GetChampionById(championId)?.Name ?? "Unknown",
                 Avatar = queueOverride == null ? await Globals.resLoading.GetChampionIconAsync(championId).WaitAsync(cancellationToken) : null!,
-                GameName = string.IsNullOrEmpty(tagLine) ? gameName : gameName,
+                GameName = gameName,          // 短名字（显示用）
+                FullName = fullName,          // 完整名字（复制用）  ← 关键
                 SoloRank = soloRank,
                 FlexRank = flexRank,
                 IsPublic = privacyStatus,

@@ -1,5 +1,4 @@
-﻿using League.Clients;
-using League.Managers;
+﻿using League.Managers;
 using League.Parsers;
 using League.UIState;
 using System.Diagnostics;
@@ -17,15 +16,14 @@ namespace League.Services
         private readonly PlayerCardManager _cardManager;
         private readonly MatchQueryProcessor _matchQueryProcessor;
 
+        // 新分离的服务
+        private readonly GameFlowPhaseMonitor _phaseMonitor;
         private readonly AutoQueueAccepter _autoAccepter;
         private readonly AutoPickService _autoPickService;
         private readonly TeamCardDisplayService _cardDisplayService;
         private readonly GameEndCleanupService _cleanupService;
 
-        private string? _lastHandledPhase;
-
-        // 断线前是否在对局中（用于重连后补卡）
-        private bool _wasInGameBeforeDisconnect;
+        private CancellationTokenSource? _watcherCts;
 
         public GameFlowWatcher(FormMain form, FormUiStateManager uiManager,
             PlayerCardManager cardManager, MatchQueryProcessor matchQueryProcessor)
@@ -35,45 +33,59 @@ namespace League.Services
             _cardManager = cardManager;
             _matchQueryProcessor = matchQueryProcessor;
 
+            // 初始化各服务
+            _phaseMonitor = new GameFlowPhaseMonitor();
             _autoAccepter = new AutoQueueAccepter(form);
             _autoPickService = new AutoPickService(form);
             _cardDisplayService = new TeamCardDisplayService(form, cardManager);
             _cleanupService = new GameEndCleanupService(form, cardManager, uiManager);
 
-            LcuManager.Instance.PhaseChanged += OnGameflowPhaseChanged;
-            LcuManager.Instance.Disconnected += HandleLcuDisconnected;
+            // 订阅阶段变化事件
+            _phaseMonitor.PhaseChanged += OnGameflowPhaseChanged;
+            // 订阅断线事件,调用主窗体的重连逻辑
+            _phaseMonitor.OnLcuDisconnected += HandleLcuDisconnected;
         }
 
         #region 启动与停止
         public async void StartGameflowWatcher()
         {
             if (!_uiManager.LcuReady) return;
-            //Debug.WriteLine("[GameFlowWatcher] StartGameflowWatcher 就绪（事件已由 LcuManager 驱动）");
+
+            _watcherCts = new CancellationTokenSource();
+
+            // 确保旧的已停止
+            _phaseMonitor.Stop();
+            _autoPickService.Stop();
+            await _phaseMonitor.StartMonitoringAsync(_watcherCts.Token);
         }
 
         public void StopGameflowWatcher()
         {
+            _watcherCts?.Cancel();
+            _watcherCts?.Dispose();
+            _watcherCts = null;
+
+            _phaseMonitor.Stop();
+
             _autoPickService.Stop();
             _cleanupService.Cleanup();
             _cardDisplayService.ClearSnapshots();
         }
 
+        // <summary>
+        /// LCU 断开连接处理
+        /// </summary>
         private void HandleLcuDisconnected()
         {
             _autoAccepter.Reset();
             Debug.WriteLine("[GameFlowWatcher] 检测到 LCU 断开，准备重启连接轮询");
 
-            Debug.WriteLine("[GameFlowWatcher] 检测到 LCU 断开");
-
-            _wasInGameBeforeDisconnect = _uiManager.IsGame
-                || (_form._cachedMyTeam != null && _form._cachedMyTeam.Count > 0)
-                || (_form._cachedEnemyTeam != null && _form._cachedEnemyTeam.Count > 0);
-
-            _lastHandledPhase = null;
             _uiManager.LcuReady = false;
             _uiManager.IsGame = false;
             _uiManager.SetLcuUiState(false, false);
 
+            // 清理当前监听
+            _phaseMonitor.Stop();
             _autoPickService.Stop();
 
             _cardDisplayService.ClearSnapshots();
@@ -83,6 +95,9 @@ namespace League.Services
         }
         #endregion
 
+        /// <summary>
+        /// 核心：游戏阶段变化时分发处理
+        /// </summary>
         public async Task OnGameflowPhaseChanged(string phase, string? previousPhase)
         {
             if ((phase is "EndOfGame" or "PreEndOfGame" or "WaitingForStats") && (previousPhase is "GameStart" or "InProgress" or "Reconnect"))
@@ -90,13 +105,13 @@ namespace League.Services
             if (phase != "ReadyCheck") _autoAccepter.Reset();
             try
             {
-                //Debug.WriteLine($"[Phase Changed] {previousPhase ?? "null"} → {phase} | 时间: {DateTime.Now:HH:mm:ss.fff}");
+                // 🔥 最重要的调试日志
+                Debug.WriteLine($"[Phase Changed] {previousPhase ?? "null"} → {phase} | 时间: {DateTime.Now:HH:mm:ss.fff}");
 
                 switch (phase)
                 {
                     case "Matchmaking":
                     case "ReadyCheck":
-                        _wasInGameBeforeDisconnect = false;
                         await HandleQueuePhase(phase);
                         break;
 
@@ -104,32 +119,28 @@ namespace League.Services
                         await HandleChampSelectStart();
                         break;
 
-                    case "GameStart":
-                        _autoPickService.Stop();
-                        Debug.WriteLine("[GameFlowWatcher] GameStart：停止自动选人");
-                        break;
-
                     case "InProgress":
-                        await HandleGameInProgress(previousPhase);
-                        _wasInGameBeforeDisconnect = false;
+                        await HandleGameInProgress();
                         break;
 
+                    // 🔥 扩大触发范围 + 放宽 previousPhase 条件
                     case "EndOfGame":
                     case "PreEndOfGame":
                     case "WaitingForStats":
                         _autoPickService.Stop();
                         _cardDisplayService.ClearSnapshots();
                         Debug.WriteLine($"[GameEnd Trigger] 检测到结束阶段: {phase}, previous={previousPhase}");
-                        await HandleGameEnd(previousPhase);
+                        await HandleGameEnd(previousPhase);  // 即使 previousPhase 为空也尝试处理
                         break;
-
                     case "Lobby":
                     case "None":
                         _autoPickService.Stop();
                         _cardDisplayService.ClearSnapshots();
                         if (_cleanupService.ShouldReturnToLobby())
                         {
-                            Debug.WriteLine($"[Lobby] 检测到刚结束游戏，开始返回模式 {Globals.CurrGameMod}");
+                            Debug.WriteLine(
+                                $"[Lobby] 检测到刚结束游戏，开始返回模式 {Globals.CurrGameMod}");
+
                             await _cleanupService.ReturnToSpecificLobbyAsync();
                         }
                         break;
@@ -150,11 +161,15 @@ namespace League.Services
             _cardManager.ClearGameState();
             _matchQueryProcessor.ClearPlayerMatchCache();
             _cleanupService.Reset();
+
+            // 🔥 重置自动接受状态
             _autoAccepter.Reset();
 
+            // 验证是否自动接受对局，以及接受对局延时时间
             if (phase == "ReadyCheck" && _form.GetAppConfig()?.EnableAutoAcceptQueue == true)
             {
                 int delay = _form.GetAppConfig()?.AutoAcceptDelaySeconds ?? 0;
+                // 只允许 0 / 5 / 10，防止配置被改乱
                 if (delay != 5 && delay != 10) delay = 0;
 
                 _ = _autoAccepter.TryAcceptAsync(delay);
@@ -172,6 +187,8 @@ namespace League.Services
             _autoPickService.Stop();
             _uiManager.IsGame = true;
             await _cardDisplayService.EnterChampSelectAsync();
+
+            // 🔥 重要：同时启动卡片更新和自动抢英雄
             _autoPickService.StartChampSelectMonitoring(_cardDisplayService);
         }
 
@@ -187,6 +204,7 @@ namespace League.Services
         {
             Debug.WriteLine($"[HandleGameEnd] 被调用 | previousPhase={previousPhase}");
 
+            // 更宽松的判断逻辑（兼容各种跳变情况）
             bool shouldHandle = previousPhase == "InProgress"
                              || previousPhase == "WaitingForStats"
                              || previousPhase == "ChampSelect"
@@ -195,9 +213,11 @@ namespace League.Services
 
             if (shouldHandle)
             {
+                // 给游戏结束打一个标记
                 if (!string.IsNullOrEmpty(Globals.CurrGameMod))
                 {
                     _cleanupService.MarkGameJustEnded();
+
                     Debug.WriteLine(
                         $"[HandleGameEnd] 已标记游戏结束，等待Lobby后返回模式 {Globals.CurrGameMod}");
                 }

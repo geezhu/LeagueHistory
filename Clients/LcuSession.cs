@@ -63,46 +63,6 @@ namespace League.Clients
         }
 
         /// <summary>
-        /// 注入已经由 LcuManager 建立好的 LcuClient（不再自己去连）
-        /// </summary>
-        public bool AttachExistingClient(LcuClient client)
-        {
-            if (client == null)
-            {
-                Debug.WriteLine("[LcuSession] AttachExistingClient: client 为 null");
-                return false;
-            }
-
-            try
-            {
-                _lcuClient = client;
-
-                // 必须重新创建所有 Service
-                if (_serviceFactory == null)
-                    _serviceFactory = new ServiceFactory();
-
-                InitializeServices();
-
-                _messageManager = new MessageServiceManager(_chatService);
-
-                // 自检
-                if (_gameflowService == null)
-                {
-                    Debug.WriteLine("[LcuSession] 警告：InitializeServices 后 _gameflowService 仍为 null");
-                    return false;
-                }
-
-                Debug.WriteLine("[LcuSession] 已成功注入现有 LcuClient，Services 已就绪");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[LcuSession] 注入失败: {ex}");
-                return false;
-            }
-        }
-
-        /// <summary>
         /// 初始化所有服务
         /// </summary>
         private void InitializeServices()

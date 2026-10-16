@@ -130,7 +130,7 @@ public sealed class PlayerCardUIManager
         var player = state.Info?.Player;
         string name = player?.GameName ?? (state.CanRetry ? "战绩读取失败" : "加载中…");
         card.SetPlayerInfo(name, player?.SoloRank ?? "", player?.FlexRank ?? "", player?.Avatar!, player?.IsPublic ?? "",
-            state.Info?.MatchItems ?? new(), player?.NameColor ?? Color.FromArgb(36,63,98), sid, champion, puuid);
+            state.Info?.MatchItems ?? new(), player?.NameColor ?? Color.FromArgb(36,63,98), sid, champion, puuid, player?.FullName);
         if (state.Info != null)
         {
             card.SetRecentStatistics(state.Info);

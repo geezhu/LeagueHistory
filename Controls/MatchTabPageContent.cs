@@ -147,8 +147,9 @@ namespace League.Controls
                 "q_420" => "单双排位",
                 "q_440" => "灵活排位",
                 "q_430" => "匹配模式",
-                "q_450" => "大乱斗",
-                "q_2400" => "海克斯乱斗",
+                "q_450" => "极地大乱斗",
+                "q_2400" => "海克斯大乱斗",
+                "q_1700" => "斗魂竞技场",
                 _ => "全部"
             };
         }
@@ -185,13 +186,7 @@ namespace League.Controls
         {
             await _loadSemaphore.WaitAsync();
             Debug.WriteLine($"[{DateTime.Now:HH:mm:ss}] 开始加载数据 - PUUID: {_puuid}");
-            if (this.LoadDataRequested == null || this.ParsePanelRequested == null)
-            {
-                Debug.WriteLine("[严重错误] 未绑定数据加载事件");
-                ShowErrorMessage("系统错误：功能未初始化");
-                _loadSemaphore.Release();
-                return;
-            }
+
             try
             {
                 if (this.LoadDataRequested == null || this.ParsePanelRequested == null)
@@ -220,6 +215,7 @@ namespace League.Controls
 
                 // 仅作上限参考，真正是否有下一页看本页返回数量
                 TotalPages = (int)Math.Ceiling(200.0 / (double)_pageSize);
+
                 JArray matches;
                 if (_selectedWin.HasValue) matches = await LoadOutcomePage();
                 else
@@ -228,11 +224,16 @@ namespace League.Controls
                     if (matches != null && matches.Count < count) TotalPages = _currentPage;
                     SafeInvoke(() => _filterScope.Text = $"第 {_currentPage} 页 · 按时间从新到旧");
                 }
-                Debug.WriteLine($"收到 {matches?.Count ?? 0} 条数据，请求参数: startIndex={startIndex}, count={count}");
-                if (matches == null || matches.Count == 0)
+                Debug.WriteLine($"收到 {(matches == null ? "null(服务器异常)" : matches.Count.ToString())} 条数据，请求参数: startIndex={startIndex}, count={count}");
+                SafeInvoke(() => _pageNumber.Text = _currentPage.ToString());
+
+                if (matches == null)
                 {
-                    SafeInvoke(() => _pageNumber.Text = _currentPage.ToString());
-                    ShowEmptyMessage();
+                    ShowErrorMessage(
+                        "战绩服务器异常\n" +
+                        "客户端头像处对局记录查不到，那么这里也查不到，表示正在维护中（一般3-5小时会恢复）...");
+                    SafeSetEnabled(btnPrev, _currentPage > 1);
+                    SafeSetEnabled(btnNext, false);
                     return;
                 }
 
@@ -261,7 +262,12 @@ namespace League.Controls
                 }
 
                 await UpdateMatchList(matches);
-                SafeInvoke(() => _pageNumber.Text = _currentPage.ToString());
+
+                // ★ 关键：本页数据 < 请求数量 → 已是最后一页；胜负筛选的页数由分页器根据已检查记录决定
+                bool hasMore = _selectedWin.HasValue
+                    ? _currentPage < TotalPages
+                    : matches.Count >= count && (startIndex + matches.Count) < 200;
+
                 SafeSetEnabled(btnPrev, _currentPage > 1);
                 SafeSetEnabled(btnNext, hasMore);
             }
@@ -408,7 +414,7 @@ namespace League.Controls
             if (!string.IsNullOrEmpty(summonerId))
                 _summonerId = summonerId;
 
-            await Task.Delay(200); // 可选延迟，确保控件加载完
+            await Task.Delay(200);
 
             SafeInvoke(() => { _masteryView.LoadPlayer(puuid); _profileBackground.LoadPlayer(puuid); _recentActivity.LoadPlayer(puuid); });
 
@@ -746,8 +752,7 @@ namespace League.Controls
 
         private void SetLoadingState(bool isLoading)
         {
-            SafeSetEnabled(btnPrev, !isLoading && _currentPage > 1);
-            SafeSetEnabled(btnNext, !isLoading && _currentPage < TotalPages);
+            // 翻页按钮由 UpdateMatchesDisplay 根据数据量单独控制，这里不要动
             SafeSetEnabled(_outcomeFilter, !isLoading);
             SafeSetEnabled(comboPage, !isLoading);
             SafeSetEnabled(comboFilter, !isLoading);

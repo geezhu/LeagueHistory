@@ -232,6 +232,7 @@ namespace League
                 chkUseChampionName.CheckedChanged += UseChampionName_CheckedChanged;
                 chkSkipHonor.CheckedChanged += ChkSkipHonor_CheckedChanged;
                 chkSkipEndOfGameStats.CheckedChanged += ChkSkipEndOfGameStats_CheckedChanged;
+                chkAutoSkinSelect.CheckedChanged += chkAutoSkinSelect_CheckedChanged;
 
                 // 启动轮询 LCU 检测
                 StartLcuConnectPolling();
@@ -245,48 +246,31 @@ namespace League
         #endregion
 
         #region LCU连接管理
-
         /// <summary>
-        /// 启动 LCU 连接入口（兼容旧方法名「轮询」）。
-        /// 实际已改为由 <see cref="LcuManager"/> 事件驱动：Connected / Disconnected / Reconnecting。
+        /// 启动窗口，轮询监听是否登录了lcu客户端
         /// </summary>
         public void StartLcuConnectPolling()
         {
-            // 兼容旧调用名，实际已改为事件驱动
-            _ = StartLcuConnectionAsync();
-        }
+            _uiManager!.SetLcuUiState(connected: false, inGame: false);
 
-        /// <summary>
-        /// 订阅 LcuManager 事件并启动永久连接循环。
-        /// 启动前会取消旧的 AsyncPoller，并防止事件重复订阅。
-        /// 初始 UI 置为「未连接」，由后续 Connected 回调再恢复。
-        /// </summary>
-        private async Task StartLcuConnectionAsync()
-        {
-            try
+            _lcuPoller.Start(async delegate
             {
-                // 先取消旧轮询（防止残留）
-                _lcuPoller?.Stop();
+                if (!_uiManager!.LcuReady)
+                {
+                    if (await Globals.lcuClient.InitializeAsync())
+                    {
+                        _uiManager!.LcuReady = true;
+                        _lcuPoller.Stop();
 
-                // 避免重复订阅：先解绑再绑定
-                LcuManager.Instance.Connected -= OnLcuConnected;
-                LcuManager.Instance.Disconnected -= OnLcuDisconnected;
-                LcuManager.Instance.Reconnecting -= OnLcuReconnecting;
-
-                LcuManager.Instance.Connected += OnLcuConnected;
-                LcuManager.Instance.Disconnected += OnLcuDisconnected;
-                LcuManager.Instance.Reconnecting += OnLcuReconnecting;
-
-                // 启动时先显示「检测连接」状态
-                _uiManager!.SetLcuUiState(connected: false, inGame: false);
-
-                Debug.WriteLine("[LCU] 启动 LcuManager 连接循环...");
-                await LcuManager.Instance.StartAsync();
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[LCU] 启动连接失败: {ex.Message}");
-            }
+                        // 初始化英雄资源，及查询SGP服务
+                        await InitializeAfterLcuConnected();
+                    }
+                    else
+                    {
+                        Debug.WriteLine("[LCU检测中] 未找到 LCU 客户端");
+                    }
+                }
+            }, 5000);
         }
 
         /// <summary>
@@ -328,72 +312,77 @@ namespace League
             return false;
         }
 
-        /// <summary>
-        /// LcuManager 连接成功（含首次连接与重连成功）回调。
-        /// 将 HttpClient 注入 <see cref="Globals.lcuClient"/>，再执行业务初始化；
-        /// finally 中无论成败都按 LcuReady/IsGame 刷新一次 UI，避免卡在「检测中」。
-        /// </summary>
-        private async void OnLcuConnected()
-        {
-            try
-            {
-                Debug.WriteLine("[LCU] OnLcuConnected");
+        ///// <summary>
+        ///// LCU 连接成功后的初始化（基本保持原逻辑）
+        ///// </summary>
+        //private async Task InitializeAfterLcuConnected()
+        //{
+        //    // 加载资源
+        //    Globals.resLoading.loadingResource(Globals.lcuClient);
 
-                // 把 LcuManager 建立好的 LcuClient 注入会话，供全项目 Globals.lcuClient 使用
-                bool injected = Globals.lcuClient.AttachExistingClient(LcuManager.Instance.HttpClient);
-                if (!injected)
-                {
-                    Debug.WriteLine("[LCU] 注入失败");
-                    return;
-                }
+        //    if (_championManager != null)
+        //    {
+        //        try
+        //        {
+        //            Debug.WriteLine("[英雄预加载] 开始加载所有英雄数据...");
+        //            await _championManager.InitializeAsync(forceRefresh: false);
+        //            Debug.WriteLine($"[英雄预加载] 成功！共加载 {_championManager.AllChampions.Count} 个英雄");
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            Debug.WriteLine($"[英雄预加载] 失败: {ex.Message}");
+        //        }
+        //    }
 
-                _uiManager!.LcuReady = true;
-                await InitializeAfterLcuConnected();
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[LCU] OnLcuConnected 异常: {ex}");
-            }
-            finally
-            {
-                // 无论中间是否超时/异常，最终按当前标志刷新一次 UI
-                try
-                {
-                    _uiManager?.SetLcuUiState(_uiManager.LcuReady, _uiManager.IsGame);
-                }
-                catch { }
-            }
-        }
+        //    // 延迟创建 ChatMessageBuilder
+        //    if (_chatMessageBuilder == null && _championManager != null)
+        //    {
+        //        _chatMessageBuilder = new ChatMessageBuilder(
+        //            _playerCardManager.GetAllCachedPlayerInfos,
+        //            _championManager!,
+        //            _appConfig?.HideSelfWhenSending ?? false
+        //        );
+        //        _chatSender?.SetChatMessageBuilder(_chatMessageBuilder);
+        //        Debug.WriteLine("[ChatMessageBuilder] 已成功延迟创建并注入 ChampionManager");
+        //    }
 
-        /// <summary>
-        /// LcuManager 确认真正断线时的回调（进程消失或连续重连失败等）。
-        /// 清空连接相关 UI、停止游戏流程监视；不要在此再次 Start 连接，由 LcuManager 自行重试。
-        /// </summary>
-        private void OnLcuDisconnected()
-        {
-            Debug.WriteLine("[LCU] OnLcuDisconnected（确认断开）");
+        //    // 初始化 SGP
+        //    if (await Globals.sgpClient.InitSgpAsync(Globals.lcuClient.Client))
+        //    {
+        //        Debug.WriteLine("SGP 连接初始化成功！");
+        //    }
+        //    else
+        //    {
+        //        Debug.WriteLine("SGP 连接初始化失败！");
+        //    }
 
-            _uiManager!.LcuReady = false;
-            _uiManager!.IsGame = false;
-            // 硬断开：显示「正在检测/重新连接…」并清空战绩相关面板
-            _uiManager!.SetLcuUiState(false, false);
+        //    // 初始化战绩 Tab
+        //    InitializeMatchTabContent();
 
-            _gameFlowWatcher?.ClearGameState();
-            _gameFlowWatcher?.StopGameflowWatcher();
-            // 不要在这里再调用 StartLcuConnectPolling()，LcuManager 内部已有自动重连循环
-        }
+        //    // 初始化默认 Tab 和预热
+        //    await this.InvokeIfRequiredAsync(async () =>
+        //    {
+        //        RefreshState.ForceMatchRefresh = false;
+        //        await InitializeDefaultTab();
+        //        _configUpdateManager!.PreWarmUiComponents();
 
-        /// <summary>
-        /// LcuManager 软重连回调：链路抖动或探活连续失败后的自动恢复阶段。
-        /// 客户端进程往往仍在，故不要 SetLcuUiState(false) 清空战绩面板，避免误伤用户界面。
-        /// 可选：在此更新状态栏/Toast 为「正在恢复连接…」。
-        /// </summary>
-        private void OnLcuReconnecting()
-        {
-            Debug.WriteLine("[LCU] OnLcuReconnecting");
-            // 可选：状态栏/小提示「正在恢复连接…」，不要 SetLcuUiState(false) 清面板
-            // 若你有 Toast/状态标签，可在这里改文字
-        }
+        //        // 主动查一次当前 phase（LcuManager 连接后也会查，这里再补一次更保险）
+        //        string? currentPhase = await Globals.lcuClient.GetGameflowPhase();
+        //        if (!string.IsNullOrEmpty(currentPhase))
+        //            await _gameFlowWatcher!.OnGameflowPhaseChanged(currentPhase, null);
+
+        //        _gameFlowWatcher!.StartGameflowWatcher();
+
+        //        // 必须在 phase 处理之后：InProgress 会把 IsGame 设为 true
+        //        _uiManager!.SetLcuUiState(_uiManager.LcuReady, _uiManager.IsGame);
+
+        //        // 已在游戏中则直接切到卡片 Tab
+        //        if (_uiManager.IsGame && imageTabControl1.TabPages.Count > 1)
+        //            imageTabControl1.SelectedIndex = 1;
+        //    });
+
+        //    _uiManager!.SetLcuUiState(_uiManager!.LcuReady, _uiManager!.IsGame);
+        //}
 
         /// <summary>
         /// LCU 连接成功后的业务初始化：资源、英雄、消息构建器、SGP、战绩 Tab、流程监视。
@@ -851,6 +840,25 @@ namespace League
             Debug.WriteLine("[自动预选] 预选配置已修改，缓存已清除");
         }
 
+        /// <summary>
+        /// 浏览已有英雄 + 为每英雄选默认皮肤
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void labChampionSkinBrowser_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            if (!_uiManager!.LcuReady)
+            {
+                MessageBox.Show("请先登录英雄联盟客户端并等待连接成功！", "客户端未连接",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            using var form = new League.ChampionSkin.ChampionSkinBrowser(_appConfig!);
+            form.Owner = this;
+            form.ShowDialog();
+        }
+
         private void ModeCheckBox_CheckedChanged(object sender, EventArgs e)
         {
             if (_appConfig == null) return;
@@ -1037,14 +1045,7 @@ namespace League
             _lcuPoller?.Stop();
             _tab1Poller?.Stop();
 
-            // 新增：停止 LcuManager
-            LcuManager.Instance.Stop();
-
-            // 取消事件订阅，防止内存泄漏
-            LcuManager.Instance.Connected -= OnLcuConnected;
-            LcuManager.Instance.Disconnected -= OnLcuDisconnected;
-            LcuManager.Instance.Reconnecting -= OnLcuReconnecting;
-
+            // 卸载热键钩子
             _hotkeyManager?.Dispose();
             _loadingOverlay?.Dispose();
 

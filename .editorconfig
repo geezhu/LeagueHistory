@@ -26,7 +26,7 @@ dotnet_diagnostic.MA0054.severity = warning
 MA0051.maximum_lines_per_method = 80
 MA0051.maximum_statements_per_method = 40
 
-[Caching/MatchCache.cs]
+[Caching/{MatchCache.cs,SkinBrowserImageCache.cs}]
 charset = unset
 indent_style = unset
 indent_size = unset
@@ -50,7 +50,31 @@ dotnet_diagnostic.MA0054.severity = none
 MA0051.maximum_lines_per_method = unset
 MA0051.maximum_statements_per_method = unset
 
-[Clients/{ChampionSelectService.cs,ChatService.cs,GameflowService.cs,LcuClient.cs,LcuConnectionManager.cs,LcuConnector.cs,LcuSession.cs,LcuWebSocketManager.cs,LcuWebSocketService.cs,MatchService.cs,MessageServiceManager.cs,RankedService.cs,ReplayService.cs,ServiceFactory.cs,SgpSession.cs,SummonerService.cs}]
+[ChampionSkin/{ChampionSkinBrowser.Designer.cs,ChampionSkinBrowser.cs,ChampionSkinCard.Designer.cs,ChampionSkinCard.cs}]
+charset = unset
+indent_style = unset
+indent_size = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+max_line_length = unset
+csharp_new_line_before_open_brace = unset
+csharp_new_line_before_else = unset
+csharp_new_line_before_catch = unset
+csharp_new_line_before_finally = unset
+csharp_new_line_before_members_in_object_initializers = unset
+csharp_preserve_single_line_statements = unset
+csharp_preserve_single_line_blocks = unset
+csharp_prefer_braces = unset
+dotnet_diagnostic.IDE0011.severity = none
+dotnet_diagnostic.MA0040.severity = none
+dotnet_diagnostic.MA0042.severity = none
+dotnet_diagnostic.MA0051.severity = none
+dotnet_diagnostic.MA0054.severity = none
+MA0051.maximum_lines_per_method = unset
+MA0051.maximum_statements_per_method = unset
+
+[Clients/{ChampionSelectService.cs,ChatService.cs,GameflowService.cs,LcuClient.cs,LcuConnectionManager.cs,LcuConnector.cs,LcuManager.cs,LcuSession.cs,LcuWebSocketManager.cs,LcuWebSocketService.cs,MatchService.cs,MessageServiceManager.cs,RankedService.cs,ReplayService.cs,ServiceFactory.cs,SgpSession.cs,SummonerService.cs}]
 charset = unset
 indent_style = unset
 indent_size = unset
@@ -194,7 +218,7 @@ dotnet_diagnostic.MA0054.severity = none
 MA0051.maximum_lines_per_method = unset
 MA0051.maximum_statements_per_method = unset
 
-[Models/{AugmentInfo.cs,GameMod.cs,GameModels.cs,LeagueConfig.cs,MatchInfo.cs,MatchMetadata.cs,PlayerBehavior.cs,PlayerCardValidationInfo.cs,PlayerInfo.cs,PlayerMatchInfo.cs,Profileicon.cs,RankedStats.cs,VersionInfo.cs}]
+[Models/{AugmentInfo.cs,ChampionSkinCardModel.cs,GameMod.cs,GameModels.cs,LeagueConfig.cs,MatchInfo.cs,MatchMetadata.cs,PlayerBehavior.cs,PlayerCardValidationInfo.cs,PlayerInfo.cs,PlayerMatchInfo.cs,Profileicon.cs,RankedStats.cs,VersionInfo.cs}]
 charset = unset
 indent_style = unset
 indent_size = unset
