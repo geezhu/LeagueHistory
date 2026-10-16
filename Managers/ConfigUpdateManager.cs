@@ -184,8 +184,8 @@ namespace League.Managers
                             response.EnsureSuccessStatusCode();
 
                             var totalBytes = response.Content.Headers.ContentLength.GetValueOrDefault(-1L);
-                            using var remoteStream = await response.Content.ReadAsStreamAsync();
-                            using var fileStream = new FileStream(
+                            await using var remoteStream = await response.Content.ReadAsStreamAsync();
+                            await using var fileStream = new FileStream(
                                 zipPath,
                                 FileMode.Create,
                                 FileAccess.Write,

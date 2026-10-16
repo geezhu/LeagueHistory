@@ -100,7 +100,7 @@ namespace League.Infrastructure
                 {
                     try
                     {
-                        using var fs = new FileStream(
+                        await using var fs = new FileStream(
                             tempPath,
                             FileMode.Create,
                             FileAccess.Write,
@@ -109,7 +109,7 @@ namespace League.Infrastructure
                             true
                         );
                         await Task.Run(() => image.Save(fs, System.Drawing.Imaging.ImageFormat.Png));
-                        fs.Flush();
+                        await fs.FlushAsync();
                         break;
                     }
                     catch (IOException) when (retry < 2)
