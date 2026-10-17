@@ -11,6 +11,10 @@ bool voiceReading = false, voiceWriting = false, voiceCleanup = false, voiceDeco
 uint64_t voiceGeneration = 0;
 hstring voiceId, voiceSession, voiceAction, pendingVoiceWrite;
 int64_t voiceCreated = 0, voiceAck = 0;
+// While the microphone is being prepared the status is read every 100 ms, so 停止录音 is offered as soon as audio is
+// captured; afterwards the view's 500 ms tick is enough.
+DispatcherTimer voicePreparingPoll;
+bool voicePreparingPollBound = false;
 
 void SetVoiceHint(hstring const &text)
 {
@@ -238,8 +242,30 @@ void RecognizeVoice()
     voiceEditor.Text(L"");
     SetVoiceHint(L"");
     SaveVoiceRequest();
+    StartVoicePreparingPoll();
     UpdateChatButtons();
     Trace(L"voice-local-start");
+}
+void StartVoicePreparingPoll()
+{
+    if (!voicePreparingPollBound)
+    {
+        voicePreparingPollBound = true;
+        voicePreparingPoll.Interval(std::chrono::milliseconds(100));
+        voicePreparingPoll.Tick(
+            [weak = weak_from_this()](auto &&, auto &&)
+            {
+                auto self = weak.lock();
+                if (!self || self->stopped || !self->voiceRunning || self->voiceReady)
+                {
+                    if (self)
+                        self->voicePreparingPoll.Stop();
+                    return;
+                }
+                self->ReadVoiceStatus();
+            });
+    }
+    voicePreparingPoll.Start();
 }
 void SaveVoiceRequest()
 {

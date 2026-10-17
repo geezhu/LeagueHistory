@@ -22,6 +22,10 @@ struct MiniVoiceSender : std::enable_shared_from_this<MiniVoiceSender>
     Button record, send;
     TextBlock text = MakeText(L"", 12, 0xe2eef3);
     XboxGameBarWidget widget{nullptr};
+    // While the microphone is being prepared the status is read every 100 ms, so 请说话 shows as soon as audio is
+    // captured; afterwards the view's 500 ms tick is enough.
+    DispatcherTimer preparingPoll;
+    bool preparingPollBound = false;
     State state = State::Idle;
     // brief is the one or two words the row shows; hint keeps the full reason for the tooltip.
     hstring recognized, brief, hint, session;
@@ -98,6 +102,7 @@ struct MiniVoiceSender : std::enable_shared_from_this<MiniVoiceSender>
         if (state != State::Idle)
             Cancel();
         stopped = true;
+        preparingPoll.Stop();
     }
     void Preview(hstring const &value)
     {
@@ -145,7 +150,29 @@ struct MiniVoiceSender : std::enable_shared_from_this<MiniVoiceSender>
         sendFailed = false;
         state = State::Preparing;
         SaveVoiceRequest();
+        StartPreparingPoll();
         Trace(L"wave-mini-voice-start");
+    }
+    void StartPreparingPoll()
+    {
+        if (!preparingPollBound)
+        {
+            preparingPollBound = true;
+            preparingPoll.Interval(std::chrono::milliseconds(100));
+            preparingPoll.Tick(
+                [weak = weak_from_this()](auto &&, auto &&)
+                {
+                    auto self = weak.lock();
+                    if (!self || self->stopped || self->state != State::Preparing)
+                    {
+                        if (self)
+                            self->preparingPoll.Stop();
+                        return;
+                    }
+                    self->ReadVoiceStatus();
+                });
+        }
+        preparingPoll.Start();
     }
     void QueueSend()
     {

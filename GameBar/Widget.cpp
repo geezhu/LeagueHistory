@@ -408,6 +408,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         ResetChat();
         stopped = true;
         timer.Stop();
+        voicePreparingPoll.Stop();
         waveFrames.revoke();
         widget = nullptr;
     }
