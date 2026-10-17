@@ -148,6 +148,10 @@ internal static class LoadingOverlayManagerChecks
     {
         overlay.Display.Reset();
         overlay.SetPhase("GameStart");
+        // A real game window may well be running on the machine, so pin the search: the checks below are about
+        // the "no game window yet" branch and must not depend on what the desktop happens to run.
+        overlay.Write("_gameWindow", IntPtr.Zero);
+        overlay.Write("_nextWindowSearch", long.MaxValue);
         overlay.Call("RefreshDisplaySettings");
         overlay.StopTimers();
         Check(overlay.Display.Requested, "The loading phase requests the shell without any roster");
