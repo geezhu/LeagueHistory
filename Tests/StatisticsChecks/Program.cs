@@ -231,6 +231,7 @@ internal static class Program
         checks["--gamebar-composition-checks"] = () => Background(GameBarCompositionChecks.Run);
         checks["--stale-session-checks"] = () => Background(StaleSessionChecks.Run);
         checks["--game-queue-checks"] = () => Background(GameQueueChecks.Run);
+        checks["--game-flow-checks"] = GameFlowWatcherChecks.Run;
         checks["--minion-wave-checks"] = MinionWaveChecks.Run;
         checks["--death-timing-checks"] = DeathTimingChecks.Run;
         checks["--turret-checks"] = TurretChecks.Run;
