@@ -142,6 +142,7 @@ internal static class Program
         checks["--tabbed-content-checks"] = () => Ui(TabbedContentChecks.Run);
         checks["--profile-icon-checks"] = () => Background(ProfileIconChecks.RunAsync);
         checks["--main-navigation-checks"] = () => Ui(MainNavigationChecks.Run);
+        checks["--team-card-checks"] = TeamCardDisplayChecks.Run;
         checks["--history-navigation-checks"] = () => Ui(HistoryNavigationChecks.Run);
         checks["--profile-surface-checks"] = () => Ui(ProfileSurfaceChecks.Run);
         checks["--opgg-lifecycle-checks"] = () => Ui(OpggViewLifecycleChecks.Run);
