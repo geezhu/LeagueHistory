@@ -150,6 +150,12 @@ internal static class Program
         checks["--history-navigation-checks"] = () => Ui(HistoryNavigationChecks.Run);
         checks["--profile-surface-checks"] = () => Ui(ProfileSurfaceChecks.Run);
         checks["--opgg-lifecycle-checks"] = () => Ui(OpggViewLifecycleChecks.Run);
+        checks["--opgg-surface-checks"] = () =>
+            Ui(() =>
+            {
+                OpggRankingsChecks.Run();
+                OpggViewSurfaceChecks.Run();
+            });
         checks["--profile-presentation-checks"] = () => Ui(ProfilePresentationChecks.Run);
         checks["--selection-control-checks"] = () => Ui(SelectionControlChecks.Run);
         checks["--player-champion-checks"] = () => Ui(PlayerChampionChecks.Run);

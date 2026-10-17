@@ -126,6 +126,8 @@ internal static class DefaultStatisticsSuite
         LoadingViewChecks.Run();
         MainNavigationChecks.Run();
         OpggViewLifecycleChecks.Run();
+        OpggViewSurfaceChecks.Run();
+        OpggRankingsChecks.Run();
         OverlayLifecycleChecks.Run();
         ProfilePresentationChecks.Run();
         ProfileSurfaceChecks.Run();
