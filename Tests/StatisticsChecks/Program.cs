@@ -260,6 +260,7 @@ internal static class Program
         checks["--live-client-checks"] = () => Background(LiveClientChecks.RunAsync);
         checks["--live-champ-select-checks"] = () => Background(LiveChampSelectChecks.RunAsync);
         checks["--live-sgp-checks"] = () => Background(LiveSgpChecks.RunAsync);
+        checks["--live-match-detail-checks"] = () => Background(LiveMatchDetailChecks.RunAsync);
     }
 
     private static void GameBarProtocolChecks()
