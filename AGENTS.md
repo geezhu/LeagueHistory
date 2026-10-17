@@ -74,7 +74,7 @@
 
 - C# 排版使用仓库固定版本的 CSharpier；Game Bar C++ 使用 `.clang-format`。
 - 老套件：`dotnet Tests/StatisticsChecks/bin/Debug/net8.0-windows/StatisticsChecks.dll`，不带参数跑默认套件，带 `--xxx-checks` 跑单项。新工程：`dotnet test Tests/League.Tests/League.Tests.csproj`。
-- 新工程的覆盖率接入 `dotnet test --collect` 后，同步更新本节和 `Scripts/Run-Coverage.ps1`；统计口径仍是只算 `League.dll`。
+- `Scripts/Run-Coverage.ps1` 分两遍采集再合并：一遍跑老套件，一遍跑 `dotnet test Tests/League.Tests`，两遍都只统计 `League.dll`。所以把一条检查从老套件搬到新工程时，**两边先都留着**；新工程确实覆盖到同样的代码之后，再删老的那一份。
 - 运行 `powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Check-CodeQuality.ps1`。默认检查全部源码；`-Fix` 修复选中源码的排版；`-BaseRef` 只检查某个提交以来改动的源码。编译分析输出到 `bin/code-quality/build`，不影响正在运行的 `bin/Release`。
 - 编译检查中的 Meziantou 规则对选中的源码形成检查门槛；不向主项目永久添加分析器依赖。
 - 测试覆盖率运行 `powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Run-Coverage.ps1`；`-Checks` 只跑指定检查，`-Open` 打开报告。结果输出到 `bin/coverage`，只统计 `League.dll`。
