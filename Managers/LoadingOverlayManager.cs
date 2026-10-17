@@ -612,7 +612,8 @@ internal sealed partial class LoadingOverlayManager : IDisposable
             _liveState,
             _controls,
             ModeCooldowns(),
-            CurrentComposition()?.Json
+            CurrentComposition()?.Json,
+            _owner.GetAppConfig()?.GameBarWaveOpacity ?? LeagueConfig.DefaultGameBarWaveOpacity
         );
     }
 

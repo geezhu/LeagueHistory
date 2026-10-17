@@ -8,6 +8,15 @@ namespace League.Models
         public bool EnableLoadingOverlay { get; set; } = true;
         public bool AutoShowLoadingOverlay { get; set; } = true;
         public string LoadingOverlayBackend { get; set; } = "Desktop";
+
+        /// <summary>
+        /// Game Bar「League 兵线」组件的背景不透明度（百分比，20–100）
+        /// </summary>
+        public int GameBarWaveOpacity { get; set; } = DefaultGameBarWaveOpacity;
+
+        public const int DefaultGameBarWaveOpacity = 85,
+            MinGameBarWaveOpacity = 20,
+            MaxGameBarWaveOpacity = 100;
         public int AramMetaCacheMinutes { get; set; } = 1440;
         public int AramBalanceCacheMinutes { get; set; } = 1440;
         public int ChampionAnalysisCacheMinutes { get; set; } = 1440;

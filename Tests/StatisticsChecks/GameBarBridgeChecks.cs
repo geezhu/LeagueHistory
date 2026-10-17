@@ -231,6 +231,10 @@ internal static class GameBarBridgeChecks
                 && !latest.ToString().Contains("secret-puuid"),
             "Account identifiers are not exported"
         );
+        Check(
+            (double?)latest["waveWidget"]?["opacity"] == LeagueConfig.DefaultGameBarWaveOpacity / 100.0,
+            "The mini wave widget opacity defaults to the config default"
+        );
     }
 
     private static async Task DisabledPublisherAsync(string folder, JObject latest)
@@ -246,7 +250,8 @@ internal static class GameBarBridgeChecks
             "已关闭",
             false,
             false,
-            false
+            false,
+            waveOpacity: 5
         );
         disabled.Dispose();
         await disabled.Completion;
@@ -258,6 +263,10 @@ internal static class GameBarBridgeChecks
         Check(
             (string?)cleared["session"] != (string?)latest["session"],
             "Restart gives commands a new instance identity"
+        );
+        Check(
+            (int?)cleared["waveWidget"]?["protocol"] == 1 && (double?)cleared["waveWidget"]?["opacity"] == 0.2,
+            "The mini wave widget gets its opacity outside a game, clamped to the minimum"
         );
     }
 }
