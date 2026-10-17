@@ -223,6 +223,7 @@ internal static class Program
         checks["--control-checks"] = () => Background(ControlChecks.Run);
         checks["--overlay-party-checks"] = () => Ui(OverlayPartyChecks.Run);
         checks["--skin-browser-checks"] = () => Ui(SkinBrowserChecks.Run);
+        checks["--skin-image-checks"] = () => Background(SkinImageStoreChecks.RunAsync);
         checks["--preliminary-checks"] = () => Ui(PreliminaryChecks.Run);
         checks["--gamebar-composition-checks"] = () => Background(GameBarCompositionChecks.Run);
         checks["--stale-session-checks"] = () => Background(StaleSessionChecks.Run);
