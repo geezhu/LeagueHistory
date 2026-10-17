@@ -330,24 +330,6 @@ namespace League.UIState
             return containerPanel;
         }
 
-        private void OpenFolder(string exePath)
-        {
-            if (string.IsNullOrEmpty(exePath))
-            {
-                return;
-            }
-
-            try
-            {
-                string? dir = Path.GetDirectoryName(exePath);
-                if (Directory.Exists(dir))
-                {
-                    Process.Start("explorer.exe", dir);
-                }
-            }
-            catch { }
-        }
-
         private void ShowLcuNotConnectedMessage(Control parentControl)
         {
             parentControl.Controls.Clear();
