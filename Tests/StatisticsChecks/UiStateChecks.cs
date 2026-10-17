@@ -182,7 +182,23 @@ internal static class UiStateChecks
 
         state.HandleImageTabControlMouseMove(null, over);
         Check((int)LastIndex.GetValue(state)! == -1, "A hover without a tab control is ignored");
+        DismissTabToolTip();
         host.Close();
+    }
+
+    /// <summary>
+    /// The tab tooltip hides itself on a 1.5 second timer that reads the control's handle. Let that timer fire while
+    /// the tab control is still alive: disposed with the timer pending, it later hides a disposed control from a
+    /// window message and ends the whole run.
+    /// </summary>
+    private static void DismissTabToolTip()
+    {
+        var until = DateTime.UtcNow.AddSeconds(2);
+        while (DateTime.UtcNow < until)
+        {
+            Application.DoEvents();
+            Thread.Sleep(10);
+        }
     }
 
     private static Panel? PanelSaying(Control host, string text) =>
