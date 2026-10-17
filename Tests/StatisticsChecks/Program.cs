@@ -165,6 +165,7 @@ internal static class Program
     private static void AddAssistantChecks(Dictionary<string, Action> checks)
     {
         checks["--assistant-lifecycle-checks"] = () => Ui(AssistantLifecycleChecks.Run);
+        checks["--assistant-session-checks"] = () => Ui(AssistantSessionChecks.Run);
         checks["--assistant-voice-checks"] = () => Ui(AssistantVoiceChecks.Run);
         checks["--assistant-voice-engine-check"] = () => Ui(AssistantVoiceChecks.EngineCheck);
         checks["--assistant-checks"] = () =>
