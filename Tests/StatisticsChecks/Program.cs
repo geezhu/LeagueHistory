@@ -235,6 +235,7 @@ internal static class Program
         checks["--player-card-checks"] = PlayerCardFactoryChecks.Run;
         checks["--lcu-discovery-checks"] = LcuProcessDiscoveryChecks.Run;
         checks["--preliminary-checks"] = () => Ui(PreliminaryChecks.Run);
+        checks["--preliminary-list-checks"] = () => Ui(PreliminaryListChecks.Run);
         checks["--gamebar-composition-checks"] = () => Background(GameBarCompositionChecks.Run);
         checks["--stale-session-checks"] = () => Background(StaleSessionChecks.Run);
         checks["--game-queue-checks"] = () => Background(GameQueueChecks.Run);
