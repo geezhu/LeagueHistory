@@ -481,7 +481,7 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
         row.Height(LaneHeight);
         ColumnDefinition nameColumn, barColumn, chipColumn;
         nameColumn.Width({34, GridUnitType::Pixel});
-        chipColumn.Width({48, GridUnitType::Pixel});
+        chipColumn.Width({58, GridUnitType::Pixel});
         row.ColumnDefinitions().Append(nameColumn);
         row.ColumnDefinitions().Append(barColumn);
         row.ColumnDefinitions().Append(chipColumn);
