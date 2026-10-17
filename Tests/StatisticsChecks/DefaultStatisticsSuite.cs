@@ -122,5 +122,7 @@ internal static class DefaultStatisticsSuite
         ShutdownUiChecks.Run();
         VoiceSettingsChecks.Run();
         UiStateChecks.Run();
+        MatchListPanelChecks.Run();
+        AugmentDescriptionChecks.Run();
     }
 }
