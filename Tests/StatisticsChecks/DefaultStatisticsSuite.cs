@@ -74,6 +74,7 @@ internal static class DefaultStatisticsSuite
         Task.Run(ChampionMasteryChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(ModelChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(ClientChecks.RunAsync).GetAwaiter().GetResult();
+        Task.Run(SkinBrowserSourceChecks.RunAsync).GetAwaiter().GetResult();
     }
 
     private static void UiChecks()

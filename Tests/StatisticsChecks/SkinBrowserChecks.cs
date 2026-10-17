@@ -19,8 +19,10 @@ internal static class SkinBrowserChecks
         Filters();
         Sources();
         Window();
+        Grid();
         Console.WriteLine(
-            "PASS: skin browser catalog, filters, image sources, selection, automatic skin, late images and preview."
+            "PASS: skin browser catalog, filters, image sources, selection, automatic skin, late images, preview and "
+                + "the champion grid's layout, hit testing, mouse, keyboard and scroll."
         );
     }
 
@@ -175,6 +177,254 @@ internal static class SkinBrowserChecks
         form.Close();
         Application.DoEvents();
         Check(source.Outstanding == 0, "Every image the source handed out was disposed: " + source.Outstanding);
+    }
+
+    // The champion grid owns its own painted list: layout, hit testing, mouse and keyboard, and the scroll bar.
+    private static void Grid()
+    {
+        var items = Enumerable.Range(0, 40).Select(i => new GridItem(1000 + i, "英雄" + i)).ToList();
+        using var host = new Form
+        {
+            ClientSize = new Size(420, 320),
+            ShowInTaskbar = false,
+            StartPosition = FormStartPosition.Manual,
+            Location = new Point(-30000, -30000),
+        };
+        using var grid = new ChampionGridView<GridItem> { Dock = DockStyle.Fill };
+        host.Controls.Add(grid);
+        host.Show();
+        Application.DoEvents();
+
+        var changes = new Counter();
+        var activated = new Counter();
+        grid.SelectionChanged += (_, _) => changes.Value++;
+        grid.ItemActivated += (_, _) => activated.Value++;
+
+        Check(grid.Items.Count == 0 && grid.Selected == null, "An empty grid has no selection");
+        Paint(grid);
+        grid.SetItems(items);
+        Check(
+            ReferenceEquals(grid.Selected, items[0]) && changes.Value == 1,
+            "A new list selects the first champion and announces it"
+        );
+
+        var first = Private<Rectangle>(grid, "CellBounds", 0);
+        var second = Private<Rectangle>(grid, "CellBounds", 1);
+        Check(second.Left == first.Left + first.Width, "Cells are laid out as columns");
+        Check(Private<int>(grid, "HitTest", Centre(second)) == 1, "A point inside a cell hits that champion");
+        Check(
+            Private<int>(grid, "HitTest", new Point(grid.ClientSize.Width - 2, second.Top + 2)) == -1,
+            "The scroll gutter is not a cell"
+        );
+        Check(
+            Private<int>(grid, "HitTest", new Point(first.Left - 1, second.Top + 2)) == -1,
+            "The left margin is not a cell"
+        );
+        Check(
+            Private<int>(grid, "HitTest", new Point(first.Left + 1, 1)) == -1,
+            "The space above the first row is not a cell"
+        );
+
+        grid.SelectChampion(items[5].ChampionId);
+        Check(
+            ReferenceEquals(grid.Selected, items[5]) && changes.Value == 2,
+            "Selecting a champion by id moves the selection"
+        );
+        grid.SelectChampion(99999);
+        Check(grid.Selected == null && changes.Value == 3, "Selecting an unknown champion clears the selection");
+
+        grid.SetItems(items);
+        Check(ReferenceEquals(grid.Selected, items[0]), "A list without the selected champion falls back to the first");
+        grid.SelectChampion(items[3].ChampionId);
+        grid.SetItems(items.Where(item => item.ChampionId != 1000).ToList());
+        Check(ReferenceEquals(grid.Selected, items[3]), "The selected champion is kept while it is still listed");
+
+        grid.SetItems([]);
+        Check(grid.Selected == null, "An empty list clears the selection");
+        grid.SetItems(items.Take(3).ToList());
+        Check(
+            Private<int>(grid, "HitTest", Centre(Private<Rectangle>(grid, "CellBounds", 4))) == -1,
+            "A point past the last champion is not a cell"
+        );
+
+        GridInput(grid, items, activated, changes);
+        GridPaint(grid, items);
+        GridScroll(host, grid, items);
+    }
+
+    private static void GridInput(
+        ChampionGridView<GridItem> grid,
+        List<GridItem> items,
+        Counter activated,
+        Counter changes
+    )
+    {
+        grid.SetItems(items);
+        grid.SelectChampion(items[1].ChampionId);
+        var point = Centre(Private<Rectangle>(grid, "CellBounds", 1));
+
+        Move(grid, point);
+        Check(
+            Private<int>(grid, "_hover") == 1 && grid.Cursor == Cursors.Hand,
+            "Hovering a cell highlights it and offers the hand cursor"
+        );
+        Move(grid, new Point(grid.ClientSize.Width - 2, point.Y));
+        Check(
+            Private<int>(grid, "_hover") == -1 && grid.Cursor == Cursors.Default,
+            "Moving onto the scroll gutter drops the highlight"
+        );
+        Invoke(grid, "OnMouseLeave", EventArgs.Empty);
+        Check(Private<int>(grid, "_hover") == -1, "Leaving the grid drops the highlight");
+
+        Click(grid, point, MouseButtons.Left, down: true);
+        Check(
+            ReferenceEquals(grid.Selected, items[1]) && activated.Value == 1,
+            "Clicking a champion selects and activates it"
+        );
+        Click(grid, point, MouseButtons.Left, down: false);
+
+        Check(
+            Private<bool>(grid, "IsInputKey", Keys.Down) && Private<bool>(grid, "IsInputKey", Keys.Enter),
+            "The arrow keys and Enter reach the grid as input keys"
+        );
+
+        int columns = Private<int>(grid, "Columns");
+        grid.SelectChampion(items[6].ChampionId);
+        int before = changes.Value;
+        Invoke(grid, "OnKeyDown", new KeyEventArgs(Keys.Right));
+        Check(ReferenceEquals(grid.Selected, items[7]), "The right arrow moves one champion to the right");
+        Invoke(grid, "OnKeyDown", new KeyEventArgs(Keys.Down));
+        Check(ReferenceEquals(grid.Selected, items[7 + columns]), "The down arrow moves one row down");
+        Invoke(grid, "OnKeyDown", new KeyEventArgs(Keys.Up));
+        Invoke(grid, "OnKeyDown", new KeyEventArgs(Keys.Left));
+        Check(
+            ReferenceEquals(grid.Selected, items[6]) && changes.Value == before + 4,
+            "The arrow keys move the selection one step at a time"
+        );
+
+        int activations = activated.Value;
+        Invoke(grid, "OnKeyDown", new KeyEventArgs(Keys.Enter));
+        Check(activated.Value == activations + 1, "Enter activates the selected champion");
+        Invoke(grid, "OnKeyDown", new KeyEventArgs(Keys.A));
+        Check(ReferenceEquals(grid.Selected, items[6]), "A key the grid does not use leaves the selection alone");
+
+        grid.SelectChampion(items[0].ChampionId);
+        Invoke(grid, "OnKeyDown", new KeyEventArgs(Keys.Left));
+        Check(ReferenceEquals(grid.Selected, items[0]), "The left arrow stops at the first champion");
+        grid.SelectChampion(items[^1].ChampionId);
+        Invoke(grid, "OnKeyDown", new KeyEventArgs(Keys.Down));
+        Check(ReferenceEquals(grid.Selected, items[^1]), "The down arrow stops at the last champion");
+
+        grid.SelectChampion(99999);
+        activations = activated.Value;
+        Invoke(grid, "OnKeyDown", new KeyEventArgs(Keys.Enter));
+        Check(activated.Value == activations, "Enter without a selection activates nothing");
+    }
+
+    // One cell carries a badge, the next a mark and no icon, so every painted state is drawn.
+    private static void GridPaint(ChampionGridView<GridItem> grid, List<GridItem> items)
+    {
+        using var icon = new Bitmap(64, 64);
+        using (var graphics = Graphics.FromImage(icon))
+        {
+            graphics.Clear(Color.CornflowerBlue);
+        }
+
+        grid.Icon = id => id % 2 == 0 ? icon : null;
+        grid.Badge = item => item.ChampionId == 1000 ? "已拥有" : null;
+        grid.Marked = item => item.ChampionId == 1001;
+        grid.MarkGlyph = "✔";
+
+        grid.SelectChampion(items[0].ChampionId);
+        Move(grid, Centre(Private<Rectangle>(grid, "CellBounds", 0)));
+        Paint(grid);
+
+        grid.SelectChampion(items[1].ChampionId);
+        Move(grid, Centre(Private<Rectangle>(grid, "CellBounds", 1)));
+        Paint(grid);
+
+        Invoke(grid, "OnMouseLeave", EventArgs.Empty);
+        Paint(grid);
+        Check(grid.Items.Count == items.Count, "A full grid paints without failing");
+    }
+
+    private static void GridScroll(Form host, ChampionGridView<GridItem> grid, List<GridItem> items)
+    {
+        grid.SelectChampion(items[0].ChampionId);
+        grid.SetItems(items);
+        var scroll = Private<object>(grid, "_scroll");
+        Check(Private<int>(scroll, "Value") == 0 && Private<bool>(scroll, "Needed"), "A long grid starts at the top");
+
+        Wheel(grid, -120);
+        Check(Private<int>(scroll, "Value") > 0, "The wheel scrolls the grid down");
+        Wheel(grid, 120);
+        Check(Private<int>(scroll, "Value") == 0, "The wheel scrolls the grid back to the top");
+        Wheel(grid, 120);
+        Check(Private<int>(scroll, "Value") == 0, "The wheel stops at the top");
+
+        var track = Private<Rectangle>(grid, "Track");
+        var thumb = Private<Rectangle>(scroll, "Thumb", track);
+        var grip = Centre(thumb);
+        Click(grid, grip, MouseButtons.Left, down: true);
+        Check(Private<bool>(scroll, "Dragging"), "Pressing the scroll thumb starts a drag");
+
+        Move(grid, new Point(grip.X, grip.Y + 30));
+        Check(Private<int>(scroll, "Value") > 0, "Dragging the thumb scrolls the grid");
+        Click(grid, new Point(grip.X, grip.Y + 30), MouseButtons.Left, down: false);
+        Check(!Private<bool>(scroll, "Dragging"), "Releasing the mouse ends the drag");
+
+        int viewport = Private<int>(scroll, "Viewport");
+        host.ClientSize = new Size(host.ClientSize.Width, host.ClientSize.Height + 140);
+        Application.DoEvents();
+        Check(
+            Private<int>(scroll, "Viewport") == grid.ClientSize.Height && grid.ClientSize.Height > viewport,
+            "Resizing the grid updates the scroll viewport"
+        );
+    }
+
+    private static void Move(ChampionGridView<GridItem> grid, Point point) =>
+        Invoke(grid, "OnMouseMove", new MouseEventArgs(MouseButtons.None, 0, point.X, point.Y, 0));
+
+    private static void Wheel(ChampionGridView<GridItem> grid, int delta) =>
+        Invoke(grid, "OnMouseWheel", new MouseEventArgs(MouseButtons.None, 0, 0, 0, delta));
+
+    private static void Click(ChampionGridView<GridItem> grid, Point point, MouseButtons button, bool down) =>
+        Invoke(grid, down ? "OnMouseDown" : "OnMouseUp", new MouseEventArgs(button, 1, point.X, point.Y, 0));
+
+    private static void Paint(ChampionGridView<GridItem> grid)
+    {
+        using var bitmap = new Bitmap(Math.Max(1, grid.Width), Math.Max(1, grid.Height));
+        using var graphics = Graphics.FromImage(bitmap);
+        using var args = new PaintEventArgs(graphics, new Rectangle(Point.Empty, grid.ClientSize));
+        Invoke(grid, "OnPaint", args);
+    }
+
+    private static Point Centre(Rectangle rectangle) =>
+        new(rectangle.Left + rectangle.Width / 2, rectangle.Top + rectangle.Height / 2);
+
+    private static T Private<T>(object owner, string name, params object[] args)
+    {
+        const BindingFlags Any = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        var type = owner.GetType();
+        if (args.Length > 0)
+        {
+            return (T)type.GetMethod(name, Any)!.Invoke(owner, args)!;
+        }
+
+        var property = type.GetProperty(name, Any);
+        return property != null ? (T)property.GetValue(owner)! : (T)type.GetField(name, Any)!.GetValue(owner)!;
+    }
+
+    private sealed class Counter
+    {
+        public int Value { get; set; }
+    }
+
+    private sealed class GridItem(int championId, string name) : IChampionGridItem
+    {
+        public int ChampionId { get; } = championId;
+
+        public string Name { get; } = name;
     }
 
     private static SkinSplashView Splash(ChampionSkinBrowser form) => Field<SkinSplashView>(form, "_splash");
