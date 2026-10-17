@@ -59,9 +59,10 @@ internal sealed partial class LoadingOverlayManager : IDisposable
         {
             _ = ReadDetailSelection();
             _ = ReadChatCommand();
-            _ = ReadVoiceCommand();
         };
         _detailPoll.Start();
+        _voicePoll.Tick += (_, _) => _ = ReadVoiceCommand();
+        _voicePoll.Start();
         _poll.Tick += (_, _) =>
         {
             ConfigureBackend();
@@ -771,6 +772,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
 
         CancelDetail();
         _detailPoll.Dispose();
+        _voicePoll.Dispose();
         _championDetails.Dispose();
         if (UseGameBar)
         {
