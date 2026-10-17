@@ -2,6 +2,7 @@
 #include "WidgetCommon.h"
 #include "WaveModel.h"
 #include "WaveShapes.h"
+#include "VoiceProtocol.h"
 #include "WaveMiniView.h"
 
 struct WidgetView : std::enable_shared_from_this<WidgetView>
