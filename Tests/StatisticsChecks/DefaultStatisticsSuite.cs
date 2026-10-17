@@ -121,5 +121,6 @@ internal static class DefaultStatisticsSuite
         SettingsSurfaceChecks.Run();
         ShutdownUiChecks.Run();
         VoiceSettingsChecks.Run();
+        UiStateChecks.Run();
     }
 }
