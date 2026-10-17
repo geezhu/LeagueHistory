@@ -107,6 +107,7 @@ internal static class Program
         checks["--room-player-checks"] = RoomPlayerChecks.Run;
         checks["--config-checks"] = LeagueConfigChecks.Run;
         checks["--shutdown-checks"] = ShutdownSettingsChecks.Run;
+        checks["--shutdown-plan-checks"] = ShutdownPlanChecks.Run;
         checks["--core-utility-checks"] = CoreUtilityChecks.Run;
         checks["--utility-logic-checks"] = UtilityLogicChecks.Run;
         checks["--image-processor-checks"] = ImageProcessorChecks.Run;
