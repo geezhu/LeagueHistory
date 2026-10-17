@@ -132,6 +132,8 @@ internal static class Program
         checks["--voice-settings-checks"] = () => Ui(VoiceSettingsChecks.Run);
         checks["--settings-surface-checks"] = () => Ui(SettingsSurfaceChecks.Run);
         checks["--ui-state-checks"] = () => Ui(UiStateChecks.Run);
+        checks["--match-card-checks"] = () => Ui(MatchListPanelChecks.Run);
+        checks["--augment-description-checks"] = AugmentDescriptionChecks.Run;
         checks["--loading-view-checks"] = () => Ui(LoadingViewChecks.Run);
         checks["--main-navigation-checks"] = () => Ui(MainNavigationChecks.Run);
         checks["--history-navigation-checks"] = () => Ui(HistoryNavigationChecks.Run);
