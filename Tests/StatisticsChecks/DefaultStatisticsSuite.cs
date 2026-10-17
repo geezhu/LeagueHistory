@@ -78,6 +78,9 @@ internal static class DefaultStatisticsSuite
         Task.Run(ModelChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(ClientChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(SkinBrowserSourceChecks.RunAsync).GetAwaiter().GetResult();
+        MatchDetailManagerChecks.Run();
+        PlayerCardFactoryChecks.Run();
+        LcuProcessDiscoveryChecks.Run();
     }
 
     private static void UiChecks()
@@ -137,5 +140,7 @@ internal static class DefaultStatisticsSuite
         TeamCardDisplayChecks.Run();
         Task.Run(MatchQueryProcessorChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(SkinImageStoreChecks.RunAsync).GetAwaiter().GetResult();
+        ClosableTabControlChecks.Run();
+        SkinStripViewChecks.Run();
     }
 }
