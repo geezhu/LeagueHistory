@@ -234,9 +234,23 @@ internal static class MatchTabPageDetailChecks
             Check(Field<Control>(view, "linkGameName").Text.Length == 0, "Copying an empty name copies nothing");
 
             var filter = Children(view).OfType<Button>().First(button => button.Text == "筛选");
-            Click(filter);
-            Click(filter);
-            Check(true, "The history filter button opens and closes its options");
+            var popup = Field<System.ComponentModel.IContainer>(view, "components")
+                .Components.OfType<ToolStripDropDown>()
+                .First();
+            try
+            {
+                Click(filter);
+                Check(popup.Visible, "The history filter button opens its options");
+                Click(filter);
+                Check(!popup.Visible, "The history filter button closes its options again");
+            }
+            finally
+            {
+                if (popup.Visible)
+                {
+                    popup.Close();
+                }
+            }
         }
         finally
         {
