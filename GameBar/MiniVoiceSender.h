@@ -23,7 +23,8 @@ struct MiniVoiceSender : std::enable_shared_from_this<MiniVoiceSender>
     TextBlock text = MakeText(L"", 12, 0xe2eef3);
     XboxGameBarWidget widget{nullptr};
     State state = State::Idle;
-    hstring recognized, hint, session;
+    // brief is the one or two words the row shows; hint keeps the full reason for the tooltip.
+    hstring recognized, brief, hint, session;
     hstring voiceId, voiceSession, voiceAction, chatId, chatSession;
     int64_t voiceCreated = 0, voiceAck = 0, chatCreated = 0;
     bool available = false, stopped = false, chatDismissed = false, voiceReading = false, chatReading = false;
@@ -73,7 +74,7 @@ struct MiniVoiceSender : std::enable_shared_from_this<MiniVoiceSender>
         if ((!available || changed) && state != State::Idle)
         {
             Cancel();
-            hint = L"";
+            SetHint(L"", L"");
         }
         Refresh();
     }
@@ -140,7 +141,7 @@ struct MiniVoiceSender : std::enable_shared_from_this<MiniVoiceSender>
         voiceAck = 0;
         voiceAction = L"start";
         recognized = L"";
-        hint = L"";
+        SetHint(L"", L"");
         sendFailed = false;
         state = State::Preparing;
         SaveVoiceRequest();
@@ -155,7 +156,7 @@ struct MiniVoiceSender : std::enable_shared_from_this<MiniVoiceSender>
         chatSession = session;
         chatCreated = Now();
         recognized = confirmed;
-        hint = L"请在 20 秒内按 Win＋G 返回游戏，保持聊天输入框关闭。";
+        SetHint(L"回游戏发送", L"请在 20 秒内按 Win＋G 返回游戏，保持聊天输入框关闭。");
         sendFailed = false;
         state = State::Sending;
         SaveChatRequest();
@@ -208,7 +209,7 @@ struct MiniVoiceSender : std::enable_shared_from_this<MiniVoiceSender>
             if (Recording())
             {
                 state = State::Idle;
-                hint = L"录音请求未能同步，请重试。";
+                SetHint(L"请重试", L"录音请求未能同步，请重试。");
             }
             Trace(L"wave-mini-voice-write-error " + e.message());
         }
@@ -241,7 +242,7 @@ struct MiniVoiceSender : std::enable_shared_from_this<MiniVoiceSender>
             SaveVoiceRequest();
             ForgetRecording(true);
             state = State::Idle;
-            hint = L"录音响应超时，请确认 League 正在运行后重新识别。";
+            SetHint(L"超时", L"录音响应超时，请确认 League 正在运行后重新识别。");
             Trace(L"wave-mini-voice-timeout");
         }
         voiceReading = false;
@@ -255,8 +256,15 @@ struct MiniVoiceSender : std::enable_shared_from_this<MiniVoiceSender>
         voiceAck = static_cast<int64_t>(data.GetNamedNumber(L"sequence", 0));
         recognized = ClipVoice(std::wstring(data.GetNamedString(L"text", L"")), VoiceTextLimit);
         auto next = data.GetNamedString(L"state", L"");
-        hint = next == L"recording" || next == L"done" || next == L"error" ? data.GetNamedString(L"hint", L"") : L"";
-        if (data.GetNamedBoolean(L"complete", false))
+        bool complete = data.GetNamedBoolean(L"complete", false);
+        auto detail =
+            next == L"recording" || next == L"done" || next == L"error" ? data.GetNamedString(L"hint", L"") : hstring();
+        SetHint(next == L"error"                 ? L"识别失败"
+                : next == L"recording"           ? L"请说话"
+                : complete && recognized.empty() ? L"没听清"
+                                                 : L"",
+                detail);
+        if (complete)
         {
             state = State::Recognized;
             ForgetRecording(false);
@@ -328,7 +336,7 @@ struct MiniVoiceSender : std::enable_shared_from_this<MiniVoiceSender>
             if (state == State::Sending || state == State::Cancelling)
             {
                 state = State::Recognized;
-                hint = L"发送请求未能写入，请重试。";
+                SetHint(L"请重试", L"发送请求未能写入，请重试。");
                 sendFailed = true;
             }
             Trace(L"wave-mini-voice-send-write-error " + e.message());
@@ -360,7 +368,7 @@ struct MiniVoiceSender : std::enable_shared_from_this<MiniVoiceSender>
             Now() - chatCreated > ChatTimeoutMilliseconds)
         {
             state = State::Recognized;
-            hint = L"发送请求已超时，请确认 League 正在运行后重试。";
+            SetHint(L"超时", L"发送请求已超时，请确认 League 正在运行后重试。");
             sendFailed = true;
             ForgetSend();
             Trace(L"wave-mini-voice-send-timeout");
@@ -369,14 +377,18 @@ struct MiniVoiceSender : std::enable_shared_from_this<MiniVoiceSender>
         if (!stopped)
             Refresh();
     }
-    // The main program's message replaces the hint; a delivered line clears the row, anything else keeps the text
+    // The main program's message goes to the tooltip; a delivered line clears the row, anything else keeps the text
     // so the player can send it again.
     void ApplyChatStatus(JsonObject const &data)
     {
-        hint = data.GetNamedString(L"message", L"正在处理发送…");
-        if (!data.GetNamedBoolean(L"complete", false))
-            return;
+        auto message = data.GetNamedString(L"message", L"");
         auto result = data.GetNamedString(L"state", L"");
+        if (!data.GetNamedBoolean(L"complete", false))
+        {
+            SetHint(result == L"waiting" ? L"回游戏发送" : L"发送中…", message);
+            return;
+        }
+        SetHint(result == L"input-complete" ? L"已发送" : result == L"cancelled" ? L"已取消" : L"未发送", message);
         Trace(L"wave-mini-voice-send-complete state=" + result);
         if (result == L"input-complete")
         {
@@ -437,6 +449,12 @@ struct MiniVoiceSender : std::enable_shared_from_this<MiniVoiceSender>
                                                                  ConfirmedVoiceText(recognized, confirmed))));
         RefreshText();
     }
+    void SetHint(hstring const &shortText, hstring const &detail)
+    {
+        brief = shortText;
+        hint = detail;
+    }
+    // The row shows the recognized text or one or two words of status; the tooltip has the full text and reason.
     void RefreshText()
     {
         hstring value;
@@ -444,13 +462,13 @@ struct MiniVoiceSender : std::enable_shared_from_this<MiniVoiceSender>
         switch (state)
         {
         case State::Idle:
-            value = hint.empty() ? hstring(L"点 🎤 说一句话，识别后点发送") : hint;
+            value = brief;
             break;
         case State::Preparing:
-            value = L"正在准备麦克风…";
+            value = L"准备中…";
             break;
         case State::Listening:
-            value = !recognized.empty() ? recognized : !hint.empty() ? hint : hstring(L"正在听…");
+            value = !recognized.empty() ? recognized : hstring(L"请说话");
             color = recognized.empty() ? 0x7ff0ee : 0xe2eef3;
             break;
         case State::Stopping:
@@ -458,19 +476,18 @@ struct MiniVoiceSender : std::enable_shared_from_this<MiniVoiceSender>
             value = recognized.empty() ? hstring(L"识别中…") : recognized;
             break;
         case State::Recognized:
-            value = sendFailed || recognized.empty() ? hint : recognized;
+            value = sendFailed || recognized.empty() ? brief : recognized;
             color = sendFailed || recognized.empty() ? 0xdbc47f : 0xe2eef3;
             break;
         case State::Sending:
         case State::Cancelling:
-            value = hint;
+            value = brief;
             color = 0xdbc47f;
             break;
         }
         text.Text(value);
         text.Foreground(MakeBrush(color));
-        // The row shows one line; the tooltip keeps the whole recognized text and the latest status.
-        hstring tip = recognized.empty() ? value : (hint.empty() ? recognized : recognized + L"\n" + hint);
-        ToolTipService::SetToolTip(text, box_value(tip));
+        hstring tip = recognized.empty() ? hint : (hint.empty() ? recognized : recognized + L"\n" + hint);
+        ToolTipService::SetToolTip(text, tip.empty() ? nullptr : box_value(tip));
     }
 };
