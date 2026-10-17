@@ -88,6 +88,8 @@ internal static class Program
     {
         checks["--client-checks"] = () => Background(ClientChecks.RunAsync);
         checks["--lcu-service-checks"] = () => Background(LcuClientServiceChecks.RunAsync);
+        checks["--voice-model-checks"] = () => Background(VoiceModelStoreChecks.RunAsync);
+        checks["--sgp-session-checks"] = () => Background(SgpSessionChecks.RunAsync);
         checks["--item-set-checks"] = () => Background(ItemSetChecks.RunAsync);
         checks["--model-checks"] = () => Background(ModelChecks.RunAsync);
         checks["--sensevoice-checks"] = () => Background(SenseVoiceChecks.RunAsync);
