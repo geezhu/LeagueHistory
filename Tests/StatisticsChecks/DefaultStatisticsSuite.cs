@@ -142,5 +142,6 @@ internal static class DefaultStatisticsSuite
         Task.Run(SkinImageStoreChecks.RunAsync).GetAwaiter().GetResult();
         ClosableTabControlChecks.Run();
         SkinStripViewChecks.Run();
+        VoiceInputDialogChecks.Run();
     }
 }

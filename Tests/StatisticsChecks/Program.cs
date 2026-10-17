@@ -132,6 +132,7 @@ internal static class Program
     private static void AddUiChecks(Dictionary<string, Action> checks)
     {
         checks["--voice-settings-checks"] = () => Ui(VoiceSettingsChecks.Run);
+        checks["--voice-dialog-checks"] = () => Ui(VoiceInputDialogChecks.Run);
         checks["--settings-surface-checks"] = () => Ui(SettingsSurfaceChecks.Run);
         checks["--ui-state-checks"] = () => Ui(UiStateChecks.Run);
         checks["--match-card-checks"] = () => Ui(MatchListPanelChecks.Run);
