@@ -140,6 +140,8 @@ internal static class DefaultStatisticsSuite
         MatchListPanelChecks.Run();
         AugmentDescriptionChecks.Run();
         MatchTabPageContentChecks.Run();
+        MatchTabPageSurfaceChecks.Run();
+        MatchTabPageDetailChecks.Run();
         MatchDetailChecks.Run();
         TeamCardDisplayChecks.Run();
         Task.Run(MatchQueryProcessorChecks.RunAsync).GetAwaiter().GetResult();

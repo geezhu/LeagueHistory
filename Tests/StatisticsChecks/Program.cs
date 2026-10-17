@@ -139,6 +139,12 @@ internal static class Program
         checks["--match-card-checks"] = () => Ui(MatchListPanelChecks.Run);
         checks["--augment-description-checks"] = AugmentDescriptionChecks.Run;
         checks["--history-page-checks"] = () => Ui(MatchTabPageContentChecks.Run);
+        checks["--history-page-surface-checks"] = () =>
+            Ui(() =>
+            {
+                MatchTabPageSurfaceChecks.Run();
+                MatchTabPageDetailChecks.Run();
+            });
         checks["--match-detail-checks"] = () => Ui(MatchDetailChecks.Run);
         checks["--query-processor-checks"] = () => Background(MatchQueryProcessorChecks.RunAsync);
         checks["--loading-view-checks"] = () => Ui(LoadingViewChecks.Run);
