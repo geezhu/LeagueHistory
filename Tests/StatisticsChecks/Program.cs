@@ -94,6 +94,7 @@ internal static class Program
         checks["--model-checks"] = () => Background(ModelChecks.RunAsync);
         checks["--sensevoice-checks"] = () => Background(SenseVoiceChecks.RunAsync);
         checks["--gamebar-voice-checks"] = () => Background(GameBarVoiceRecognitionChecks.RunAsync);
+        checks["--gamebar-voice-edge-checks"] = () => Background(GameBarVoiceRecognitionEdgeChecks.RunAsync);
         checks["--balance-checks"] = () => Background(AramBalanceChecks.RunAsync);
         checks["--roster-identity-checks"] = () => Background(LoadingRosterIdentityChecks.Run);
         checks["--live-champion-checks"] = LiveChampionChecks.Run;
