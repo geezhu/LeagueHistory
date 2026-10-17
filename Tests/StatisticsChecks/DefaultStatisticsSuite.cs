@@ -89,6 +89,7 @@ internal static class DefaultStatisticsSuite
         OverlayPartyChecks.Run();
         SkinBrowserChecks.Run();
         PreliminaryChecks.Run();
+        PreliminaryListChecks.Run();
         AssistantWindowChecks.Run();
         GameHotkeyChecks.Run();
         CompositionViewChecks.Run();
