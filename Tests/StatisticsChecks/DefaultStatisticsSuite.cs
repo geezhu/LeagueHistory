@@ -61,6 +61,7 @@ internal static class DefaultStatisticsSuite
         TurretChecks.Run();
         GameQueueChecks.Run();
         LeagueConfigChecks.Run();
+        ChampionManagerChecks.Run();
         ShutdownSettingsChecks.Run();
         Task.Run(ControlChecks.Run).GetAwaiter().GetResult();
         Task.Run(GameBarBridgeChecks.Run).GetAwaiter().GetResult();
