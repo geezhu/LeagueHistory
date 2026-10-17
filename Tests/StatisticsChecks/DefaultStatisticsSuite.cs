@@ -131,5 +131,6 @@ internal static class DefaultStatisticsSuite
         MatchTabPageContentChecks.Run();
         MatchDetailChecks.Run();
         Task.Run(MatchQueryProcessorChecks.RunAsync).GetAwaiter().GetResult();
+        Task.Run(SkinImageStoreChecks.RunAsync).GetAwaiter().GetResult();
     }
 }
