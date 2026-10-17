@@ -120,6 +120,8 @@ dotnet run --project Tests/StatisticsChecks/StatisticsChecks.csproj -c Release -
 
 炮车波：下一波是炮车波时，底部兵线按钮变成金色并显示「兵线 炮车 0:23」，不打开兵线页也能看到。兵线页标题栏的「炮车提示音 ▾」可选「关」（默认）、「下一波是炮车时」（炮车波的前一波出兵时提示，约提前一波）或「炮车波出兵时」；提示音为两声低音，由主程序播放（游戏在前台时 Windows 会静音组件），选择时不试播。设置随 `control-settings.json` 的 `cannonSound`（off / next / spawn）传给主程序；主程序每次读到兵线预测时记住接下来的出兵时间，出兵时间在两次读取之间经过才提示，首次读取或两次读取相隔超过 5 秒（中途启动、重连）只记录不提示（`CannonWaveAlerts`），每次提示写入 `tier-chat` 日志。回归检查 `--minion-wave-checks`。
 
+兵线小组件：同一组件包另注册了「League 兵线」（扩展 Id `Waves`），按 Win＋G 从小组件列表打开，点图钉后可单独悬浮在游戏上方，与「League 对局速览」互不影响；它不响应主程序的自动显示 / 隐藏命令。第一行显示下一波倒计时、普通波或炮车波、波次，以及之后的炮车倒计时（有水晶被摧毁时改为列出出超级兵的路）。右侧 ▴ / ▾ 收起为一行或展开各路：每路一条水晶到水晶的进度条，显示双方建筑、正在行进的兵和 ◆ 默认交汇点（双方前塔中点），右侧是我方下一波到达交汇点的时间。收起状态存在组件本地设置；切换时组件按路数请求调整窗口高度，宽度保持玩家拖动后的值。背景不透明度在主程序「设置 → 对局速览」的「兵线组件不透明度」中调整（20%–100%，默认 85%，仅在选择 Game Bar 时显示），随快照的 `waveWidget.opacity` 下发，与 Game Bar 自带的组件透明度相乘；只淡化背景，文字和图标保持不透明。鼠标穿透开启时需通过 Win＋G 操作收起按钮。截图检查：放好详情样例后运行 `GameBar/Verify-Preview.ps1 -WaveMini expanded`（或 `collapsed`），输出 `wave-mini-preview-*.png`。实际全屏下的透明与悬浮效果需进游戏确认。
+
 详情布局检查：测试项目的 `--overlay-detail-fixture <输出目录> <已有 Assets 目录>` 导出明确标注的样例，复制其中两个 `detail-preview-*.json` 到组件 `LocalState` 后运行 `GameBar/Verify-Preview.ps1 -DetailTab skills`（或 `builds` / `augments` / `live` / `roster` / `waves`）。截图使用同一渲染代码，样例文件独立于真实快照与请求；默认检查 820×560，也可在样例快照中设置 `width` / `height` 检查最小 640×500。它不代替实际全屏交互验证。
 
 参考：[官方接入说明](https://learn.microsoft.com/en-us/xbox/game-bar/quickstart/introduction)、[组件激活](https://learn.microsoft.com/en-us/xbox/game-bar/guide/app-activation)。

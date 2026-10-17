@@ -47,7 +47,8 @@ public sealed partial class GameBarBridge : IDisposable
         OverlayLiveState? live = null,
         IReadOnlyDictionary<int, ControlSkill[]>? controls = null,
         IReadOnlyDictionary<int, SpellCooldown[]>? cooldowns = null,
-        JObject? composition = null
+        JObject? composition = null,
+        int waveOpacity = LeagueConfig.DefaultGameBarWaveOpacity
     )
     {
         if (_disposed)
@@ -114,6 +115,8 @@ public sealed partial class GameBarBridge : IDisposable
             ["status"] = status,
             ["teams"] = new JArray(teams.Select(t => roster?.TeamLabel(t) ?? (t == 100 ? "我方" : "对方"))),
             ["players"] = rows,
+            // Sent outside a game too, so the mini wave widget previews an opacity change at once.
+            ["waveWidget"] = WaveWidgetSettings(waveOpacity),
         };
         // Hidden or inactive, the widget gets the live fields empty.
         AddLiveSnapshot(snapshot, enabled && active ? live : null);
@@ -125,6 +128,14 @@ public sealed partial class GameBarBridge : IDisposable
 
         _pending.Writer.TryWrite(snapshot);
     }
+
+    private static JObject WaveWidgetSettings(int opacity) =>
+        new()
+        {
+            ["protocol"] = 1,
+            ["opacity"] =
+                Math.Clamp(opacity, LeagueConfig.MinGameBarWaveOpacity, LeagueConfig.MaxGameBarWaveOpacity) / 100.0,
+        };
 
     private static void AddLiveSnapshot(JObject snapshot, OverlayLiveState? live)
     {
