@@ -18,43 +18,6 @@ void SetVoiceHint(hstring const &text)
     voiceHint.Visibility(text.empty() ? Visibility::Collapsed : Visibility::Visible);
 }
 
-static hstring ClipVoice(std::wstring text, size_t limit)
-{
-    if (text.size() > limit)
-    {
-        text.resize(limit);
-        if (!text.empty() && text.back() >= 0xd800 && text.back() <= 0xdbff)
-            text.pop_back();
-    }
-    return hstring(text);
-}
-static bool ConfirmedVoiceText(hstring const &value, hstring &result)
-{
-    std::wstring text(value);
-    if (text.size() > 180)
-        return false;
-    for (size_t i = 0; i < text.size(); ++i)
-    {
-        auto c = text[i];
-        if (c < 32 || (c >= 0x7f && c <= 0x9f) || c == 0x2028 || c == 0x2029)
-            return false;
-        if (c >= 0xd800 && c <= 0xdbff)
-        {
-            if (++i >= text.size() || text[i] < 0xdc00 || text[i] > 0xdfff)
-                return false;
-        }
-        else if (c >= 0xdc00 && c <= 0xdfff)
-            return false;
-    }
-    auto first = text.find_first_not_of(
-        L" \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000");
-    if (first == std::wstring::npos || text[first] == L'/')
-        return false;
-    auto last = text.find_last_not_of(
-        L" \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000");
-    result = hstring(text.substr(first, last - first + 1));
-    return true;
-}
 void InitializeVoice()
 {
     voiceButton = DetailButton(L"");
@@ -262,12 +225,8 @@ void RecognizeVoice()
 {
     if (!VoiceAvailable() || !supportsVoiceRecording || voiceRunning || voicePanel.Visibility() != Visibility::Visible)
         return;
-    std::wstring id;
-    for (wchar_t c : NewDetailId())
-        if (c != L'{' && c != L'}' && c != L'-')
-            id.push_back(c >= L'A' && c <= L'F' ? c + 32 : c);
     ++voiceGeneration;
-    voiceId = hstring(id);
+    voiceId = NewRequestId();
     voiceSession = session;
     voiceCreated = Now();
     voiceAck = 0;
@@ -286,15 +245,7 @@ void SaveVoiceRequest()
 {
     if (!widget || fixturePreview || voiceId.empty())
         return;
-    JsonObject data;
-    data.Insert(L"protocol", JsonValue::CreateNumberValue(1));
-    data.Insert(L"id", JsonValue::CreateStringValue(voiceId));
-    data.Insert(L"session", JsonValue::CreateStringValue(voiceSession));
-    data.Insert(L"createdAt", JsonValue::CreateNumberValue(double(voiceCreated)));
-    data.Insert(L"updatedAt", JsonValue::CreateNumberValue(double(Now())));
-    data.Insert(L"action", JsonValue::CreateStringValue(voiceAction));
-    data.Insert(L"ack", JsonValue::CreateNumberValue(double(voiceAck)));
-    pendingVoiceWrite = data.Stringify();
+    pendingVoiceWrite = VoiceRequestJson(voiceId, voiceSession, voiceCreated, voiceAction, voiceAck).Stringify();
     WriteVoiceRequest();
 }
 fire_and_forget WriteVoiceRequest()
@@ -369,13 +320,10 @@ fire_and_forget ReadVoiceStatus()
 }
 bool ApplyVoiceStatus(JsonObject const &data, uint64_t generation, hstring const &id)
 {
-    auto age = Now() - data.GetNamedNumber(L"updatedAt", 0);
-    auto sequence = data.GetNamedNumber(L"sequence", 0);
-    if (!voiceRunning || !VoiceCurrent(generation) || id != voiceId || data.GetNamedNumber(L"protocol", 0) != 1 ||
-        data.GetNamedString(L"id", L"") != id || data.GetNamedString(L"session", L"") != voiceSession || age < 0 ||
-        age >= 5000 || sequence <= double(voiceAck) || sequence > 1000000)
+    if (!voiceRunning || !VoiceCurrent(generation) || id != voiceId ||
+        !VoiceStatusAccepted(data, id, voiceSession, voiceAck))
         return false;
-    voiceAck = static_cast<int64_t>(sequence);
+    voiceAck = static_cast<int64_t>(data.GetNamedNumber(L"sequence", 0));
     voiceEditor.Text(ClipVoice(std::wstring(data.GetNamedString(L"text", L"")), 180));
     auto state = data.GetNamedString(L"state", L"");
     SetVoiceHint(state == L"preparing" || state == L"decoding" || state == L"stopping"

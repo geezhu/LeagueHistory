@@ -208,11 +208,7 @@ void QueueChat(hstring const &target, hstring const &kind)
     }
     if (kind != L"voice")
         chatText = L"";
-    std::wstring id;
-    for (wchar_t c : NewDetailId())
-        if (c != L'{' && c != L'}' && c != L'-')
-            id.push_back(c >= L'A' && c <= L'F' ? c + 32 : c);
-    chatId = hstring(id);
+    chatId = NewRequestId();
     chatSession = session;
     chatTarget = target;
     chatKind = kind;
