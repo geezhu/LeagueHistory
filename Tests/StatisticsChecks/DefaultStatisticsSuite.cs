@@ -60,6 +60,7 @@ internal static class DefaultStatisticsSuite
         DeathTimingChecks.Run();
         TurretChecks.Run();
         GameQueueChecks.Run();
+        GameFlowWatcherChecks.Run();
         LeagueConfigChecks.Run();
         ChampionManagerChecks.Run();
         ShutdownSettingsChecks.Run();
