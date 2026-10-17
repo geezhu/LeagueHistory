@@ -234,6 +234,7 @@ internal static class Program
         checks["--match-detail-manager-checks"] = MatchDetailManagerChecks.Run;
         checks["--player-card-checks"] = PlayerCardFactoryChecks.Run;
         checks["--lcu-discovery-checks"] = LcuProcessDiscoveryChecks.Run;
+        checks["--roster-window-checks"] = () => Ui(AssistantRosterWindowChecks.Run);
         checks["--preliminary-checks"] = () => Ui(PreliminaryChecks.Run);
         checks["--preliminary-list-checks"] = () => Ui(PreliminaryListChecks.Run);
         checks["--gamebar-composition-checks"] = () => Background(GameBarCompositionChecks.Run);
