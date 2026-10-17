@@ -123,6 +123,7 @@ internal static class Program
             Background(UiHangMonitorChecks.RunAsync);
         };
         checks["--history-data-checks"] = HistoryDataChecks.Run;
+        checks["--match-parse-checks"] = () => Background(MatchParsingChecks.RunAsync);
         checks["--timeline-data-checks"] = TimelineDataChecks.Run;
     }
 
