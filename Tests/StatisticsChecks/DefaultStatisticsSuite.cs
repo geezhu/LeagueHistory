@@ -110,6 +110,7 @@ internal static class DefaultStatisticsSuite
         HistoryNavigationChecks.Run();
         HistoryPresentationChecks.Run();
         LoadingOverlayChecks.Run();
+        LoadingOverlayManagerChecks.Run();
         LoadingViewChecks.Run();
         MainNavigationChecks.Run();
         OpggViewLifecycleChecks.Run();

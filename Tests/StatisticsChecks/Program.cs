@@ -138,6 +138,7 @@ internal static class Program
         checks["--match-detail-checks"] = () => Ui(MatchDetailChecks.Run);
         checks["--query-processor-checks"] = () => Background(MatchQueryProcessorChecks.RunAsync);
         checks["--loading-view-checks"] = () => Ui(LoadingViewChecks.Run);
+        checks["--loading-overlay-manager-checks"] = () => Ui(LoadingOverlayManagerChecks.Run);
         checks["--main-navigation-checks"] = () => Ui(MainNavigationChecks.Run);
         checks["--history-navigation-checks"] = () => Ui(HistoryNavigationChecks.Run);
         checks["--profile-surface-checks"] = () => Ui(ProfileSurfaceChecks.Run);
