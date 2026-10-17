@@ -126,5 +126,6 @@ internal static class DefaultStatisticsSuite
         AugmentDescriptionChecks.Run();
         MatchTabPageContentChecks.Run();
         MatchDetailChecks.Run();
+        Task.Run(MatchQueryProcessorChecks.RunAsync).GetAwaiter().GetResult();
     }
 }
