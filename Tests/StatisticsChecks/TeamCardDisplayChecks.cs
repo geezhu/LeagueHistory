@@ -55,6 +55,7 @@ internal static class TeamCardDisplayChecks
             var service = new TeamCardDisplayService(owner, cards);
             ChampSelectEntry(owner, service);
             MyTeamCards(owner, service);
+            StaleQueueRead(owner, cards, service);
             RosterBranches(owner, cards, service);
             LoadingScreen(owner, cards, service);
             Snapshots(owner, service);
@@ -143,6 +144,23 @@ internal static class TeamCardDisplayChecks
     }
 
     // ---------------------------------------------------------------- the loading screen roster
+
+    /// <summary>A snapshot that was replaced while its statistics queue was being resolved is dropped.</summary>
+    private static void StaleQueueRead(FormMain owner, PlayerCardManager cards, TeamCardDisplayService service)
+    {
+        owner._cachedMyTeam = new JArray();
+        UseClient(path =>
+        {
+            if (path == SessionPath)
+            {
+                cards.BeginSession(); // A newer champion select arrives while the queue is being read.
+            }
+
+            return path == ChampSelectPath ? Json(ChampSelectBody("1400", 5)) : Refused();
+        });
+        Await(service.ShowMyTeamCards());
+        Check(owner._cachedMyTeam!.Count == 0, "A snapshot replaced while it was read never reaches the cards");
+    }
 
     private static void RosterBranches(FormMain owner, PlayerCardManager cards, TeamCardDisplayService service)
     {
@@ -250,6 +268,7 @@ internal static class TeamCardDisplayChecks
 
         Layout(owner, cards, service);
         FailedRoster(cards, service);
+        AbandonedRoster(owner, cards, service);
         StaleRoster(owner, cards, service);
     }
 
@@ -283,12 +302,45 @@ internal static class TeamCardDisplayChecks
         Check(true, "A failing roster read stops the load instead of retrying forever");
     }
 
+    /// <summary>After a failed attempt the load waits, then gives up once a newer session exists.</summary>
+    private static void AbandonedRoster(FormMain owner, PlayerCardManager cards, TeamCardDisplayService service)
+    {
+        var previous = FormMain.Globals.lcuClient;
+        owner._cachedMyTeam = new JArray(new JObject());
+        try
+        {
+            FormMain.Globals.lcuClient = new LcuSession();
+            var task = GameSessionTask(service, cards.Generation, CancellationToken.None, false);
+            cards.BeginSession(); // The retry is abandoned while the failed attempt waits.
+            Await(task);
+        }
+        finally
+        {
+            FormMain.Globals.lcuClient = previous;
+        }
+
+        Check(owner._cachedMyTeam!.Count == 1, "An abandoned load never touches the roster");
+    }
+
     private static void StaleRoster(FormMain owner, PlayerCardManager cards, TeamCardDisplayService service)
     {
         UseClient(_ => Refused());
         owner._cachedMyTeam = new JArray(new JObject());
         Await(GameSessionTask(service, cards.Generation - 1, CancellationToken.None, false));
         Check(owner._cachedMyTeam!.Count == 1, "A load for an older session never touches the roster");
+
+        // The session is replaced while the roster is being read for it.
+        UseClient(path =>
+        {
+            if (path == SummonerPath)
+            {
+                cards.BeginSession();
+            }
+
+            return path == SessionPath ? Json(GameBody(420, "CLASSIC", 5, 5)) : Refused();
+        });
+        Await(GameSessionTask(service, cards.Generation, CancellationToken.None, false));
+        Check(owner._cachedMyTeam!.Count == 1, "A load for a session that was replaced is dropped");
     }
 
     private static void Snapshots(FormMain owner, TeamCardDisplayService service)
