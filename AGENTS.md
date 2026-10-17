@@ -66,8 +66,10 @@
 
 ### 异步
 
-- 测试方法直接写成 `async Task`，不用 `.GetAwaiter().GetResult()`。
-- **前置条件**：应用代码的异步方法没有 `ConfigureAwait(false)`，UI 检查又跑在持久的 `Application.Run` 消息循环和 `WindowsFormsSynchronizationContext` 上。在应用代码补上后台边界之前，`async Task` 测试对 UI 路径会死锁。顺序是先改应用侧，再改测试写法；在那之前 UI 路径继续用现有的消息循环宿主。
+- 不涉及界面的测试方法直接写成 `async Task`，不用 `.GetAwaiter().GetResult()`。
+- **界面测试用 `Support/UiHost.Run`**：它在专用 STA 线程上起一个真正的 `Application.Run` 消息循环，body 拿到一个已显示的宿主窗体，可以往里加控件。不这么做的话，xUnit 把测试方法放在 MTA 线程池线程上，没有消息循环；应用代码的异步续体经 `WindowsFormsSynchronizationContext` 投递后**没人泵**，测试会挂住而不是失败。
+- `UiHost.Run` 的 body 可以是 `async`，循环在它等待期间继续泵消息，await 之后仍回到同一条 STA 线程——`Support/UiHostTests.cs` 就是钉这三件事的。界面测试方法本身保持 `void`，异步体现在 body 里。
+- 应用代码的异步方法没有 `ConfigureAwait(false)`，所以**不要**在界面线程上用 `.GetAwaiter().GetResult()` 等一个会回到界面的任务。确实需要等一个与界面无关的任务时，在 `UiHost` 的 body 里 `await` 它。
 - 取消单独写测试，验证「取消后不发布晚到的结果」。
 
 ## 工具与验证
