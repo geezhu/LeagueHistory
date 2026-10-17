@@ -2,11 +2,12 @@
 // widget but ignores its show/hide commands, so hiding the roster never hides the wave bar.
 #pragma once
 #include "WaveShapes.h"
+#include "MiniVoiceSender.h"
 
 struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
 {
     static constexpr double DefaultOpacity = .85, MinOpacity = .2;
-    static constexpr double HeaderHeight = 48, LaneHeight = 28, DefaultWidth = 320;
+    static constexpr double HeaderHeight = 48, LaneHeight = 28, VoiceHeight = 36, DefaultWidth = 320;
     static constexpr wchar_t const *CollapsedSetting = L"waveMiniCollapsed";
     static constexpr uint32_t Background = 0x071e29;
 
@@ -20,6 +21,7 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
     TextBlock death = MakeText(L"", 12, 0xa4bcc7);
     Button toggle;
     StackPanel lanes;
+    std::shared_ptr<MiniVoiceSender> voice = std::make_shared<MiniVoiceSender>();
     XboxGameBarWidget widget{nullptr};
     DispatcherTimer timer;
     CompositionTarget::Rendering_revoker frames;
@@ -31,7 +33,10 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
     // Wall clock when the own champion respawns; zero while alive.
     int64_t respawnUntil = 0;
     int renderedLanes = -1;
+    hstring session;
     bool busy = false, stopped = false, collapsed = false, enabled = false, active = false;
+    // The main program accepts confirmed voice text; the voice row shows only then and during a game.
+    bool supportsVoice = false, voiceShown = false;
     // Preview captures read a fixture with a frozen clock; nothing is sent to the game.
     bool preview = false, capturePending = false;
 
@@ -45,14 +50,19 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
     {
         root.RequestedTheme(ElementTheme::Dark);
         root.Padding({10, 6, 8, 6});
-        RowDefinition header, body;
+        RowDefinition header, body, voiceRow;
         header.Height({1, GridUnitType::Auto});
+        voiceRow.Height({1, GridUnitType::Auto});
         root.RowDefinitions().Append(header);
         root.RowDefinitions().Append(body);
+        root.RowDefinitions().Append(voiceRow);
         root.Children().Append(CreateHeader());
         lanes.Margin({0, 4, 0, 0});
         Grid::SetRow(lanes, 1);
         root.Children().Append(lanes);
+        voice->row.Visibility(Visibility::Collapsed);
+        Grid::SetRow(voice->row, 2);
+        root.Children().Append(voice->row);
         ApplyBackground();
     }
     // Next wave on the left, the next cannon or super minion lanes beside it, the own death time and the collapse
@@ -107,7 +117,19 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
         if (widget)
         {
             widget.MinWindowSize({220, static_cast<float>(HeaderHeight)});
-            widget.MaxWindowSize({640, 260});
+            widget.MaxWindowSize({640, 300});
+            voice->widget = widget;
+            widget.GameBarDisplayModeChanged(
+                [weak = weak_from_this()](auto &&, auto &&)
+                {
+                    if (auto self = weak.lock())
+                        self->root.Dispatcher().RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
+                                                         [weak]
+                                                         {
+                                                             if (auto view = weak.lock(); view && !view->stopped)
+                                                                 view->voice->DisplayModeChanged();
+                                                         });
+                });
             widget.RequestedOpacityChanged(
                 [weak = weak_from_this()](auto &&, auto &&)
                 {
@@ -128,6 +150,7 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
                 {
                     self->Read();
                     self->Update(false);
+                    self->voice->Tick();
                 }
             });
         timer.Start();
@@ -143,9 +166,12 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
         root.HorizontalAlignment(HorizontalAlignment::Left);
         root.VerticalAlignment(VerticalAlignment::Top);
         RefreshToggle();
+        // A sample result shows the voice row's layout; no request, audio or chat is produced.
+        voice->Preview(L"先别开团，等队友到齐后一起推");
     }
     void Stop()
     {
+        voice->Stop();
         stopped = true;
         timer.Stop();
         frames.revoke();
@@ -177,7 +203,8 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
         Update(true);
         FitWindow();
     }
-    // Collapsed keeps one line; expanded grows by one row per lane. The width stays where the player left it.
+    // Collapsed keeps one line; expanded grows by one row per lane, and the voice row adds one more while shown. The
+    // width stays where the player left it.
     fire_and_forget FitWindow()
     {
         if (stopped || !widget)
@@ -186,8 +213,8 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
         int laneCount =
             collapsed ? 0 : (std::max)(1, static_cast<int>(waves.GetNamedArray(L"lanes", JsonArray()).Size()));
         double width = root.ActualWidth() > 0 ? root.ActualWidth() : DefaultWidth;
-        Size size{static_cast<float>(width),
-                  static_cast<float>(HeaderHeight + laneCount * LaneHeight + (laneCount ? 8 : 0))};
+        double height = HeaderHeight + laneCount * LaneHeight + (laneCount ? 8 : 0) + (voiceShown ? VoiceHeight : 0);
+        Size size{static_cast<float>(width), static_cast<float>(height)};
         try
         {
             if (!co_await widget.TryResizeWindowAsync(size))
@@ -239,6 +266,9 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
         lastGood = preview ? Now() : static_cast<int64_t>(data.GetNamedNumber(L"updatedAt", 0));
         enabled = data.GetNamedBoolean(L"enabled", false);
         active = data.GetNamedBoolean(L"active", false);
+        session = data.GetNamedString(L"session", L"");
+        supportsVoice = data.GetNamedNumber(L"chatProtocol", 0) == 1 && data.GetNamedBoolean(L"chatVoice", false) &&
+                        data.GetNamedNumber(L"voiceProtocol", 0) == 2;
         auto settings = data.TryLookup(L"waveWidget");
         double nextOpacity = settings && settings.ValueType() == JsonValueType::Object
                                  ? settings.GetObject().GetNamedNumber(L"opacity", DefaultOpacity)
@@ -337,6 +367,7 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
         nextPanel.Visibility(text.empty() ? Visibility::Visible : Visibility::Collapsed);
         upcoming.Visibility(text.empty() ? Visibility::Visible : Visibility::Collapsed);
         death.Visibility(text.empty() ? Visibility::Visible : Visibility::Collapsed);
+        UpdateVoice(connected);
         if (!text.empty())
         {
             ClearLanes();
@@ -349,6 +380,21 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
             return;
         renderedSecond = second;
         RenderLanes(now);
+    }
+    // The voice row appears in a game when the main program supports confirmed voice text, independent of the wave
+    // countdown, so a stale wave poll never cancels a recording. Showing or hiding it refits the window height.
+    void UpdateVoice(bool inGame)
+    {
+        bool available = !preview && widget && inGame && supportsVoice;
+        if (!preview)
+            voice->Update(available, session);
+        bool shown = available || (preview && inGame);
+        voice->row.Visibility(shown ? Visibility::Visible : Visibility::Collapsed);
+        if (shown != voiceShown)
+        {
+            voiceShown = shown;
+            FitWindow();
+        }
     }
     void RenderNext(double now)
     {
