@@ -2,7 +2,7 @@
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3" IgnorableNamespaces="uap uap3">
-  <Identity Name="LeagueHistory.GameBar" Publisher="CN=LeagueHistory" Version="1.0.0.89" ProcessorArchitecture="x64" />
+  <Identity Name="LeagueHistory.GameBar" Publisher="CN=LeagueHistory" Version="1.0.0.90" ProcessorArchitecture="x64" />
   <Properties><DisplayName>League 对局速览</DisplayName><PublisherDisplayName>LeagueHistory</PublisherDisplayName><Logo>Assets\Logo50.png</Logo></Properties>
   <Dependencies>
     <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
@@ -19,6 +19,15 @@
               <HomeMenuVisible>true</HomeMenuVisible><PinningSupported>true</PinningSupported>
               <ActivateAfterInstall>true</ActivateAfterInstall><FavoriteAfterInstall>true</FavoriteAfterInstall>
               <Window><Size><Width>820</Width><Height>560</Height><MinWidth>640</MinWidth><MinHeight>500</MinHeight><MaxWidth>1100</MaxWidth><MaxHeight>800</MaxHeight></Size><ResizeSupported><Horizontal>true</Horizontal><Vertical>true</Vertical></ResizeSupported></Window>
+            </GameBarWidget></uap3:Properties>
+          </uap3:AppExtension>
+        </uap3:Extension>
+        <uap3:Extension Category="windows.appExtension">
+          <uap3:AppExtension Name="microsoft.gameBarUIExtension" Id="Waves" DisplayName="League 兵线" Description="悬浮在游戏上方的出兵倒计时与三路兵线" PublicFolder="GameBar">
+            <uap3:Properties><GameBarWidget Type="Standard">
+              <HomeMenuVisible>true</HomeMenuVisible><PinningSupported>true</PinningSupported>
+              <ActivateAfterInstall>false</ActivateAfterInstall><FavoriteAfterInstall>true</FavoriteAfterInstall>
+              <Window><Size><Width>320</Width><Height>148</Height><MinWidth>220</MinWidth><MinHeight>48</MinHeight><MaxWidth>640</MaxWidth><MaxHeight>260</MaxHeight></Size><ResizeSupported><Horizontal>true</Horizontal><Vertical>true</Vertical></ResizeSupported></Window>
             </GameBarWidget></uap3:Properties>
           </uap3:AppExtension>
         </uap3:Extension>

@@ -1,4 +1,4 @@
-﻿param([string]$PackageDirectory = '', [ValidateSet('skills','builds','runes','augments','live','record','roster','voice','waves','marks','controls','cooldowns','augmentpage','')][string]$DetailTab = '')
+﻿param([string]$PackageDirectory = '', [ValidateSet('skills','builds','runes','augments','live','record','roster','voice','waves','marks','controls','cooldowns','augmentpage','')][string]$DetailTab = '', [ValidateSet('expanded','collapsed','')][string]$WaveMini = '')
 $ErrorActionPreference = 'Stop'
 if ($PackageDirectory) { & "$PSScriptRoot/Install-Development.ps1" -PackageDirectory $PackageDirectory }
 $package = Get-AppxPackage -Name LeagueHistory.GameBar
@@ -20,7 +20,7 @@ public static class PreviewActivation {
     }
 }
 '@
-$arguments = if ($DetailTab) { "--capture-detail-fixture:$DetailTab" } else { '--capture-preview' }
+$arguments = if ($WaveMini) { "--capture-wave-mini:$WaveMini" } elseif ($DetailTab) { "--capture-detail-fixture:$DetailTab" } else { '--capture-preview' }
 [PreviewActivation]::Run($package.PackageFamilyName + '!App', $arguments)
-$imageName = if ($DetailTab) { "detail-preview-$DetailTab.png" } else { 'preview-verification.png' }
+$imageName = if ($WaveMini) { "wave-mini-preview-$WaveMini.png" } elseif ($DetailTab) { "detail-preview-$DetailTab.png" } else { 'preview-verification.png' }
 Write-Host "检查输出：$env:LOCALAPPDATA/Packages/$($package.PackageFamilyName)/LocalState/$imageName"
