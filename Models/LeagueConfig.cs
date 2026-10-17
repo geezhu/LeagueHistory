@@ -14,7 +14,7 @@ namespace League.Models
         /// </summary>
         public int GameBarWaveOpacity { get; set; } = DefaultGameBarWaveOpacity;
 
-        public const int DefaultGameBarWaveOpacity = 85,
+        public const int DefaultGameBarWaveOpacity = 20,
             MinGameBarWaveOpacity = 20,
             MaxGameBarWaveOpacity = 100;
         public int AramMetaCacheMinutes { get; set; } = 1440;

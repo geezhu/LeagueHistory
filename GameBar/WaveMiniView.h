@@ -6,7 +6,7 @@
 
 struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
 {
-    static constexpr double DefaultOpacity = .85, MinOpacity = .2;
+    static constexpr double DefaultOpacity = .2, MinOpacity = .2;
     static constexpr double HeaderHeight = 48, LaneHeight = 28, VoiceHeight = 36, DefaultWidth = 320;
     static constexpr wchar_t const *CollapsedSetting = L"waveMiniCollapsed";
     static constexpr uint32_t Background = 0x071e29;
