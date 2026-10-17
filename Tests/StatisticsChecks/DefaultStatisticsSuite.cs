@@ -107,6 +107,7 @@ internal static class DefaultStatisticsSuite
     {
         AramMetaViewLifecycleChecks.Run();
         AssistantLifecycleChecks.Run();
+        AssistantSessionChecks.Run();
         HistoryNavigationChecks.Run();
         HistoryPresentationChecks.Run();
         LoadingOverlayChecks.Run();
