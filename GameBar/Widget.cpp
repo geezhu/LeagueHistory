@@ -2,6 +2,7 @@
 #include "WidgetCommon.h"
 #include "WaveModel.h"
 #include "WaveShapes.h"
+#include "WaveMiniView.h"
 
 struct WidgetView : std::enable_shared_from_this<WidgetView>
 {
@@ -883,7 +884,11 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
 
 struct WidgetApp : ApplicationT<WidgetApp>
 {
+    // Must match the second AppExtension Id in Package.appxmanifest.
+    static constexpr wchar_t const *WaveMiniExtensionId = L"Waves";
+    static constexpr std::wstring_view WaveMiniPreviewPrefix = L"--capture-wave-mini:";
     std::vector<std::shared_ptr<WidgetView>> views;
+    std::vector<std::shared_ptr<WaveMiniView>> miniViews;
     WidgetApp()
     {
         UnhandledException([](auto &&, UnhandledExceptionEventArgs const &args) { LogError(args.Message()); });
@@ -909,13 +914,18 @@ struct WidgetApp : ApplicationT<WidgetApp>
             Trace(L"widget-repeat-activation");
             return;
         }
-        Trace(L"widget-initial-activation");
+        Trace(L"widget-initial-activation id=" + activation.AppExtensionId());
         Frame frame;
         auto window = Window::Current();
         frame.HorizontalContentAlignment(HorizontalAlignment::Stretch);
         frame.VerticalContentAlignment(VerticalAlignment::Stretch);
         window.Content(frame);
         auto widget = XboxGameBarWidget(activation, window.CoreWindow(), frame);
+        if (activation.AppExtensionId() == WaveMiniExtensionId)
+        {
+            StartWaveMini(window, frame, widget);
+            return;
+        }
         auto view = std::make_shared<WidgetView>();
         Page page;
         page.Content(view->root);
@@ -932,12 +942,63 @@ struct WidgetApp : ApplicationT<WidgetApp>
         window.Activate();
         Trace(L"widget-window-activated");
     }
+    // Game Bar composites the widget over the game, so the frame and page stay transparent and the view's own
+    // background carries the chosen opacity.
+    void StartWaveMini(Window const &window, Frame const &frame, XboxGameBarWidget const &widget)
+    {
+        SolidColorBrush clear(Colors::Transparent());
+        frame.Background(clear);
+        Page page;
+        page.Background(clear);
+        auto view = std::make_shared<WaveMiniView>();
+        page.Content(view->root);
+        frame.Content(page);
+        view->Start(widget);
+        TrackWaveMini(window, view);
+        window.Activate();
+        Trace(L"wave-mini-window-activated");
+    }
+    // Renders the mini widget from the detail fixture with a frozen clock and saves a PNG; replaces any desktop
+    // preview in this window.
+    void ShowWaveMiniPreview(Window const &window, hstring const &arguments)
+    {
+        for (auto const &view : views)
+            if (!view->widget)
+                view->Stop();
+        for (auto const &view : miniViews)
+            if (!view->widget)
+                view->Stop();
+        auto view = std::make_shared<WaveMiniView>();
+        view->ConfigurePreview(arguments);
+        Page page;
+        page.Content(view->root);
+        window.Content(page);
+        view->Start(nullptr);
+        TrackWaveMini(window, view);
+    }
+    void TrackWaveMini(Window const &window, std::shared_ptr<WaveMiniView> const &view)
+    {
+        std::erase_if(miniViews, [](auto const &item) { return item->stopped; });
+        miniViews.push_back(view);
+        window.Closed(
+            [weak = std::weak_ptr<WaveMiniView>(view)](auto &&, auto &&)
+            {
+                if (auto value = weak.lock())
+                    value->Stop();
+            });
+    }
     void OnLaunched(LaunchActivatedEventArgs const &args)
     {
         // Use the identical renderer for a real desktop preview, without registering game shortcuts.
         Trace(L"desktop-preview-launch");
         auto window = Window::Current();
-        if (!window.Content())
+        if (std::wstring_view(args.Arguments()).starts_with(WaveMiniPreviewPrefix))
+        {
+            ShowWaveMiniPreview(window, args.Arguments());
+        }
+        // A mini preview may have replaced the roster preview; a later roster preview starts a fresh one.
+        else if (std::none_of(
+                     views.begin(), views.end(), [](auto const &view) { return !view->widget && !view->stopped; }))
         {
             auto view = std::make_shared<WidgetView>();
             Page page;
