@@ -17,6 +17,7 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
     TextBlock nextKind = MakeText(L"", 13, 0xa4bcc7);
     TextBlock nextNumber = MakeText(L"", 11, 0x91acbb);
     TextBlock upcoming = MakeText(L"", 12, 0xffd27a);
+    TextBlock death = MakeText(L"", 12, 0xa4bcc7);
     Button toggle;
     StackPanel lanes;
     XboxGameBarWidget widget{nullptr};
@@ -27,6 +28,8 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
     hstring readError;
     double opacity = DefaultOpacity;
     int64_t lastGood = 0, renderedSecond = -1;
+    // Wall clock when the own champion respawns; zero while alive.
+    int64_t respawnUntil = 0;
     int renderedLanes = -1;
     bool busy = false, stopped = false, collapsed = false, enabled = false, active = false;
     // Preview captures read a fixture with a frozen clock; nothing is sent to the game.
@@ -52,21 +55,22 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
         root.Children().Append(lanes);
         ApplyBackground();
     }
-    // Next wave on the left, the next cannon or super minion lanes beside it, the collapse toggle on the right.
+    // Next wave on the left, the next cannon or super minion lanes beside it, the own death time and the collapse
+    // toggle on the right. Only the upcoming text shrinks when the widget is narrow.
     Grid CreateHeader()
     {
         Grid header;
         header.MinHeight(HeaderHeight - 12);
-        header.ColumnDefinitions().Append(ColumnDefinition());
-        ColumnDefinition upcomingColumn, toggleColumn;
-        upcomingColumn.Width({1, GridUnitType::Auto});
+        ColumnDefinition nextColumn, upcomingColumn, deathColumn, toggleColumn;
+        nextColumn.Width({1, GridUnitType::Auto});
+        deathColumn.Width({1, GridUnitType::Auto});
         toggleColumn.Width({1, GridUnitType::Auto});
-        header.ColumnDefinitions().Append(upcomingColumn);
-        header.ColumnDefinitions().Append(toggleColumn);
+        for (auto const &column : {nextColumn, upcomingColumn, deathColumn, toggleColumn})
+            header.ColumnDefinitions().Append(column);
         status.VerticalAlignment(VerticalAlignment::Center);
         status.TextWrapping(TextWrapping::Wrap);
         status.MaxLines(2);
-        Grid::SetColumnSpan(status, 2);
+        Grid::SetColumnSpan(status, 3);
         header.Children().Append(status);
         nextPanel.Orientation(Orientation::Horizontal);
         nextPanel.VerticalAlignment(VerticalAlignment::Center);
@@ -83,12 +87,16 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
         upcoming.Margin({0, 0, 6, 0});
         Grid::SetColumn(upcoming, 1);
         header.Children().Append(upcoming);
+        death.VerticalAlignment(VerticalAlignment::Center);
+        death.Margin({0, 0, 6, 0});
+        Grid::SetColumn(death, 2);
+        header.Children().Append(death);
         toggle.Background(MakeBrush(0x143542));
         toggle.BorderThickness({0});
         toggle.Padding({8, 2, 8, 2});
         toggle.VerticalAlignment(VerticalAlignment::Center);
         toggle.Click([this](auto &&, auto &&) { SetCollapsed(!collapsed); });
-        Grid::SetColumn(toggle, 2);
+        Grid::SetColumn(toggle, 3);
         header.Children().Append(toggle);
         RefreshToggle();
         return header;
@@ -248,6 +256,59 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
             waves = next;
             renderedSecond = -1;
         }
+        ApplyRespawn(data.GetNamedArray(L"players", JsonArray()));
+    }
+    // The respawn countdown is relative to the snapshot time, like the roster widget's cards.
+    void ApplyRespawn(JsonArray const &players)
+    {
+        respawnUntil = 0;
+        for (auto const &value : players)
+        {
+            if (value.ValueType() != JsonValueType::Object)
+                continue;
+            auto player = value.GetObject();
+            double respawn = player.GetNamedNumber(L"respawn", 0);
+            if (player.GetNamedBoolean(L"self", false) && respawn > 0)
+                respawnUntil = lastGood + static_cast<int64_t>(respawn * 1000);
+        }
+    }
+    // Dead: the live respawn countdown. Alive: how long dying now would cost, from level and game time, with the
+    // main program's die-to-shop advice in the tooltip. Empty for modes without a death timer table.
+    void RenderDeath()
+    {
+        int64_t left = respawnUntil - Now();
+        if (left > 0)
+        {
+            death.Text(L"复活 " + to_hstring((left + 999) / 1000));
+            death.Foreground(MakeBrush(0xff8a7a));
+            ToolTipService::SetToolTip(death, box_value(L"你的英雄复活倒计时"));
+            return;
+        }
+        for (auto const &value : waves.GetNamedArray(L"deaths", JsonArray()))
+        {
+            auto cost = value.GetObject();
+            if (!cost.GetNamedBoolean(L"self", false))
+                continue;
+            death.Text(L"阵亡 " + to_hstring(static_cast<int>(cost.GetNamedNumber(L"seconds", 0) + .5)) + L" 秒");
+            death.Foreground(MakeBrush(0xa4bcc7));
+            ToolTipService::SetToolTip(death, box_value(DeathTip(cost)));
+            return;
+        }
+        death.Text(L"");
+    }
+    hstring DeathTip(JsonObject const &cost) const
+    {
+        std::wstring tip = L"现在阵亡需等待的复活时间（" +
+                           std::wstring(to_hstring(static_cast<int>(cost.GetNamedNumber(L"level", 0)))) +
+                           L" 级，按等级与游戏时间推算）";
+        auto advice = waves.TryLookup(L"deathAdvice");
+        if (!advice || advice.ValueType() != JsonValueType::Object)
+            return hstring(tip);
+        auto verdict = advice.GetObject().GetNamedString(L"verdict", L"avoid");
+        tip += verdict == L"good" ? L"\n适合送死" : verdict == L"okay" ? L"\n可以送死" : L"\n不建议送死";
+        for (auto const &reason : advice.GetObject().GetNamedArray(L"reasons", JsonArray()))
+            tip += L" · " + std::wstring(reason.GetString());
+        return hstring(tip);
     }
     // Why there is no countdown, in the order the player can fix it; empty when waves are counting down.
     hstring StatusText(double now) const
@@ -275,12 +336,14 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
         status.Visibility(text.empty() ? Visibility::Collapsed : Visibility::Visible);
         nextPanel.Visibility(text.empty() ? Visibility::Visible : Visibility::Collapsed);
         upcoming.Visibility(text.empty() ? Visibility::Visible : Visibility::Collapsed);
+        death.Visibility(text.empty() ? Visibility::Visible : Visibility::Collapsed);
         if (!text.empty())
         {
             ClearLanes();
             return;
         }
         RenderNext(now);
+        RenderDeath();
         int64_t second = static_cast<int64_t>(now);
         if (collapsed || (!force && second == renderedSecond))
             return;
