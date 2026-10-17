@@ -111,6 +111,8 @@ internal static class DefaultStatisticsSuite
         HistoryPresentationChecks.Run();
         LoadingOverlayChecks.Run();
         LoadingOverlayManagerChecks.Run();
+        TabbedContentChecks.Run();
+        Task.Run(ProfileIconChecks.RunAsync).GetAwaiter().GetResult();
         LoadingViewChecks.Run();
         MainNavigationChecks.Run();
         OpggViewLifecycleChecks.Run();
