@@ -46,6 +46,7 @@ internal static class DefaultStatisticsSuite
         Task.Run(LcuClientServiceChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(VoiceModelStoreChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(SgpSessionChecks.RunAsync).GetAwaiter().GetResult();
+        Task.Run(MatchParsingChecks.RunAsync).GetAwaiter().GetResult();
         OfflineChecks();
     }
 
