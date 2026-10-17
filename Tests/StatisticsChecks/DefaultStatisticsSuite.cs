@@ -145,5 +145,6 @@ internal static class DefaultStatisticsSuite
         ClosableTabControlChecks.Run();
         SkinStripViewChecks.Run();
         VoiceInputDialogChecks.Run();
+        ProgressFormChecks.Run();
     }
 }
