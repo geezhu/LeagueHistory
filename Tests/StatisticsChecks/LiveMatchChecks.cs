@@ -30,6 +30,7 @@ internal static class LiveMatchChecks
             LateAssetsAndBorrowedClients();
             ClosedPollingAndStaleRanks();
             CancelledRecommendations();
+            InteractivePaths();
         });
         Console.WriteLine(
             "PASS: live match identity, retained cards, cached icons, equipment, responsive layout, cancellation and owned cleanup."
@@ -486,6 +487,131 @@ internal static class LiveMatchChecks
         );
         ranks.Dispose();
         Complete(Field<Task>(ranks, "_cleanupWork"));
+    }
+
+    private static void InteractivePaths()
+    {
+        using var client = new LiveMatchClient(new Handler());
+        using var opgg = new OpggClient(new Recommendations());
+        using var am = new AramMetaClient(new TierIndex());
+        using var form = new Form { ClientSize = new Size(1100, 740) };
+        var guided = new List<(int Id, int Queue)>();
+        using var view = new LiveMatchView(
+            () => Task.FromResult(2400),
+            (id, queue) => guided.Add((id, queue)),
+            () => TimeSpan.FromDays(1),
+            client,
+            (_, _) => Task.FromResult<(Image?, string, string)>((null, "", "")),
+            opgg,
+            am
+        );
+        SetField(
+            view,
+            "_artworkLoader",
+            (Func<int, CancellationToken, Task<Image?>>)((_, _) => Task.FromResult<Image?>(null))
+        );
+        form.Controls.Add(view);
+        form.Show();
+        PumpUntil(() => Cards(view).Length == 3);
+        PumpUntil(() => Field<string>(view, "_rankStatus").Contains("arammeta"));
+        Check(
+            ((System.Collections.ICollection)Field<object>(view, "_ranks")).Count > 0,
+            "The mayhem statistics fill the live ranks."
+        );
+        Check(
+            Field<ComboBox>(view, "_augment").Items.Count > 0,
+            "The mayhem statistics fill the manual augment picker."
+        );
+        Toolbar(view, guided);
+        ManualAugments(view);
+        SnapshotChange(view);
+        Invoke(view, "RefreshRanks", 0);
+        Invoke(view, "RefreshRanks", 2400);
+        view.Dispose();
+        Complete(Field<Task>(view, "_cleanupWork"));
+    }
+
+    private static void Toolbar(LiveMatchView view, List<(int Id, int Queue)> guided)
+    {
+        Field<ComboBox>(view, "_mode").SelectedIndex = 1;
+        Click(Find(view, "刷新对局"));
+        PumpUntil(() => Cards(view).Length == 3);
+
+        string self = Field<string>(view, "_selectedKey");
+        var other = Cards(view).Select(card => (string)card.Tag!).First(key => key != self);
+        Click(Cards(view).First(card => (string)card.Tag! == other));
+        PumpUntil(() => Field<string>(view, "_selectedKey") == other);
+
+        Click(Find(view, "所选英雄完整攻略"));
+        Check(
+            guided.Count == 1 && guided[0].Queue == 2400 && guided[0].Id > 0,
+            "The guide opens for the selected champion in the current mode."
+        );
+        SetField(view, "_currentQueue", 0);
+        Click(Find(view, "所选英雄完整攻略"));
+        Check(guided.Count == 1, "A mode without a guide opens nothing.");
+        SetField(view, "_currentQueue", 2400);
+    }
+
+    private static void ManualAugments(LiveMatchView view)
+    {
+        var manual = Field<Dictionary<string, List<int>>>(view, "_manualAugments");
+        string selected = Field<string>(view, "_selectedKey");
+        var picker = Field<ComboBox>(view, "_augment");
+        picker.SelectedIndex = 0;
+        Click(Find(view, "记录已选"));
+        Check(
+            manual.TryGetValue(selected, out var ids) && ids.Count == 1,
+            "The picker records the chosen augment for the selected player."
+        );
+        Click(Find(view, "清除记录"));
+        Check(!manual.ContainsKey(selected), "Clearing drops the recorded augments.");
+
+        SetField(view, "_selectedKey", "player-that-left");
+        Click(Find(view, "记录已选"));
+        Check(!manual.ContainsKey("player-that-left"), "Recording without a selected player does nothing.");
+        SetField(view, "_selectedKey", selected);
+        Click(Find(view, "记录已选"));
+    }
+
+    private static void SnapshotChange(LiveMatchView view)
+    {
+        var manual = Field<Dictionary<string, List<int>>>(view, "_manualAugments");
+        Check(manual.Count > 0, "A recorded augment is kept while the roster is the same.");
+        var changed = JObject.Parse(Sample);
+        changed["allPlayers"]![0]!["riotId"] = "Other#CN";
+        Invoke(view, "ApplySnapshot", LiveMatchSnapshot.Parse(changed), 2400);
+        Check(manual.Count == 0, "A different roster drops the manual augment records.");
+        Invoke(view, "ApplySnapshot", LiveMatchSnapshot.Parse(changed), 450);
+        Check(
+            Field<string>(view, "_rankStatus").Length == 0,
+            "Switching the statistics mode clears the previous tier status."
+        );
+    }
+
+    private static Button Find(LiveMatchView view, string text) =>
+        Children(view).OfType<Button>().First(button => button.Text == text);
+
+    private static void Click(Control control) =>
+        typeof(Control).GetMethod("OnClick", PrivateInstance)!.Invoke(control, new object[] { EventArgs.Empty });
+
+    private sealed class TierIndex : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken token
+        )
+        {
+            Check(
+                request.RequestUri!.AbsolutePath.EndsWith("tier-list.json", StringComparison.Ordinal),
+                "The live page reads the complete statistics index once."
+            );
+            string body = await File.ReadAllTextAsync(
+                Path.Combine(AppContext.BaseDirectory, "Fixtures", "AramMeta", "index.json"),
+                token
+            );
+            return Response(body);
+        }
     }
 
     private static void CancelledRecommendations()
