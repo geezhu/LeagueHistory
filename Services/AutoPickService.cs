@@ -36,6 +36,7 @@ namespace League.Services
             _hasAutoPreliminated = false;
             _hasSwappedInAram = false;
 
+            // 循环体，预选优先、一进选人就预选（卡片并行/后置）
             await Task.Run(async () =>
             {
                 while (!token.IsCancellationRequested)
@@ -45,20 +46,33 @@ namespace League.Services
                         var currentPhase = await Globals.lcuClient.GetGameflowPhase();
                         if (currentPhase != "ChampSelect") break;
 
-                        // 我方队伍卡片显示
-                        await _cardDisplayService.ShowMyTeamCards();
-
-                        // 自动预选抢英雄
+                        // 1) 先预选（不依赖战绩）
                         await TryAutoPreliminaryAsync();
 
-                        // 自动配置皮肤
+                        // 2) 皮肤（可选，很快）
                         await TryAutoSkinAsync();
+
+                        // 3) 卡片/战绩：不要挡住预选；可并行，失败也不影响
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await _cardDisplayService.ShowMyTeamCards();
+                            }
+                            catch (Exception ex)
+                            {
+                                Debug.WriteLine($"[AutoPickService] 卡片更新异常: {ex.Message}");
+                            }
+                        }, token);
 
                         var session = await Globals.lcuClient.GetChampSelectSession();
                         int queueId = session?["queueId"]?.Value<int>() ?? 0;
 
-                        // 乱斗类轮询更快，其它模式 1 秒
-                        int delay = (queueId == 450 || queueId == 2400 || queueId == 900) ? 500 : 1000;
+                        // 预选未成功前轮询更快；成功后可放慢
+                        int delay = !_hasAutoPreliminated
+                            ? 200   // 未预选：200ms 再试，接近「秒选」
+                            : (queueId is 450 or 2400 or 900 ? 500 : 800);
+
                         await Task.Delay(delay, token);
                     }
                     catch (TaskCanceledException) { break; }
@@ -108,12 +122,16 @@ namespace League.Services
             // 根据 queueId 和用户配置决定是否执行
             bool shouldExecute = queueId switch
             {
-                400 or 430 => _form.GetAppConfig().EnablePreliminaryInNormal,      // 匹配
-                420 or 440 => _form.GetAppConfig().EnablePreliminaryInRanked,      // 排位
-                450 => _form.GetAppConfig().EnablePreliminaryInAram,        // 大乱斗
-                2400 => _form.GetAppConfig().EnablePreliminaryInNexusBlitz,  // 海克斯
-                900 => _form.GetAppConfig().EnablePreliminaryInUrf,         // 无限乱斗（随机）
-                1900 => _form.GetAppConfig().EnablePreliminaryInPickUrf,     // 无限火力（自选）
+                400 or 430 => _form.GetAppConfig().EnablePreliminaryInNormal,   // 匹配
+                420 or 440 => _form.GetAppConfig().EnablePreliminaryInRanked,   // 排位
+                450 => _form.GetAppConfig().EnablePreliminaryInAram,            // 大乱斗
+                2400 => _form.GetAppConfig().EnablePreliminaryInNexusBlitz,     // 海克斯
+                900 => _form.GetAppConfig().EnablePreliminaryInUrf,             // 无限乱斗
+                1900 => _form.GetAppConfig().EnablePreliminaryInPickUrf,        // 无限火力
+                4310 or 4320 => _form.GetAppConfig().EnablePreliminaryInClassic,// 经典峡谷（含人机）
+                                                                                
+                830 or 840 or 850 or 870 or 880 or 890                          // 普通人机（召唤师峡谷 vs AI）
+                    => _form.GetAppConfig().EnablePreliminaryInBot,
                 _ => false
             };
 
@@ -127,7 +145,7 @@ namespace League.Services
                 return;
             }
 
-            // 普通自选模式：匹配、排位、无限火力 → 只预选一次
+            // 普通自选模式：匹配、排位、无限火力、经典模式、普通人机 → 只预选一次
             if (_hasAutoPreliminated) return;
 
             bool success = await Globals.lcuClient.AutoDeclareIntentAsync(preList);

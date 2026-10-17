@@ -63,6 +63,7 @@ namespace League
             lk_GitPro = new LinkLabel();
             label4 = new Label();
             groupBox1 = new GroupBox();
+            chkClassic = new CheckBox();
             chkAutoSkinSelect = new CheckBox();
             labChampionSkinBrowser = new LinkLabel();
             chkPickUrf = new CheckBox();
@@ -80,6 +81,7 @@ namespace League
             txtCustomContent = new TextBox();
             rbModeCustom = new RadioButton();
             rbModeMatch = new RadioButton();
+            chkBot = new CheckBox();
             panel1.SuspendLayout();
             imageTabControl1.SuspendLayout();
             tabPage1.SuspendLayout();
@@ -351,7 +353,7 @@ namespace League
             groupBox2.Controls.Add(label6);
             groupBox2.Controls.Add(btnCloseClients);
             groupBox2.Controls.Add(btnRestartUx);
-            groupBox2.Location = new Point(16, 295);
+            groupBox2.Location = new Point(16, 354);
             groupBox2.Name = "groupBox2";
             groupBox2.Size = new Size(1077, 116);
             groupBox2.TabIndex = 14;
@@ -437,6 +439,8 @@ namespace League
             // 
             // groupBox1
             // 
+            groupBox1.Controls.Add(chkBot);
+            groupBox1.Controls.Add(chkClassic);
             groupBox1.Controls.Add(chkAutoSkinSelect);
             groupBox1.Controls.Add(labChampionSkinBrowser);
             groupBox1.Controls.Add(chkPickUrf);
@@ -448,15 +452,25 @@ namespace League
             groupBox1.Controls.Add(lkbPreliminary);
             groupBox1.Location = new Point(16, 154);
             groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(1077, 124);
+            groupBox1.Size = new Size(1077, 179);
             groupBox1.TabIndex = 6;
             groupBox1.TabStop = false;
             groupBox1.Text = "英雄预选 - 位置信息根据英雄联盟攻略中心数据划分";
             // 
+            // chkClassic
+            // 
+            chkClassic.AutoSize = true;
+            chkClassic.Location = new Point(6, 114);
+            chkClassic.Name = "chkClassic";
+            chkClassic.Size = new Size(243, 21);
+            chkClassic.TabIndex = 14;
+            chkClassic.Text = "启用经典模式（怀旧峡谷）预选，含人机";
+            chkClassic.UseVisualStyleBackColor = true;
+            // 
             // chkAutoSkinSelect
             // 
             chkAutoSkinSelect.AutoSize = true;
-            chkAutoSkinSelect.Location = new Point(461, 60);
+            chkAutoSkinSelect.Location = new Point(710, 60);
             chkAutoSkinSelect.Name = "chkAutoSkinSelect";
             chkAutoSkinSelect.Size = new Size(123, 21);
             chkAutoSkinSelect.TabIndex = 13;
@@ -467,7 +481,7 @@ namespace League
             // 
             labChampionSkinBrowser.AutoSize = true;
             labChampionSkinBrowser.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
-            labChampionSkinBrowser.Location = new Point(461, 31);
+            labChampionSkinBrowser.Location = new Point(710, 31);
             labChampionSkinBrowser.Name = "labChampionSkinBrowser";
             labChampionSkinBrowser.Size = new Size(361, 17);
             labChampionSkinBrowser.TabIndex = 12;
@@ -480,9 +494,9 @@ namespace League
             chkPickUrf.AutoSize = true;
             chkPickUrf.Location = new Point(314, 89);
             chkPickUrf.Name = "chkPickUrf";
-            chkPickUrf.Size = new Size(123, 21);
+            chkPickUrf.Size = new Size(147, 21);
             chkPickUrf.TabIndex = 11;
-            chkPickUrf.Text = "无限火力（自选）";
+            chkPickUrf.Text = "启用无限火力（自选）";
             chkPickUrf.UseVisualStyleBackColor = true;
             // 
             // chkUrf
@@ -490,9 +504,9 @@ namespace League
             chkUrf.AutoSize = true;
             chkUrf.Location = new Point(314, 62);
             chkUrf.Name = "chkUrf";
-            chkUrf.Size = new Size(123, 21);
+            chkUrf.Size = new Size(183, 21);
             chkUrf.TabIndex = 10;
-            chkUrf.Text = "无限乱斗（随机）";
+            chkUrf.Text = "启用无限乱斗（随机）抢英雄";
             chkUrf.UseVisualStyleBackColor = true;
             // 
             // chkNexus
@@ -541,10 +555,10 @@ namespace League
             lkbPreliminary.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
             lkbPreliminary.Location = new Point(6, 31);
             lkbPreliminary.Name = "lkbPreliminary";
-            lkbPreliminary.Size = new Size(344, 17);
+            lkbPreliminary.Size = new Size(589, 17);
             lkbPreliminary.TabIndex = 5;
             lkbPreliminary.TabStop = true;
-            lkbPreliminary.Text = "点击英雄预选配置，目前支持匹配、排位、大乱斗、海克斯乱斗";
+            lkbPreliminary.Text = "点击英雄预选/抢英雄配置，目前支持【峡谷人机、匹配、排位、大乱斗、海克斯乱斗、无线乱斗、怀旧峡谷】";
             lkbPreliminary.LinkClicked += lkbPreliminary_LinkClicked;
             // 
             // tabPage5
@@ -630,6 +644,16 @@ namespace League
             rbModeMatch.Text = "发送战绩信息";
             rbModeMatch.UseVisualStyleBackColor = true;
             // 
+            // chkBot
+            // 
+            chkBot.AutoSize = true;
+            chkBot.Location = new Point(314, 114);
+            chkBot.Name = "chkBot";
+            chkBot.Size = new Size(147, 21);
+            chkBot.TabIndex = 15;
+            chkBot.Text = "启用普通模式人机预选";
+            chkBot.UseVisualStyleBackColor = true;
+            // 
             // FormMain
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);
@@ -714,5 +738,7 @@ namespace League
         private CheckBox chkUrf;
         private LinkLabel labChampionSkinBrowser;
         private CheckBox chkAutoSkinSelect;
+        private CheckBox chkClassic;
+        private CheckBox chkBot;
     }
 }

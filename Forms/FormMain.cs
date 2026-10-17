@@ -159,6 +159,8 @@ namespace League
                 chkAutoAccept.Checked = _appConfig.EnableAutoAcceptQueue;   // 自动接受对局
                 chkUrf.Checked = _appConfig.EnablePreliminaryInUrf;             // 无限乱斗（900）
                 chkPickUrf.Checked = _appConfig.EnablePreliminaryInPickUrf;     // 无限火力（1900）
+                chkClassic.Checked = _appConfig.EnablePreliminaryInClassic; // 经典模式（4310/4320）
+                chkBot.Checked = _appConfig.EnablePreliminaryInBot;
 
                 // 恢复自动接受对局延时配置
                 cboAutoAcceptDelay.SelectedIndex = _appConfig.AutoAcceptDelaySeconds switch
@@ -207,6 +209,8 @@ namespace League
                 chkNexus.CheckedChanged += ModeCheckBox_CheckedChanged;
                 chkUrf.CheckedChanged += ModeCheckBox_CheckedChanged;
                 chkPickUrf.CheckedChanged += ModeCheckBox_CheckedChanged;
+                chkClassic.CheckedChanged += ModeCheckBox_CheckedChanged;
+                chkBot.CheckedChanged += ModeCheckBox_CheckedChanged;
                 chkAutoAccept.CheckedChanged += AutoAccept_CheckedChanged;
                 cboAutoAcceptDelay.SelectedIndexChanged += cboAutoAcceptDelay_SelectedIndexChanged;
                 chkHideSelf.CheckedChanged += HideSelf_CheckedChanged;
@@ -973,6 +977,8 @@ namespace League
             _appConfig.EnablePreliminaryInNexusBlitz = chkNexus.Checked;  // 海克斯乱斗
             _appConfig.EnablePreliminaryInUrf = chkUrf.Checked;           // 无限乱斗
             _appConfig.EnablePreliminaryInPickUrf = chkPickUrf.Checked;   // 无限火力
+            _appConfig.EnablePreliminaryInClassic = chkClassic.Checked;   // 经典模式
+            _appConfig.EnablePreliminaryInBot = chkBot.Checked;           // 峡谷人机
 
             SaveAppConfig(); // 立即保存到 LeagueConfig.json
 
