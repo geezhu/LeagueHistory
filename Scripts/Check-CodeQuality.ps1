@@ -36,6 +36,9 @@ try {
         if ($csharp | Where-Object { $_ -like 'Tests/StatisticsChecks/*' }) {
             $projects += 'Tests/StatisticsChecks/StatisticsChecks.csproj'
         }
+        if ($csharp | Where-Object { $_ -like 'Tests/League.Tests/*' }) {
+            $projects += 'Tests/League.Tests/League.Tests.csproj'
+        }
         $violations = [Collections.Generic.List[string]]::new()
         foreach ($report in (Invoke-CodeQualityAnalysis $repository $projects)) {
             foreach ($violation in (Get-CodeQualityViolations $repository $report $csharp $configuration.analysisRules)) {
