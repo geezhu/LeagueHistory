@@ -228,6 +228,11 @@ internal static class Program
         checks["--skin-browser-checks"] = () => Ui(SkinBrowserChecks.Run);
         checks["--skin-image-checks"] = () => Background(SkinImageStoreChecks.RunAsync);
         checks["--skin-source-checks"] = () => Background(SkinBrowserSourceChecks.RunAsync);
+        checks["--skin-strip-checks"] = () => Ui(SkinStripViewChecks.Run);
+        checks["--closable-tab-checks"] = () => Ui(ClosableTabControlChecks.Run);
+        checks["--match-detail-manager-checks"] = MatchDetailManagerChecks.Run;
+        checks["--player-card-checks"] = PlayerCardFactoryChecks.Run;
+        checks["--lcu-discovery-checks"] = LcuProcessDiscoveryChecks.Run;
         checks["--preliminary-checks"] = () => Ui(PreliminaryChecks.Run);
         checks["--gamebar-composition-checks"] = () => Background(GameBarCompositionChecks.Run);
         checks["--stale-session-checks"] = () => Background(StaleSessionChecks.Run);
