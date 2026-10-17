@@ -131,6 +131,7 @@ internal static class DefaultStatisticsSuite
         AugmentDescriptionChecks.Run();
         MatchTabPageContentChecks.Run();
         MatchDetailChecks.Run();
+        TeamCardDisplayChecks.Run();
         Task.Run(MatchQueryProcessorChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(SkinImageStoreChecks.RunAsync).GetAwaiter().GetResult();
     }
