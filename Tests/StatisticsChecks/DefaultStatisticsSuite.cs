@@ -44,6 +44,8 @@ internal static class DefaultStatisticsSuite
         Task.Run(ItemSetChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(AramBalanceChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(LcuClientServiceChecks.RunAsync).GetAwaiter().GetResult();
+        Task.Run(VoiceModelStoreChecks.RunAsync).GetAwaiter().GetResult();
+        Task.Run(SgpSessionChecks.RunAsync).GetAwaiter().GetResult();
         OfflineChecks();
     }
 
