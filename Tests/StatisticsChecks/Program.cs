@@ -258,6 +258,7 @@ internal static class Program
         // Live integration checks: they reach the internet or a running client, so they are opt-in only.
         checks["--live-source-checks"] = () => Background(LiveSourceChecks.RunAsync);
         checks["--live-client-checks"] = () => Background(LiveClientChecks.RunAsync);
+        checks["--live-champ-select-checks"] = () => Background(LiveChampSelectChecks.RunAsync);
     }
 
     private static void GameBarProtocolChecks()
