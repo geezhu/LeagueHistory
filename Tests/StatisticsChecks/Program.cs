@@ -255,6 +255,9 @@ internal static class Program
         checks["--live-champion-diagnostics"] = () => Background(LiveChampionChecks.RunLiveAsync);
         checks["--death-streak-live-diagnostics"] = () => Background(LiveDeathStreakChecks.RunLiveAsync);
         checks["--shutdown-validate"] = ShutdownSettingsChecks.ValidateWindows;
+        // Live integration checks: they reach the internet or a running client, so they are opt-in only.
+        checks["--live-source-checks"] = () => Background(LiveSourceChecks.RunAsync);
+        checks["--live-client-checks"] = () => Background(LiveClientChecks.RunAsync);
     }
 
     private static void GameBarProtocolChecks()
