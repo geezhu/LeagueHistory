@@ -125,5 +125,6 @@ internal static class DefaultStatisticsSuite
         MatchListPanelChecks.Run();
         AugmentDescriptionChecks.Run();
         MatchTabPageContentChecks.Run();
+        MatchDetailChecks.Run();
     }
 }
