@@ -15,6 +15,7 @@ public class RoomPlayerLoaderTests
 {
     private const string LoadingStatus = "正在读取战绩…";
     private const string TimeoutStatus = "读取超时";
+    private const string FailedStatus = "读取失败";
 
     [Fact]
     public void Normalize_RepeatedKnownIdentity_CapsTheTeamAtFiveDistinctSlots()
@@ -27,15 +28,19 @@ public class RoomPlayerLoaderTests
         Assert.Equal(new long[] { 1, 2, 3, 4, 5 }, normalized.Select(player => player.Value<long>("summonerId")));
     }
 
-    [Fact]
-    public void Normalize_HiddenPlayersWithZeroIdentities_KeepsFiveDistinctSlots()
+    [Theory]
+    [InlineData("")]
+    [InlineData("00000000-0000-0000-0000-000000000000")]
+    [InlineData("OBFUSCATED_7")]
+    [InlineData("HIDDEN_7")]
+    public void Normalize_PlayersSharingAnInvisibleIdentity_KeepsFiveDistinctSlots(string puuid)
     {
         JObject[] hidden = Enumerable
             .Range(0, 5)
             .Select(cell => new JObject
             {
                 ["summonerId"] = 0,
-                ["puuid"] = "OBFUSCATED_" + cell,
+                ["puuid"] = puuid,
                 ["cellId"] = cell,
             })
             .ToArray();
@@ -222,6 +227,347 @@ public class RoomPlayerLoaderTests
         Assert.Equal(0, fixture.Calls(1));
     }
 
+    [Fact]
+    public async Task UpdateTeamAsync_SlowPlayerStaysPending_WhileTheOthersComplete()
+    {
+        using var fixture = new LoaderFixture();
+        long generation = fixture.Reset();
+
+        await fixture.UpdateAsync(new[] { Player(1), Player(2), Player(3) }, ally: true, generation);
+        await fixture.StartedAsync(1, 2, 3);
+        fixture.Release(2);
+        fixture.Release(3);
+        await fixture.RenderedAsync(states => states.Count(state => state.Info != null) == 2);
+
+        Assert.Equal(LoadingStatus, fixture.State(true, 1).Status);
+        Assert.Null(fixture.State(true, 1).Info);
+        Assert.Same(fixture.Fetched(2), fixture.State(true, 2).Info);
+        Assert.Same(fixture.Fetched(3), fixture.State(true, 3).Info);
+        Assert.Equal(new[] { 1, 1, 1 }, new long[] { 1, 2, 3 }.Select(fixture.Calls));
+    }
+
+    [Fact]
+    public async Task UpdateTeamAsync_ChampionOnlyChange_KeepsTheLoadedHistory()
+    {
+        using var fixture = new LoaderFixture();
+        long generation = fixture.Reset();
+        JObject player = Player(1, 99);
+        await fixture.UpdateAsync(new[] { player }, ally: true, generation);
+        await fixture.StartedAsync(1);
+        fixture.Release(1);
+        await fixture.RenderedAsync(states => states.All(state => state.Info != null));
+
+        player["championId"] = 55;
+        await fixture.UpdateAsync(new[] { player }, ally: true, generation);
+
+        Assert.Same(fixture.Fetched(1), fixture.State(true, 1).Info);
+        Assert.Equal(55, fixture.State(true, 1).Player.Value<int>("championId"));
+        Assert.Equal(1, fixture.Calls(1));
+    }
+
+    [Fact]
+    public async Task UpdateTeamAsync_ReorderedSlotsWithAChampionChange_KeepsBothLoadedHistories()
+    {
+        using var fixture = new LoaderFixture();
+        long generation = fixture.Reset();
+        JObject first = Player(1, 99);
+        JObject second = Player(2, 25);
+        await fixture.UpdateAsync(new[] { first, second }, ally: true, generation);
+        await fixture.StartedAsync(1, 2);
+        fixture.Release(1);
+        fixture.Release(2);
+        await fixture.RenderedAsync(states => states.All(state => state.Info != null));
+
+        first["championId"] = 55;
+        await fixture.UpdateAsync(new[] { second, first }, ally: true, generation);
+
+        Assert.Equal(0, fixture.State(true, 2).Column);
+        Assert.Equal(1, fixture.State(true, 1).Column);
+        Assert.Equal(25, fixture.State(true, 2).Player.Value<int>("championId"));
+        Assert.Equal(55, fixture.State(true, 1).Player.Value<int>("championId"));
+        Assert.Same(fixture.Fetched(1), fixture.State(true, 1).Info);
+        Assert.Same(fixture.Fetched(2), fixture.State(true, 2).Info);
+        Assert.Equal(1, fixture.Calls(1));
+        Assert.Equal(1, fixture.Calls(2));
+    }
+
+    [Fact]
+    public async Task UpdateTeamAsync_QueueChange_ReloadsTheSameSlot()
+    {
+        using var fixture = new LoaderFixture();
+        long generation = fixture.Reset();
+        JObject player = Player(10);
+        player["__roomQueue"] = "420";
+        await fixture.UpdateAsync(new[] { player }, ally: true, generation);
+        await fixture.StartedAsync(10);
+        fixture.Release(10);
+        await fixture.RenderedAsync(states => states.All(state => state.Info != null));
+
+        player["__roomQueue"] = "450";
+        await fixture.UpdateAsync(new[] { player }, ally: true, generation);
+        await fixture.RenderedAsync(states => states.All(state => state.Info != null));
+
+        Assert.Equal(2, fixture.Calls(10));
+        Assert.Equal(new[] { LoaderFixture.Key(true, 10) }, fixture.Latest.Select(state => state.Key));
+        Assert.Same(fixture.Fetched(10), fixture.State(true, 10).Info);
+    }
+
+    [Fact]
+    public async Task UpdateTeamAsync_LeavingPlayer_CancelsItsRequest()
+    {
+        using var fixture = new LoaderFixture();
+        long generation = fixture.Reset();
+        await fixture.UpdateAsync(new[] { Player(1), Player(2) }, ally: true, generation);
+        await fixture.StartedAsync(1, 2);
+        CancellationToken token = fixture.FetchToken(2);
+
+        await fixture.UpdateAsync(new[] { Player(1) }, ally: true, generation);
+
+        Assert.True(token.IsCancellationRequested, "the removed player's request must be cancelled");
+        Assert.Equal(new[] { LoaderFixture.Key(true, 1) }, fixture.Latest.Select(state => state.Key));
+    }
+
+    [Fact]
+    public async Task UpdateTeamAsync_LateResultForARemovedPlayer_IsNotDelivered()
+    {
+        using var fixture = new LoaderFixture(ignoreCancellation: true);
+        long generation = fixture.Reset();
+        await fixture.UpdateAsync(new[] { Player(1), Player(2) }, ally: true, generation);
+        await fixture.StartedAsync(1, 2);
+        await fixture.UpdateAsync(new[] { Player(2) }, ally: true, generation);
+
+        Task<bool> delivered = fixture.WaitForDeliveryAsync(TimeSpan.FromMilliseconds(500));
+        fixture.Release(1);
+
+        Assert.False(await delivered, "a result for a removed player must not be delivered");
+        Assert.Equal(new[] { LoaderFixture.Key(true, 2) }, fixture.Latest.Select(state => state.Key));
+    }
+
+    [Fact]
+    public async Task UpdateTeamAsync_ResultForAPresentPlayer_IsDelivered()
+    {
+        using var fixture = new LoaderFixture(ignoreCancellation: true);
+        long generation = fixture.Reset();
+        await fixture.UpdateAsync(new[] { Player(1) }, ally: true, generation);
+        await fixture.StartedAsync(1);
+
+        fixture.Release(1);
+        await fixture.RenderedAsync(states => states.All(state => state.Info != null));
+
+        Assert.Same(fixture.Fetched(1), fixture.State(true, 1).Info);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UpdateTeamAsync_EitherTeamColor_LoadsAndKeepsTheTeamFlag(bool ally)
+    {
+        using var fixture = new LoaderFixture();
+        long generation = fixture.Reset();
+
+        await fixture.UpdateAsync(new[] { Player(1) }, ally, generation);
+        await fixture.StartedAsync(1);
+        fixture.Release(1);
+        await fixture.RenderedAsync(states => states.All(state => state.Info != null));
+
+        RoomPlayerState state = fixture.State(ally, 1);
+        Assert.Equal(ally, state.Ally);
+        Assert.Equal(0, state.Column);
+        Assert.Equal(generation, state.Generation);
+        Assert.Same(fixture.Fetched(1), state.Info);
+        Assert.Equal(string.Empty, state.Status);
+    }
+
+    [Fact]
+    public async Task UpdateTeamAsync_TenCompletedPlayers_ReportNoLoadingState()
+    {
+        using var fixture = new LoaderFixture(
+            fetch: (player, _) => Task.FromResult(Info(player.Value<long>("summonerId")))
+        );
+        long generation = fixture.Reset();
+        JObject[] allies = Enumerable.Range(1, 5).Select(id => Player(id)).ToArray();
+        JObject[] enemies = Enumerable.Range(6, 5).Select(id => Player(id)).ToArray();
+        long[] expected = Enumerable.Range(1, 10).Select(id => (long)id).ToArray();
+
+        await fixture.UpdateAsync(allies, ally: true, generation);
+        await fixture.UpdateAsync(enemies, ally: false, generation);
+        await fixture.RenderedAsync(states => states.Count == 10 && states.All(state => state.Info != null));
+
+        Assert.Equal(
+            Enumerable
+                .Range(1, 5)
+                .Select(id => LoaderFixture.Key(true, id))
+                .Concat(Enumerable.Range(6, 5).Select(id => LoaderFixture.Key(false, id))),
+            fixture.Latest.Select(state => state.Key)
+        );
+        Assert.Equal(Enumerable.Repeat(string.Empty, 10), fixture.Latest.Select(state => state.Status));
+        Assert.Equal(expected, fixture.Latest.Select(state => state.Player.Value<long>("summonerId")));
+    }
+
+    [Fact]
+    public async Task UpdateTeamAsync_MorePendingPlayersThanRequestSlots_AllTimeOutWithARetryOffer()
+    {
+        using var fixture = new LoaderFixture(
+            timeout: TimeSpan.FromMilliseconds(50),
+            retryDelay: TimeSpan.FromMilliseconds(5)
+        );
+        long generation = fixture.Reset();
+        JObject[] players = Enumerable.Range(1, 5).Select(id => Player(id)).ToArray();
+
+        await fixture.UpdateAsync(players, ally: true, generation);
+        await fixture.RenderedAsync(states => states.Count == 5 && states.All(state => state.CanRetry));
+
+        Assert.Equal(
+            Enumerable.Range(1, 5).Select(id => LoaderFixture.Key(true, id)),
+            fixture.Latest.Select(state => state.Key)
+        );
+        Assert.Equal(Enumerable.Repeat(TimeoutStatus, 5), fixture.Latest.Select(state => state.Status));
+        Assert.Equal(Enumerable.Repeat(true, 5), fixture.Latest.Select(state => state.CanRetry));
+        Assert.Equal(Enumerable.Repeat(false, 5), fixture.Latest.Select(state => state.Info != null));
+    }
+
+    [Fact]
+    public async Task RetryAsync_AfterBothAttemptsFailed_RecoversWithoutFailureState()
+    {
+        using var fixture = new LoaderFixture(
+            timeout: TimeSpan.FromMilliseconds(30),
+            retryDelay: TimeSpan.FromMilliseconds(1)
+        );
+        long generation = fixture.Reset();
+        await fixture.UpdateAsync(new[] { Player(8) }, ally: true, generation);
+        await fixture.RenderedAsync(states => states.All(state => state.CanRetry));
+        RoomPlayerState failed = fixture.State(true, 8);
+        int attemptsBeforeRetry = fixture.Calls(8);
+
+        fixture.Release(8);
+        await fixture.RetryAsync(failed.Key, generation);
+        await fixture.RenderedAsync(states => states.All(state => state.Info != null));
+
+        Assert.Equal(2, attemptsBeforeRetry);
+        Assert.Equal(3, fixture.Calls(8));
+        Assert.Equal(TimeoutStatus, failed.Status);
+        Assert.Null(failed.Info);
+        Assert.Same(fixture.Fetched(8), fixture.State(true, 8).Info);
+        Assert.Equal(string.Empty, fixture.State(true, 8).Status);
+        Assert.False(fixture.State(true, 8).CanRetry);
+    }
+
+    [Fact]
+    public async Task UpdateTeamAsync_StaleGeneration_StartsNoRequestAndDeliversNothing()
+    {
+        using var fixture = new LoaderFixture();
+        long generation = fixture.Reset();
+
+        await fixture.UpdateAsync(new[] { Player(1) }, ally: true, generation - 1);
+
+        Assert.Empty(fixture.Latest);
+        Assert.Equal(0, fixture.Calls(1));
+    }
+
+    [Fact]
+    public async Task UpdateTeamAsync_FetchReceivesAClone_MutatingItLeavesTheSnapshotIntact()
+    {
+        var handed = new TaskCompletionSource<JObject>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var fixture = new LoaderFixture(
+            fetch: (player, _) =>
+            {
+                handed.TrySetResult(player);
+                return Task.FromResult(Info(1));
+            }
+        );
+        long generation = fixture.Reset();
+        JObject roster = Player(1, 99);
+
+        await fixture.UpdateAsync(new[] { roster }, ally: true, generation);
+        await fixture.RenderedAsync(states => states.All(state => state.Info != null));
+        JObject captured = await handed.Task;
+
+        roster["championId"] = 55;
+        captured["championId"] = 77;
+
+        Assert.NotSame(roster, captured);
+        Assert.Equal(99, fixture.State(true, 1).Player.Value<int>("championId"));
+    }
+
+    [Fact]
+    public async Task UpdateTeamAsync_FetchFails_RetriesOnceAndOffersManualRetry()
+    {
+        using var fixture = new LoaderFixture(retryDelay: TimeSpan.FromMilliseconds(1));
+        long generation = fixture.Reset();
+        await fixture.UpdateAsync(new[] { Player(1) }, ally: true, generation);
+        await fixture.StartedAsync(1);
+
+        fixture.Fail(1, new InvalidOperationException("client refused"));
+        await fixture.RenderedAsync(states => states.All(state => state.CanRetry));
+
+        Assert.Equal(2, fixture.Calls(1));
+        Assert.Equal(FailedStatus, fixture.State(true, 1).Status);
+        Assert.Null(fixture.State(true, 1).Info);
+    }
+
+    [Fact]
+    public async Task UpdateTeamAsync_ReturnedIdentityDiffersFromTheSlot_KeepsTheFailureState()
+    {
+        using var fixture = new LoaderFixture(retryDelay: TimeSpan.FromMilliseconds(1));
+        long generation = fixture.Reset();
+        await fixture.UpdateAsync(new[] { Player(1) }, ally: true, generation);
+        await fixture.StartedAsync(1);
+
+        fixture.Release(1, Info(2));
+        await fixture.RenderedAsync(states => states.All(state => state.CanRetry));
+
+        Assert.Equal(2, fixture.Calls(1));
+        Assert.Equal(FailedStatus, fixture.State(true, 1).Status);
+        Assert.Null(fixture.State(true, 1).Info);
+    }
+
+    [Fact]
+    public async Task UpdateTeamAsync_FetchReportsUnavailableData_KeepsTheFailureState()
+    {
+        using var fixture = new LoaderFixture(retryDelay: TimeSpan.FromMilliseconds(1));
+        long generation = fixture.Reset();
+        await fixture.UpdateAsync(new[] { Player(1) }, ally: true, generation);
+        await fixture.StartedAsync(1);
+
+        fixture.Release(1, UnavailableInfo(1));
+        await fixture.RenderedAsync(states => states.All(state => state.CanRetry));
+
+        Assert.Equal(2, fixture.Calls(1));
+        Assert.Equal(FailedStatus, fixture.State(true, 1).Status);
+        Assert.Null(fixture.State(true, 1).Info);
+    }
+
+    [Fact]
+    public async Task RetryAsync_WhileThePlayerIsStillLoading_StartsNoSecondRequest()
+    {
+        using var fixture = new LoaderFixture();
+        long generation = fixture.Reset();
+        await fixture.UpdateAsync(new[] { Player(1) }, ally: true, generation);
+        await fixture.StartedAsync(1);
+
+        await fixture.RetryAsync(LoaderFixture.Key(true, 1), generation);
+
+        Assert.Equal(1, fixture.Calls(1));
+        Assert.Equal(LoadingStatus, fixture.State(true, 1).Status);
+        Assert.False(fixture.State(true, 1).CanRetry);
+    }
+
+    [Fact]
+    public async Task Dispose_WithAPendingPlayer_CancelsItAndDeliversNothing()
+    {
+        using var fixture = new LoaderFixture(ignoreCancellation: true);
+        long generation = fixture.Reset();
+        await fixture.UpdateAsync(new[] { Player(1) }, ally: true, generation);
+        await fixture.StartedAsync(1);
+
+        Task<bool> delivered = fixture.WaitForDeliveryAsync(TimeSpan.FromMilliseconds(500));
+        fixture.Dispose();
+        fixture.Release(1);
+
+        Assert.False(await delivered, "a disposed loader must not deliver anything");
+        Assert.True(fixture.FetchToken(1).IsCancellationRequested, "a disposed loader must cancel its requests");
+    }
+
     private static JObject Player(long id, int champion = 0) =>
         new()
         {
@@ -286,6 +632,17 @@ public class RoomPlayerLoaderTests
             MatchItems = { new ListViewItem(new[] { "", "大乱斗", "3/2/5", "2026-09-17" }) },
         };
 
+    private static PlayerMatchInfo UnavailableInfo(long id) =>
+        new()
+        {
+            Player = new PlayerInfo
+            {
+                SummonerId = id,
+                Puuid = "test-player-" + id,
+                GameName = "失败",
+            },
+        };
+
     private sealed record Waiter(
         Func<IReadOnlyList<RoomPlayerState>, bool> Match,
         TaskCompletionSource<IReadOnlyList<RoomPlayerState>> Completion
@@ -301,6 +658,7 @@ public class RoomPlayerLoaderTests
     {
         private readonly RoomPlayerLoader _loader;
         private readonly Func<JObject, CancellationToken, Task<PlayerMatchInfo>> _fetch;
+        private readonly bool _ignoreCancellation;
         private readonly ConcurrentDictionary<long, TaskCompletionSource<PlayerMatchInfo>> _gates = new();
         private readonly ConcurrentDictionary<long, TaskCompletionSource> _started = new();
         private readonly ConcurrentDictionary<long, CancellationToken> _tokens = new();
@@ -313,18 +671,27 @@ public class RoomPlayerLoaderTests
             action();
             return Task.CompletedTask;
         };
+        private TaskCompletionSource _nextDelivery = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private RoomPlayerState[] _latest = Array.Empty<RoomPlayerState>();
 
         public LoaderFixture(
             Func<JObject, CancellationToken, Task<PlayerMatchInfo>>? fetch = null,
             TimeSpan? timeout = null,
-            TimeSpan? retryDelay = null
+            TimeSpan? retryDelay = null,
+            bool ignoreCancellation = false
         )
         {
+            _ignoreCancellation = ignoreCancellation;
             _fetch = fetch ?? GatedFetch;
             _loader = new RoomPlayerLoader(
                 (player, token) => _fetch(player, token),
-                action => _deliver(action),
+                action =>
+                {
+                    TaskCompletionSource signalled = _nextDelivery;
+                    _nextDelivery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    signalled.TrySetResult();
+                    return _deliver(action);
+                },
                 OnRender,
                 null,
                 timeout,
@@ -336,7 +703,7 @@ public class RoomPlayerLoaderTests
 
         public int PostedDeliveries => _posted.Count;
 
-        public static string Key(long id) => "ally/p:test-player-" + id;
+        public static string Key(bool ally, long id) => (ally ? "ally/" : "enemy/") + "p:test-player-" + id;
 
         public long Reset() => _loader.Reset();
 
@@ -345,7 +712,26 @@ public class RoomPlayerLoaderTests
 
         public Task RetryAsync(string key, long generation) => _loader.RetryAsync(key, generation);
 
-        public RoomPlayerState State(long id) => _latest.Single(state => state.Key == Key(id));
+        public RoomPlayerState State(bool ally, long id) => _latest.Single(state => state.Key == Key(ally, id));
+
+        /// <summary>
+        /// Reports whether the loader dispatched one more render inside <paramref name="window"/>. Snapshot the wait
+        /// before provoking the work: a test that expects nothing uses it as a bounded proof of absence.
+        /// </summary>
+        public async Task<bool> WaitForDeliveryAsync(TimeSpan window)
+        {
+            Task next = _nextDelivery.Task;
+            using var deadline = new CancellationTokenSource(window);
+            try
+            {
+                await next.WaitAsync(deadline.Token);
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+        }
 
         public int Calls(long id) => _calls.TryGetValue(id, out int count) ? count : 0;
 
@@ -378,6 +764,8 @@ public class RoomPlayerLoaderTests
             _fetched[id] = info;
             Gate(id).TrySetResult(info);
         }
+
+        public void Fail(long id, Exception error) => Gate(id).TrySetException(error);
 
         public Task StartedAsync(params long[] ids) => Bounded(Task.WhenAll(ids.Select(StartedTask)));
 
@@ -421,7 +809,10 @@ public class RoomPlayerLoaderTests
             _calls.AddOrUpdate(id, 1, (_, count) => count + 1);
             _tokens[id] = token;
             Started(id).TrySetResult();
-            return await Gate(id).Task.WaitAsync(token);
+            Task<PlayerMatchInfo> result = Gate(id).Task;
+            // A loader that ignores cancellation stands in for a resource that does not take a token: the loader's
+            // own wait has to protect delivery from its late answer.
+            return await (_ignoreCancellation ? result : result.WaitAsync(token));
         }
 
         private Task StartedTask(long id) => Started(id).Task;
