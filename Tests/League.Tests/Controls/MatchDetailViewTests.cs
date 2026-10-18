@@ -13,6 +13,10 @@ namespace League.Tests.Controls;
 [Trait("Category", "UI")]
 public class MatchDetailViewTests
 {
+    private static readonly string[] Tabs = ["统计", "图表", "时间线", "基础数据"];
+    private static readonly Color ActiveTabInk = Color.FromArgb(46, 103, 190);
+    private static readonly Color IdleTabInk = Color.FromArgb(111, 123, 139);
+
     [Fact]
     public void PrepareAsync_GameWithParticipants_BuildsTheScoreboardSurface()
     {
@@ -94,6 +98,199 @@ public class MatchDetailViewTests
             Assert.Equal(900, detail.Width);
         });
     }
+
+    [Theory]
+    [InlineData("统计")]
+    [InlineData("图表")]
+    [InlineData("时间线")]
+    [InlineData("基础数据")]
+    public void PrepareAsync_GameWithParticipants_OffersTheTab(string tab)
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            var detail = View(host, match);
+            await detail.PrepareAsync();
+
+            int offered = Descendants(detail).OfType<Button>().Count(button => button.Text == tab);
+
+            Assert.Equal(1, offered);
+        });
+    }
+
+    [Theory]
+    [InlineData("统计")]
+    [InlineData("图表")]
+    [InlineData("时间线")]
+    [InlineData("基础数据")]
+    public void Tab_Clicked_BecomesTheActiveTab(string tab)
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            var detail = View(host, match);
+            await detail.PrepareAsync();
+            var button = TabButton(detail, tab);
+            var others = TabButtons(detail).Where(other => other != button).ToArray();
+
+            WindowMessages.Click(button, new Point(4, 4));
+
+            Assert.Equal(ActiveTabInk, button.ForeColor);
+            Assert.All(others, other => Assert.Equal(IdleTabInk, other.ForeColor));
+        });
+    }
+
+    [Fact]
+    public void StatisticsTab_Clicked_BuildsTheStatisticsView()
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            var detail = View(host, match);
+            await detail.PrepareAsync();
+
+            WindowMessages.Click(TabButton(detail, "统计"), new Point(4, 4));
+
+            Assert.Single(Descendants(detail).OfType<MatchStatisticsView>());
+        });
+    }
+
+    [Fact]
+    public void ChartsTab_Clicked_BuildsTheChartsView()
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            var detail = View(host, match);
+            await detail.PrepareAsync();
+
+            WindowMessages.Click(TabButton(detail, "图表"), new Point(4, 4));
+
+            Assert.Single(Descendants(detail).OfType<MatchChartsView>());
+        });
+    }
+
+    [Fact]
+    public void TimelineTab_Clicked_BuildsTheTimelineView()
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            var detail = View(host, match);
+            await detail.PrepareAsync();
+
+            WindowMessages.Click(TabButton(detail, "时间线"), new Point(4, 4));
+
+            Assert.Single(Descendants(detail).OfType<TimelineView>());
+        });
+    }
+
+    [Fact]
+    public void PrepareAsync_GameWhereBothTeamsBanned_OffersTheBanListOfEachTeam()
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            var detail = View(host, match);
+            await detail.PrepareAsync();
+
+            // The bans of a team are drawn only because its entry in RawGameData["teams"] carries them.
+            int lists = Descendants(detail).OfType<Button>().Count(button => button.Name == "TeamBans");
+
+            Assert.Equal(2, lists);
+        });
+    }
+
+    [Fact]
+    public void PrepareAsync_GameWithParticipants_ShowsACardPerHighlightTheGameCarries()
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            var detail = View(host, match);
+            await detail.PrepareAsync();
+
+            var strip = Descendants(detail).OfType<FlowLayoutPanel>().Single(panel => panel.Name == "MatchHighlights");
+
+            // Damage dealt and damage taken are integers in the game document; it carries no largestKillingSpree.
+            Assert.Equal(2, strip.Controls.Count);
+        });
+    }
+
+    [Theory]
+    [InlineData("时间", "09-08 01:54")]
+    [InlineData("类型", "召唤师峡谷")]
+    [InlineData("地图", "未知地图")]
+    [InlineData("比赛时长", "22分5秒")]
+    [InlineData("击杀", "12 / 3")]
+    public void PrepareAsync_GameWithParticipants_ShowsTheHeaderValue(string caption, string expected)
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            var detail = View(host, match);
+            await detail.PrepareAsync();
+
+            Assert.Equal(expected, HeaderValue(detail, caption));
+        });
+    }
+
+    [Fact]
+    public void PrepareAsync_GameWithoutParticipants_SaysThereIsNothingToShow()
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = new MatchInfo
+            {
+                ResultText = "胜利",
+                Mode = "极地大乱斗",
+                QueueId = "q_450",
+            };
+            var detail = View(host, match);
+
+            await detail.PrepareAsync();
+            string[] texts = [.. Descendants(detail).OfType<Label>().Select(label => label.Text)];
+
+            Assert.Contains("这场比赛暂无可展示的详细数据。", texts);
+        });
+    }
+
+    [Fact]
+    public void ReplayButton_Clicked_RaisesTheReplayRequest()
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            var detail = View(host, match);
+            await detail.PrepareAsync();
+            int requests = 0;
+            detail.ReplayRequested += () => requests++;
+
+            WindowMessages.Click(
+                Descendants(detail).OfType<Button>().Single(button => button.Text == "查看回放"),
+                new Point(4, 4)
+            );
+
+            Assert.Equal(1, requests);
+        });
+    }
+
+    private static Button TabButton(Control detail, string tab) =>
+        Descendants(detail).OfType<Button>().Single(button => button.Text == tab);
+
+    private static IEnumerable<Button> TabButtons(Control detail) =>
+        Descendants(detail).OfType<Button>().Where(button => Tabs.Contains(button.Text));
+
+    /// <summary>The value cell of a header column, addressed by the caption above it.</summary>
+    private static string HeaderValue(Control detail, string caption) =>
+        Descendants(detail)
+            .OfType<Panel>()
+            .Single(cell =>
+                cell.Controls.OfType<Label>().Any(label => label.Text == caption && label.Dock == DockStyle.Top)
+            )
+            .Controls.OfType<Label>()
+            .Single(label => label.Dock == DockStyle.Fill)
+            .Text;
 
     private static string[] PlayerNames(Control detail) =>
         [.. Descendants(detail).OfType<PlayerNameLink>().Select(link => link.PlayerName)];
