@@ -568,6 +568,38 @@ public class RoomPlayerLoaderTests
         Assert.True(fixture.FetchToken(1).IsCancellationRequested, "a disposed loader must cancel its requests");
     }
 
+    [Fact]
+    public void Reset_NewSession_ReportsTheNewGeneration()
+    {
+        using var fixture = new LoaderFixture();
+
+        long first = fixture.Reset();
+        long second = fixture.Reset();
+
+        Assert.Equal(1, first);
+        Assert.Equal(2, second);
+        Assert.Equal(second, fixture.Generation);
+    }
+
+    [Fact]
+    public async Task UpdateTeamAsync_UnchangedRoster_DeliversNothingMore()
+    {
+        using var fixture = new LoaderFixture();
+        long generation = fixture.Reset();
+        await fixture.UpdateAsync(new[] { Player(1) }, ally: true, generation);
+        await fixture.StartedAsync(1);
+        fixture.Release(1);
+        await fixture.RenderedAsync(states => states.All(state => state.Info != null));
+        int deliveries = fixture.PostedDeliveries;
+
+        Task<bool> delivered = fixture.WaitForDeliveryAsync(TimeSpan.FromMilliseconds(300));
+        await fixture.UpdateAsync(new[] { Player(1) }, ally: true, generation);
+
+        Assert.False(await delivered, "an unchanged roster must not render again");
+        Assert.Equal(deliveries, fixture.PostedDeliveries);
+        Assert.Equal(1, fixture.Calls(1));
+    }
+
     private static JObject Player(long id, int champion = 0) =>
         new()
         {
@@ -706,6 +738,8 @@ public class RoomPlayerLoaderTests
         public static string Key(bool ally, long id) => (ally ? "ally/" : "enemy/") + "p:test-player-" + id;
 
         public long Reset() => _loader.Reset();
+
+        public long Generation => _loader.Generation;
 
         public Task UpdateAsync(JObject[] players, bool ally, long generation) =>
             _loader.UpdateTeamAsync(new JArray(players), ally, generation);
