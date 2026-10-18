@@ -63,6 +63,24 @@ public class ClosableTabControlTests
     }
 
     [Fact]
+    public void Paint_TheControl_PaintsItselfAndIsNeverAskedToOwnerDrawATab()
+    {
+        UiHost.Run(host =>
+        {
+            using var tabs = new RecordingTabControl { Dock = DockStyle.Fill };
+            host.Controls.Add(tabs);
+            AddPages(tabs, "第一页", "第二页");
+            Application.DoEvents();
+
+            using var printed = Paint(tabs);
+            WindowMessages.Paint(tabs);
+
+            Assert.True(tabs.Painted > 0, "The control really painted.");
+            Assert.Equal(0, tabs.DrawnTabs);
+        });
+    }
+
+    [Fact]
     public void Click_AwayFromTheCloseButton_ClosesNothing()
     {
         UiHost.Run(host =>
@@ -197,15 +215,26 @@ public class ClosableTabControlTests
         return painted;
     }
 
-    /// <summary>Counts the tabs the framework owner-draws, which is the only way to reach that override.</summary>
+    /// <summary>
+    /// Counts the paints and the tabs the framework owner-draws. Both counters exist so a test can tell "the control
+    /// painted and the owner-draw hook stayed silent" apart from "nothing painted at all".
+    /// </summary>
     private sealed class RecordingTabControl : ClosableTabControl
     {
         public int DrawnTabs { get; private set; }
+
+        public int Painted { get; private set; }
 
         protected override void OnDrawItem(DrawItemEventArgs e)
         {
             base.OnDrawItem(e);
             DrawnTabs++;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            Painted++;
         }
     }
 }

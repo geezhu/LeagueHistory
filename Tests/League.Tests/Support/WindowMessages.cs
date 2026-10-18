@@ -17,6 +17,7 @@ public static class WindowMessages
     private const int LeftButtonDoubleClick = 0x0203;
     private const int KeyDown = 0x0100;
     private const int KeyUp = 0x0101;
+    private const int PaintMessage = 0x000F;
     private const int LeftButton = 0x0001;
 
     private const int MouseWheel = 0x020A;
@@ -72,6 +73,13 @@ public static class WindowMessages
     /// <summary>A key press as a message, for the preprocessing the message loop does before dispatching one.</summary>
     public static Message KeyDownMessage(Control control, Keys key) =>
         Message.Create(control.Handle, KeyDown, (nint)key, 0);
+
+    /// <summary>
+    /// Asks the control to repaint itself. <see cref="Control.DrawToBitmap"/> sends WM_PRINT instead, which is a
+    /// different path through the window procedure, and the test window sits off screen, so Windows never queues a
+    /// real paint of its own accord.
+    /// </summary>
+    public static void Paint(Control control) => Send(control, PaintMessage, 0, 0);
 
     // The low word is the x coordinate and the high word the y coordinate, both relative to the client area.
     private static int Pack(Point point) => (point.Y << 16) | (point.X & 0xFFFF);
