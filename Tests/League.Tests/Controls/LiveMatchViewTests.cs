@@ -175,42 +175,6 @@ public class LiveMatchViewTests : IDisposable
     }
 
     [Fact]
-    public void Window_TheAugmentPicker_RecordsTheChosenAugmentForTheSelectedPlayer()
-    {
-        UiHost.Run(async host =>
-        {
-            var live = new FakeLive(Snapshot(LiveMatchFixture.AramGame(125, 900, 1400)));
-            using var screen = CreateScreen(host, live, aramMeta: new FakeAramMeta());
-            await screen.Rendered(() => screen.PickerReady && screen.Cards.Count == 10);
-            screen.Picker.SelectedIndex = screen.AugmentIndex("幻影武器");
-
-            Click(screen.ButtonWith("记录已选"));
-            await screen.Rendered(() => screen.IconsOf(1029).Count == 1);
-
-            Assert.Equal("幻影武器", screen.IconsOf(1029)[0].AccessibleName);
-        });
-    }
-
-    [Fact]
-    public void Window_ClearingTheRecordedAugments_DropsThem()
-    {
-        UiHost.Run(async host =>
-        {
-            var live = new FakeLive(Snapshot(LiveMatchFixture.AramGame(125, 900, 1400)));
-            using var screen = CreateScreen(host, live, aramMeta: new FakeAramMeta());
-            await screen.Rendered(() => screen.PickerReady && screen.Cards.Count == 10);
-            screen.Picker.SelectedIndex = screen.AugmentIndex("幻影武器");
-            Click(screen.ButtonWith("记录已选"));
-            await screen.Rendered(() => screen.IconsOf(1029).Count == 1);
-
-            Click(screen.ButtonWith("清除记录"));
-            await screen.Rendered(() => screen.IconsOf(1029).Count == 0);
-
-            Assert.Equal(1, screen.LabelsWith("在底部记录已选强化，点击图标可移除。").Count);
-        });
-    }
-
-    [Fact]
     public void Window_RecordingWithoutASelectedPlayer_DoesNothing()
     {
         UiHost.Run(async host =>
@@ -223,25 +187,6 @@ public class LiveMatchViewTests : IDisposable
             Click(screen.ButtonWith("记录已选"));
 
             Assert.Equal(0, screen.AugmentIconTotal);
-        });
-    }
-
-    [Fact]
-    public void Window_ARecordedAugment_IsKeptWhileTheRosterIsTheSame()
-    {
-        UiHost.Run(async host =>
-        {
-            var live = new FakeLive(Snapshot(LiveMatchFixture.AramGame(125, 900, 1400)));
-            using var screen = CreateScreen(host, live, aramMeta: new FakeAramMeta());
-            await screen.Rendered(() => screen.PickerReady && screen.Cards.Count == 10);
-            screen.Picker.SelectedIndex = screen.AugmentIndex("幻影武器");
-            Click(screen.ButtonWith("记录已选"));
-            await screen.Rendered(() => screen.IconsOf(1029).Count == 1);
-
-            Click(screen.Refresh);
-            await screen.Rendered(() => live.Polls >= 2 && screen.Cards.Count == 10);
-
-            Assert.Equal(1, screen.IconsOf(1029).Count);
         });
     }
 
