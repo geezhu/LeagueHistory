@@ -152,12 +152,22 @@ public class GameBarBridgeTests : IDisposable
         JObject snapshot = await PublishSnapshotAsync(RosterPublish());
 
         Assert.Equal(10, snapshot["players"]!.Count());
-        Assert.Empty(Row(snapshot, 1));
-        Assert.Empty(Row(snapshot, 2));
-        Assert.Empty(Row(snapshot, 3));
-        Assert.Empty(Row(snapshot, 4));
-        Assert.Empty(Row(snapshot, 6));
-        Assert.Empty(Row(snapshot, 9));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(6)]
+    [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(9)]
+    public async Task Publish_SlotWithoutAPlayer_KeepsItsEmptyRow(int slot)
+    {
+        JObject snapshot = await PublishSnapshotAsync(RosterPublish());
+
+        Assert.Empty(Row(snapshot, slot));
     }
 
     [Fact]
@@ -267,6 +277,136 @@ public class GameBarBridgeTests : IDisposable
         Assert.Equal(session.Split(':')[0], ((string)snapshot["command"]!).Split(':')[0]);
     }
 
+    [Fact]
+    public async Task Publish_ManySnapshots_KeepsTheNewest()
+    {
+        JObject snapshot = await PublishSnapshotAsync(bridge => PublishRosterRepeatedly(bridge, 101));
+
+        Assert.Equal(1, (int)snapshot["protocol"]!);
+        Assert.EndsWith(":101", (string)snapshot["revision"]!);
+    }
+
+    [Fact]
+    public async Task Publish_FinishedWrite_LeavesNoTemporaryFile()
+    {
+        await PublishSnapshotAsync(bridge => PublishRosterRepeatedly(bridge, 3));
+
+        Assert.Empty(Directory.EnumerateFiles(_folder.Root, "*.tmp"));
+    }
+
+    [Fact]
+    public async Task Publish_AfterDispose_WritesNothingMore()
+    {
+        var bridge = new GameBarBridge(_folder.Root);
+        PublishRoster(bridge, enabled: true, active: true, waveOpacity: LeagueConfig.DefaultGameBarWaveOpacity);
+        bridge.Dispose();
+
+        PublishRoster(bridge, enabled: false, active: false, waveOpacity: 5);
+        await bridge.Completion;
+
+        JObject snapshot = JObject.Parse(await File.ReadAllTextAsync(_folder.File("snapshot.json")));
+        Assert.True((bool)snapshot["enabled"]!, "a disposed bridge must not publish the late snapshot");
+    }
+
+    [Fact]
+    public async Task Publish_Disabled_RemovesThePreviousMatchInformation()
+    {
+        await PublishSnapshotAsync(RosterPublish());
+
+        JObject snapshot = await PublishSnapshotAsync(RosterPublish(enabled: false, active: false));
+
+        Assert.False((bool)snapshot["enabled"]!, "the feature is off");
+        Assert.Empty(Row(snapshot, 0));
+        Assert.Empty(Row(snapshot, 5));
+    }
+
+    [Fact]
+    public async Task Publish_AfterARestart_RenewsTheInstanceIdentity()
+    {
+        JObject first = await PublishSnapshotAsync(RosterPublish());
+
+        JObject restarted = await PublishSnapshotAsync(RosterPublish());
+
+        Assert.NotEqual((string?)first["session"], (string?)restarted["session"]);
+        Assert.EndsWith(":match-1", (string)restarted["session"]!);
+    }
+
+    [Fact]
+    public async Task Publish_WaveWidgetOpacity_DefaultsToTheConfigDefault()
+    {
+        JObject snapshot = await PublishSnapshotAsync(RosterPublish());
+
+        Assert.Equal(1, (int)snapshot["waveWidget"]!["protocol"]!);
+        Assert.Equal(LeagueConfig.DefaultGameBarWaveOpacity / 100.0, (double)snapshot["waveWidget"]!["opacity"]!);
+    }
+
+    [Theory]
+    [InlineData(5, 20)]
+    [InlineData(20, 20)]
+    [InlineData(100, 100)]
+    [InlineData(150, 100)]
+    public async Task Publish_WaveWidgetOpacity_IsClampedToTheConfigRange(int requested, int expected)
+    {
+        JObject snapshot = await PublishSnapshotAsync(
+            RosterPublish(enabled: false, active: false, waveOpacity: requested)
+        );
+
+        Assert.Equal(expected / 100.0, (double)snapshot["waveWidget"]!["opacity"]!);
+    }
+
+    [Fact]
+    public async Task Status_WithoutAHeartbeat_ReportsDisconnected()
+    {
+        string status = await PublishStatusAsync(RosterPublish());
+
+        Assert.Equal(Disconnected, status);
+    }
+
+    [Theory]
+    [InlineData(true, true, Connected)]
+    [InlineData(true, false, Waiting)]
+    [InlineData(false, true, NotPinned)]
+    public async Task Status_FreshHeartbeat_ReportsTheWidgetsOwnState(bool pinned, bool active, string expected)
+    {
+        await WriteHeartbeatAsync(WidgetHeartbeat(pinned, active));
+
+        string status = await PublishStatusAsync(RosterPublish());
+
+        Assert.Equal(expected, status);
+    }
+
+    [Fact]
+    public async Task Status_StaleHeartbeat_ReportsDisconnected()
+    {
+        JObject heartbeat = WidgetHeartbeat(pinned: true, active: true);
+        heartbeat["updatedAt"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - 20000;
+        await WriteHeartbeatAsync(heartbeat);
+
+        string status = await PublishStatusAsync(RosterPublish());
+
+        Assert.Equal(Disconnected, status);
+    }
+
+    [Fact]
+    public async Task Status_HeartbeatTooLargeToBeTheWidgets_IsIgnored()
+    {
+        await File.WriteAllTextAsync(_folder.File("widget-status.json"), new string(' ', 8192));
+
+        string status = await PublishStatusAsync(RosterPublish());
+
+        Assert.Equal(Disconnected, status);
+    }
+
+    [Fact]
+    public async Task Status_UnreadableHeartbeat_ReportsTheSyncFailure()
+    {
+        await File.WriteAllTextAsync(_folder.File("widget-status.json"), "{ not json");
+
+        string status = await PublishStatusAsync(RosterPublish());
+
+        Assert.StartsWith("本机同步不可用：", status);
+    }
+
     /// <summary>A widget that is open, pinned and showing a match, as the widget itself reports it.</summary>
     private static JObject Heartbeat() =>
         new()
@@ -304,9 +444,13 @@ public class GameBarBridgeTests : IDisposable
 
     private static Dictionary<string, OverlayPartyMarker> Parties() => new() { ["self-key"] = new(5, 0xcba2ff) };
 
-    private static Action<GameBarBridge> RosterPublish() => bridge => PublishRoster(bridge);
+    private static Action<GameBarBridge> RosterPublish(
+        bool enabled = true,
+        bool active = true,
+        int waveOpacity = LeagueConfig.DefaultGameBarWaveOpacity
+    ) => bridge => PublishRoster(bridge, enabled, active, waveOpacity);
 
-    private static void PublishRoster(GameBarBridge bridge)
+    private static void PublishRoster(GameBarBridge bridge, bool enabled, bool active, int waveOpacity)
     {
         using var icon = new Bitmap(32, 32);
         bridge.Publish(
@@ -317,19 +461,50 @@ public class GameBarBridgeTests : IDisposable
             details: _ => "近期 20 场，12 胜",
             session: "match-1",
             status: "当前对局",
-            enabled: true,
-            active: true,
+            enabled: enabled,
+            active: active,
             show: true,
             masteries: Masteries(),
             deathStreaks: DeathStreaks(),
-            parties: Parties()
+            parties: Parties(),
+            waveOpacity: waveOpacity
         );
     }
+
+    /// <summary>The writer's channel holds one snapshot and drops the oldest, so only the newest reaches the file.</summary>
+    private static void PublishRosterRepeatedly(GameBarBridge bridge, int times)
+    {
+        for (int i = 0; i < times; i++)
+        {
+            PublishRoster(bridge, enabled: true, active: true, waveOpacity: LeagueConfig.DefaultGameBarWaveOpacity);
+        }
+    }
+
+    /// <summary>A heartbeat the widget would have written moments ago, so the bridge reads it as current.</summary>
+    private static JObject WidgetHeartbeat(bool pinned, bool active) =>
+        new()
+        {
+            ["updatedAt"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - 100,
+            ["connected"] = true,
+            ["pinned"] = pinned,
+            ["active"] = active,
+            ["width"] = 820,
+            ["height"] = 560,
+        };
+
+    private async Task WriteHeartbeatAsync(JObject heartbeat) =>
+        await File.WriteAllTextAsync(_folder.File("widget-status.json"), heartbeat.ToString());
 
     private async Task<JObject> PublishSnapshotAsync(Action<GameBarBridge> publish)
     {
         var (snapshot, _) = await PublishAsync(publish);
         return snapshot;
+    }
+
+    private async Task<string> PublishStatusAsync(Action<GameBarBridge> publish)
+    {
+        var (_, status) = await PublishAsync(publish);
+        return status;
     }
 
     /// <summary>
