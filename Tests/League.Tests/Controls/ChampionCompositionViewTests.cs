@@ -30,6 +30,23 @@ public class ChampionCompositionViewTests
     }
 
     [Fact]
+    public void DrawToBitmap_CapabilityRows_PaintsEveryBarAgainstItsThreshold()
+    {
+        UiHost.Run(async host =>
+        {
+            using var view = View(host, Index());
+            view.SetRoster(Roster());
+            await view.Loading;
+
+            using var painted = new Bitmap(view.Width, view.Height);
+            view.DrawToBitmap(painted, new Rectangle(Point.Empty, view.Size));
+
+            Assert.Equal(view.Size, painted.Size);
+            Assert.Equal(7, view.Controls.OfType<Panel>().Count());
+        });
+    }
+
+    [Fact]
     public void SetRoster_MayhemRoster_ComparesEveryBenchChampionInOrderOfTheWinRateChange()
     {
         UiHost.Run(async host =>
