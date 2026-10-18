@@ -1,13 +1,21 @@
 using System.Text.RegularExpressions;
+using League.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace League.Services;
 
-/// <summary>The facts read from a champion's game data: slows for the control page and cooldowns.</summary>
+/// <summary>
+/// The facts read from a champion's game data: slows for the control page, cooldowns, and the character record and
+/// spell numbers the Game Bar's stat page shows.
+/// </summary>
 public sealed record ChampionSpellFacts(SlowSkill[] Slows, SpellCooldown[] Cooldowns)
 {
     public static readonly ChampionSpellFacts None = new([], []);
+
+    public ChampionRecord Record { get; init; } = ChampionRecord.None;
+
+    public ChampionSpellScalings Scalings { get; init; } = ChampionSpellScalings.None;
 
     /// <summary>Slows a game mode changes, by lower-case mode; other modes use <see cref="Slows"/>.</summary>
     public Dictionary<string, SlowSkill[]> ModeSlows { get; init; } = new();
@@ -16,14 +24,14 @@ public sealed record ChampionSpellFacts(SlowSkill[] Slows, SpellCooldown[] Coold
 }
 
 /// <summary>
-/// Downloads a champion's game data from CommunityDragon for the client's patch and keeps only the extracted slows
-/// and cooldowns, cached per patch. The client's own resources carry neither slow amounts nor cooldowns per rank, so
+/// Downloads a champion's game data from CommunityDragon for the client's patch and keeps only the extracted slows,
+/// cooldowns, character record and spell numbers, cached per patch. The client's own resources carry neither slow amounts nor cooldowns per rank, so
 /// this is the one remote read for them; it runs off the UI thread.
 /// </summary>
 public sealed class ChampionSpellData
 {
     // Bumped whenever what is extracted changes, so results from older rules are not reused.
-    public const string RulesVersion = "7";
+    public const string RulesVersion = "8";
 
     private static readonly HttpClient Http = CreateClient();
     private readonly string _folder;
@@ -64,6 +72,8 @@ public sealed class ChampionSpellData
         var facts = new ChampionSpellFacts(slows, ChampionCooldowns.Parse(bin, champion))
         {
             ModeSlows = ChampionSlowSkills.ParseModes(bin, champion, slows),
+            Record = ChampionRecord.Parse(bin, (string?)champion["alias"] ?? ""),
+            Scalings = ChampionSpellScalings.Parse(bin, (string?)champion["alias"] ?? ""),
         };
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -73,7 +83,7 @@ public sealed class ChampionSpellData
     }
 
     // CommunityDragon keeps one folder per patch ("16.20"); without a local version the latest data stands in.
-    private static string ClientPatch()
+    internal static string ClientPatch()
     {
         try
         {

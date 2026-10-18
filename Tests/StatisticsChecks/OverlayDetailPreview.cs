@@ -272,6 +272,7 @@ internal static class OverlayDetailPreview
             if (slot is 0 or 5)
             {
                 row["calc"] = CalculatorPreview(slot == 0);
+                row["sheet"] = StatPagePreview(slot == 0);
             }
 
             slot++;
@@ -346,6 +347,183 @@ internal static class OverlayDetailPreview
                 Ability("R", "终极闪光", 1, [80, 60, 40])
             ),
         };
+    }
+
+    // Five abilities with values by rank: damage with an AP ratio, a percent calculation and a stacking value.
+    private static SpellScaling[] PreviewSpells()
+    {
+        static JObject Formula(params JObject[] parts) =>
+            new() { ["__type"] = "GameCalculation", ["mFormulaParts"] = new JArray(parts) };
+        static JObject Value(string name) =>
+            new() { ["__type"] = "NamedDataValueCalculationPart", ["mDataValue"] = name };
+        static JObject Power(string name) =>
+            new() { ["__type"] = "StatByNamedDataValueCalculationPart", ["mDataValue"] = name };
+        static SpellScaling Spell(
+            string script,
+            int ranks,
+            JObject calculations,
+            params (string Name, double[] Values)[] values
+        ) =>
+            new(script, "preview_" + script + "_tooltip", ranks)
+            {
+                Values = values.ToDictionary(v => v.Name, v => v.Values),
+                Calculations = calculations,
+                Costs = ranks == 3 ? [100, 100, 100] : [55, 60, 65, 70, 75],
+            };
+        var percent = Formula(Value("speed"));
+        percent["mDisplayAsPercent"] = true;
+        var stacks = new JObject { ["__type"] = "BuffCounterByCoefficientCalculationPart", ["mCoefficient"] = 1 };
+        SpellScaling[] spells =
+        [
+            Spell(
+                "previewp",
+                1,
+                new JObject { ["heal"] = Formula(Value("heal"), Power("healratio")) },
+                ("heal", [0, 80]),
+                ("healratio", [0, 0.35])
+            ),
+            Spell(
+                "previewq",
+                5,
+                new JObject { ["damage"] = Formula(Value("damage"), Power("ratio")) },
+                ("damage", [0, 40, 65, 90, 115, 140]),
+                ("ratio", [0, 0.45, 0.45, 0.45, 0.45, 0.45])
+            ),
+            Spell(
+                "previeww",
+                5,
+                new JObject
+                {
+                    ["damage"] = Formula(Value("damage"), Power("ratio")),
+                    ["speed"] = percent,
+                    ["stacks"] = Formula(stacks, Value("perstack")),
+                },
+                ("damage", [0, 50, 75, 100, 125, 150]),
+                ("ratio", [0, 0.3, 0.3, 0.3, 0.3, 0.3]),
+                ("speed", [0, 0.4, 0.4, 0.4, 0.4, 0.4]),
+                ("perstack", [0, 4, 4, 4, 4, 4])
+            ),
+            Spell(
+                "previewe",
+                5,
+                new JObject { ["damage"] = Formula(Value("damage"), Power("ratio")) },
+                ("damage", [0, 80, 110, 140, 170, 200]),
+                ("ratio", [0, 0.85, 0.85, 0.85, 0.85, 0.85]),
+                ("duration", [0, 1.2, 1.35, 1.5, 1.65, 1.8])
+            ),
+            Spell(
+                "previewr",
+                3,
+                new JObject { ["damage"] = Formula(Value("damage"), Power("ratio")) },
+                ("damage", [0, 60, 90, 120]),
+                ("ratio", [0, 0.35, 0.35, 0.35])
+            ),
+        ];
+        return spells;
+    }
+
+    private static Dictionary<string, string> PreviewTooltips()
+    {
+        return new Dictionary<string, string>
+        {
+            ["preview_previewp_tooltip"] =
+                "击杀小兵后回复<healing>@Heal@生命值</healing>。<br>布局样例 · 不代表当前对局。",
+            ["preview_previewq_tooltip"] =
+                "投出宝珠，去程造成<magicDamage>@Damage@魔法伤害</magicDamage>，"
+                + "回程造成<trueDamage>@Damage@真实伤害</trueDamage>。",
+            ["preview_previeww_tooltip"] =
+                "释放 3 团狐火，每团造成<magicDamage>@Damage@魔法伤害</magicDamage>，"
+                + "并获得<speed>@Speed@移动速度</speed>。<br>每层效果额外<magicDamage>@Stacks@</magicDamage>伤害；当前加成：@f1@。",
+            ["preview_previewe_tooltip"] =
+                "<status>魅惑</status>首个敌人@Duration@秒并造成<magicDamage>@Damage@魔法伤害</magicDamage>。",
+            ["preview_previewr_tooltip"] =
+                "冲刺并发射 3 颗灵魄弹，每颗造成<magicDamage>@Damage@魔法伤害</magicDamage>，可在 15 秒内再次施放 2 次。",
+        };
+    }
+
+    // The stat page through the main program's own builder: the player's 2999 panel or an enemy's estimate, damage of
+    // each kind, a percent calculation, a client variable and a stacking value, so every kind of run shows.
+    private static JObject StatPagePreview(bool self)
+    {
+        var spells = PreviewSpells();
+        var texts = PreviewTooltips();
+        var champion = new JObject
+        {
+            ["passive"] = new JObject { ["name"] = "摄魂夺魄" },
+            ["spells"] = new JArray(
+                new JObject { ["spellKey"] = "q", ["name"] = "欺诈宝珠" },
+                new JObject { ["spellKey"] = "w", ["name"] = "妖异狐火" },
+                new JObject { ["spellKey"] = "e", ["name"] = "魅惑妖术" },
+                new JObject { ["spellKey"] = "r", ["name"] = "灵魄突袭" }
+            ),
+        };
+        var baseStats = new ChampionBaseStats(590, 104, 21, 4.7, 30, 1.3)
+        {
+            AttackDamage = 53,
+            AttackDamagePerLevel = 3,
+            AttackSpeed = 0.668,
+            AttackSpeedPerLevel = 2.2,
+            AttackRange = 550,
+            Mana = 418,
+            ManaPerLevel = 25,
+            MoveSpeed = 330,
+            HealthRegen = 2.5,
+            HealthRegenPerLevel = 0.6,
+            ManaRegen = 8,
+            ManaRegenPerLevel = 0.8,
+            Resource = "法力值",
+        };
+        var record = new ChampionRecord
+        {
+            AttackSpeedRatio = 0.625,
+            AttackWindup = 0.2,
+            GameplayRadius = 65,
+            SelectionRadius = 100,
+            AcquisitionRange = 525,
+        };
+        var source = new StatPageSource(
+            ChampionSpellFacts.None with
+            {
+                Record = record,
+                Scalings = new ChampionSpellScalings
+                {
+                    Slots = new()
+                    {
+                        ["P"] = "previewp",
+                        ["Q"] = "previewq",
+                        ["W"] = "previeww",
+                        ["E"] = "previewe",
+                        ["R"] = "previewr",
+                    },
+                    Spells = spells.ToDictionary(spell => spell.Script),
+                },
+            },
+            champion,
+            baseStats
+        );
+        var live = new LiveChampionStats(2380, 96, 58, 25, 12, 0.18, 0, 0)
+        {
+            AttackDamage = 98,
+            AbilityPower = 285,
+            AttackSpeed = 0.82,
+            AttackRange = 550,
+            CritDamage = 175,
+            MoveSpeed = 385,
+            ResourceMax = 1120,
+            HealthRegen = 14,
+            ResourceRegen = 22,
+            Omnivamp = 0.08,
+        };
+        var items = new ItemStats(150, 0, 0, 20)
+        {
+            AbilityPower = 165,
+            Mana = 300,
+            MagicPenetration = 15,
+        };
+        var sheet = self
+            ? ChampionStatSheet.FromLive(baseStats, record, 9, live)
+            : ChampionStatSheet.Estimate(baseStats, record, 9, items, AugmentEffects.None, 20);
+        return ChampionStatPage.Build(source, sheet, texts, "");
     }
 
     // The player's Shrink Engine added at 4:00 and counted since, and an enemy's Tank Engine on the control page;

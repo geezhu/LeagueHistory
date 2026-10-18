@@ -1,0 +1,12 @@
+{
+ "entries": {
+  "spell_anniepassive_tooltip": "在使用4次技能后，安妮的下一个伤害技能会造成@StunDuration@秒<status>晕眩</status>。<br><br>安妮在游戏开始时和重生时，会带着满层的<spellName>嗜火</spellName>。",
+  "spell_annieq_tooltip": "安妮投出一团火球，造成<magicDamage>@TotalDamage@魔法伤害</magicDamage>。如果目标阵亡，那么安妮会返还法力值并缩短50%冷却时间。",
+  "spell_anniew_tooltip": "安妮投射出一阵火焰波，造成<magicDamage>@TotalDamage@魔法伤害</magicDamage>。",
+  "spell_anniee_tooltip": "安妮为一名友方英雄提供持续@ShieldDuration@秒的<shield>@ShieldBlockTotal@护盾值</shield>，以及在@MovementSpeedDuration@秒里持续衰减的<speed>@MoveSpeedCalc@移动速度</speed>。当护盾处于激活状态时，敌人用攻击或技能对护盾造成伤害时会受到<magicDamage>@DamageReturn@魔法伤害</magicDamage>，每个护盾受到一次伤害。<br><br>提伯斯在被召唤出来时总会获得<spellName>熔岩护盾</spellName>的效果。",
+  "spell_annier_tooltip": "<spellPassive>被动：</spellPassive>安妮获得<magicPen>@RPercentPenBuff*100@%法术穿透</magicPen>。<br><br>安妮召唤提伯斯，造成<magicDamage>@InitialBurstDamage@魔法伤害</magicDamage>。在接下来的@TibbersLifetime@秒里，提伯斯会灼烧附近的敌人，<magicDamage>每秒造成@TibbersAuraDamage@魔法伤害</magicDamage>。<br><br>提伯斯在以下情况下会变得暴怒：在被召唤出来时、在安妮晕眩一名敌方英雄时、以及在安妮阵亡时。在暴怒状态下，提伯斯获得<attackSpeed>275%攻击速度</attackSpeed>和在3秒里持续衰减的<speed>100%移动速度</speed>。<br><br><recast>再次施放：</recast>手动给提伯斯下达指令。",
+  "generatedtip_spell_annieq_tooltip": "<titleLeft>[@Hotkey@]&nbsp;碎裂之火</titleLeft><titleRight>@Cooldown@秒 %i:cooldown%</titleRight><subtitleLeft>@SpellTags@</subtitleLeft><subtitleRight>@Cost@ @AbilityResourceName@</subtitleRight><mainText>安妮投出一团火球，造成<magicDamage>@TotalDamage@魔法伤害</magicDamage>。如果目标阵亡，那么安妮会返还法力值并缩短50%冷却时间。@SpellModifierDescriptionAppend@</mainText>",
+  "spell_annieq_name": "碎裂之火"
+ },
+ "version": 5
+}

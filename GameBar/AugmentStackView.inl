@@ -184,6 +184,7 @@ void SaveAugments()
     augmentsEdited = true;
     if (augmentOpen)
         RenderAugmentPage();
+    RenderStatsAfterEdit();
     if (!widget || fixturePreview || stopped)
         return;
     JsonArray augments;
@@ -210,6 +211,7 @@ void SetUltimateHaste(hstring const &player, double value)
     ultimateEdited = true;
     if (augmentOpen)
         RenderAugmentPage();
+    RenderStatsAfterEdit();
     if (!widget || fixturePreview || stopped)
         return;
     JsonArray players;
@@ -526,6 +528,7 @@ Button AugmentAddButton(hstring const &player, bool timed)
             {
                 augmentRedrawPending = false;
                 RefreshAugmentPage();
+                RefreshStatsPage();
             }
         });
     auto add = AugmentButton(L"＋ 海克斯", [] {}, !filter->entries.empty());
@@ -624,7 +627,10 @@ void CloseAugmentPage()
     augmentBody.Children().Clear();
     augmentRoot.Visibility(Visibility::Collapsed);
     if (augmentReturnCard >= 0 && augmentReturnCard == selectedCard)
+    {
         detailRoot.Visibility(Visibility::Visible);
+        RefreshStatsPage();
+    }
     else
     {
         rosterPanel.Visibility(Visibility::Visible);
@@ -687,7 +693,7 @@ void RenderAugmentPage()
         }
     }
 }
-// The control page shows a player's records read-only; changes are made on the augment page.
+// The control page shows a player's records read-only; changes are made on the augment or stat page.
 std::vector<UIElement> AugmentSummaryChips(hstring const &player)
 {
     std::vector<UIElement> chips;
@@ -695,12 +701,12 @@ std::vector<UIElement> AugmentSummaryChips(hstring const &player)
         if (pick.player == player)
         {
             auto entry = CatalogEntry(pick.augment);
-            chips.push_back(
-                ControlChip(AugmentChipText(pick, AugmentState(pick)),
-                            0xb8a2ff,
-                            (entry ? AugmentText(entry, L"effect") : hstring()) + L"\n在「海克斯」页修改。"));
+            chips.push_back(ControlChip(AugmentChipText(pick, AugmentState(pick)),
+                                        0xb8a2ff,
+                                        (entry ? AugmentText(entry, L"effect") : hstring()) +
+                                            L"\n在「海克斯」页或英雄的「属性」页修改。"));
         }
     if (chips.empty())
-        chips.push_back(MakeText(L"未记录（在「海克斯」页添加）", 12, 0x6f8793));
+        chips.push_back(MakeText(L"未记录（在「海克斯」页或英雄的「属性」页添加）", 12, 0x6f8793));
     return chips;
 }

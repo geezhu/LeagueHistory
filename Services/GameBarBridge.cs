@@ -48,7 +48,8 @@ public sealed partial class GameBarBridge : IDisposable
         IReadOnlyDictionary<int, ControlSkill[]>? controls = null,
         IReadOnlyDictionary<int, SpellCooldown[]>? cooldowns = null,
         JObject? composition = null,
-        int waveOpacity = LeagueConfig.DefaultGameBarWaveOpacity
+        int waveOpacity = LeagueConfig.DefaultGameBarWaveOpacity,
+        StatPageSources? statPages = null
     )
     {
         if (_disposed)
@@ -76,6 +77,7 @@ public sealed partial class GameBarBridge : IDisposable
             var spells = cooldowns?.GetValueOrDefault(p.ChampionId);
             AddControls(row, p, controls, spells, live);
             AddCalculator(row, p, spells, live);
+            AddStatPage(row, p, statPages, live);
             rows.Add(row);
         }
         _detailScope = new(

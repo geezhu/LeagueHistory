@@ -18,6 +18,10 @@ public sealed record OverlayLiveState(LiveMatchInsight Insight, JArray Sections,
     /// <summary>Ability haste by roster player key: 2999's value for the player, estimates for everyone else.</summary>
     public IReadOnlyDictionary<string, PlayerHaste> Haste { get; init; } = new Dictionary<string, PlayerHaste>();
 
+    /// <summary>Stats by roster player key: 2999's panel for the player, estimates for everyone else.</summary>
+    public IReadOnlyDictionary<string, ChampionStatSheet> Sheets { get; init; } =
+        new Dictionary<string, ChampionStatSheet>();
+
     /// <summary>The active player's ability ranks from 2999.</summary>
     public IReadOnlyDictionary<string, int> AbilityRanks { get; init; } = new Dictionary<string, int>();
 

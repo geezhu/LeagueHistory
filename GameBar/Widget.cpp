@@ -67,6 +67,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
 #include "RespawnMarkView.inl"
 #include "AugmentStackView.inl"
 #include "CooldownView.inl"
+#include "StatsView.inl"
 #include "SummonerTimerView.inl"
 
     fire_and_forget CapturePreview()
@@ -499,6 +500,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         ClearSummoners();
         calcCard = -1;
         calcSignature = L"";
+        statsSignature = L"";
         CloseDetails(false);
         CloseVoice();
         ResetChat();

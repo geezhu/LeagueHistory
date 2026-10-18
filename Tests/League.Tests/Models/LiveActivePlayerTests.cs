@@ -59,6 +59,29 @@ public class LiveActivePlayerTests
     }
 
     [Fact]
+    public void Parse_RegenerationPerSecond_ReadsPerFiveSeconds()
+    {
+        var data = JObject.Parse(
+            """{"championStats":{"maxHealth":653,"healthRegenRate":1.7,"resourceRegenRate":1.6}}"""
+        );
+
+        var stats = LiveActivePlayer.Parse(data)!.Stats!;
+
+        Assert.Equal(8.5, stats.HealthRegen, 6);
+        Assert.Equal(8.0, stats.ResourceRegen, 6);
+    }
+
+    [Fact]
+    public void Parse_CritStats_KeepsChanceAndDamageAsReported()
+    {
+        var data = JObject.Parse("""{"championStats":{"maxHealth":653,"critChance":0.25,"critDamage":175}}""");
+
+        var stats = LiveActivePlayer.Parse(data)!.Stats!;
+
+        Assert.Equal((0.25, 175.0), (stats.CritChance, stats.CritDamage));
+    }
+
+    [Fact]
     public void Parse_NegativeGold_ClampsToZero()
     {
         var data = new JObject { ["currentGold"] = -5.0 };

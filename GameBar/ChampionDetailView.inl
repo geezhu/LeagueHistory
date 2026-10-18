@@ -12,7 +12,7 @@ std::array<Image, 10> heroIcons;
 std::array<Border, 10> heroIndicators;
 std::array<Button, 7> tabButtons;
 static constexpr std::array<wchar_t const *, 7> DetailTabKeys{
-    L"skills", L"builds", L"runes", L"augments", L"live", L"cooldowns", L"record"};
+    L"skills", L"builds", L"runes", L"augments", L"live", L"stats", L"record"};
 JsonObject detailData;
 hstring detailRequest, detailRevision, detailTab = L"skills";
 hstring pendingDetailRequest;
@@ -42,7 +42,7 @@ void ConfigureDetailPreview(hstring const &argument)
     auto tab = text.substr(prefix.size());
     if (tab != L"skills" && tab != L"builds" && tab != L"runes" && tab != L"augments" && tab != L"live" &&
         tab != L"record" && tab != L"roster" && tab != L"voice" && tab != L"waves" && tab != L"marks" &&
-        tab != L"controls" && tab != L"cooldowns" && tab != L"augmentpage")
+        tab != L"controls" && tab != L"stats" && tab != L"augmentpage")
         return;
     fixturePreview = true;
     fixtureOpened = false;
@@ -153,7 +153,7 @@ void InitializeDetailTabs()
     detailTabs.Orientation(Orientation::Horizontal);
     detailTabs.Margin({0, 8, 0, 8});
     // The player's record follows the hero tabs: it describes the account, not the champion.
-    std::array<hstring, 7> names{L"技能", L"出装", L"符文", L"海克斯", L"本局", L"冷却", L"战绩"};
+    std::array<hstring, 7> names{L"技能", L"出装", L"符文", L"海克斯", L"本局", L"属性", L"战绩"};
     for (size_t i = 0; i < names.size(); ++i)
     {
         auto &b = tabButtons[i];
@@ -209,7 +209,7 @@ void RefreshDetailHeader()
     tabButtons[2].Visibility(mayhem ? Visibility::Collapsed : Visibility::Visible);
     tabButtons[3].Visibility(mayhem ? Visibility::Visible : Visibility::Collapsed);
     tabButtons[4].Visibility(HasLivePanel() ? Visibility::Visible : Visibility::Collapsed);
-    tabButtons[5].Visibility(HasCalculator() ? Visibility::Visible : Visibility::Collapsed);
+    tabButtons[5].Visibility(HasStatsPage() ? Visibility::Visible : Visibility::Collapsed);
 }
 // The in-game panel describes the active player only; 2999 exposes no other player's attributes.
 bool HasLivePanel()
@@ -245,7 +245,7 @@ void OpenDetails(int index)
     }
     else if (detailTab == L"live")
         detailTab = L"skills";
-    if (detailTab == L"cooldowns" && !HasCalculator())
+    if (detailTab == L"stats" && !HasStatsPage())
         detailTab = L"skills";
     rosterPanel.Visibility(Visibility::Collapsed);
     details.Visibility(Visibility::Collapsed);
@@ -403,9 +403,9 @@ void RenderDetails(bool resetScroll = true)
         tabButtons[i].Background(MakeBrush(DetailTabKeys[i] == detailTab ? 0x008b98 : 0x143542));
     }
     RenderRarityChoices();
-    if (detailTab == L"cooldowns")
+    if (detailTab == L"stats")
     {
-        RenderCooldownCalculator();
+        RenderStatsPage();
         DecodeDetailImage(detailArtwork, detailData.GetNamedString(L"art", L""), detailRender, 560);
         return;
     }

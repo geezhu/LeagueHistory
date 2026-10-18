@@ -1,7 +1,7 @@
 // Included inside WidgetView. The cooldown calculator for the open hero: the main program sends each ability's
 // cooldowns by rank, the ranks (2999's for the player, the highest the level allows for others), the ability haste
 // and the cooldown rules of the player's recorded augments. Ranks and haste are what-ifs the user may change here;
-// augments and ultimate haste are recorded on the augment page and only shown here.
+// the stat page around it records the augments and ultimate haste, which this part only shows.
 static constexpr double BreadHaste = 100;
 static constexpr double PuristCooldown = 0.9;
 // Ult Bot (Wiki): ability haste no longer shortens basic abilities; it grants 100 ability haste, and the ultimate's
@@ -81,19 +81,19 @@ static CalcOptions CalcOptionsFrom(JsonObject const &calc)
     }
     return options;
 }
-// Haste and the level change during the game; the page follows them unless the user set its own values.
+// Haste and the level change during the game; the page follows them unless the user set its own values. The stat
+// page around the calculator redraws when anything it shows changed.
 void ApplyCalculator()
 {
     auto calc = CalcData();
     auto signature = calc ? calc.Stringify() : hstring();
-    if (signature == calcSignature)
-        return;
-    calcSignature = signature;
-    if (selectedCard >= 0 && detailTab == L"cooldowns")
+    if (signature != calcSignature)
     {
-        RefreshDetailHeader();
-        RenderDetails(false);
+        calcSignature = signature;
+        if (selectedCard >= 0)
+            RefreshDetailHeader();
     }
+    RefreshStatsPage();
 }
 static hstring CalcSeconds(double seconds)
 {
@@ -154,7 +154,7 @@ static double CalcAbilityHaste(CalcOptions const &options, size_t slot, double h
         return (general + options.ultHaste) * (options.ultBot ? UltBotEffect : 1) + own;
     return (options.ultBot ? 0 : general) + own;
 }
-// What the recorded augments change here, read-only; the button opens the augment page to change them.
+// What the recorded augments change here, read-only; they are recorded above, or for everyone on the augment page.
 StackPanel CalcRecordedRow(CalcOptions const &options)
 {
     StackPanel row;
@@ -171,7 +171,7 @@ StackPanel CalcRecordedRow(CalcOptions const &options)
     text.TextWrapping(TextWrapping::Wrap);
     text.MaxWidth(520);
     row.Children().Append(text);
-    auto edit = DetailButton(L"在海克斯页修改");
+    auto edit = DetailButton(L"全部玩家的海克斯");
     edit.Padding({8, 2, 8, 2});
     edit.Margin({8, 0, 0, 0});
     edit.Click([this](auto &&, auto &&) { OpenAugmentPage(); });

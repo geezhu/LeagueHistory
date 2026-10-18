@@ -97,12 +97,14 @@ internal sealed partial class LoadingOverlayManager
 
         var augmentStacks = CountAugmentStacks(roster, snapshot);
         var effects = SumAugmentEffects(roster, augmentStacks);
+        var haste = DescribeHaste(roster, snapshot, insight, effects);
         _liveState = new(insight, _liveSections, _liveRevision)
         {
             Waves = waves,
             AugmentStacks = augmentStacks,
             Health = DescribeHealth(roster, snapshot, insight, effects),
-            Haste = DescribeHaste(roster, snapshot, insight, effects),
+            Haste = haste,
+            Sheets = DescribeSheets(roster, snapshot, insight, effects, haste),
             AbilityRanks = snapshot.Active?.AbilityRanks ?? new Dictionary<string, int>(),
             GameTime = snapshot.Time,
             GameTimeAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),

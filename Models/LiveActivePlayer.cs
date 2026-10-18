@@ -25,6 +25,32 @@ public sealed record LiveChampionStats(
 
     public double AttackRange { get; init; }
 
+    /// <summary>Critical strike chance, 0 to 1.</summary>
+    public double CritChance { get; init; }
+
+    /// <summary>Critical strike damage in percent of the attack (175 for 175%).</summary>
+    public double CritDamage { get; init; }
+
+    public double MoveSpeed { get; init; }
+
+    /// <summary>The resource bar's maximum (mana, energy, fury); 0 for champions without one.</summary>
+    public double ResourceMax { get; init; }
+
+    /// <summary>Resource regenerated per 5 seconds, as the stats panel shows it.</summary>
+    public double ResourceRegen { get; init; }
+
+    /// <summary>Health regenerated per 5 seconds, as the stats panel shows it.</summary>
+    public double HealthRegen { get; init; }
+
+    /// <summary>Life steal, omnivamp, tenacity and heal and shield power, each 0 to 1.</summary>
+    public double LifeSteal { get; init; }
+
+    public double Omnivamp { get; init; }
+
+    public double Tenacity { get; init; }
+
+    public double HealShieldPower { get; init; }
+
     public static LiveChampionStats? Parse(JObject? stats)
     {
         if (stats?["maxHealth"] is not JToken health || (double?)health is not (double maxHealth and > 0))
@@ -53,6 +79,17 @@ public sealed record LiveChampionStats(
             AbilityPower = Value("abilityPower"),
             AttackSpeed = Value("attackSpeed"),
             AttackRange = Value("attackRange"),
+            CritChance = Value("critChance"),
+            CritDamage = Value("critDamage"),
+            MoveSpeed = Value("moveSpeed"),
+            ResourceMax = Value("resourceMax"),
+            // 2999 reports regeneration per second; the stats panel and Data Dragon count per 5 seconds.
+            ResourceRegen = Value("resourceRegenRate") * 5,
+            HealthRegen = Value("healthRegenRate") * 5,
+            LifeSteal = Value("lifeSteal"),
+            Omnivamp = Value("omnivamp"),
+            Tenacity = Value("tenacity"),
+            HealShieldPower = Value("healShieldPower"),
         };
     }
 }
