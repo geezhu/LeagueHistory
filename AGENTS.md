@@ -55,7 +55,7 @@
 
 ### 准备与共享资源
 
-- 每个测试各自的准备放构造函数，清理放 `Dispose`；多个测试共用且准备昂贵的（样例对局 JSON、图片、窗体宿主）用 `IClassFixture<T>`；整个程序集只做一次的（数据目录、环境变量、`Application.SetHighDpiMode`）放模块初始化器。
+- 每个测试各自的准备放构造函数，清理放 `Dispose`；多个测试共用且准备昂贵的（样例对局 JSON、图片、窗体宿主）用 `IClassFixture<T>`；整个程序集只做一次的（数据目录、环境变量、`Application.SetHighDpiMode`）放模块初始化器。`TestSetup.cs` 已经把 `LEAGUE_DATA_ROOT` 指到临时目录并在进程退出时清理：设置、搜索历史和日志不会落到用户自己的文件上。
 - 样例数据用构建器（例如 `new MatchBuilder().WithQueue(3270).Build()`）或放在 `TestData/`，不要每个测试手拼一大段 JSON。
 
 ### 测什么，不测什么
@@ -64,8 +64,8 @@
 - **不要为测试加 `InternalsVisibleTo`，也不要把私有成员改成 `internal` 图方便。** 老套件用反射读私有成员，多数是在钉死环境状态或替换依赖；后者说明该处缺少注入点，正确做法是新增代码留出接缝（构造函数参数、工厂委托），而不是放宽可见性。反射只作为存量代码的临时手段，新增代码不允许新增反射访问。
 - 界面测试只验证状态和布局计算（例如 `Placement` 返回的位置、`CellBounds` 的行列），不比对像素。
 - **交互用 `Support/WindowMessages`**：`Click`/`DoubleClick`/`Move`/`Drag`/`Drop`/`Wheel`/`Key`/`Paint` 把真实窗口消息发给控件。窗口消息是 Win32 控件的公开接口，所以点击自绘按钮、拖动、滚轮、键盘都可以测，不必反射进 `protected OnXxx`。
-- **绘制用 `Control.DrawToBitmap`（WM_PRINT）；要真实重绘用 `WindowMessages.Paint`（WM_PAINT）**，两者是窗口过程里的不同路径。屏幕外的窗口不会被 Windows 排队重绘，所以 `Refresh()` 拿不到 `OnPaint`。
-- 断言「某个钩子没有被调用」时，**必须同时有正向对照**（例如一起数 `OnPaint`），否则分不清「没画」和「画了但没走那条路」。
+- **要让控件绘制，用 `Control.DrawToBitmap`（WM_PRINT）。** 屏幕外的窗口根本不绘制：`Refresh()`、`Invalidate()`、乃至直接投递 `WM_PAINT` 都到不了 `OnPaint`（`MatchListPanel` 与 `ClosableTabControl` 上实测）。`WindowMessages.Paint` 只用来钉死这个差异，不要指望它画出东西。
+- 断言「某个钩子没有被调用」时，**必须同时有正向对照**（例如一起数 `OnPaint`），否则分不清「没画」和「画了但没走那条路」。而且要先确认那个正向对照**真的来自你想验的路径**——两者混在一个计数里会得出错误结论，这里已经错过一次。
 - 断言一个 record 时，**只比较这条规则涉及的字段**，不要整记录相等：应用新增一个属性就会让整记录比较变红，而那不是回归。`HealthEstimateChecks` 就这么误报过一次。
 
 ### 异步

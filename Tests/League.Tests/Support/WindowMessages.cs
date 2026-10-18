@@ -75,9 +75,10 @@ public static class WindowMessages
         Message.Create(control.Handle, KeyDown, (nint)key, 0);
 
     /// <summary>
-    /// Asks the control to repaint itself. <see cref="Control.DrawToBitmap"/> sends WM_PRINT instead, which is a
-    /// different path through the window procedure, and the test window sits off screen, so Windows never queues a
-    /// real paint of its own accord.
+    /// Sends WM_PAINT. It does <b>not</b> make an off-screen control paint: Windows clips the update region of a
+    /// window that is outside the desktop, so <c>OnPaint</c> is never reached — measured on two controls, alone and
+    /// after <c>Invalidate()</c>. To make a control paint in a test use <see cref="Control.DrawToBitmap"/>, which
+    /// sends WM_PRINT; this helper exists so a test can pin that difference rather than assume it.
     /// </summary>
     public static void Paint(Control control) => Send(control, PaintMessage, 0, 0);
 

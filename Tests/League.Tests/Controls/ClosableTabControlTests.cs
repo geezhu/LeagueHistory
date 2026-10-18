@@ -63,7 +63,7 @@ public class ClosableTabControlTests
     }
 
     [Fact]
-    public void Paint_TheControl_PaintsItselfAndIsNeverAskedToOwnerDrawATab()
+    public void DrawToBitmap_Tabs_PaintsThemItselfAndIsNeverAskedToOwnerDrawATab()
     {
         UiHost.Run(host =>
         {
@@ -71,11 +71,17 @@ public class ClosableTabControlTests
             host.Controls.Add(tabs);
             AddPages(tabs, "第一页", "第二页");
             Application.DoEvents();
+            int before = tabs.Painted;
 
             using var printed = Paint(tabs);
+            int afterPrint = tabs.Painted;
+
+            // A lone WM_PAINT is not a way to make an off-screen control paint; only DrawToBitmap (WM_PRINT) reaches
+            // OnPaint here. Counting them apart keeps this test from claiming a positive control it did not have.
             WindowMessages.Paint(tabs);
 
-            Assert.True(tabs.Painted > 0, "The control really painted.");
+            Assert.True(afterPrint > before, "DrawToBitmap reaches OnPaint.");
+            Assert.Equal(afterPrint, tabs.Painted);
             Assert.Equal(0, tabs.DrawnTabs);
         });
     }
