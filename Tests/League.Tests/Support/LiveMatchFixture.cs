@@ -1,4 +1,5 @@
 using League.Models;
+using Newtonsoft.Json.Linq;
 
 namespace League.Tests.Support;
 
@@ -119,6 +120,85 @@ internal static class LiveMatchFixture
     /// <summary>A champion kill on the Howling Abyss, named by the aliases the players carry.</summary>
     public static LiveMatchEvent Kill(long id, double time, string killer, string victim) =>
         new(id, "ChampionKill", time, killer, victim);
+
+    /// <summary>
+    /// The snapshot as the body of a <c>liveclientdata/allgamedata</c> response. The view reaches its poll, card and
+    /// recommendation paths through <see cref="League.Clients.LiveMatchClient"/>, whose only entry point is that
+    /// document, so a snapshot built above has to go back through the same JSON shape the game serves. Everything
+    /// <c>LiveMatchSnapshot.Parse</c> keeps is written: the active player, the game metadata, each player's scores,
+    /// items and raw champion name, and the events. Cheaper than hand-writing a document per test, and it keeps the
+    /// builders above as the single source of the sample.
+    /// </summary>
+    public static JObject ToJson(LiveMatchSnapshot snapshot)
+    {
+        var active = snapshot.Players.FirstOrDefault(player => player.Self);
+        return new JObject
+        {
+            ["activePlayer"] = new JObject { ["riotId"] = active?.Name, ["summonerName"] = active?.Name },
+            ["gameData"] = new JObject
+            {
+                ["gameMode"] = snapshot.Mode,
+                ["mapNumber"] = snapshot.Map,
+                ["gameTime"] = snapshot.Time,
+            },
+            ["allPlayers"] = new JArray(
+                snapshot.Players.Select(player =>
+                    (JToken)
+                        new JObject
+                        {
+                            ["riotId"] = player.Name,
+                            ["summonerName"] = player.Name,
+                            ["rawChampionName"] =
+                                player.RawChampionName.Length > 0
+                                    ? player.RawChampionName
+                                    : "game_character_displayname_" + player.ChampionAlias,
+                            ["championName"] = player.ChampionName,
+                            ["team"] = player.Team,
+                            ["level"] = player.Level,
+                            ["scores"] = new JObject
+                            {
+                                ["kills"] = player.Kills,
+                                ["deaths"] = player.Deaths,
+                                ["assists"] = player.Assists,
+                            },
+                            ["items"] =
+                                player.Items == null
+                                    ? null
+                                    : new JArray(
+                                        player.Items.Select(item =>
+                                            (JToken)
+                                                new JObject
+                                                {
+                                                    ["itemID"] = item.Id,
+                                                    ["displayName"] = item.Name,
+                                                    ["count"] = item.Count,
+                                                }
+                                        )
+                                    ),
+                            ["isDead"] = player.IsDead,
+                            ["respawnTimer"] = player.RespawnTimer,
+                        }
+                )
+            ),
+            ["events"] = new JObject
+            {
+                ["Events"] = new JArray(
+                    (snapshot.Events ?? []).Select(entry =>
+                        (JToken)
+                            new JObject
+                            {
+                                ["EventID"] = entry.Id,
+                                ["EventName"] = entry.Name,
+                                ["EventTime"] = entry.Time,
+                                ["KillerName"] = entry.Killer,
+                                ["VictimName"] = entry.Victim,
+                                [entry.Name] = entry.Structure,
+                            }
+                    )
+                ),
+            },
+        };
+    }
 
     private static LiveMatchPlayer Player(int index, (int Index, double Respawn)[] dead)
     {
