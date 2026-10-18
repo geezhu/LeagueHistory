@@ -49,9 +49,16 @@ internal static class HealthEstimateChecks
                 + "<attention>100%</attention>基础生命回复</stats><passive>生命值</passive>"
                 + "<attention>300</attention>生命值</mainText>"
         );
+        // Compare the fields this rule is about rather than the whole record: ItemStats carries more than the four
+        // defensive stats, and a new one must not turn "percents and passive text do not count" red.
         Check(
-            blade == new ItemStats(150, 0, 0, 15)
-                && warmog == new ItemStats(400, 0, 50, 0)
+            blade.Health == 150
+                && blade.AbilityHaste == 15
+                && blade.Armor == 0
+                && blade.MagicResist == 0
+                && warmog.Health == 400
+                && warmog.MagicResist == 50
+                && warmog.AbilityHaste == 0
                 && ItemStats.Parse(null) == ItemStats.None,
             "Only flat stats in the stats block count; percents and passive text do not: " + warmog
         );
