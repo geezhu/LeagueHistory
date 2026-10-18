@@ -80,6 +80,26 @@ internal static class LiveMatchFixture
             Players = [.. snapshot.Players.Select(player => player with { Level = level })],
         };
 
+    /// <summary>
+    /// The active player's champion stats with 2000 max health and 1000 left, at the given basic-attack numbers.
+    /// </summary>
+    public static LiveChampionStats Attacker(double attackDamage, double abilityPower, double attackRange) =>
+        new(2000, 50, 40, 0, 0, 0, 0, 0)
+        {
+            CurrentHealth = 1000,
+            AttackDamage = attackDamage,
+            AbilityPower = abilityPower,
+            AttackSpeed = 1,
+            AttackRange = attackRange,
+        };
+
+    /// <summary>The same snapshot with every player on one team.</summary>
+    public static LiveMatchSnapshot WithTeam(LiveMatchSnapshot snapshot, string team) =>
+        snapshot with
+        {
+            Players = [.. snapshot.Players.Select(player => player with { Team = team })],
+        };
+
     /// <summary>A structure event; the old checks passed the id, the killer and the victim as empty.</summary>
     public static LiveMatchEvent Structure(string name, double time, string structure) =>
         new(null, name, time, "", "") { Structure = structure };
