@@ -63,6 +63,10 @@
 - 只通过公开接口测行为；私有方法通过调用它的公开路径验证。
 - **不要为测试加 `InternalsVisibleTo`，也不要把私有成员改成 `internal` 图方便。** 老套件用反射读私有成员，多数是在钉死环境状态或替换依赖；后者说明该处缺少注入点，正确做法是新增代码留出接缝（构造函数参数、工厂委托），而不是放宽可见性。反射只作为存量代码的临时手段，新增代码不允许新增反射访问。
 - 界面测试只验证状态和布局计算（例如 `Placement` 返回的位置、`CellBounds` 的行列），不比对像素。
+- **交互用 `Support/WindowMessages`**：`Click`/`DoubleClick`/`Move`/`Drag`/`Drop`/`Wheel`/`Key`/`Paint` 把真实窗口消息发给控件。窗口消息是 Win32 控件的公开接口，所以点击自绘按钮、拖动、滚轮、键盘都可以测，不必反射进 `protected OnXxx`。
+- **绘制用 `Control.DrawToBitmap`（WM_PRINT）；要真实重绘用 `WindowMessages.Paint`（WM_PAINT）**，两者是窗口过程里的不同路径。屏幕外的窗口不会被 Windows 排队重绘，所以 `Refresh()` 拿不到 `OnPaint`。
+- 断言「某个钩子没有被调用」时，**必须同时有正向对照**（例如一起数 `OnPaint`），否则分不清「没画」和「画了但没走那条路」。
+- 断言一个 record 时，**只比较这条规则涉及的字段**，不要整记录相等：应用新增一个属性就会让整记录比较变红，而那不是回归。`HealthEstimateChecks` 就这么误报过一次。
 
 ### 异步
 
