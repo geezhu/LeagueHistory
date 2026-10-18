@@ -93,6 +93,18 @@ internal static class LiveMatchFixture
             AttackRange = attackRange,
         };
 
+    /// <summary>
+    /// One player on a lane map at a game time, for the wave schedule. <paramref name="team"/> is the team the
+    /// player counts as self on, which decides which side of the lane the forecast calls own.
+    /// </summary>
+    public static LiveMatchSnapshot WaveGame(
+        string mode,
+        int map,
+        double time,
+        string team,
+        params LiveMatchEvent[] events
+    ) => new(mode, map, time, [new("self|0", SelfName, "Ahri", "阿狸", team, true, 1, null)]) { Events = events };
+
     /// <summary>The same snapshot with every player on one team.</summary>
     public static LiveMatchSnapshot WithTeam(LiveMatchSnapshot snapshot, string team) =>
         snapshot with
