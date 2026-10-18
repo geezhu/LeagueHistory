@@ -226,6 +226,35 @@ public class ChampionCompositionViewTests
         });
     }
 
+    [Fact]
+    public void SetRoster_SwapThatFixesALack_NamesWhatItFixes()
+    {
+        UiHost.Run(async host =>
+        {
+            using var view = View(host, Index());
+
+            // A roster whose bench holds a champion that covers a capability the team is missing.
+            view.SetRoster(Roster(team: [4, 35, 63, 112, 134], bench: [37, 102, 157, 202, 876]));
+            await view.Loading;
+
+            Assert.Contains(Text(view), text => text.Contains("补续航", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public void SetRoster_SwapThatIntroducesALack_NamesTheNewLack()
+    {
+        UiHost.Run(async host =>
+        {
+            using var view = View(host, Index());
+
+            view.SetRoster(Roster(team: [4, 35, 37, 102, 112], bench: [63, 134, 157, 202, 876]));
+            await view.Loading;
+
+            Assert.Contains(Text(view), text => text.Contains("新短板 清线", StringComparison.Ordinal));
+        });
+    }
+
     private static int[] Ids => [.. AramTeamScoreFixture.Index.Champions.Select(champion => champion.Id)];
 
     private static Func<CancellationToken, Task<AramMetaIndex>> Index() =>
@@ -234,9 +263,13 @@ public class ChampionCompositionViewTests
     private static Func<CancellationToken, Task<AramMetaIndex>> Failing() =>
         _ => Task.FromException<AramMetaIndex>(new HttpRequestException("offline"));
 
-    private static ChampionSelectRoster Roster(int[]? bench = null) =>
+    private static ChampionSelectRoster Roster(int[]? bench = null, int[]? team = null) =>
         new(
-            [.. Ids.Take(5).Select((id, slot) => new ChampionSelectRosterEntry(id, slot, slot == 0, false))],
+            [
+                .. (team ?? [.. Ids.Take(5)]).Select(
+                    (id, slot) => new ChampionSelectRosterEntry(id, slot, slot == 0, false)
+                ),
+            ],
             bench ?? [.. Ids.Skip(5)],
             true
         );
