@@ -94,6 +94,8 @@ public sealed partial class GameBarBridge : IDisposable
             ["chatRecord"] = true,
             ["chatParty"] = true,
             ["chatControls"] = true,
+            // The control list without slows; older main programs leave it out and the widget hides the button.
+            ["chatHardControls"] = true,
             ["chatComposition"] = true,
             ["compositionProtocol"] = 1,
             ["controlProtocol"] = 1,

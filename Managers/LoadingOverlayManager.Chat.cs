@@ -149,7 +149,13 @@ internal sealed partial class LoadingOverlayManager
                 _owner.GetAppConfig()?.UseChampionNameWhenSending ?? false
             ),
             "party" => OverlayPartyChatMessage.Build(roster!, request, CachedPlayers(), Champion),
-            "controls" => OverlayControlChatMessage.Build(roster!, request, _controls, _liveState, Champion),
+            "controls" or "hardControls" => OverlayControlChatMessage.Build(
+                roster!,
+                request,
+                _controls,
+                _liveState,
+                Champion
+            ),
             "composition" => GameBarComposition.ChatMessage(CurrentComposition(), request),
             "summoner" => SummonerChatMessage.Build(
                 OverlayTierChatMessage.Select(roster!, request).FirstOrDefault(),

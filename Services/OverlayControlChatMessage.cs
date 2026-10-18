@@ -4,7 +4,8 @@ namespace League.Services;
 
 /// <summary>
 /// One side's crowd control as the control page shows it: each champion's abilities with hard control, plus the
-/// ranged strong slows. Lines longer than one chat message continue in the next, split between champions.
+/// ranged strong slows unless the request is "hardControls". Lines longer than one chat message continue in the
+/// next, split between champions.
 /// </summary>
 public static class OverlayControlChatMessage
 {
@@ -34,26 +35,28 @@ public static class OverlayControlChatMessage
             throw new InvalidOperationException("未发送：英雄技能还在读取，请稍后重试。");
         }
 
+        bool slows = request.Kind != "hardControls";
         var entries = players.Select(p =>
             champion(p.ChampionId)
             + " "
             + (
                 controls.GetValueOrDefault(p.ChampionId) is { } skills
-                    ? Skills(skills, live?.Effects.GetValueOrDefault(p.Key)?.Cooldown?.UltimateSealed == true)
+                    ? Skills(skills, live?.Effects.GetValueOrDefault(p.Key)?.Cooldown?.UltimateSealed == true, slows)
                     : "读取中"
             )
         );
         string side = request.Target == "own" ? "我方" : "对方";
-        return Split($"【控制·{side}】", entries.ToList());
+        return Split($"【{(slows ? "控制" : "硬控")}·{side}】", entries.ToList());
     }
 
-    // A sealed ultimate (Back to Basics) cannot be cast, as on the control page.
-    private static string Skills(ControlSkill[] skills, bool ultimateSealed)
+    // A sealed ultimate (Back to Basics) cannot be cast, as on the control page. Without slows, an ability that
+    // only slows has nothing left and drops out.
+    private static string Skills(ControlSkill[] skills, bool ultimateSealed, bool slows)
     {
         var parts = skills
             .Where(skill => !(skill.Key == "R" && ultimateSealed))
             .Select(skill =>
-                skill.Key + string.Join("/", skill.Slow != null ? skill.Effects.Append("减速") : skill.Effects)
+                skill.Key + string.Join("/", slows && skill.Slow != null ? skill.Effects.Append("减速") : skill.Effects)
             )
             .Where(part => part.Length > 1)
             .ToArray();

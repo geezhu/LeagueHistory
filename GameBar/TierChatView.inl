@@ -13,9 +13,9 @@ static constexpr wchar_t const *ChatIdleText =
 std::array<MenuFlyoutItem, 3> tierTargets, masteryTargets, deathStreakTargets, recordTargets;
 TextBlock chatStatus = MakeText(ChatIdleText, 12, 0x91acbb);
 bool supportsChat = false, supportsMasteryChat = false, supportsDeathStreakChat = false, supportsRecordChat = false,
-     supportsPartyChat = false, supportsControlChat = false, supportsWaveChat = false, chatTeams = false,
-     chatPending = false, chatWriting = false, chatReading = false, chatDismissed = false, chatCancelled = false,
-     chatCleanup = false;
+     supportsPartyChat = false, supportsControlChat = false, supportsHardControlChat = false, supportsWaveChat = false,
+     chatTeams = false, chatPending = false, chatWriting = false, chatReading = false, chatDismissed = false,
+     chatCancelled = false, chatCleanup = false;
 hstring chatId, chatSession, chatTarget, chatKind, chatText, pendingChatWrite;
 int chatSlot = -1, chatHero = 0, chatSpell = -1;
 int64_t chatCreated = 0;
@@ -138,6 +138,10 @@ void UpdateChatButtons()
     controlChatButton.IsEnabled(available && supportsControlChat && chatTeams);
     for (auto &item : controlChatTargets)
         item.IsEnabled(available && supportsControlChat && chatTeams);
+    hardControlChatButton.Visibility(supportsHardControlChat ? Visibility::Visible : Visibility::Collapsed);
+    hardControlChatButton.IsEnabled(available && supportsHardControlChat && chatTeams);
+    for (auto &item : hardControlChatTargets)
+        item.IsEnabled(available && supportsHardControlChat && chatTeams);
     bool compositionChat = supportsCompositionChat && composition != nullptr;
     compositionChatButton.Visibility(compositionChat ? Visibility::Visible : Visibility::Collapsed);
     compositionChatButton.IsEnabled(available && compositionChat && chatTeams);
@@ -181,11 +185,12 @@ bool CanQueueChat(hstring const &target, hstring const &kind) const
         return supportsSummonerChat && target == L"single" && summonerChatCard >= 0 && summonerChatCard < 5 &&
                cards[summonerChatCard].hero > 0;
     if ((kind != L"tier" && kind != L"mastery" && kind != L"deathStreak" && kind != L"record" && kind != L"party" &&
-         kind != L"controls" && kind != L"composition" && kind != L"voice") ||
+         kind != L"controls" && kind != L"hardControls" && kind != L"composition" && kind != L"voice") ||
         (kind == L"mastery" && !supportsMasteryChat) || (kind == L"deathStreak" && !supportsDeathStreakChat) ||
         (kind == L"record" && !supportsRecordChat) ||
         (kind == L"party" && (!supportsPartyChat || target == L"single")) ||
         (kind == L"controls" && (!supportsControlChat || target == L"single")) ||
+        (kind == L"hardControls" && (!supportsHardControlChat || target == L"single")) ||
         (kind == L"composition" && (!supportsCompositionChat || !composition || target == L"single")))
         return false;
     if (kind != L"voice" && target != L"own" && target != L"enemy" && target != L"single")
@@ -224,16 +229,17 @@ void QueueChat(hstring const &target, hstring const &kind)
                 : target == L"enemy" ? L"敌方英雄"
                                      : cards[chatSlot].champion.Text();
     hstring metric = kind == L"summoner" ? L" " + cards[chatSlot].summoners[chatSpell].name
-                                         : hstring(kind == L"mastery"       ? L"熟练度"
-                                                   : kind == L"deathStreak" ? L"连死次数"
-                                                   : kind == L"record"      ? L"战绩"
-                                                   : kind == L"party"       ? L"疑似组排"
-                                                   : kind == L"controls"    ? L"控制技能"
-                                                   : kind == L"composition" ? L"阵容能力"
-                                                   : target == L"spawn"     ? L"出波与炮车"
-                                                   : target == L"super"     ? L"超级兵"
-                                                   : target == L"deaths"    ? L"阵亡代价"
-                                                                            : L"梯队");
+                                         : hstring(kind == L"mastery"        ? L"熟练度"
+                                                   : kind == L"deathStreak"  ? L"连死次数"
+                                                   : kind == L"record"       ? L"战绩"
+                                                   : kind == L"party"        ? L"疑似组排"
+                                                   : kind == L"controls"     ? L"控制技能"
+                                                   : kind == L"hardControls" ? L"硬控技能"
+                                                   : kind == L"composition"  ? L"阵容能力"
+                                                   : target == L"spawn"      ? L"出波与炮车"
+                                                   : target == L"super"      ? L"超级兵"
+                                                   : target == L"deaths"     ? L"阵亡代价"
+                                                                             : L"梯队");
     chatStatus.Text(kind == L"voice" ? L"文字已确认。请在 20 秒内按 Win＋G 返回游戏，保持聊天输入框关闭；可取消发送。"
                                      : L"待发送：" + hstring(name) + metric +
                                            L"。请按 Win＋G 返回游戏，保持聊天输入框关闭（20 秒内）。");

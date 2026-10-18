@@ -16,9 +16,10 @@ bool enemySound = true, allySound = false, controlSettingsWritten = false, contr
 hstring pendingControlSettings;
 static constexpr wchar_t const *SurvivalSoundSetting = L"survivalItemSound";
 static constexpr wchar_t const *AllySoundSetting = L"survivalItemAllySound";
-// Sends one side's recognized control skills to game chat through the shared send gate.
-Button controlChatButton;
-std::array<MenuFlyoutItem, 2> controlChatTargets;
+// Sends one side's recognized control skills to game chat through the shared send gate, with the ranged strong
+// slows or, from the second button, without them.
+Button controlChatButton, hardControlChatButton;
+std::array<MenuFlyoutItem, 2> controlChatTargets, hardControlChatTargets;
 
 void InitializeControls()
 {
@@ -94,26 +95,41 @@ void InitializeSurvivalSound(StackPanel const &navigation)
     RefreshSurvivalSoundButton();
     navigation.Children().Append(survivalSoundButton);
 }
-void InitializeControlChat(StackPanel const &navigation)
+Button ControlChatButton(hstring const &label,
+                         hstring const &kind,
+                         hstring const &tip,
+                         std::array<MenuFlyoutItem, 2> &targets)
 {
     MenuFlyout menu;
     std::array<hstring, 2> names{L"我方", L"敌方"};
     std::array<hstring, 2> keys{L"own", L"enemy"};
-    for (size_t i = 0; i < controlChatTargets.size(); ++i)
+    for (size_t i = 0; i < targets.size(); ++i)
     {
-        controlChatTargets[i].Text(names[i]);
-        controlChatTargets[i].Click([this, target = keys[i]](auto &&, auto &&) { QueueChat(target, L"controls"); });
-        menu.Items().Append(controlChatTargets[i]);
+        targets[i].Text(names[i]);
+        targets[i].Click([this, target = keys[i], kind](auto &&, auto &&) { QueueChat(target, kind); });
+        menu.Items().Append(targets[i]);
     }
-    controlChatButton = DetailButton(L"");
-    controlChatButton.Content(MakeText(L"发送控制 ▾", 13));
+    auto button = DetailButton(L"");
+    button.Content(MakeText(label, 13));
+    button.Flyout(menu);
+    ToolTipService::SetToolTip(button, box_value(tip + L"\n需以管理员身份运行 League；点击后按 Win＋G 返回游戏。"));
+    button.Visibility(Visibility::Collapsed);
+    return button;
+}
+void InitializeControlChat(StackPanel const &navigation)
+{
+    controlChatButton = ControlChatButton(L"发送控制 ▾",
+                                          L"controls",
+                                          L"把我方或敌方每个英雄的控制技能（含远程强减速）发送到游戏聊天。",
+                                          controlChatTargets);
     controlChatButton.Margin({12, 0, 0, 0});
-    controlChatButton.Flyout(menu);
-    ToolTipService::SetToolTip(controlChatButton,
-                               box_value(L"把我方或敌方每个英雄的控制技能（含远程强减速）发送到游戏聊天。\n"
-                                         L"需以管理员身份运行 League；点击后按 Win＋G 返回游戏。"));
-    controlChatButton.Visibility(Visibility::Collapsed);
     navigation.Children().Append(controlChatButton);
+    hardControlChatButton = ControlChatButton(L"发送硬控 ▾",
+                                              L"hardControls",
+                                              L"只发送控制技能，不含远程强减速；只会减速的技能不列出。",
+                                              hardControlChatTargets);
+    hardControlChatButton.Margin({6, 0, 0, 0});
+    navigation.Children().Append(hardControlChatButton);
 }
 void ChangeSurvivalSound()
 {
