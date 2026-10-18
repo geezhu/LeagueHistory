@@ -206,6 +206,48 @@ public class ChampionSkinBrowserTests
     }
 
     [Fact]
+    public void LoadIcons_MoreChampionsThanARepaintBatch_LoadsThemAllAndRepaintsAlongTheWay()
+    {
+        UiHost.Run(async host =>
+        {
+            using var browser = Browser(Config(), new ManyChampionsSource(), () => { });
+
+            await browser.Loading;
+            var grid = Grid(browser);
+            Assert.Equal(ManyChampionsSource.Count, grid.Items.Count);
+
+            // The window repaints every twelfth icon and once more when the list is done; both need every icon in.
+            await WaitFor(() => grid.Items.All(item => grid.Icon(item.ChampionId) != null));
+
+            browser.Close();
+        });
+    }
+
+    [Fact]
+    public void Close_WhileASplashIsStillLoading_DropsTheLateArt()
+    {
+        UiHost.Run(async host =>
+        {
+            var source = new GatedSplashSource();
+            using var browser = Browser(Config(), source, () => { });
+            var splash = Splash(browser);
+
+            await browser.Loading;
+            await WaitFor(() => source.StartedSplashes > 0);
+
+            browser.Close();
+            source.Release();
+            await WaitFor(() => source.FinishedSplashes > 0);
+            await Pump();
+
+            // The art arrived after the window stopped showing that champion, so it is dropped rather than shown.
+            Assert.Null(splash.Image);
+            Assert.NotNull(source.LastSplash);
+            Assert.Throws<ArgumentException>(() => _ = source.LastSplash!.Width);
+        });
+    }
+
+    [Fact]
     public void DrawToBitmap_TheWindow_PaintsItsWholeSurface()
     {
         UiHost.Run(async host =>
@@ -289,6 +331,15 @@ public class ChampionSkinBrowserTests
         Assert.True(ready(), "The window did not show its art in time.");
     }
 
+    // Let the message loop drain the continuations the window posted, without waiting on the clock.
+    private static async Task Pump()
+    {
+        for (int i = 0; i < 8; i++)
+        {
+            await Task.Yield();
+        }
+    }
+
     private static PrimaryChampion Champion(int id, string name, string title, string alias) =>
         new()
         {
@@ -355,6 +406,79 @@ public class ChampionSkinBrowserTests
             using var graphics = Graphics.FromImage(art);
             graphics.Clear(Color.CornflowerBlue);
             return art;
+        }
+    }
+
+    /// <summary>More champions than the window repaints an icon batch after, all owned so all of them are listed.</summary>
+    private sealed class ManyChampionsSource : ISkinBrowserSource
+    {
+        private readonly StubSource _art = new();
+
+        public const int Count = 13;
+
+        public Task<List<ChampionSkinCardModel>> LoadAsync(
+            IReadOnlyDictionary<int, int> preferred,
+            CancellationToken cancellationToken
+        )
+        {
+            var champions = Enumerable
+                .Range(0, Count)
+                .Select(i => Champion(900 + i, "英雄" + i, "称号" + i, "Alias" + i))
+                .ToList();
+            var owned = champions.ToDictionary(champion => champion.Id, champion => Skins(champion.Id));
+            return Task.FromResult(SkinCatalog.Build(champions, owned, preferred));
+        }
+
+        public Task<Image?> LoadIconAsync(ChampionSkinCardModel champion, CancellationToken cancellationToken) =>
+            _art.LoadIconAsync(champion, cancellationToken);
+
+        public Task<Image?> LoadSkinAsync(
+            ChampionSkinCardModel champion,
+            SkinThumbItem skin,
+            SkinImageKind kind,
+            CancellationToken cancellationToken
+        ) => _art.LoadSkinAsync(champion, skin, kind, cancellationToken);
+    }
+
+    /// <summary>Holds every splash back until the test releases it, so a late one can be produced on purpose.</summary>
+    private sealed class GatedSplashSource : ISkinBrowserSource
+    {
+        private readonly StubSource _art = new();
+        private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int StartedSplashes { get; private set; }
+
+        public int FinishedSplashes { get; private set; }
+
+        public Image? LastSplash { get; private set; }
+
+        public void Release() => _gate.TrySetResult();
+
+        public Task<List<ChampionSkinCardModel>> LoadAsync(
+            IReadOnlyDictionary<int, int> preferred,
+            CancellationToken cancellationToken
+        ) => _art.LoadAsync(preferred, cancellationToken);
+
+        public Task<Image?> LoadIconAsync(ChampionSkinCardModel champion, CancellationToken cancellationToken) =>
+            _art.LoadIconAsync(champion, cancellationToken);
+
+        public async Task<Image?> LoadSkinAsync(
+            ChampionSkinCardModel champion,
+            SkinThumbItem skin,
+            SkinImageKind kind,
+            CancellationToken cancellationToken
+        )
+        {
+            if (kind != SkinImageKind.Splash)
+            {
+                return await _art.LoadSkinAsync(champion, skin, kind, cancellationToken);
+            }
+
+            StartedSplashes++;
+            await _gate.Task;
+            LastSplash = await _art.LoadSkinAsync(champion, skin, kind, cancellationToken);
+            FinishedSplashes++;
+            return LastSplash;
         }
     }
 }
