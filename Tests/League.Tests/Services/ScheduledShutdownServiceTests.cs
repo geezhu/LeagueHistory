@@ -267,6 +267,225 @@ public class ScheduledShutdownServiceTests : IDisposable
         Assert.Equal(0, _tasks.Deletions);
     }
 
+    [Fact]
+    public async Task ReadAsync_ManagedRunningTask_ReportsThePlanFromTheTask()
+    {
+        var service = await RunningManagedAsync();
+
+        var view = await service.ReadAsync();
+
+        Assert.Equal("23:00", view.Plan.Time);
+        Assert.Equal(30, view.Plan.CountdownSeconds);
+        Assert.True(view.Plan.Enabled);
+    }
+
+    [Fact]
+    public async Task ReadAsync_ManagedRunningTask_IsReportedAsOurs()
+    {
+        var service = await RunningManagedAsync();
+
+        var view = await service.ReadAsync();
+
+        Assert.True(view.Exists);
+        Assert.True(view.Managed);
+        Assert.True(view.Running);
+    }
+
+    [Fact]
+    public async Task ReadAsync_RunningWorker_SaysSo()
+    {
+        var service = await RunningManagedAsync();
+
+        var view = await service.ReadAsync();
+
+        Assert.Contains("正在执行", view.Message);
+    }
+
+    [Fact]
+    public async Task ReadAsync_FreshStatus_IsShownAsTheCurrentState()
+    {
+        var service = await RunningManagedAsync();
+
+        var view = await service.ReadAsync();
+
+        Assert.Contains("正在检查对局", view.Message);
+    }
+
+    [Fact]
+    public async Task ReadAsync_FreshStatus_PassesTheOccurrenceOn()
+    {
+        var service = await RunningManagedAsync();
+
+        var view = await service.ReadAsync();
+
+        Assert.Equal("2026-09-18T23:00:00", view.Occurrence);
+    }
+
+    [Fact]
+    public async Task ReadAsync_ManagedTask_NextRunIsTheTriggerTime()
+    {
+        var service = await RunningManagedAsync();
+
+        var view = await service.ReadAsync();
+
+        Assert.Equal<DateTime?>(new DateTime(2026, 9, 18, 23, 0, 0), view.NextRun);
+    }
+
+    [Fact]
+    public async Task ReadAsync_SkippedOccurrence_IsAnnounced()
+    {
+        var service = await RunningManagedAsync();
+        await File.WriteAllTextAsync(_folder.File("cancel.json"), "{\"Occurrence\":\"2026-09-18T23:00:00\"}");
+
+        var view = await service.ReadAsync();
+
+        Assert.Contains("下一次计划已跳过", view.Message);
+    }
+
+    [Fact]
+    public async Task ReadAsync_SkippedOccurrence_MovesTheNextRunADay()
+    {
+        var service = await RunningManagedAsync();
+        await File.WriteAllTextAsync(_folder.File("cancel.json"), "{\"Occurrence\":\"2026-09-18T23:00:00\"}");
+
+        var view = await service.ReadAsync();
+
+        Assert.Equal<DateTime?>(new DateTime(2026, 9, 19, 23, 0, 0), view.NextRun);
+    }
+
+    [Fact]
+    public async Task ReadAsync_TriggerDaysAway_IsNotMovedBackToTomorrow()
+    {
+        var service = Service();
+        _tasks.Record = new(TaskXml(new(true, "23:00", 30), new DateTime(2026, 9, 20, 22, 0, 0)), true, false);
+
+        var view = await service.ReadAsync();
+
+        Assert.Equal<DateTime?>(new DateTime(2026, 9, 20, 23, 0, 0), view.NextRun);
+    }
+
+    [Fact]
+    public async Task ReadAsync_ForeignTask_IsNotOurs()
+    {
+        var service = await ForeignAsync();
+
+        var view = await service.ReadAsync();
+
+        Assert.False(view.Managed);
+    }
+
+    [Fact]
+    public async Task ReadAsync_ForeignTask_KeepsTheDefaultCountdown()
+    {
+        var service = await ForeignAsync();
+
+        var view = await service.ReadAsync();
+
+        Assert.Equal(ScheduledShutdownService.DefaultCountdownSeconds, view.Plan.CountdownSeconds);
+    }
+
+    [Fact]
+    public async Task ReadAsync_ForeignTask_IsAnnouncedAsTheOriginalScript()
+    {
+        var service = await ForeignAsync();
+
+        var view = await service.ReadAsync();
+
+        Assert.Contains("已发现原有脚本", view.Message);
+    }
+
+    [Fact]
+    public async Task ReadAsync_ForeignTask_KeepsItsRunningState()
+    {
+        var service = await ForeignAsync();
+
+        var view = await service.ReadAsync();
+
+        Assert.Contains("正在执行", view.Message);
+    }
+
+    [Fact]
+    public async Task ReadAsync_ForeignTask_HasNoWorkerStatus()
+    {
+        var service = await ForeignAsync();
+
+        var view = await service.ReadAsync();
+
+        Assert.Null(view.Occurrence);
+        Assert.NotNull(view.NextRun);
+    }
+
+    [Fact]
+    public async Task ReadAsync_StatusOlderThanAMinute_IsReportedAsTheLatestState()
+    {
+        var service = Service();
+        _tasks.Record = new(TaskXml(new(true, "23:00", 30), Now), true, false);
+        await File.WriteAllTextAsync(
+            _folder.File("status.json"),
+            StatusJson("上次尝试被跳过", DateTimeOffset.UtcNow.AddMinutes(-5))
+        );
+
+        var view = await service.ReadAsync();
+
+        Assert.Contains("最近状态：上次尝试被跳过", view.Message);
+    }
+
+    [Fact]
+    public async Task ReadAsync_StatusOlderThanAMinute_DoesNotClaimAnOccurrence()
+    {
+        var service = Service();
+        _tasks.Record = new(TaskXml(new(true, "23:00", 30), Now), true, false);
+        await File.WriteAllTextAsync(
+            _folder.File("status.json"),
+            StatusJson("上次尝试被跳过", DateTimeOffset.UtcNow.AddMinutes(-5))
+        );
+
+        var view = await service.ReadAsync();
+
+        Assert.Null(view.Occurrence);
+    }
+
+    [Fact]
+    public async Task ReadAsync_UnreadableConfiguration_FallsBackToTheDefaultCountdown()
+    {
+        var service = Service();
+        _tasks.Record = new(TaskXml(new(true, "23:00", 30), Now), true, false);
+        await File.WriteAllTextAsync(_folder.File("plan.json"), "not json at all");
+
+        var view = await service.ReadAsync();
+
+        Assert.Equal(ScheduledShutdownService.DefaultCountdownSeconds, view.Plan.CountdownSeconds);
+        Assert.Equal("23:00", view.Plan.Time);
+    }
+
+    [Fact]
+    public async Task ReadAsync_UnreadableStatus_IsLeftOut()
+    {
+        var service = Service();
+        _tasks.Record = new(TaskXml(new(true, "23:00", 30), Now), true, false);
+        await File.WriteAllTextAsync(_folder.File("status.json"), "not json either");
+
+        var view = await service.ReadAsync();
+
+        Assert.DoesNotContain("最近状态", view.Message);
+    }
+
+    [Fact]
+    public async Task ReadAsync_OpeningAndRefreshing_DoesNotMutateTheStoredTask()
+    {
+        var service = await RunningManagedAsync();
+        string task = _tasks.Record!.Xml;
+
+        await service.ReadAsync();
+        await service.ReadAsync();
+
+        Assert.Equal(task, _tasks.Record!.Xml);
+        Assert.Equal(0, _tasks.Registrations);
+        Assert.Equal(0, _tasks.EnableChanges);
+        Assert.Equal(0, _tasks.Stops);
+        Assert.Equal(0, _tasks.Deletions);
+    }
+
     // ---------------------------------------------------------------- creating the plan
 
     [Fact]
@@ -336,6 +555,103 @@ public class ScheduledShutdownServiceTests : IDisposable
         Assert.Equal<DateTime?>(new DateTime(2026, 9, 18, 22, 30, 0), saved.NextRun);
     }
 
+    [Fact]
+    public async Task CreateAsync_UnrecognizedSameNamedTask_IsNeverOverwritten()
+    {
+        var service = Service();
+        _tasks.Record = new(UnrelatedTaskXml(), false, false);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync("23:00", 30));
+
+        Assert.Equal(0, _tasks.Registrations);
+    }
+
+    [Theory]
+    [InlineData("25:00", 30)]
+    [InlineData("9:00", 30)]
+    [InlineData("23:00", 301)]
+    public async Task CreateAsync_InvalidOptions_AreRefusedBeforeTheTaskIsTouched(string time, int countdownSeconds)
+    {
+        var service = Service();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.CreateAsync(time, countdownSeconds));
+
+        Assert.Equal(0, _tasks.Registrations);
+    }
+
+    [Fact]
+    public async Task CreateAsync_FailedRegistration_RestoresTheExistingPlan()
+    {
+        var service = Service();
+        _tasks.Record = new(LegacyTaskXml("old"), false, false);
+        await service.CreateAsync("23:00", 30);
+        string previous = await File.ReadAllTextAsync(_folder.File("plan.json"));
+        _tasks.FailRegistration = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync("23:00", 30));
+
+        Assert.Equal(previous, await File.ReadAllTextAsync(_folder.File("plan.json")));
+    }
+
+    [Fact]
+    public async Task CreateAsync_RunningWorker_IsStoppedBeforeTheReplacement()
+    {
+        var service = Service();
+        _tasks.Record = new(TaskXml(new(true, "23:00", 30), Now), true, true);
+
+        var replacement = await service.CreateAsync("01:15", 45);
+
+        Assert.Equal(1, _tasks.Stops);
+        Assert.False(replacement.Running);
+    }
+
+    [Fact]
+    public async Task CreateAsync_Replacement_StartsAtTheNextFutureOccurrence()
+    {
+        var service = Service();
+        _tasks.Record = new(TaskXml(new(true, "23:00", 30), Now), true, true);
+
+        var replacement = await service.CreateAsync("01:15", 45);
+
+        Assert.Equal("01:15", replacement.Plan.Time);
+        Assert.Equal(45, replacement.Plan.CountdownSeconds);
+        Assert.Equal<DateTime?>(new DateTime(2026, 9, 18, 1, 15, 0), replacement.NextRun);
+    }
+
+    [Fact]
+    public async Task CreateAsync_HalfSavedPlan_IsDisarmedInsteadOfLeftEnabled()
+    {
+        var service = Service();
+        Directory.CreateDirectory(_folder.File("cancel.json")); // The atomic write cannot replace a folder.
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync("23:00", 30));
+
+        Assert.False(_tasks.LastEnabled);
+    }
+
+    [Fact]
+    public async Task CreateAsync_HalfSavedPlan_DisarmsTheConfigurationOnDisk()
+    {
+        var service = Service();
+        Directory.CreateDirectory(_folder.File("cancel.json"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync("23:00", 30));
+
+        var config = JObject.Parse(await File.ReadAllTextAsync(_folder.File("plan.json")));
+        Assert.False((bool?)config["Enabled"]);
+    }
+
+    [Fact]
+    public async Task CreateAsync_HalfSavedPlan_LeavesNoTemporaryFileBehind()
+    {
+        var service = Service();
+        Directory.CreateDirectory(_folder.File("cancel.json"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync("23:00", 30));
+
+        Assert.Empty(Directory.EnumerateFiles(_folder.Root, "*.tmp"));
+    }
+
     // ---------------------------------------------------------------- deleting the plan
 
     [Fact]
@@ -394,9 +710,80 @@ public class ScheduledShutdownServiceTests : IDisposable
         Assert.False((bool?)config["Enabled"]);
     }
 
+    [Fact]
+    public async Task DeleteAsync_FailedDeletion_LeavesTheTaskDisabledAndStopped()
+    {
+        var service = Service();
+        _tasks.Record = new(TaskXml(new(true, "23:00", 30), Now), true, true);
+        _tasks.FailDeletion = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteAsync());
+
+        Assert.False(_tasks.Record!.Enabled);
+        Assert.False(_tasks.Record!.Running);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_UnrelatedSameNamedTask_IsNotTouched()
+    {
+        var service = Service();
+        _tasks.Record = new(UnrelatedTaskXml(), false, false);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteAsync());
+
+        Assert.Equal(0, _tasks.Deletions);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_KeepsLogsAndTheOriginalTaskBackup()
+    {
+        var service = Service();
+        string task = TaskXml(new(true, "23:00", 30), Now);
+        _tasks.Record = new(task, true, false);
+        await File.WriteAllTextAsync(_folder.File("shutdown.log"), "test log");
+
+        await service.DeleteAsync();
+
+        Assert.Equal("test log", await File.ReadAllTextAsync(_folder.File("shutdown.log")));
+        Assert.Equal(task, await File.ReadAllTextAsync(_folder.File("original-task.xml")));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_AfterDeletion_ExplicitCreationEnablesTheNewPlan()
+    {
+        var service = Service();
+        _tasks.Record = new(TaskXml(new(true, "23:00", 30), Now), true, false);
+        await service.DeleteAsync();
+
+        var recreated = await service.CreateAsync("23:30", 30);
+
+        Assert.True(recreated.Exists);
+        Assert.True(recreated.Plan.Enabled);
+    }
+
     // ---------------------------------------------------------------- fixtures
 
     private ScheduledShutdownService Service() => new(_folder.Root, _tasks, () => Now);
+
+    private async Task<ScheduledShutdownService> RunningManagedAsync()
+    {
+        var service = Service();
+        _tasks.Record = new(TaskXml(new(true, "23:00", 30), Now), true, true);
+        await File.WriteAllTextAsync(_folder.File("plan.json"), PlanJson(30));
+        await File.WriteAllTextAsync(
+            _folder.File("status.json"),
+            FreshStatusJson("正在检查对局", "2026-09-18T23:00:00")
+        );
+        return service;
+    }
+
+    private async Task<ScheduledShutdownService> ForeignAsync()
+    {
+        var service = Service();
+        _tasks.Record = new(LegacyTaskXml("someone else's task"), true, true);
+        await File.WriteAllTextAsync(_folder.File("plan.json"), PlanJson(30));
+        return service;
+    }
 
     private string TaskXml(ShutdownPlan plan, DateTime now) =>
         ScheduledShutdownService.BuildTaskXml(plan, _folder.Root, Sid(), now);
@@ -408,7 +795,29 @@ public class ScheduledShutdownServiceTests : IDisposable
         return xml.ToString();
     }
 
+    private string UnrelatedTaskXml()
+    {
+        var xml = XDocument.Parse(LegacyTaskXml("old"));
+        xml.Descendants(Ns + "Arguments").Single().Value = "-Command Write-Output ShutdownAfterLoL.ps1";
+        return xml.ToString();
+    }
+
     private static string Sid() => WindowsIdentity.GetCurrent().User!.Value;
+
+    private static string PlanJson(int countdownSeconds) =>
+        "{\"Version\":1,\"Enabled\":true,\"Time\":\"23:00\",\"CountdownSeconds\":" + countdownSeconds + "}";
+
+    private static string FreshStatusJson(string message, string occurrence) =>
+        "{\"UpdatedAt\":\""
+        + DateTimeOffset.UtcNow.ToString("O")
+        + "\",\"Message\":\""
+        + message
+        + "\",\"Occurrence\":\""
+        + occurrence
+        + "\"}";
+
+    private static string StatusJson(string message, DateTimeOffset updatedAt) =>
+        "{\"UpdatedAt\":\"" + updatedAt.ToString("O") + "\",\"Message\":\"" + message + "\"}";
 
     private static string Value(string xml, string name) =>
         (string?)XDocument.Parse(xml).Descendants(Ns + name).Single() ?? "";
