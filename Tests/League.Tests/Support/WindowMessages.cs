@@ -63,6 +63,12 @@ public static class WindowMessages
         Send(control, KeyUp, (int)key, 0);
     }
 
+    /// <summary>
+    /// The press of a key on its own, for a handler that closes its window: there is no window left to release the key
+    /// to afterwards.
+    /// </summary>
+    public static void KeyDownOnly(Control control, Keys key) => Send(control, KeyDown, (int)key, 0);
+
     /// <summary>A key press as a message, for the preprocessing the message loop does before dispatching one.</summary>
     public static Message KeyDownMessage(Control control, Keys key) =>
         Message.Create(control.Handle, KeyDown, (nint)key, 0);
