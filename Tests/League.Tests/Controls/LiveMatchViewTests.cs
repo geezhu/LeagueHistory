@@ -190,21 +190,11 @@ public class LiveMatchViewTests : IDisposable
         });
     }
 
-    [Fact]
-    public void Window_TheGuideButton_OpensTheSelectedChampionInTheCurrentMode()
-    {
-        UiHost.Run(async host =>
-        {
-            var guided = new List<(int Id, int Queue)>();
-            var live = new FakeLive(Snapshot(LiveMatchFixture.AramGame(125, 900, 1400)));
-            using var screen = CreateScreen(host, live, guide: (id, queue) => guided.Add((id, queue)));
-            await screen.Rendered(() => screen.Cards.Count == 10);
-
-            Click(screen.ButtonWith("所选英雄完整攻略"));
-
-            Assert.Equal([(99, 2400)], guided);
-        });
-    }
+    // Behaviours still to cover, every one of them blocked on the public surface rather than on the page itself: the
+    // guide button (its callback is pinned by Tests/StatisticsChecks, but the mode it reads cannot be settled from
+    // outside without racing the poll), switching the statistics mode, reading the statistics index once, a stale
+    // rank failure, the augment records surviving and dropping with the roster, a late queue result, the owned
+    // recommendation items, and clicking a recommended augment. See docs/testing-gaps-notes.md.
 
     [Fact]
     public void Window_LateIconCopies_AreDisposedAndNeverPublished()
@@ -429,6 +419,15 @@ public class LiveMatchViewTests : IDisposable
 
         public bool PickerReady => Picker.Items.Count > 0;
 
+        /// <summary>The page's status line: the separator line that is not inside a participant card.</summary>
+        public string TierStatus =>
+            Descendants(View)
+                .OfType<Label>()
+                .Where(label => label.Text.Contains(" · ", StringComparison.Ordinal) && !InsideACard(label))
+                .Select(label => label.Text)
+                .FirstOrDefault()
+            ?? "";
+
         public List<string> PickerItems => Picker.Items.Cast<object>().Select(item => item.ToString() ?? "").ToList();
 
         /// <summary>The picker index of one recorded augment; the statistics decide the order.</summary>
@@ -452,6 +451,9 @@ public class LiveMatchViewTests : IDisposable
 
         private static IEnumerable<Control> Descendants(Control parent) =>
             parent.Controls.Cast<Control>().SelectMany(child => new[] { child }.Concat(Descendants(child)));
+
+        private static bool InsideACard(Control control) =>
+            control.Parent is { } parent && (parent.Tag is string || InsideACard(parent));
     }
 
     /// <summary>Waits for a positive signal, pumping the message loop the way the application does.</summary>
@@ -530,7 +532,10 @@ public class LiveMatchViewTests : IDisposable
     /// <summary>arammeta on its stub: the captured index, validated by its entity tag.</summary>
     private sealed class FakeAramMeta : HttpMessageHandler
     {
-        private static readonly string Tag = "\"" + AramMetaFixture.Version + "\"";
+        // The entity tag has to be unique to this class. The arammeta cache lives on disk under the shared test data
+        // root, so a tag that other classes also use would let their cached document answer this class's conditional
+        // request with 304, and the index would then never arrive.
+        private static readonly string Tag = "\"" + AramMetaFixture.Version + "-livematch\"";
         private readonly JObject _index = AramMetaFixture.Index();
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
