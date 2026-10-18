@@ -407,6 +407,74 @@ public class GameBarBridgeTests : IDisposable
         Assert.StartsWith("本机同步不可用：", status);
     }
 
+    [Fact]
+    public async Task Publish_HiddenIdentity_DropsThePartyMarker()
+    {
+        JObject snapshot = await PublishSnapshotAsync(CustomPublish(SoloRoster(Self(identityHidden: true))));
+
+        Assert.Equal(0, (int)Row(snapshot, 0)["partySize"]!);
+        Assert.Equal("", (string)Row(snapshot, 0)["party"]!);
+    }
+
+    [Theory]
+    [InlineData(1, 0, "")]
+    [InlineData(2, 2, "2人")]
+    [InlineData(5, 5, "5人")]
+    [InlineData(6, 0, "")]
+    public async Task Publish_PartySizeOutsideAGroup_IsNotAMarker(int size, int expectedSize, string expectedBadge)
+    {
+        var parties = new Dictionary<string, OverlayPartyMarker> { ["self-key"] = new(size, 0xcba2ff) };
+
+        JObject snapshot = await PublishSnapshotAsync(CustomPublish(SoloRoster(Self()), parties: parties));
+
+        Assert.Equal(expectedSize, (int)Row(snapshot, 0)["partySize"]!);
+        Assert.Equal(expectedBadge, (string)Row(snapshot, 0)["party"]!);
+    }
+
+    [Fact]
+    public async Task Publish_MasteryBelongingToAnotherChampion_IsNotUsed()
+    {
+        var masteries = new Dictionary<string, PlayerChampionMastery> { ["self-key"] = new(99, 7, 1000, null, true) };
+
+        JObject snapshot = await PublishSnapshotAsync(CustomPublish(SoloRoster(Self()), masteries: masteries));
+
+        Assert.Equal("成就读取中…", (string)Row(snapshot, 0)["mastery"]!);
+    }
+
+    [Fact]
+    public async Task Publish_ChampionNotConfirmedYet_ReportsTheWaitingTexts()
+    {
+        JObject snapshot = await PublishSnapshotAsync(CustomPublish(SoloRoster(Self(champion: 0))));
+
+        Assert.Equal("等待英雄确认", (string)Row(snapshot, 0)["mastery"]!);
+        Assert.Equal("", (string)Row(snapshot, 0)["deathStreak"]!);
+    }
+
+    [Fact]
+    public async Task Publish_PlayerWithoutStatistics_ShowsTheLoadingState()
+    {
+        JObject snapshot = await PublishSnapshotAsync(
+            CustomPublish(SoloRoster(Self()), ranks: new Dictionary<string, PlayerChampionTier>())
+        );
+
+        Assert.Equal("—", (string)Row(snapshot, 0)["tier"]!);
+        Assert.Equal("统计读取中…", (string)Row(snapshot, 0)["stats"]!);
+        Assert.Contains("英雄统计尚未读取。", (string)Row(snapshot, 0)["details"]!);
+    }
+
+    [Fact]
+    public async Task Publish_MoreThanFivePlayersInATeam_KeepsFiveSlotsPerSide()
+    {
+        var roster = new LoadingRoster("123", 2400, "KIWI", [Self(), Ally(1), Ally(2), Ally(3), Ally(4), Ally(5)]);
+
+        JObject snapshot = await PublishSnapshotAsync(CustomPublish(roster));
+
+        Assert.Equal("self-key", (string)Row(snapshot, 0)["key"]!);
+        Assert.Equal("ally-4", (string)Row(snapshot, 4)["key"]!);
+        Assert.Empty(Row(snapshot, 5));
+        Assert.DoesNotContain("ally-5", snapshot.ToString());
+    }
+
     /// <summary>A widget that is open, pinned and showing a match, as the widget itself reports it.</summary>
     private static JObject Heartbeat() =>
         new()
@@ -421,6 +489,14 @@ public class GameBarBridgeTests : IDisposable
         };
 
     private static JObject Row(JObject snapshot, int slot) => (JObject)snapshot["players"]![slot]!;
+
+    private static LoadingPlayer Self(bool identityHidden = false, int champion = 2) =>
+        new("self-key", "Self", "secret-puuid", 456, champion, 200, true, identityHidden);
+
+    private static LoadingPlayer Ally(int index) =>
+        new("ally-" + index, "Ally " + index, "ally-puuid-" + index, 500 + index, 10 + index, 200, false);
+
+    private static LoadingRoster SoloRoster(LoadingPlayer player) => new("123", 2400, "KIWI", [player]);
 
     private static LoadingRoster Roster(int ownTeam, int enemyTeam) =>
         new(
@@ -494,6 +570,33 @@ public class GameBarBridgeTests : IDisposable
 
     private async Task WriteHeartbeatAsync(JObject heartbeat) =>
         await File.WriteAllTextAsync(_folder.File("widget-status.json"), heartbeat.ToString());
+
+    /// <summary>The roster under test with the lookup tables the bridge joins onto it.</summary>
+    private static Action<GameBarBridge> CustomPublish(
+        LoadingRoster roster,
+        IReadOnlyDictionary<string, PlayerChampionTier>? ranks = null,
+        IReadOnlyDictionary<string, PlayerChampionMastery>? masteries = null,
+        IReadOnlyDictionary<string, OverlayPartyMarker>? parties = null
+    ) =>
+        bridge =>
+        {
+            using var icon = new Bitmap(32, 32);
+            bridge.Publish(
+                roster,
+                ranks ?? Ranks(),
+                new Dictionary<int, Image> { [2] = icon },
+                champion: id => "英雄 " + id,
+                details: _ => "近期 20 场，12 胜",
+                session: "match-1",
+                status: "当前对局",
+                enabled: true,
+                active: true,
+                show: true,
+                masteries: masteries ?? Masteries(),
+                deathStreaks: DeathStreaks(),
+                parties: parties ?? Parties()
+            );
+        };
 
     private async Task<JObject> PublishSnapshotAsync(Action<GameBarBridge> publish)
     {
