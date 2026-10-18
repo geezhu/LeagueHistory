@@ -11,8 +11,10 @@ namespace League.Tests.Support;
 public static class WindowMessages
 {
     private const int MouseMove = 0x0200;
+    private const int MouseLeave = 0x02A3;
     private const int LeftButtonDown = 0x0201;
     private const int LeftButtonUp = 0x0202;
+    private const int LeftButtonDoubleClick = 0x0203;
     private const int KeyDown = 0x0100;
     private const int KeyUp = 0x0101;
     private const int LeftButton = 0x0001;
@@ -25,6 +27,17 @@ public static class WindowMessages
     public static void Click(Control control, Point point)
     {
         Send(control, LeftButtonDown, LeftButton, Pack(point));
+        Send(control, LeftButtonUp, 0, Pack(point));
+    }
+
+    /// <summary>The message Windows posts when the pointer leaves a window that asked to be told about it.</summary>
+    public static void Leave(Control control) => Send(control, MouseLeave, 0, 0);
+
+    /// <summary>A double click: the first press and release, then the message Windows sends for the second press.</summary>
+    public static void DoubleClick(Control control, Point point)
+    {
+        Click(control, point);
+        Send(control, LeftButtonDoubleClick, LeftButton, Pack(point));
         Send(control, LeftButtonUp, 0, Pack(point));
     }
 
@@ -49,6 +62,10 @@ public static class WindowMessages
         Send(control, KeyDown, (int)key, 0);
         Send(control, KeyUp, (int)key, 0);
     }
+
+    /// <summary>A key press as a message, for the preprocessing the message loop does before dispatching one.</summary>
+    public static Message KeyDownMessage(Control control, Keys key) =>
+        Message.Create(control.Handle, KeyDown, (nint)key, 0);
 
     // The low word is the x coordinate and the high word the y coordinate, both relative to the client area.
     private static int Pack(Point point) => (point.Y << 16) | (point.X & 0xFFFF);
