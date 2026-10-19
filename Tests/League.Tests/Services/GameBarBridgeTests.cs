@@ -475,6 +475,62 @@ public class GameBarBridgeTests : IDisposable
         Assert.DoesNotContain("ally-5", snapshot.ToString());
     }
 
+    [Theory]
+    [InlineData(true, true, true, true)]
+    [InlineData(true, true, false, false)]
+    [InlineData(true, false, true, false)]
+    [InlineData(true, false, false, false)]
+    [InlineData(false, true, true, false)]
+    [InlineData(false, true, false, false)]
+    [InlineData(false, false, true, false)]
+    [InlineData(false, false, false, false)]
+    public async Task Publish_CompositionKey_NeedsAPageAndAnEnabledActiveGame(
+        bool withComposition,
+        bool enabled,
+        bool active,
+        bool expected
+    )
+    {
+        GameComposition? page = withComposition ? Composition() : null;
+
+        JObject snapshot = await PublishSnapshotAsync(RosterPublish(enabled, active, composition: page));
+
+        // The two flags really reached Publish, so a mixed-up row cannot pass as the rule under test.
+        Assert.Equal(enabled, (bool)snapshot["enabled"]!);
+        Assert.Equal(active, (bool)snapshot["active"]!);
+        // Announced in every snapshot, page or no page, enabled or not: the pair tells the widget that this bridge can
+        // draw the composition page. Only the payload below is gated. Reading them back also proves that this is the
+        // snapshot Publish wrote rather than some other document.
+        Assert.Equal(1, (int)snapshot["compositionProtocol"]!);
+        Assert.Equal(true, (bool)snapshot["chatComposition"]!);
+        Assert.Equal(expected, snapshot.ContainsKey("composition"));
+    }
+
+    [Fact]
+    public async Task Publish_CompositionWithoutAPage_OmitsTheKeyInsteadOfNullingIt()
+    {
+        JObject snapshot = await PublishSnapshotAsync(RosterPublish(composition: null));
+
+        Assert.False(snapshot.ContainsKey("composition"));
+        // The same document does write an explicit JSON null (gameClock), so a key that is absent and one that is
+        // present but null read alike; ContainsKey is what tells them apart.
+        Assert.Equal(JTokenType.Null, snapshot["gameClock"]!.Type);
+    }
+
+    [Fact]
+    public async Task Publish_CompositionPage_ShipsThePageTheCallerBuilt()
+    {
+        GameComposition page = Composition();
+        Assert.NotEmpty((string)page.Json["revision"]!);
+
+        JObject snapshot = await PublishSnapshotAsync(RosterPublish(composition: page));
+        JObject shipped = (JObject)snapshot["composition"]!;
+
+        Assert.Equal((string)page.Json["revision"]!, (string?)shipped["revision"]);
+        // Its own copy: the caller keeps using its page while the writer thread serialises the snapshot.
+        Assert.NotSame(page.Json, shipped);
+    }
+
     /// <summary>A widget that is open, pinned and showing a match, as the widget itself reports it.</summary>
     private static JObject Heartbeat() =>
         new()
@@ -509,6 +565,20 @@ public class GameBarBridgeTests : IDisposable
             ]
         );
 
+    /// <summary>
+    /// The roster the bridge publishes run through the composition page itself, so the JObject crossing the bridge is
+    /// the real page and not a hand-written stand-in. Assert.IsType also fails loudly if the page stops being built.
+    /// </summary>
+    private static GameComposition Composition() =>
+        Assert.IsType<GameComposition>(
+            GameBarComposition.Build(
+                AramTeamScoreFixture.Index,
+                AramCapabilityGrades.Build(AramTeamScoreFixture.Index),
+                Roster(ownTeam: 200, enemyTeam: 100),
+                id => "英雄 " + id
+            )
+        );
+
     private static Dictionary<string, PlayerChampionTier> Ranks() =>
         new() { ["self-key"] = new("T4", "胜 48.5%", "arammeta · 调整后胜率", 2400, "none") { PickRate = "7.1%" } };
 
@@ -523,10 +593,17 @@ public class GameBarBridgeTests : IDisposable
     private static Action<GameBarBridge> RosterPublish(
         bool enabled = true,
         bool active = true,
-        int waveOpacity = LeagueConfig.DefaultGameBarWaveOpacity
-    ) => bridge => PublishRoster(bridge, enabled, active, waveOpacity);
+        int waveOpacity = LeagueConfig.DefaultGameBarWaveOpacity,
+        GameComposition? composition = null
+    ) => bridge => PublishRoster(bridge, enabled, active, waveOpacity, composition);
 
-    private static void PublishRoster(GameBarBridge bridge, bool enabled, bool active, int waveOpacity)
+    private static void PublishRoster(
+        GameBarBridge bridge,
+        bool enabled,
+        bool active,
+        int waveOpacity,
+        GameComposition? composition = null
+    )
     {
         using var icon = new Bitmap(32, 32);
         bridge.Publish(
@@ -543,7 +620,8 @@ public class GameBarBridgeTests : IDisposable
             masteries: Masteries(),
             deathStreaks: DeathStreaks(),
             parties: Parties(),
-            waveOpacity: waveOpacity
+            waveOpacity: waveOpacity,
+            composition: composition?.Json
         );
     }
 
