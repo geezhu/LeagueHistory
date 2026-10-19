@@ -69,7 +69,7 @@ public sealed class SummonerSpellDataTests : IDisposable
 
         var spells = SummonerSpellData.Parse(list);
 
-        Assert.Equal(1, ((JObject)list["data"]!).Count);
+        Assert.Equal(id, Assert.Single(((JObject)list["data"]!).Properties()).Name);
         var spell = Assert.Single(spells);
         Assert.Equal(id, spell.Key);
         Assert.Equal(id, spell.Value.Id);
@@ -92,7 +92,7 @@ public sealed class SummonerSpellDataTests : IDisposable
 
         var spells = SummonerSpellData.Parse(list);
 
-        Assert.Equal(1, ((JObject)list["data"]!).Count);
+        Assert.Equal("SummonerBroken", Assert.Single(((JObject)list["data"]!).Properties()).Name);
         Assert.Empty(spells);
     }
 
@@ -164,7 +164,7 @@ public sealed class SummonerSpellDataTests : IDisposable
 
         var modes = SummonerSpellData.ParseModes(shared);
 
-        Assert.Equal(1, shared.Count);
+        Assert.Equal("Shared/Spells/SummonerExhaust", Assert.Single(shared.Properties()).Name);
         var spell = Assert.Single(modes);
         Assert.Equal("SummonerExhaust", spell.Key);
         Assert.Equal(new KeyValuePair<string, double>(mode, value), Assert.Single(spell.Value));
@@ -186,7 +186,7 @@ public sealed class SummonerSpellDataTests : IDisposable
 
         var modes = SummonerSpellData.ParseModes(shared);
 
-        Assert.Equal(1, shared.Count);
+        Assert.Equal("Shared/Spells/SummonerExhaust", Assert.Single(shared.Properties()).Name);
         Assert.Empty(modes);
     }
 
@@ -235,8 +235,9 @@ public sealed class SummonerSpellDataTests : IDisposable
 
         var modes = await data.LoadModesAsync(CancellationToken.None);
 
-        Assert.Equal(1, Assert.Single(modes).Value.Count);
-        Assert.Equal(290.0, modes["SummonerExhaust"]["aram"]);
+        var spell = Assert.Single(modes);
+        Assert.Equal("SummonerExhaust", spell.Key);
+        Assert.Equal(new KeyValuePair<string, double>("aram", 290.0), Assert.Single(spell.Value));
     }
 
     [Theory]
