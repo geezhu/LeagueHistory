@@ -146,6 +146,7 @@ public class OverlayRecordChatMessageTests
         string line = OverlayRecordChatMessage.Line("队友", info);
 
         Assert.Contains("特征 [[玻璃心、爱发问号]]", teamSummary);
+        Assert.DoesNotContain("[[", line);
         Assert.Equal(teamSummary.Replace("[[", "[").Replace("]]", "]"), line);
         Assert.Equal("队友 近5场 胜率 [60%] | 发问号 3.2 | 发撤退 4.1 特征 [玻璃心、爱发问号]", line);
     }
