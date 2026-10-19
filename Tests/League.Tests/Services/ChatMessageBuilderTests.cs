@@ -20,10 +20,16 @@ namespace League.Tests.Services;
 /// data, with and without a win history, with and without a behaviour summary - is reachable through
 /// <c>BuildMyTeamSummary</c>, which calls that same method for each seat, so no behaviour of <c>BuildSimpleLine</c> is
 /// skipped here. What cannot be repeated without reflection is the assertion around it: the line
-/// <c>OverlayRecordChatMessage.Build</c> writes from the same cached history, its collapse of the double brackets
-/// <c>BuildSimpleLine</c> writes into one pair (OverlayRecordChatMessage.cs:83-85), its 180-character truncation and
-/// its refusal to send before any history is loaded. Those belong to <c>OverlayRecordChatMessage</c>, not to
+/// <c>OverlayRecordChatMessage.Line</c> writes from the same cached history, its 180-character truncation and its
+/// refusal to send before any history is loaded. Those belong to <c>OverlayRecordChatMessage</c>, not to
 /// <c>ChatMessageBuilder</c>; this class pins this class's side of that contract, the double brackets.
+///
+/// The two sides disagree on the brackets, and it is worth naming why: this class writes
+/// <c>特征 [[玻璃心、爱发问号]]</c> (the summary carries its own pair), while <c>Line</c> writes one pair,
+/// <c>特征 [玻璃心、爱发问号]</c>. Nothing in the application collapses one into the other - <c>Line</c> takes the
+/// tags apart with <c>OverlayRecordSections.Tags</c> (<c>.Trim('[', ']', ' ')</c>) and writes them back out inside a
+/// single pair of its own. The old check's <c>overlay.Replace("[[", "[")</c> is what used to make the two look like a
+/// collapse. Both sides are pinned in <c>OverlayRecordChatMessageTests</c>.
 /// </summary>
 public class ChatMessageBuilderTests
 {
