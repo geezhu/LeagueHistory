@@ -9,6 +9,9 @@ namespace League.Services;
 /// </summary>
 public sealed class ChampionAlerts : IDisposable
 {
+    // The client lists each champion again at id + 60000 for its classic-mode variant: Jade_Shaco is 60035.
+    private const int VariantOffset = 60000;
+
     private readonly Action _play;
     private readonly HashSet<int> _announced = new();
     private readonly object _gate = new();
@@ -20,7 +23,7 @@ public sealed class ChampionAlerts : IDisposable
     /// <summary>The watched enemies not yet announced this game; one chime plays when there are any.</summary>
     public IReadOnlyList<int> Update(long generation, IEnumerable<int> enemies, IEnumerable<int> watched)
     {
-        var wanted = watched.ToHashSet();
+        var wanted = watched.Select(BaseId).ToHashSet();
         var found = new List<int>();
         lock (_gate)
         {
@@ -30,7 +33,7 @@ public sealed class ChampionAlerts : IDisposable
                 _announced.Clear();
             }
 
-            foreach (int id in enemies)
+            foreach (int id in enemies.Select(BaseId))
             {
                 if (id > 0 && wanted.Contains(id) && _announced.Add(id))
                 {
@@ -46,6 +49,9 @@ public sealed class ChampionAlerts : IDisposable
 
         return found;
     }
+
+    /// <summary>The champion a classic-mode variant stands for, so a watched champion also matches its variant.</summary>
+    public static int BaseId(int id) => id > VariantOffset ? id - VariantOffset : id;
 
     /// <summary>Plays the chime once, for the settings page's preview.</summary>
     public void Play() => _play();

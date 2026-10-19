@@ -67,6 +67,18 @@ public class ChampionAlertsTests
         Assert.Equal(2, _plays);
     }
 
+    [Theory]
+    [InlineData(60035, 35)]
+    [InlineData(35, 60035)]
+    public void Update_ModeVariant_MatchesWatchedChampion(int enemy, int watched)
+    {
+        using var alerts = Create();
+
+        var found = alerts.Update(1, [enemy], [watched]);
+
+        Assert.Equal([35], found);
+    }
+
     [Fact]
     public void Update_UnknownChampionId_IsIgnored()
     {
