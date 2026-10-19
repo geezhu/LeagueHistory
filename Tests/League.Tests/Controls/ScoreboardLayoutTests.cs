@@ -55,7 +55,7 @@ public class ScoreboardLayoutTests
             var section = Section(detail, "甲");
             var header = Header(section, SortHeaderTitle(key));
 
-            WindowMessages.Click(header, new Point(4, 4));
+            ClickHeader(header);
 
             Assert.Equal(SortHeaderTitle(key) + " ↓", header.Text);
             Assert.Equal([first, second, third], RowNames(section));
@@ -73,9 +73,9 @@ public class ScoreboardLayoutTests
             var section = Section(detail, "甲");
             var header = Header(section, "经济");
 
-            WindowMessages.Click(header, new Point(4, 4));
+            ClickHeader(header);
             Assert.Equal("经济 ↓", header.Text);
-            WindowMessages.Click(header, new Point(4, 4));
+            ClickHeader(header);
 
             Assert.Equal(["甲", "丙", "乙"], RowNames(section));
             Assert.Equal("经济 ↑", header.Text);
@@ -92,8 +92,8 @@ public class ScoreboardLayoutTests
             await detail.PrepareAsync();
             var section = Section(detail, "甲");
 
-            WindowMessages.Click(Header(section, "经济"), new Point(4, 4));
-            WindowMessages.Click(Header(section, "英雄伤害"), new Point(4, 4));
+            ClickHeader(Header(section, "经济"));
+            ClickHeader(Header(section, "英雄伤害"));
 
             Assert.Equal(["甲", "丙", "乙"], RowNames(section));
             Assert.Equal(
@@ -208,7 +208,7 @@ public class ScoreboardLayoutTests
 
             Assert.Equal(686, row.Controls["goldEarned"]!.Left);
             Assert.Equal(180, row.Controls["PlayerName"]!.Width);
-            Assert.Equal(false, MetricPage(detail, "甲").Visible);
+            Assert.False(MetricPage(detail, "甲").Visible);
             Assert.Equal(WideMetrics, VisibleMetrics(row));
         });
     }
@@ -252,6 +252,18 @@ public class ScoreboardLayoutTests
 
     private static Button Header(Control section, string title) =>
         section.Controls.OfType<Button>().Single(button => button.Text.TrimEnd(' ', '↑', '↓') == title);
+
+    /// <summary>
+    /// Clicks a header and settles the queue the message went through. The control tree is built from an awaited
+    /// prepare, so the click is the first thing the message loop sees; draining it keeps the delivery deterministic
+    /// when another class left messages behind.
+    /// </summary>
+    private static void ClickHeader(Button header)
+    {
+        WindowMessages.Click(header, new Point(4, 4));
+        Application.DoEvents();
+        header.Update();
+    }
 
     /// <summary>The sortable headings in board order, with the active one named first.</summary>
     private static string[] SortingHeaderTexts(Control section, string active) =>
