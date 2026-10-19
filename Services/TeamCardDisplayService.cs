@@ -8,6 +8,7 @@ public sealed class TeamCardDisplayService
 {
     private readonly FormMain _form;
     private readonly PlayerCardManager _cards;
+    private readonly ChampionAlerts _championAlerts = new();
     private CancellationTokenSource? _gameSessionLoad;
     private string _selectionQueue = "";
     private string _selectionRawQueue = "";
@@ -220,6 +221,7 @@ public sealed class TeamCardDisplayService
             "session-roster",
             detail: $"one={one.Count} two={two.Count} selections={(data?["playerChampionSelections"] as JArray)?.Count ?? 0} ally={ours.Count} enemy={theirs.Count} supplemented={supplemented}"
         );
+        AnnounceWatchedChampions(generation, theirs);
         _form._cachedMyTeam = ours;
         _form._cachedEnemyTeam = theirs;
         await _cards.UpdateTeamAsync(ours, true, generation, queue);
@@ -273,6 +275,26 @@ public sealed class TeamCardDisplayService
                 )
                 .Select(p => p.DeepClone())
         );
+    }
+
+    // Chimes before the cards load player histories, which can take several seconds.
+    private void AnnounceWatchedChampions(long generation, JArray enemies)
+    {
+        var watched = _form.GetAppConfig()?.AlertChampionIds;
+        if (watched is not { Count: > 0 })
+        {
+            return;
+        }
+
+        var found = _championAlerts.Update(generation, enemies.Select(p => p.Value<int?>("championId") ?? 0), watched);
+        if (found.Count > 0)
+        {
+            var champions = Globals.resLoading?.Champions;
+            AppLog.Shared.Info(
+                LogCategory.Game,
+                "英雄提醒：敌方有 " + string.Join("、", found.Select(id => champions?.GetById(id)?.Name ?? $"#{id}"))
+            );
+        }
     }
 
     private void StopGameSessionLoad()

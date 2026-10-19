@@ -112,18 +112,8 @@ namespace League.Models
         public bool EnableAutoSkinSelect { get; set; } = false;
 
         /// <summary>
-        /// 快捷键选人阶段发送，默认 Ctrl+F7
+        /// 游戏开始时敌方出现这些英雄就发出提示音；为空即关闭。设置页整体替换列表而不原地修改，后台读取不会读到改了一半的列表。
         /// </summary>
-        public string HotkeyChampSelect { get; set; } = "Ctrl+F7";
-
-        /// <summary>
-        /// 快捷键游戏内发送我方，默认 F9
-        /// </summary>
-        public string HotkeyMyTeam { get; set; } = "F9";
-
-        /// <summary>
-        /// 快捷键游戏内发送全队，默认 F11
-        /// </summary>
-        public string HotkeyFullTeam { get; set; } = "F11";
+        public List<int> AlertChampionIds { get; set; } = new();
     }
 }

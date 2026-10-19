@@ -53,6 +53,7 @@ public partial class FormMain
         ConfigureAssistantSetting(general);
         ConfigurePreselectSettings(general);
         ConfigureAutomationSettings(general);
+        ConfigureChampionAlertSettings(general);
         ConfigureClientMaintenanceSettings(general);
         ConfigureShutdownSettings(general);
         ConfigureAboutSettings(general);

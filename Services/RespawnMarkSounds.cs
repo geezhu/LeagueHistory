@@ -78,6 +78,9 @@ public sealed class RespawnMarkSounds : IDisposable
 
     /// <summary>A cannon wave: two low notes, unlike the rising chimes.</summary>
     public static readonly Lazy<byte[]> CannonWave = new(() => Tone(523, 392));
+
+    /// <summary>A watched champion on the enemy team: high and low twice, unlike the rising and falling chimes.</summary>
+    public static readonly Lazy<byte[]> ChampionAlertWave = new(() => Tone(880, 659, 880, 659));
     private SoundPlayer? _player;
 
     // SoundPlayer.Play returns at once and plays on its own thread; a new chime replaces one still playing.
