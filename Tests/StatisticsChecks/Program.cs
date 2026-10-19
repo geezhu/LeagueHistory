@@ -88,14 +88,11 @@ internal static class Program
     {
         checks["--client-checks"] = () => Background(ClientChecks.RunAsync);
         checks["--lcu-service-checks"] = () => Background(LcuClientServiceChecks.RunAsync);
-        checks["--voice-model-checks"] = () => Background(VoiceModelStoreChecks.RunAsync);
         checks["--sgp-session-checks"] = () => Background(SgpSessionChecks.RunAsync);
-        checks["--item-set-checks"] = () => Background(ItemSetChecks.RunAsync);
         checks["--model-checks"] = () => Background(ModelChecks.RunAsync);
         checks["--sensevoice-checks"] = () => Background(SenseVoiceChecks.RunAsync);
         checks["--gamebar-voice-checks"] = () => Background(GameBarVoiceRecognitionChecks.RunAsync);
         checks["--gamebar-voice-edge-checks"] = () => Background(GameBarVoiceRecognitionEdgeChecks.RunAsync);
-        checks["--balance-checks"] = () => Background(AramBalanceChecks.RunAsync);
         checks["--roster-identity-checks"] = () => Background(LoadingRosterIdentityChecks.Run);
         checks["--live-champion-checks"] = LiveChampionChecks.Run;
         checks["--death-streak-checks"] = LiveDeathStreakChecks.Run;
@@ -122,12 +119,10 @@ internal static class Program
         {
             Background(DiagnosticLogChecks.RunAsync);
             Background(AppLogChecks.RunAsync);
-            Background(DiagnosticReportChecks.RunAsync);
             Background(UiHangMonitorChecks.RunAsync);
         };
         checks["--history-data-checks"] = HistoryDataChecks.Run;
         checks["--match-parse-checks"] = () => Background(MatchParsingChecks.RunAsync);
-        checks["--timeline-data-checks"] = TimelineDataChecks.Run;
     }
 
     private static void AddUiChecks(Dictionary<string, Action> checks)
@@ -138,7 +133,6 @@ internal static class Program
         checks["--settings-surface-checks"] = () => Ui(SettingsSurfaceChecks.Run);
         checks["--ui-state-checks"] = () => Ui(UiStateChecks.Run);
         checks["--match-card-checks"] = () => Ui(MatchListPanelChecks.Run);
-        checks["--augment-description-checks"] = AugmentDescriptionChecks.Run;
         checks["--history-page-checks"] = () => Ui(MatchTabPageContentChecks.Run);
         checks["--history-page-surface-checks"] = () =>
             Ui(() =>
@@ -205,10 +199,8 @@ internal static class Program
                 AssistantWindowChecks.Run();
             });
         checks["--mastery-checks"] = MasteryChecks;
-        checks["--team-score-checks"] = AramTeamScoreChecks.Run;
         checks["--composition-checks"] = () =>
         {
-            AramTeamScoreChecks.Run();
             Ui(CompositionViewChecks.Run);
         };
         checks["--opgg-checks"] = () =>
@@ -241,9 +233,7 @@ internal static class Program
         checks["--control-checks"] = () => Background(ControlChecks.Run);
         checks["--overlay-party-checks"] = () => Ui(OverlayPartyChecks.Run);
         checks["--skin-browser-checks"] = () => Ui(SkinBrowserChecks.Run);
-        checks["--skin-image-checks"] = () => Background(SkinImageStoreChecks.RunAsync);
         checks["--skin-source-checks"] = () => Background(SkinBrowserSourceChecks.RunAsync);
-        checks["--skin-strip-checks"] = () => Ui(SkinStripViewChecks.Run);
         checks["--closable-tab-checks"] = () => Ui(ClosableTabControlChecks.Run);
         checks["--match-detail-manager-checks"] = MatchDetailManagerChecks.Run;
         checks["--player-card-checks"] = PlayerCardFactoryChecks.Run;

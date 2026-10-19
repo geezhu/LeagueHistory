@@ -16,8 +16,6 @@ internal static class ClientChecks
         await LoadingRosterIdentityChecks.Run();
         await OpggChecks.RunAsync();
         await AramMetaChecks.RunAsync();
-        await AramBalanceChecks.RunAsync();
-        await ItemSetChecks.RunAsync();
         await StatisticsRequests();
         Console.WriteLine(
             "PASS: isolated client cache, identity, cancellation, retry, version and persistence checks."

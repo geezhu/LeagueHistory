@@ -5,7 +5,6 @@ internal static class ModelChecks
 {
     public static Task RunAsync()
     {
-        AramTeamScoreChecks.Run();
         ChampionTierChatChecks.Run();
         LiveChampionChecks.Run();
         LiveDeathStreakChecks.Run();

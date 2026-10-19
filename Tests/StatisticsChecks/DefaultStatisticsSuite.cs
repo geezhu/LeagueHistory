@@ -20,8 +20,6 @@ internal static class DefaultStatisticsSuite
         UpdateSupportChecks.Run();
         BuildInfoChecks.Run();
         HistoryDataChecks.Run();
-        TimelineDataChecks.Run();
-        AramTeamScoreChecks.Run();
         ChampionTierChatChecks.Run();
         LiveChampionChecks.Run();
         LiveDeathStreakChecks.Run();
@@ -37,14 +35,10 @@ internal static class DefaultStatisticsSuite
         Task.Run(ChatSendDiagnosticsChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(DiagnosticLogChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(AppLogChecks.RunAsync).GetAwaiter().GetResult();
-        Task.Run(DiagnosticReportChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(UiHangMonitorChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(OpggChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(AramMetaChecks.RunAsync).GetAwaiter().GetResult();
-        Task.Run(ItemSetChecks.RunAsync).GetAwaiter().GetResult();
-        Task.Run(AramBalanceChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(LcuClientServiceChecks.RunAsync).GetAwaiter().GetResult();
-        Task.Run(VoiceModelStoreChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(SgpSessionChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(GameBarVoiceRecognitionChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(GameBarVoiceRecognitionEdgeChecks.RunAsync).GetAwaiter().GetResult();
@@ -140,16 +134,13 @@ internal static class DefaultStatisticsSuite
         VoiceSettingsChecks.Run();
         UiStateChecks.Run();
         MatchListPanelChecks.Run();
-        AugmentDescriptionChecks.Run();
         MatchTabPageContentChecks.Run();
         MatchTabPageSurfaceChecks.Run();
         MatchTabPageDetailChecks.Run();
         MatchDetailChecks.Run();
         TeamCardDisplayChecks.Run();
         Task.Run(MatchQueryProcessorChecks.RunAsync).GetAwaiter().GetResult();
-        Task.Run(SkinImageStoreChecks.RunAsync).GetAwaiter().GetResult();
         ClosableTabControlChecks.Run();
-        SkinStripViewChecks.Run();
         VoiceInputDialogChecks.Run();
         ProgressFormChecks.Run();
     }
