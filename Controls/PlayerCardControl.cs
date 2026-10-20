@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using League.Models;
+using System.Diagnostics;
 
 namespace League.Controls
 {
@@ -47,7 +48,7 @@ namespace League.Controls
         /// 设置玩家信息
         /// </summary>
         /// <param name="fullName">完整名称（带#标签），用于点击复制。如果为 null 则使用 playerName</param>
-        public void SetPlayerInfo(string playerName, string soloRank, string flexRank, Image heroImage, string isPublic, List<ListViewItem> recentGames, Color nameColor, long summonerId = 0, int championId = 0, string puuid = "", string fullName = null)
+        public void SetPlayerInfo(string playerName, string soloRank, string flexRank, Image heroImage, string isPublic, List<ListViewItem> recentGames, Color nameColor, long summonerId = 0, int championId = 0, string puuid = "", string fullName = null, int summonerLevel = 0)
         {
             // 保存关键标识（最重要！）
             CurrentSummonerId = summonerId;
@@ -86,6 +87,9 @@ namespace League.Controls
             lblPrivacyStatus.Text = $"{isPublic}";
             picHero.Image = heroImage;
 
+            // 等级角标
+            SetSummonerLevel(summonerLevel);
+
             IsLoading = playerName.Contains("加载中") || soloRank.Contains("加载中");
 
             listViewGames.BeginUpdate();
@@ -104,6 +108,32 @@ namespace League.Controls
             listViewGames.Refresh();
 
             //Debug.WriteLine($"当前 listViewGames 中共有 {listViewGames.Items.Count} 个项");
+        }
+
+        /// <summary>
+        /// 右下角显示召唤师等级（白色小字）
+        /// </summary>
+        public void SetSummonerLevel(int level)
+        {
+            if (lblSummonerLevel == null || lblSummonerLevel.IsDisposed) return;
+
+            void Apply()
+            {
+                if (level > 0)
+                {
+                    lblSummonerLevel.Text = level.ToString();
+                    lblSummonerLevel.Visible = true;
+                    lblSummonerLevel.ForeColor = Color.White;
+                }
+                else
+                {
+                    lblSummonerLevel.Text = "";
+                    lblSummonerLevel.Visible = false;
+                }
+            }
+
+            if (InvokeRequired) BeginInvoke(Apply);
+            else Apply();
         }
 
         /// <summary>
@@ -178,5 +208,77 @@ namespace League.Controls
             _fullPlayerName = fullName ?? "";
             UpdateNameToolTip();   // 统一走这里
         }
+
+        #region 显示英雄熟练度
+
+        private readonly ToolTip _masteryToolTip = new ToolTip
+        {
+            AutoPopDelay = 4000,
+            InitialDelay = 200,
+            ReshowDelay = 100,
+            ShowAlways = true
+        };
+
+        /// <summary>
+        /// 设置熟练度最高的英雄头像（加载卡片时调用）
+        /// </summary>
+        public void SetTopMasteries(List<ChampionMasteryInfo> masteries)
+        {
+            if (flpMastery == null || flpMastery.IsDisposed) return;
+
+            void Apply()
+            {
+                flpMastery.SuspendLayout();
+
+                // 先释放旧头像
+                foreach (Control c in flpMastery.Controls)
+                {
+                    if (c is PictureBox pb)
+                    {
+                        pb.Image?.Dispose();
+                        pb.Dispose();
+                    }
+                }
+
+                // 再清空
+                flpMastery.Controls.Clear();
+
+                if (masteries == null || masteries.Count == 0)
+                {
+                    flpMastery.ResumeLayout();
+                    return;
+                }
+
+                // 有多少显示多少（由 GetTopChampionMasteryAsync 的 topN 决定）
+                foreach (var m in masteries)
+                {
+                    var pic = new PictureBox
+                    {
+                        Size = new Size(20, 20),
+                        SizeMode = PictureBoxSizeMode.Zoom,
+                        Margin = new Padding(1, 0, 1, 0),
+                        Cursor = Cursors.Hand
+                    };
+
+                    if (m.Icon != null)
+                    {
+                        try { pic.Image = (Image)m.Icon.Clone(); }
+                        catch { /* ignore */ }
+                    }
+
+                    _masteryToolTip.SetToolTip(pic, m.TooltipText);
+                    flpMastery.Controls.Add(pic);
+                }
+
+                flpMastery.ResumeLayout();
+            }
+
+            if (InvokeRequired)
+                BeginInvoke(Apply);
+            else
+                Apply();
+        }
+
+        #endregion
     }
 }

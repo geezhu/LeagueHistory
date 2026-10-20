@@ -1,5 +1,4 @@
 ﻿using League.Caching;
-using League.ChampionSkin;
 using League.Clients;
 using League.Controls;
 using League.Extensions;
@@ -173,8 +172,34 @@ namespace League
                 chkUseChampionName.Checked = _appConfig.UseChampionNameWhenSending; //发送战绩时是否使用英雄名称
                 chkSkipHonor.Checked = _appConfig.EnableSkipHonor;  //自动跳过点赞界面
                 chkSkipEndOfGameStats.Checked = _appConfig.EnableSkipEndOfGameStats;    //自动跳过结算统计界面
-
                 chkAutoSkinSelect.Checked = _appConfig.EnableAutoSkinSelect;    // 是否自动配置皮肤
+
+                // 消息发送恢复快捷键显示
+                if (txtHotkeyChampSelect != null && txtHotkeyMyTeam != null && txtHotkeyFullTeam != null)
+                {
+                    txtHotkeyChampSelect.ReadOnly = true;
+                    txtHotkeyMyTeam.ReadOnly = true;
+                    txtHotkeyFullTeam.ReadOnly = true;
+
+                    txtHotkeyChampSelect.Text = string.IsNullOrWhiteSpace(_appConfig.HotkeyChampSelect)
+                        ? "Ctrl+F7" : _appConfig.HotkeyChampSelect;
+                    txtHotkeyMyTeam.Text = string.IsNullOrWhiteSpace(_appConfig.HotkeyMyTeam)
+                        ? "F9" : _appConfig.HotkeyMyTeam;
+                    txtHotkeyFullTeam.Text = string.IsNullOrWhiteSpace(_appConfig.HotkeyFullTeam)
+                        ? "F11" : _appConfig.HotkeyFullTeam;
+
+                    // 避免重复绑定：若你可能多次进这段，可先 -= 再 +=
+                    txtHotkeyChampSelect.KeyDown -= HotkeyTextBox_KeyDown;
+                    txtHotkeyMyTeam.KeyDown -= HotkeyTextBox_KeyDown;
+                    txtHotkeyFullTeam.KeyDown -= HotkeyTextBox_KeyDown;
+
+                    txtHotkeyChampSelect.KeyDown += HotkeyTextBox_KeyDown;
+                    txtHotkeyMyTeam.KeyDown += HotkeyTextBox_KeyDown;
+                    txtHotkeyFullTeam.KeyDown += HotkeyTextBox_KeyDown;
+                }
+
+                // 把配置应用到钩子（必须在 _appConfig 已 Load、_hotkeyManager 已创建之后）
+                _hotkeyManager?.ApplyConfig(_appConfig);
 
                 // 根据配置文件恢复消息发送信息 ===
                 if (rbModeMatch != null && rbModeCustom != null && txtCustomContent != null)
@@ -234,7 +259,8 @@ namespace League
         #region LCU连接管理
 
         /// <summary>
-        /// 启动 LCU 连接（使用 LcuManager，事件驱动）
+        /// 启动 LCU 连接入口（兼容旧方法名「轮询」）。
+        /// 实际已改为由 <see cref="LcuManager"/> 事件驱动：Connected / Disconnected / Reconnecting。
         /// </summary>
         public void StartLcuConnectPolling()
         {
@@ -242,6 +268,11 @@ namespace League
             _ = StartLcuConnectionAsync();
         }
 
+        /// <summary>
+        /// 订阅 LcuManager 事件并启动永久连接循环。
+        /// 启动前会取消旧的 AsyncPoller，并防止事件重复订阅。
+        /// 初始 UI 置为「未连接」，由后续 Connected 回调再恢复。
+        /// </summary>
         private async Task StartLcuConnectionAsync()
         {
             try
@@ -249,13 +280,16 @@ namespace League
                 // 先取消旧轮询（防止残留）
                 _lcuPoller?.Stop();
 
-                // 避免重复订阅
+                // 避免重复订阅：先解绑再绑定
                 LcuManager.Instance.Connected -= OnLcuConnected;
                 LcuManager.Instance.Disconnected -= OnLcuDisconnected;
+                LcuManager.Instance.Reconnecting -= OnLcuReconnecting;
 
                 LcuManager.Instance.Connected += OnLcuConnected;
                 LcuManager.Instance.Disconnected += OnLcuDisconnected;
+                LcuManager.Instance.Reconnecting += OnLcuReconnecting;
 
+                // 启动时先显示「检测连接」状态
                 _uiManager!.SetLcuUiState(connected: false, inGame: false);
 
                 Debug.WriteLine("[LCU] 启动 LcuManager 连接循环...");
@@ -268,8 +302,12 @@ namespace League
         }
 
         /// <summary>
-        /// 等待召唤师信息 + SGP 均就绪（登录后 token/session 可能延迟几百 ms～数秒）
+        /// 等待当前召唤师信息与 SGP 会话均就绪。
+        /// 登录后 LCU 的 token/session 可能延迟数百毫秒到数秒，过早拉战绩会导致空白或失败。
         /// </summary>
+        /// <param name="maxAttempts">最大重试次数，默认 20</param>
+        /// <param name="delayMs">每次间隔毫秒，默认 800</param>
+        /// <returns>summoner 与 SGP 均成功时返回 true，否则 false</returns>
         private async Task<bool> WaitForSessionAndSgpReadyAsync(int maxAttempts = 20, int delayMs = 800)
         {
             for (int i = 1; i <= maxAttempts; i++)
@@ -303,135 +341,79 @@ namespace League
         }
 
         /// <summary>
-        /// LcuManager 连接成功回调
+        /// LcuManager 连接成功（含首次连接与重连成功）回调。
+        /// 将 HttpClient 注入 <see cref="Globals.lcuClient"/>，再执行业务初始化；
+        /// finally 中无论成败都按 LcuReady/IsGame 刷新一次 UI，避免卡在「检测中」。
         /// </summary>
         private async void OnLcuConnected()
         {
             try
             {
-                Debug.WriteLine("[LCU] OnLcuConnected 触发");
+                Debug.WriteLine("[LCU] OnLcuConnected");
 
-                // 把 LcuManager 的 HttpClient 注入到原来的 LcuSession
-                // 这样全项目 Globals.lcuClient.XXX 调用都能继续工作
+                // 把 LcuManager 建立好的 LcuClient 注入会话，供全项目 Globals.lcuClient 使用
                 bool injected = Globals.lcuClient.AttachExistingClient(LcuManager.Instance.HttpClient);
                 if (!injected)
                 {
-                    Debug.WriteLine("[LCU] 注入 HttpClient 失败，跳过初始化");
+                    Debug.WriteLine("[LCU] 注入失败");
                     return;
                 }
 
-                // 再确认一次 Service 可用
-                var testPhase = await Globals.lcuClient.GetGameflowPhase();
-                Debug.WriteLine($"[LCU] 注入后测试 phase = {testPhase ?? "null"}");
-
                 _uiManager!.LcuReady = true;
-
-                // 执行原来的初始化逻辑
                 await InitializeAfterLcuConnected();
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[LCU] OnLcuConnected 异常: {ex}");
             }
+            finally
+            {
+                // 无论中间是否超时/异常，最终按当前标志刷新一次 UI
+                try
+                {
+                    _uiManager?.SetLcuUiState(_uiManager.LcuReady, _uiManager.IsGame);
+                }
+                catch { }
+            }
         }
 
         /// <summary>
-        /// LcuManager 真正断线回调
+        /// LcuManager 确认真正断线时的回调（进程消失或连续重连失败等）。
+        /// 清空连接相关 UI、停止游戏流程监视；不要在此再次 Start 连接，由 LcuManager 自行重试。
         /// </summary>
         private void OnLcuDisconnected()
         {
-            Debug.WriteLine("[LCU] OnLcuDisconnected 触发");
+            Debug.WriteLine("[LCU] OnLcuDisconnected（确认断开）");
 
             _uiManager!.LcuReady = false;
             _uiManager!.IsGame = false;
+            // 硬断开：显示「正在检测/重新连接…」并清空战绩相关面板
             _uiManager!.SetLcuUiState(false, false);
 
-            // 清理游戏状态
             _gameFlowWatcher?.ClearGameState();
             _gameFlowWatcher?.StopGameflowWatcher();
-
-            // 注意：不要在这里再调用 StartLcuConnectPolling()
-            // LcuManager 内部已经有自动重连循环，会自己重连
+            // 不要在这里再调用 StartLcuConnectPolling()，LcuManager 内部已有自动重连循环
         }
 
-        ///// <summary>
-        ///// LCU 连接成功后的初始化（基本保持原逻辑）
-        ///// </summary>
-        //private async Task InitializeAfterLcuConnected()
-        //{
-        //    // 加载资源
-        //    Globals.resLoading.loadingResource(Globals.lcuClient);
-
-        //    if (_championManager != null)
-        //    {
-        //        try
-        //        {
-        //            Debug.WriteLine("[英雄预加载] 开始加载所有英雄数据...");
-        //            await _championManager.InitializeAsync(forceRefresh: false);
-        //            Debug.WriteLine($"[英雄预加载] 成功！共加载 {_championManager.AllChampions.Count} 个英雄");
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            Debug.WriteLine($"[英雄预加载] 失败: {ex.Message}");
-        //        }
-        //    }
-
-        //    // 延迟创建 ChatMessageBuilder
-        //    if (_chatMessageBuilder == null && _championManager != null)
-        //    {
-        //        _chatMessageBuilder = new ChatMessageBuilder(
-        //            _playerCardManager.GetAllCachedPlayerInfos,
-        //            _championManager!,
-        //            _appConfig?.HideSelfWhenSending ?? false
-        //        );
-        //        _chatSender?.SetChatMessageBuilder(_chatMessageBuilder);
-        //        Debug.WriteLine("[ChatMessageBuilder] 已成功延迟创建并注入 ChampionManager");
-        //    }
-
-        //    // 初始化 SGP
-        //    if (await Globals.sgpClient.InitSgpAsync(Globals.lcuClient.Client))
-        //    {
-        //        Debug.WriteLine("SGP 连接初始化成功！");
-        //    }
-        //    else
-        //    {
-        //        Debug.WriteLine("SGP 连接初始化失败！");
-        //    }
-
-        //    // 初始化战绩 Tab
-        //    InitializeMatchTabContent();
-
-        //    // 初始化默认 Tab 和预热
-        //    await this.InvokeIfRequiredAsync(async () =>
-        //    {
-        //        RefreshState.ForceMatchRefresh = false;
-        //        await InitializeDefaultTab();
-        //        _configUpdateManager!.PreWarmUiComponents();
-
-        //        // 主动查一次当前 phase（LcuManager 连接后也会查，这里再补一次更保险）
-        //        string? currentPhase = await Globals.lcuClient.GetGameflowPhase();
-        //        if (!string.IsNullOrEmpty(currentPhase))
-        //            await _gameFlowWatcher!.OnGameflowPhaseChanged(currentPhase, null);
-
-        //        _gameFlowWatcher!.StartGameflowWatcher();
-
-        //        // 必须在 phase 处理之后：InProgress 会把 IsGame 设为 true
-        //        _uiManager!.SetLcuUiState(_uiManager.LcuReady, _uiManager.IsGame);
-
-        //        // 已在游戏中则直接切到卡片 Tab
-        //        if (_uiManager.IsGame && imageTabControl1.TabPages.Count > 1)
-        //            imageTabControl1.SelectedIndex = 1;
-        //    });
-
-        //    _uiManager!.SetLcuUiState(_uiManager!.LcuReady, _uiManager!.IsGame);
-        //}
+        /// <summary>
+        /// LcuManager 软重连回调：链路抖动或探活连续失败后的自动恢复阶段。
+        /// 客户端进程往往仍在，故不要 SetLcuUiState(false) 清空战绩面板，避免误伤用户界面。
+        /// 可选：在此更新状态栏/Toast 为「正在恢复连接…」。
+        /// </summary>
+        private void OnLcuReconnecting()
+        {
+            Debug.WriteLine("[LCU] OnLcuReconnecting");
+            // 可选：状态栏/小提示「正在恢复连接…」，不要 SetLcuUiState(false) 清面板
+            // 若你有 Toast/状态标签，可在这里改文字
+        }
 
         /// <summary>
-        /// LCU 连接成功后的初始化（带会话就绪等待，避免首屏战绩空白）
+        /// LCU 连接成功后的业务初始化：资源、英雄、消息构建器、SGP、战绩 Tab、流程监视。
+        /// 带会话/SGP 就绪等待，减轻首屏战绩空白；超时仍继续初始化，便于后续强制刷新。
         /// </summary>
         private async Task InitializeAfterLcuConnected()
         {
-            // 加载资源（不依赖登录完成）
+            // 加载静态资源（不依赖登录完全完成）
             Globals.resLoading.loadingResource(Globals.lcuClient);
 
             if (_championManager != null)
@@ -448,7 +430,7 @@ namespace League
                 }
             }
 
-            // 延迟创建 ChatMessageBuilder
+            // 延迟创建 ChatMessageBuilder（依赖 ChampionManager）
             if (_chatMessageBuilder == null && _championManager != null)
             {
                 _chatMessageBuilder = new ChatMessageBuilder(
@@ -460,7 +442,7 @@ namespace League
                 Debug.WriteLine("[ChatMessageBuilder] 已成功延迟创建并注入 ChampionManager");
             }
 
-            // ★ 关键：等召唤师 + SGP 都就绪再加载战绩
+            // 等召唤师 + SGP 就绪后再拉战绩，减少空白首屏
             Debug.WriteLine("[LCU] 等待会话与 SGP 就绪...");
             bool ready = await WaitForSessionAndSgpReadyAsync(maxAttempts: 20, delayMs: 800);
             if (!ready)
@@ -474,13 +456,13 @@ namespace League
                 Debug.WriteLine("SGP 连接初始化成功！");
             }
 
-            // 初始化战绩 Tab
+            // 重建战绩列表 Tab 宿主
             InitializeMatchTabContent();
 
-            // 初始化默认 Tab 和预热
+            // 默认 Tab、预热、当前 phase、启动流程监视（需在 UI 线程）
             await this.InvokeIfRequiredAsync(async () =>
             {
-                RefreshState.ForceMatchRefresh = true; // 首次加载走网络，避免脏缓存
+                RefreshState.ForceMatchRefresh = true; // 首次/重连后走网络，避免脏缓存
                 await InitializeDefaultTab();
                 _configUpdateManager!.PreWarmUiComponents();
 
@@ -499,6 +481,9 @@ namespace League
             _uiManager!.SetLcuUiState(_uiManager!.LcuReady, _uiManager!.IsGame);
         }
 
+        /// <summary>
+        /// 在战绩列表面板中创建并挂载 <see cref="MatchTabContent"/>（先清空旧控件）。
+        /// </summary>
         private void InitializeMatchTabContent()
         {
             FormUiStateManager.SafeInvoke(panelMatchList, delegate
@@ -553,44 +538,7 @@ namespace League
 
             Debug.WriteLine("[InitializeDefaultTab] 完成");
         }
-        //public async Task InitializeDefaultTab()
-        //{
-        //    Debug.WriteLine($"[InitializeDefaultTab] 开始，ForceMatchRefresh={RefreshState.ForceMatchRefresh}");
-
-        //    var summoner = await Globals.lcuClient.GetCurrentSummoner();
-        //    if (summoner == null)
-        //    {
-        //        Debug.WriteLine("[InitializeDefaultTab] 获取当前召唤师失败");
-        //        return;
-        //    }
-
-        //    Globals.CurrentPuuid = summoner["puuid"]?.ToString() ?? "";
-        //    Globals.CurrentSummonerName = summoner["gameName"]?.ToString();
-
-        //    // 把自己的PUUID告诉消息构建器，用来过滤自己
-        //    _chatMessageBuilder?.SetMyPuuid(Globals.CurrentPuuid);
-
-        //    Debug.WriteLine($"[InitializeDefaultTab] 当前玩家 PUUID: {Globals.CurrentPuuid}");
-
-        //    var rankedStats = await GetRankedStatsAsync(summoner["puuid"]?.ToString() ?? "");
-        //    string privacyStatus = GetPrivacyStatus(summoner);
-
-        //    // 记录调用 CreateNewTab 前的状态
-        //    Debug.WriteLine($"[InitializeDefaultTab] 调用 CreateNewTab，ForceMatchRefresh={RefreshState.ForceMatchRefresh}");
-
-        //    _matchTabContent?.CreateNewTab(
-        //        summoner["summonerId"]?.ToString() ?? "",
-        //        summoner["gameName"]?.ToString() ?? "",
-        //        summoner["tagLine"]?.ToString() ?? "",
-        //        summoner["puuid"]?.ToString() ?? "",
-        //        summoner["profileIconId"]?.ToString() ?? "",
-        //        summoner["summonerLevel"]?.ToString() ?? "",
-        //        privacyStatus,
-        //        rankedStats
-        //    );
-
-        //    Debug.WriteLine("[InitializeDefaultTab] 完成");
-        //}
+        
 
         private async void btn_search_Click(object sender, EventArgs e)
         {
@@ -865,6 +813,79 @@ namespace League
                 return _preSelectedHeroes;
             }
         }
+
+        /// <summary>
+        /// 当前焦点是否在热键配置框（改键时不触发发送、不吞键）
+        /// </summary>
+        public bool IsHotkeyCaptureFocused()
+        {
+            return (txtHotkeyChampSelect?.Focused ?? false)
+                || (txtHotkeyMyTeam?.Focused ?? false)
+                || (txtHotkeyFullTeam?.Focused ?? false);
+        }
+
+        private void HotkeyTextBox_KeyDown(object? sender, KeyEventArgs e)
+        {
+            if (sender is not TextBox tb || _appConfig == null) return;
+
+            e.SuppressKeyPress = true;
+            e.Handled = true;
+
+            // Backspace / Delete → 该项恢复默认
+            if (e.KeyCode is Keys.Back or Keys.Delete)
+            {
+                if (tb == txtHotkeyChampSelect)
+                {
+                    tb.Text = "Ctrl+F7";
+                    _appConfig.HotkeyChampSelect = tb.Text;
+                }
+                else if (tb == txtHotkeyMyTeam)
+                {
+                    tb.Text = "F9";
+                    _appConfig.HotkeyMyTeam = tb.Text;
+                }
+                else if (tb == txtHotkeyFullTeam)
+                {
+                    tb.Text = "F11";
+                    _appConfig.HotkeyFullTeam = tb.Text;
+                }
+
+                SaveAppConfig();
+                _hotkeyManager?.ApplyConfig(_appConfig);
+                return;
+            }
+
+            // 忽略单独按下的修饰键
+            if (e.KeyCode is Keys.ControlKey or Keys.ShiftKey or Keys.Menu or Keys.LWin or Keys.RWin)
+                return;
+
+            string text = e.Control ? $"Ctrl+{e.KeyCode}" : e.KeyCode.ToString();
+
+            // 三个动作不能绑同一个键
+            foreach (var other in new[] { txtHotkeyChampSelect, txtHotkeyMyTeam, txtHotkeyFullTeam })
+            {
+                if (other != null && other != tb &&
+                    string.Equals(other.Text, text, StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show("该快捷键已被其他动作使用，请换一个。", "快捷键冲突",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+
+            tb.Text = text;
+
+            if (tb == txtHotkeyChampSelect)
+                _appConfig.HotkeyChampSelect = text;
+            else if (tb == txtHotkeyMyTeam)
+                _appConfig.HotkeyMyTeam = text;
+            else if (tb == txtHotkeyFullTeam)
+                _appConfig.HotkeyFullTeam = text;
+
+            SaveAppConfig();
+            _hotkeyManager?.ApplyConfig(_appConfig);
+        }
+
         #endregion
 
         #region 自动化操作事件处理方法
@@ -1165,6 +1186,7 @@ namespace League
             // 取消事件订阅，防止内存泄漏
             LcuManager.Instance.Connected -= OnLcuConnected;
             LcuManager.Instance.Disconnected -= OnLcuDisconnected;
+            LcuManager.Instance.Reconnecting -= OnLcuReconnecting;
 
             _hotkeyManager?.Dispose();
             base.OnFormClosing(e);

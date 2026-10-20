@@ -34,10 +34,11 @@ namespace League
             panel1 = new Panel();
             imageTabControl1 = new ImageTabControl();
             tabPage1 = new TabPage();
-            panelMatchList = new Panel();
+            panelTab1 = new Panel();
             btn_search = new Button();
-            txtGameName = new TextBox();
             label1 = new Label();
+            panelMatchList = new Panel();
+            txtGameName = new TextBox();
             tabPage2 = new TabPage();
             penalGameMatchData = new Panel();
             tableLayoutPanel1 = new TableLayoutPanel();
@@ -63,6 +64,7 @@ namespace League
             lk_GitPro = new LinkLabel();
             label4 = new Label();
             groupBox1 = new GroupBox();
+            chkBot = new CheckBox();
             chkClassic = new CheckBox();
             chkAutoSkinSelect = new CheckBox();
             labChampionSkinBrowser = new LinkLabel();
@@ -74,6 +76,14 @@ namespace League
             chkNormal = new CheckBox();
             lkbPreliminary = new LinkLabel();
             tabPage5 = new TabPage();
+            pictureBox1 = new PictureBox();
+            groupBox4 = new GroupBox();
+            txtHotkeyFullTeam = new TextBox();
+            lblHotkeyFullTeam = new Label();
+            txtHotkeyMyTeam = new TextBox();
+            lblHotkeyMyTeam = new Label();
+            txtHotkeyChampSelect = new TextBox();
+            lblHotkeyChampSelect = new Label();
             chkUseChampionName = new CheckBox();
             chkHideSelf = new CheckBox();
             label3 = new Label();
@@ -81,10 +91,10 @@ namespace League
             txtCustomContent = new TextBox();
             rbModeCustom = new RadioButton();
             rbModeMatch = new RadioButton();
-            chkBot = new CheckBox();
             panel1.SuspendLayout();
             imageTabControl1.SuspendLayout();
             tabPage1.SuspendLayout();
+            panelTab1.SuspendLayout();
             tabPage2.SuspendLayout();
             penalGameMatchData.SuspendLayout();
             tabPage3.SuspendLayout();
@@ -94,6 +104,8 @@ namespace League
             groupBox2.SuspendLayout();
             groupBox1.SuspendLayout();
             tabPage5.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)pictureBox1).BeginInit();
+            groupBox4.SuspendLayout();
             SuspendLayout();
             // 
             // panel1
@@ -128,10 +140,7 @@ namespace League
             // tabPage1
             // 
             tabPage1.BackColor = SystemColors.Control;
-            tabPage1.Controls.Add(panelMatchList);
-            tabPage1.Controls.Add(btn_search);
-            tabPage1.Controls.Add(txtGameName);
-            tabPage1.Controls.Add(label1);
+            tabPage1.Controls.Add(panelTab1);
             tabPage1.Location = new Point(54, 4);
             tabPage1.Name = "tabPage1";
             tabPage1.Padding = new Padding(3);
@@ -139,18 +148,21 @@ namespace League
             tabPage1.TabIndex = 0;
             tabPage1.Text = "查看历史";
             // 
-            // panelMatchList
+            // panelTab1
             // 
-            panelMatchList.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            panelMatchList.AutoScroll = true;
-            panelMatchList.Location = new Point(6, 36);
-            panelMatchList.Name = "panelMatchList";
-            panelMatchList.Size = new Size(1166, 764);
-            panelMatchList.TabIndex = 8;
+            panelTab1.Controls.Add(btn_search);
+            panelTab1.Controls.Add(label1);
+            panelTab1.Controls.Add(panelMatchList);
+            panelTab1.Controls.Add(txtGameName);
+            panelTab1.Dock = DockStyle.Fill;
+            panelTab1.Location = new Point(3, 3);
+            panelTab1.Name = "panelTab1";
+            panelTab1.Size = new Size(1169, 794);
+            panelTab1.TabIndex = 9;
             // 
             // btn_search
             // 
-            btn_search.Location = new Point(581, 7);
+            btn_search.Location = new Point(651, 5);
             btn_search.Name = "btn_search";
             btn_search.Size = new Size(75, 23);
             btn_search.TabIndex = 7;
@@ -158,23 +170,32 @@ namespace League
             btn_search.UseVisualStyleBackColor = true;
             btn_search.Click += btn_search_Click;
             // 
-            // txtGameName
-            // 
-            txtGameName.Location = new Point(398, 7);
-            txtGameName.Name = "txtGameName";
-            txtGameName.RightToLeft = RightToLeft.No;
-            txtGameName.Size = new Size(177, 23);
-            txtGameName.TabIndex = 6;
-            // 
             // label1
             // 
             label1.AutoSize = true;
-            label1.Location = new Point(288, 10);
+            label1.Location = new Point(358, 8);
             label1.Name = "label1";
             label1.RightToLeft = RightToLeft.No;
             label1.Size = new Size(104, 17);
             label1.TabIndex = 5;
             label1.Text = "请输入玩家名称：";
+            // 
+            // panelMatchList
+            // 
+            panelMatchList.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            panelMatchList.AutoScroll = true;
+            panelMatchList.Location = new Point(3, 34);
+            panelMatchList.Name = "panelMatchList";
+            panelMatchList.Size = new Size(1162, 760);
+            panelMatchList.TabIndex = 8;
+            // 
+            // txtGameName
+            // 
+            txtGameName.Location = new Point(468, 5);
+            txtGameName.Name = "txtGameName";
+            txtGameName.RightToLeft = RightToLeft.No;
+            txtGameName.Size = new Size(177, 23);
+            txtGameName.TabIndex = 6;
             // 
             // tabPage2
             // 
@@ -457,14 +478,24 @@ namespace League
             groupBox1.TabStop = false;
             groupBox1.Text = "英雄预选 - 位置信息根据英雄联盟攻略中心数据划分";
             // 
+            // chkBot
+            // 
+            chkBot.AutoSize = true;
+            chkBot.Location = new Point(6, 141);
+            chkBot.Name = "chkBot";
+            chkBot.Size = new Size(147, 21);
+            chkBot.TabIndex = 15;
+            chkBot.Text = "启用普通模式人机预选";
+            chkBot.UseVisualStyleBackColor = true;
+            // 
             // chkClassic
             // 
             chkClassic.AutoSize = true;
             chkClassic.Location = new Point(6, 114);
             chkClassic.Name = "chkClassic";
-            chkClassic.Size = new Size(243, 21);
+            chkClassic.Size = new Size(171, 21);
             chkClassic.TabIndex = 14;
-            chkClassic.Text = "启用经典模式（怀旧峡谷）预选，含人机";
+            chkClassic.Text = "启用经典模式预选，含人机";
             chkClassic.UseVisualStyleBackColor = true;
             // 
             // chkAutoSkinSelect
@@ -494,9 +525,9 @@ namespace League
             chkPickUrf.AutoSize = true;
             chkPickUrf.Location = new Point(314, 89);
             chkPickUrf.Name = "chkPickUrf";
-            chkPickUrf.Size = new Size(147, 21);
+            chkPickUrf.Size = new Size(171, 21);
             chkPickUrf.TabIndex = 11;
-            chkPickUrf.Text = "启用无限火力（自选）";
+            chkPickUrf.Text = "启用无限火力（自选）预选";
             chkPickUrf.UseVisualStyleBackColor = true;
             // 
             // chkUrf
@@ -504,9 +535,9 @@ namespace League
             chkUrf.AutoSize = true;
             chkUrf.Location = new Point(314, 62);
             chkUrf.Name = "chkUrf";
-            chkUrf.Size = new Size(183, 21);
+            chkUrf.Size = new Size(171, 21);
             chkUrf.TabIndex = 10;
-            chkUrf.Text = "启用无限乱斗（随机）抢英雄";
+            chkUrf.Text = "启用无限乱斗（随机）预选";
             chkUrf.UseVisualStyleBackColor = true;
             // 
             // chkNexus
@@ -563,6 +594,8 @@ namespace League
             // 
             // tabPage5
             // 
+            tabPage5.Controls.Add(pictureBox1);
+            tabPage5.Controls.Add(groupBox4);
             tabPage5.Controls.Add(chkUseChampionName);
             tabPage5.Controls.Add(chkHideSelf);
             tabPage5.Controls.Add(label3);
@@ -578,20 +611,95 @@ namespace League
             tabPage5.Text = "消息发送";
             tabPage5.UseVisualStyleBackColor = true;
             // 
+            // pictureBox1
+            // 
+            pictureBox1.Image = (Image)resources.GetObject("pictureBox1.Image");
+            pictureBox1.Location = new Point(580, 308);
+            pictureBox1.Name = "pictureBox1";
+            pictureBox1.Size = new Size(533, 169);
+            pictureBox1.TabIndex = 8;
+            pictureBox1.TabStop = false;
+            // 
+            // groupBox4
+            // 
+            groupBox4.Controls.Add(txtHotkeyFullTeam);
+            groupBox4.Controls.Add(lblHotkeyFullTeam);
+            groupBox4.Controls.Add(txtHotkeyMyTeam);
+            groupBox4.Controls.Add(lblHotkeyMyTeam);
+            groupBox4.Controls.Add(txtHotkeyChampSelect);
+            groupBox4.Controls.Add(lblHotkeyChampSelect);
+            groupBox4.Location = new Point(12, 72);
+            groupBox4.Name = "groupBox4";
+            groupBox4.Size = new Size(545, 120);
+            groupBox4.TabIndex = 7;
+            groupBox4.TabStop = false;
+            groupBox4.Text = "快捷键配置（点击输入框后按下要绑定的快捷键，支持 Ctrl+Fx...）";
+            // 
+            // txtHotkeyFullTeam
+            // 
+            txtHotkeyFullTeam.Location = new Point(204, 84);
+            txtHotkeyFullTeam.Name = "txtHotkeyFullTeam";
+            txtHotkeyFullTeam.ReadOnly = true;
+            txtHotkeyFullTeam.Size = new Size(160, 23);
+            txtHotkeyFullTeam.TabIndex = 5;
+            // 
+            // lblHotkeyFullTeam
+            // 
+            lblHotkeyFullTeam.AutoSize = true;
+            lblHotkeyFullTeam.Location = new Point(7, 86);
+            lblHotkeyFullTeam.Name = "lblHotkeyFullTeam";
+            lblHotkeyFullTeam.Size = new Size(193, 17);
+            lblHotkeyFullTeam.TabIndex = 4;
+            lblHotkeyFullTeam.Text = "游戏内，发送全队战绩/消息快捷键";
+            // 
+            // txtHotkeyMyTeam
+            // 
+            txtHotkeyMyTeam.Location = new Point(204, 55);
+            txtHotkeyMyTeam.Name = "txtHotkeyMyTeam";
+            txtHotkeyMyTeam.ReadOnly = true;
+            txtHotkeyMyTeam.Size = new Size(160, 23);
+            txtHotkeyMyTeam.TabIndex = 3;
+            // 
+            // lblHotkeyMyTeam
+            // 
+            lblHotkeyMyTeam.AutoSize = true;
+            lblHotkeyMyTeam.Location = new Point(7, 57);
+            lblHotkeyMyTeam.Name = "lblHotkeyMyTeam";
+            lblHotkeyMyTeam.Size = new Size(193, 17);
+            lblHotkeyMyTeam.TabIndex = 2;
+            lblHotkeyMyTeam.Text = "游戏内，发送我方战绩/消息快捷键";
+            // 
+            // txtHotkeyChampSelect
+            // 
+            txtHotkeyChampSelect.Location = new Point(204, 26);
+            txtHotkeyChampSelect.Name = "txtHotkeyChampSelect";
+            txtHotkeyChampSelect.ReadOnly = true;
+            txtHotkeyChampSelect.Size = new Size(160, 23);
+            txtHotkeyChampSelect.TabIndex = 1;
+            // 
+            // lblHotkeyChampSelect
+            // 
+            lblHotkeyChampSelect.AutoSize = true;
+            lblHotkeyChampSelect.Location = new Point(7, 28);
+            lblHotkeyChampSelect.Name = "lblHotkeyChampSelect";
+            lblHotkeyChampSelect.Size = new Size(193, 17);
+            lblHotkeyChampSelect.TabIndex = 0;
+            lblHotkeyChampSelect.Text = "选人窗，发送我方战绩/消息快捷键";
+            // 
             // chkUseChampionName
             // 
             chkUseChampionName.AutoSize = true;
-            chkUseChampionName.Location = new Point(303, 28);
+            chkUseChampionName.Location = new Point(179, 11);
             chkUseChampionName.Name = "chkUseChampionName";
-            chkUseChampionName.Size = new Size(243, 21);
+            chkUseChampionName.Size = new Size(303, 21);
             chkUseChampionName.TabIndex = 6;
-            chkUseChampionName.Text = "发送时使用英雄名称（能防止名称屏蔽）";
+            chkUseChampionName.Text = "发送时使用英雄名称（能防止名称屏蔽，限游戏内）";
             chkUseChampionName.UseVisualStyleBackColor = true;
             // 
             // chkHideSelf
             // 
             chkHideSelf.AutoSize = true;
-            chkHideSelf.Location = new Point(17, 28);
+            chkHideSelf.Location = new Point(12, 11);
             chkHideSelf.Name = "chkHideSelf";
             chkHideSelf.Size = new Size(135, 21);
             chkHideSelf.TabIndex = 5;
@@ -600,32 +708,34 @@ namespace League
             // 
             // label3
             // 
-            label3.Location = new Point(706, 216);
+            label3.Location = new Point(580, 198);
             label3.Name = "label3";
-            label3.Size = new Size(440, 67);
+            label3.Size = new Size(440, 73);
             label3.TabIndex = 4;
-            label3.Text = "发送自定义信息：将要发送的内容输入进行，默认一行一条，然后在【选人窗口/游戏内聊天】会根据输入的文本进行发送，快捷键同上，需要自己按[tab]切换发送队伍或者所有人";
+            label3.Text = "发送自定义信息：\r\n· 在左侧输入要发送的内容，默认一行一条。\r\n· 选人阶段 / 游戏内按对应快捷键发送（与战绩模式使用同一套快捷键）。\r\n· 游戏内如需发到队伍或所有人，请先按 Tab 切换聊天频道。";
             // 
             // label2
             // 
-            label2.Location = new Point(706, 101);
+            label2.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            label2.Location = new Point(580, 98);
             label2.Name = "label2";
-            label2.Size = new Size(440, 71);
+            label2.Size = new Size(440, 81);
             label2.TabIndex = 3;
-            label2.Text = "发送战绩信息：即（选人窗口按【ctrl+f7】发送我方战绩信息到聊天窗口），同理在游戏内按【f9】则发送我方战绩到聊天窗口，按【f12】则发送所有人战绩信息，我方队伍5人与敌方队伍5人的战绩信息到聊天窗口";
+            label2.Text = "发送战绩信息：\r\n· 选人阶段：按「选人阶段发送」快捷键，把我方近期战绩/消息发到选人聊天窗\r\n· 游戏内：按「游戏内·我方」只发我方；   按「游戏内·全队」发我方+敌方\r\n· 具体按键以左侧「快捷键」配置为准（点击编辑框后按下要绑定的键即可修改）";
             // 
             // txtCustomContent
             // 
-            txtCustomContent.Location = new Point(138, 101);
+            txtCustomContent.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+            txtCustomContent.Location = new Point(12, 198);
             txtCustomContent.Multiline = true;
             txtCustomContent.Name = "txtCustomContent";
-            txtCustomContent.Size = new Size(545, 610);
+            txtCustomContent.Size = new Size(545, 566);
             txtCustomContent.TabIndex = 2;
             // 
             // rbModeCustom
             // 
             rbModeCustom.AutoSize = true;
-            rbModeCustom.Location = new Point(303, 74);
+            rbModeCustom.Location = new Point(179, 38);
             rbModeCustom.Name = "rbModeCustom";
             rbModeCustom.Size = new Size(110, 21);
             rbModeCustom.TabIndex = 1;
@@ -636,23 +746,13 @@ namespace League
             // 
             rbModeMatch.AutoSize = true;
             rbModeMatch.Checked = true;
-            rbModeMatch.Location = new Point(17, 74);
+            rbModeMatch.Location = new Point(12, 38);
             rbModeMatch.Name = "rbModeMatch";
             rbModeMatch.Size = new Size(98, 21);
             rbModeMatch.TabIndex = 0;
             rbModeMatch.TabStop = true;
             rbModeMatch.Text = "发送战绩信息";
             rbModeMatch.UseVisualStyleBackColor = true;
-            // 
-            // chkBot
-            // 
-            chkBot.AutoSize = true;
-            chkBot.Location = new Point(314, 114);
-            chkBot.Name = "chkBot";
-            chkBot.Size = new Size(147, 21);
-            chkBot.TabIndex = 15;
-            chkBot.Text = "启用普通模式人机预选";
-            chkBot.UseVisualStyleBackColor = true;
             // 
             // FormMain
             // 
@@ -668,7 +768,8 @@ namespace League
             panel1.ResumeLayout(false);
             imageTabControl1.ResumeLayout(false);
             tabPage1.ResumeLayout(false);
-            tabPage1.PerformLayout();
+            panelTab1.ResumeLayout(false);
+            panelTab1.PerformLayout();
             tabPage2.ResumeLayout(false);
             penalGameMatchData.ResumeLayout(false);
             tabPage3.ResumeLayout(false);
@@ -683,6 +784,9 @@ namespace League
             groupBox1.PerformLayout();
             tabPage5.ResumeLayout(false);
             tabPage5.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)pictureBox1).EndInit();
+            groupBox4.ResumeLayout(false);
+            groupBox4.PerformLayout();
             ResumeLayout(false);
         }
 
@@ -728,7 +832,7 @@ namespace League
         private Label label7;
         private Label label6;
         private GroupBox groupBox3;
-        private Label label8;
+        private Label lblHotkeyChampSelect;
         private Button btnDodgeNow;
         private ComboBox cboAutoAcceptDelay;
         private Label lblAutoAcceptDelay;
@@ -740,5 +844,13 @@ namespace League
         private CheckBox chkAutoSkinSelect;
         private CheckBox chkClassic;
         private CheckBox chkBot;
+        private GroupBox groupBox4;
+        private TextBox txtHotkeyChampSelect;
+        private TextBox txtHotkeyFullTeam;
+        private Label lblHotkeyFullTeam;
+        private TextBox txtHotkeyMyTeam;
+        private Label lblHotkeyMyTeam;
+        private PictureBox pictureBox1;
+        private Panel panelTab1;
     }
 }

@@ -1,6 +1,8 @@
-﻿using League.PrimaryElection;
+﻿using League.Models;
+using League.PrimaryElection;
 using Newtonsoft.Json.Linq;
 using System.Diagnostics;
+using static League.FormMain;
 
 namespace League.Clients
 {
@@ -22,6 +24,7 @@ namespace League.Clients
         private ReplayService _replayService;
         private ChampionSelectService _championSelectService;
         private ChatService _chatService;
+        private ChampionMasteryService _championMasteryService;
 
         public ChatService ChatService => _chatService;
 
@@ -111,6 +114,7 @@ namespace League.Clients
             _replayService = _serviceFactory.CreateReplayService(_lcuClient);
             _championSelectService = _serviceFactory.CreateChampionSelectService(_lcuClient, _gameflowService);
             _chatService = _serviceFactory.CreateChatService(_lcuClient);
+            _championMasteryService = _serviceFactory.CreateChampionMasteryService(_lcuClient);
         }
 
         #region 自动接受对局
@@ -177,6 +181,63 @@ namespace League.Clients
         public async Task<JObject> GetCurrentRankedStatsAsync(string puuid)
         {
             return await _rankedService.GetCurrentRankedStatsAsync(puuid);
+        }
+
+        /// <summary>
+        /// 获取英雄熟练度列表
+        /// </summary>
+        /// <param name="puuid"></param>
+        /// <returns></returns>
+        public async Task<JArray> GetChampionMasteryAsync(string puuid)
+        {
+            if (_championMasteryService == null) return new JArray();
+            return await _championMasteryService.GetChampionMasteryAsync(puuid);
+        }
+
+        /// <summary>
+        /// 根据获取到的熟练度列表提取前8名
+        /// </summary>
+        /// <param name="puuid"></param>
+        /// <param name="topN"></param>
+        /// <returns></returns>
+        public async Task<List<ChampionMasteryInfo>> GetTopChampionMasteryAsync(string puuid, int topN = 8)
+        {
+            var result = new List<ChampionMasteryInfo>();
+            if (string.IsNullOrEmpty(puuid)) return result;
+
+            try
+            {
+                var arr = await GetChampionMasteryAsync(puuid);
+                int take = Math.Min(topN, arr.Count);
+
+                for (int i = 0; i < take; i++)
+                {
+                    var item = arr[i];
+                    int cid = item["championId"]?.Value<int>() ?? 0;
+                    if (cid <= 0) continue;
+
+                    string name = Globals.resLoading.GetChampionById(cid)?.Name ?? $"英雄{cid}";
+                    Image? icon = null;
+                    try { icon = await Globals.resLoading.GetChampionIconAsync(cid); } catch { }
+
+                    result.Add(new ChampionMasteryInfo
+                    {
+                        ChampionId = cid,
+                        ChampionName = name,
+                        ChampionLevel = item["championLevel"]?.Value<int>() ?? 0,
+                        ChampionPoints = item["championPoints"]?.Value<long>() ?? 0,
+                        HighestGrade = item["highestGrade"]?.ToString() ?? "-",
+                        LastPlayTime = item["lastPlayTime"]?.Value<long>() ?? 0,
+                        Icon = icon
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[LcuSession] GetTopChampionMasteryAsync: {ex.Message}");
+            }
+
+            return result;
         }
 
         // ============ 游戏流程相关方法 ============

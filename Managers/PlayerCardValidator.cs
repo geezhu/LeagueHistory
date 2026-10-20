@@ -23,6 +23,8 @@ namespace League.Managers
                 card.lblSoloRank.Text = "隐藏";
                 card.lblFlexRank.Text = "隐藏";
                 card.lblPrivacyStatus.Text = "隐藏";
+                card.SetTopMasteries(null);
+                card.SetSummonerLevel(0);
                 card.lblPlayerName.LinkColor = Color.Gray;
             });
         }

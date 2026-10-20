@@ -1,7 +1,7 @@
-﻿using System.Net.Http.Headers;
-using System.Text;
+﻿using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Security;
-using System.Net;
+using System.Text;
 
 namespace League.Clients
 {
@@ -65,10 +65,12 @@ namespace League.Clients
             _httpClient = new HttpClient(handler)
             {
                 DefaultRequestVersion = HttpVersion.Version11,
-                DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
+                DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact,
+                // 请求总超时：避免心跳/探测无限挂起（默认 100 秒太长）
+                // LcuManager 里还会用 Task.WhenAny 做更短的 4 秒探测超时
+                Timeout = TimeSpan.FromSeconds(8)
             };
 
-            // 设置认证头
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
                 "Basic",
                 Convert.ToBase64String(Encoding.ASCII.GetBytes("riot:" + token))

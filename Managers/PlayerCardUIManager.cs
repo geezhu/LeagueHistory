@@ -107,27 +107,19 @@ namespace League.Managers
             string soloRank = string.IsNullOrEmpty(player.SoloRank) ? "未知" : player.SoloRank;
             string flexRank = string.IsNullOrEmpty(player.FlexRank) ? "未知" : player.FlexRank;
 
-            //// 关键调用
-            //card.SetPlayerInfo(name, soloRank, flexRank, player.Avatar, player.IsPublic,
-            //    matchInfo.MatchItems, player.NameColor, player.SummonerId, player.ChampionId, puuid ?? player.Puuid ?? "", fullName);
-
-            //// 【修复点】必须设置 SmallImageList
-            //if (matchInfo.HeroIcons != null)
-            //{
-            //    card.ListViewControl.SmallImageList = matchInfo.HeroIcons;
-            //}
-
-            //card.ListViewControl.View = View.Details;
-
             // 先 ImageList 再 SetPlayerInfo
             if (matchInfo.HeroIcons != null)
             {
                 card.ListViewControl.SmallImageList = matchInfo.HeroIcons;
             }
 
+            // 设置卡片信息，段位，历史战绩
             card.SetPlayerInfo(name, soloRank, flexRank, player.Avatar, player.IsPublic,
                 matchInfo.MatchItems, player.NameColor, player.SummonerId, player.ChampionId,
-                puuid ?? player.Puuid ?? "", fullName);
+                puuid ?? player.Puuid ?? "", fullName, player.SummonerLevel);
+
+            // 设置卡片信息，英雄熟练度
+            card.SetTopMasteries(player.TopMasteries);
 
             card.ListViewControl.View = View.Details;
 
@@ -149,51 +141,6 @@ namespace League.Managers
             });
         }
 
-        //public void UpdateCardUI(PlayerCardControl card, PlayerMatchInfo matchInfo)
-        //{
-        //    if (card == null || card.IsDisposed || matchInfo?.Player == null) return;
-
-        //    // 此为异步
-        //    //FormUiStateManager.SafeInvoke(card, () =>
-
-        //    // 此为同步
-        //    FormUiStateManager.SafeInvokeSync(card, () =>
-        //    {
-        //        var p = matchInfo.Player;
-        //        card.lblPlayerName.Text = p.GameName ?? "未知玩家";
-
-        //        // 更新完整名称
-        //        string full = !string.IsNullOrEmpty(p.FullName) ? p.FullName : (p.GameName ?? "");
-        //        card.SetFullPlayerName(full);
-
-        //        card.lblSoloRank.Text = p.SoloRank ?? "未知";
-        //        card.lblFlexRank.Text = p.FlexRank ?? "未知";
-        //        card.lblPrivacyStatus.Text = p.IsPublic ?? "隐藏";
-
-        //        if (p.Avatar != null)
-        //            card.picHero.Image = p.Avatar;
-
-        //        // 【重要修复】战绩列表 + 英雄头像
-        //        if (matchInfo.MatchItems?.Count > 0)
-        //        {
-        //            card.ListViewControl.Items.Clear();
-        //            foreach (var item in matchInfo.MatchItems)
-        //                card.ListViewControl.Items.Add(item);
-
-        //            if (matchInfo.HeroIcons != null)
-        //                card.ListViewControl.SmallImageList = matchInfo.HeroIcons;
-        //        }
-
-        //        if (p.NameColor != default)
-        //        {
-        //            card.lblPlayerName.LinkColor = p.NameColor;
-        //            card.lblPlayerName.VisitedLinkColor = p.NameColor;
-        //            card.lblPlayerName.ActiveLinkColor = p.NameColor;
-        //        }
-        //        card.CurrentPuuId = matchInfo.Player.Puuid ?? "";
-        //    });
-        //}
-
         public void UpdateCardUI(PlayerCardControl card, PlayerMatchInfo matchInfo)
         {
             if (card == null || card.IsDisposed || matchInfo?.Player == null) return;
@@ -210,6 +157,8 @@ namespace League.Managers
 
                 card.lblSoloRank.Text = p.SoloRank ?? "未知";
                 card.lblFlexRank.Text = p.FlexRank ?? "未知";
+                card.SetSummonerLevel(p.SummonerLevel); // 玩家等级
+                card.SetTopMasteries(p.TopMasteries);   //赏玩的英雄
                 card.lblPrivacyStatus.Text = p.IsPublic ?? "隐藏";
 
                 if (p.Avatar != null)

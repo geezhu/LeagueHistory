@@ -94,5 +94,20 @@ namespace League.Models
         /// 选人阶段是否按 PreferredChampionSkins 自动切皮肤
         /// </summary>
         public bool EnableAutoSkinSelect { get; set; } = false;
+
+        /// <summary>
+        /// 快捷键选人阶段发送，默认 Ctrl+F7
+        /// </summary>
+        public string HotkeyChampSelect { get; set; } = "Ctrl+F7";
+
+        /// <summary>
+        /// 快捷键游戏内发送我方，默认 F9
+        /// </summary>
+        public string HotkeyMyTeam { get; set; } = "F9";
+
+        /// <summary>
+        /// 快捷键游戏内发送全队，默认 F11
+        /// </summary>
+        public string HotkeyFullTeam { get; set; } = "F11";
     }
 }

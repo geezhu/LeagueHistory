@@ -38,14 +38,20 @@
             columnHeader3 = new ColumnHeader();
             columnHeader4 = new ColumnHeader();
             lblPrivacyStatus = new Label();
+            flpMastery = new FlowLayoutPanel();
+            label1 = new Label();
+            pnlAvatar = new Panel();
+            lblSummonerLevel = new Label();
             ((System.ComponentModel.ISupportInitialize)picHero).BeginInit();
+            pnlAvatar.SuspendLayout();
             SuspendLayout();
             // 
             // picHero
             // 
-            picHero.Location = new Point(3, 3);
+            picHero.Dock = DockStyle.Fill;
+            picHero.Location = new Point(0, 0);
             picHero.Name = "picHero";
-            picHero.Size = new Size(40, 40);
+            picHero.Size = new Size(41, 41);
             picHero.SizeMode = PictureBoxSizeMode.Zoom;
             picHero.TabIndex = 0;
             picHero.TabStop = false;
@@ -85,9 +91,9 @@
             listViewGames.Columns.AddRange(new ColumnHeader[] { columnHeader1, columnHeader2, columnHeader3, columnHeader4 });
             listViewGames.FullRowSelect = true;
             listViewGames.HeaderStyle = ColumnHeaderStyle.Nonclickable;
-            listViewGames.Location = new Point(3, 49);
+            listViewGames.Location = new Point(3, 80);
             listViewGames.Name = "listViewGames";
-            listViewGames.Size = new Size(242, 278);
+            listViewGames.Size = new Size(242, 247);
             listViewGames.TabIndex = 4;
             listViewGames.UseCompatibleStateImageBehavior = false;
             listViewGames.View = View.Details;
@@ -122,19 +128,64 @@
             lblPrivacyStatus.TabIndex = 5;
             lblPrivacyStatus.Text = "未知";
             // 
+            // flpMastery
+            // 
+            flpMastery.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            flpMastery.Location = new Point(39, 49);
+            flpMastery.Name = "flpMastery";
+            flpMastery.Size = new Size(206, 25);
+            flpMastery.TabIndex = 6;
+            flpMastery.WrapContents = false;
+            // 
+            // label1
+            // 
+            label1.AutoSize = true;
+            label1.Location = new Point(5, 53);
+            label1.Name = "label1";
+            label1.Size = new Size(32, 17);
+            label1.TabIndex = 7;
+            label1.Text = "常玩";
+            // 
+            // pnlAvatar
+            // 
+            pnlAvatar.BackColor = Color.Transparent;
+            pnlAvatar.Controls.Add(lblSummonerLevel);
+            pnlAvatar.Controls.Add(picHero);
+            pnlAvatar.Location = new Point(3, 3);
+            pnlAvatar.Name = "pnlAvatar";
+            pnlAvatar.Size = new Size(41, 41);
+            pnlAvatar.TabIndex = 8;
+            // 
+            // lblSummonerLevel
+            // 
+            lblSummonerLevel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            lblSummonerLevel.AutoSize = true;
+            lblSummonerLevel.BackColor = Color.FromArgb(140, 0, 0, 0);
+            lblSummonerLevel.Font = new Font("Microsoft YaHei UI", 6.75F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            lblSummonerLevel.ForeColor = Color.White;
+            lblSummonerLevel.Location = new Point(16, 25);
+            lblSummonerLevel.Name = "lblSummonerLevel";
+            lblSummonerLevel.Size = new Size(22, 14);
+            lblSummonerLevel.TabIndex = 6;
+            lblSummonerLevel.Text = "666";
+            // 
             // PlayerCardControl
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
+            Controls.Add(pnlAvatar);
+            Controls.Add(label1);
+            Controls.Add(flpMastery);
             Controls.Add(lblPrivacyStatus);
             Controls.Add(listViewGames);
             Controls.Add(lblFlexRank);
             Controls.Add(lblSoloRank);
             Controls.Add(lblPlayerName);
-            Controls.Add(picHero);
             Name = "PlayerCardControl";
             Size = new Size(248, 330);
             ((System.ComponentModel.ISupportInitialize)picHero).EndInit();
+            pnlAvatar.ResumeLayout(false);
+            pnlAvatar.PerformLayout();
             ResumeLayout(false);
             PerformLayout();
         }
@@ -150,5 +201,9 @@
         public Label lblSoloRank;
         public Label lblFlexRank;
         public Label lblPrivacyStatus;
+        private FlowLayoutPanel flpMastery;
+        public Label label1;
+        private Panel pnlAvatar;
+        public Label lblSummonerLevel;
     }
 }

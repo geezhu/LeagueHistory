@@ -1,590 +1,4 @@
-﻿//using Newtonsoft.Json;
-//using Newtonsoft.Json.Linq;
-//using System.Diagnostics;
-//using System.Management;
-//using System.Net.WebSockets;
-//using System.Text;
-//using System.Text.RegularExpressions;
-
-//namespace League.Clients
-//{
-//    public enum LcuConnectionState
-//    {
-//        Disconnected,
-//        Connecting,
-//        Connected
-//    }
-
-//    /// <summary>
-//    /// 专业级 LCU 连接管理器（HTTP + WebSocket 双通道）
-//    /// 支持「游戏内关闭客户端」后的恢复连接（参考 LeagueAkari 的 lastConnectedClient 机制）
-//    /// </summary>
-//    public class LcuManager : IDisposable
-//    {
-//        public static LcuManager Instance { get; } = new LcuManager();
-
-//        private bool _hasEverConnected = false;  // 只有真正连上过，断线才通知 UI
-
-//        /// <summary>HTTP 客户端（供所有 Service 使用）</summary>
-//        public LcuClient HttpClient { get; private set; }
-
-//        public LcuConnectionState State { get; private set; } = LcuConnectionState.Disconnected;
-
-//        /// <summary>连接成功</summary>
-//        public event Action Connected;
-
-//        /// <summary>真正断线（进程消失或多次重连失败）</summary>
-//        public event Action Disconnected;
-
-//        /// <summary>游戏阶段变化 (newPhase, oldPhase)</summary>
-//        public event Func<string, string, Task> PhaseChanged;
-
-//        /// <summary>没有 LCU，但 2999 显示正在对局（关客户端模式）</summary>
-//        //public event Action InGameWithoutLcu;
-
-//        // 内部状态
-//        private ClientWebSocket _ws;
-//        private CancellationTokenSource _cts;
-//        private string _port;
-//        private string _token;
-//        private string _lastPhase;
-//        private bool _isRunning;
-//        private readonly object _lock = new object();
-
-//        // ==================== 缓存相关 ====================
-//        private readonly string _cacheFilePath;
-//        private const int CacheValidMinutes = 60;   // 缓存有效期（分钟），可自行调整
-
-//        public LcuManager()
-//        {
-//            // 缓存文件直接保存在程序启动目录
-//            string appDir = AppDomain.CurrentDomain.BaseDirectory;
-//            _cacheFilePath = Path.Combine(appDir, "last_lcu_cache.json");
-//        }
-
-//        // ========== 对外入口 ==========
-//        public async Task StartAsync()
-//        {
-//            lock (_lock)
-//            {
-//                if (_isRunning) return;
-//                _isRunning = true;
-//            }
-
-//            _cts = new CancellationTokenSource();
-//            _ = Task.Run(ConnectionLoopAsync, _cts.Token);
-//            Debug.WriteLine("[LcuManager] 启动连接循环");
-//        }
-
-//        public void Stop()
-//        {
-//            lock (_lock)
-//            {
-//                if (!_isRunning) return;
-//                _isRunning = false;
-//            }
-
-//            _cts?.Cancel();
-//            DisconnectInternal();
-//            Debug.WriteLine("[LcuManager] 已停止");
-//        }
-
-//        // ========== 主连接循环 ==========
-//        private async Task ConnectionLoopAsync()
-//        {
-//            while (_isRunning && !_cts.IsCancellationRequested)
-//            {
-//                try
-//                {
-//                    // 1. 获取凭证
-//                    if (!await TryGetCredentialsAsync())
-//                    {
-//                        await SafeDelay(2000);
-//                        continue;
-//                    }
-
-//                    // 2. 尝试建立连接（带重试，应对客户端刚启动 API 未就绪）
-//                    State = LcuConnectionState.Connecting;
-//                    Debug.WriteLine($"[LcuManager] 尝试连接 → Port:{_port}");
-
-//                    bool connected = await TryConnectWithRetryAsync(maxAttempts: 15, delayMs: 1500);
-
-//                    if (!connected)
-//                    {
-//                        Debug.WriteLine("[LcuManager] 多次尝试后仍无法连接，稍后重试...");
-//                        await SafeDelay(3000);
-//                        continue; // 注意：这里不要触发 Disconnected
-//                    }
-
-//                    // 3. HTTP + WS 已通，但登录会话可能还没就绪 → 先等 summoner
-//                    Debug.WriteLine("[LcuManager] HTTP/WS 已连接，等待 current-summoner 就绪...");
-//                    bool summonerReady = await WaitForSummonerReadyAsync(maxAttempts: 30, delayMs: 1000);
-//                    if (!summonerReady)
-//                    {
-//                        Debug.WriteLine("[LcuManager] summoner 未就绪，本轮不触发 Connected，稍后重试");
-//                        DisconnectInternal();
-//                        await SafeDelay(2000);
-//                        continue;
-//                    }
-
-//                    // 4. 真正可用
-//                    State = LcuConnectionState.Connected;
-//                    _hasEverConnected = true;
-
-//                    SaveCache(_port, _token);
-
-//                    Connected?.Invoke();
-//                    await Task.Delay(400); // 给主窗体注入 Service 的时间
-
-//                    await QueryCurrentPhaseAsync();
-
-//                    // ★ 必须加回：进入 WS 接收循环，直到断线才往下走
-//                    Debug.WriteLine("[LcuManager] 已连接，进入接收循环");
-//                    await ReceiveLoopAsync();
-//                }
-//                catch (OperationCanceledException)
-//                {
-//                    break;
-//                }
-//                catch (Exception ex)
-//                {
-//                    Debug.WriteLine($"[LcuManager] 连接循环异常: {ex.Message}");
-//                }
-
-//                // 走到这里说明连接断了
-//                DisconnectInternal();
-
-//                // 只有曾经成功连接过，才通知 UI 断线
-//                if (_hasEverConnected)
-//                {
-//                    _hasEverConnected = false;
-//                    Disconnected?.Invoke();
-//                    Debug.WriteLine("[LcuManager] 已断线，3 秒后重试...");
-//                }
-//                else
-//                {
-//                    Debug.WriteLine("[LcuManager] 尚未成功连接过，继续静默重试...");
-//                }
-
-//                await SafeDelay(3000);
-//            }
-//        }
-
-//        // ========== 获取 port / token（核心改造） ==========
-//        private async Task<bool> TryGetCredentialsAsync()
-//        {
-//            try
-//            {
-//                // 1. 优先从 LeagueClientUx 获取（正常情况）
-//                var uxProcess = Process.GetProcessesByName("LeagueClientUx").FirstOrDefault();
-//                if (uxProcess != null)
-//                {
-//                    string cmdLine = GetCommandLine(uxProcess);
-//                    if (!string.IsNullOrEmpty(cmdLine))
-//                    {
-//                        string port = ExtractArgument(cmdLine, "--app-port=");
-//                        string token = ExtractArgument(cmdLine, "--remoting-auth-token=");
-
-//                        if (!string.IsNullOrEmpty(port) && !string.IsNullOrEmpty(token))
-//                        {
-//                            _port = Clean(port);
-//                            _token = Clean(token);
-
-//                            // 成功拿到就立刻缓存
-//                            SaveCache(_port, _token);
-//                            Debug.WriteLine($"[LcuManager] 从 LeagueClientUx 获取凭证成功 → Port:{_port}");
-//                            return true;
-//                        }
-//                    }
-//                }
-
-//                // 2. UX 不存在，检查是否还存在 LeagueClient.exe（游戏内关闭客户端的情况）
-//                var clientProcess = Process.GetProcessesByName("LeagueClient").FirstOrDefault();
-//                if (clientProcess != null)
-//                {
-//                    if (LoadCache(out string cachedPort, out string cachedToken))
-//                    {
-//                        _port = cachedPort;
-//                        _token = cachedToken;
-//                        Debug.WriteLine($"[LcuManager] UX 已关闭，使用缓存凭证尝试连接 → Port:{_port}");
-//                        return true;
-//                    }
-//                    else
-//                    {
-//                        Debug.WriteLine("[LcuManager] UX 已关闭，且没有有效缓存");
-//                    }
-//                }
-//                else
-//                {
-//                    // 3. 两个进程都没有时，也尝试一次缓存（应对极少数时序问题）
-//                    if (LoadCache(out string cachedPort, out string cachedToken))
-//                    {
-//                        _port = cachedPort;
-//                        _token = cachedToken;
-//                        Debug.WriteLine($"[LcuManager] 进程检测不到，强制使用缓存尝试 → Port:{_port}");
-//                        return true;
-//                    }
-//                }
-
-//                return false;
-//            }
-//            catch (Exception ex)
-//            {
-//                Debug.WriteLine($"[LcuManager] 获取凭证失败: {ex.Message}");
-//                return false;
-//            }
-//        }
-
-//        /// <summary>
-//        /// 带重试的连接：专门应对「进程已启动但 API 还没就绪」
-//        /// </summary>
-//        private async Task<bool> TryConnectWithRetryAsync(int maxAttempts, int delayMs)
-//        {
-//            for (int i = 1; i <= maxAttempts; i++)
-//            {
-//                if (_cts.IsCancellationRequested) return false;
-
-//                try
-//                {
-//                    // 每次重试都重新读一次凭证（防止客户端重启后 port 变了）
-//                    await TryGetCredentialsAsync();
-
-//                    await ConnectHttpAndWsAsync();
-//                    Debug.WriteLine($"[LcuManager] 第 {i} 次尝试连接成功");
-//                    return true;
-//                }
-//                catch (Exception ex)
-//                {
-//                    Debug.WriteLine($"[LcuManager] 第 {i}/{maxAttempts} 次连接失败: {ex.Message}");
-
-//                    // 清理半成品连接
-//                    try
-//                    {
-//                        _ws?.Abort();
-//                        _ws?.Dispose();
-//                    }
-//                    catch { }
-//                    _ws = null;
-
-//                    if (i < maxAttempts)
-//                        await SafeDelay(delayMs);
-//                }
-//            }
-//            return false;
-//        }
-
-//        private async Task ConnectHttpAndWsAsync()
-//        {
-//            // --- HTTP ---
-//            HttpClient?.HttpClient?.Dispose();
-//            HttpClient = new LcuClient(_port, _token);
-
-//            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(4));
-//            var response = await HttpClient.GetAsync("/lol-summoner/v1/current-summoner");
-
-//            // 注意：刚登录时 current-summoner 可能暂时 404/空，只要不是「连接被拒绝」就算 HTTP 通了
-//            if (!response.IsSuccessStatusCode)
-//            {
-//                // 再试一个几乎总会有的端点
-//                response = await HttpClient.GetAsync("/riotclient/app-name");
-//                if (!response.IsSuccessStatusCode)
-//                    throw new Exception($"HTTP 测试失败: {response.StatusCode}");
-//            }
-
-//            // --- WebSocket ---
-//            _ws?.Dispose();
-//            _ws = new ClientWebSocket();
-//            _ws.Options.RemoteCertificateValidationCallback = (s, c, ch, e) => true;
-//            _ws.Options.SetRequestHeader("Authorization",
-//                "Basic " + Convert.ToBase64String(Encoding.ASCII.GetBytes($"riot:{_token}")));
-
-//            var uri = new Uri($"wss://127.0.0.1:{_port}/");
-//            await _ws.ConnectAsync(uri, _cts.Token);
-
-//            // 订阅 phase
-//            await SendWsAsync("[5,\"OnJsonApiEvent_lol-gameflow_v1_gameflow-phase\"]");
-//        }
-
-//        /// <summary>
-//        /// 等待 current-summoner 真正可用（登录完成）
-//        /// 解决：进程/端口已通，但账号会话尚未建立的时序问题
-//        /// </summary>
-//        private async Task<bool> WaitForSummonerReadyAsync(int maxAttempts = 30, int delayMs = 1000)
-//        {
-//            for (int i = 1; i <= maxAttempts; i++)
-//            {
-//                if (_cts == null || _cts.IsCancellationRequested)
-//                    return false;
-
-//                try
-//                {
-//                    var response = await HttpClient.GetAsync("/lol-summoner/v1/current-summoner");
-//                    if (response.IsSuccessStatusCode)
-//                    {
-//                        var json = await response.Content.ReadAsStringAsync();
-//                        if (!string.IsNullOrWhiteSpace(json))
-//                        {
-//                            var obj = JObject.Parse(json);
-//                            if (!string.IsNullOrEmpty(obj["puuid"]?.ToString()))
-//                            {
-//                                Debug.WriteLine($"[LcuManager] current-summoner 已就绪（第 {i} 次）");
-//                                return true;
-//                            }
-//                        }
-//                    }
-//                    Debug.WriteLine($"[LcuManager] current-summoner 未就绪 ({i}/{maxAttempts}) status={response.StatusCode}");
-//                }
-//                catch (Exception ex)
-//                {
-//                    Debug.WriteLine($"[LcuManager] 等待 summoner 异常 ({i}/{maxAttempts}): {ex.Message}");
-//                }
-
-//                await SafeDelay(delayMs);
-//            }
-
-//            Debug.WriteLine("[LcuManager] 等待 current-summoner 超时");
-//            return false;
-//        }
-
-//        // ========== 接收循环 ==========
-//        private async Task ReceiveLoopAsync()
-//        {
-//            var buffer = new byte[16384];
-//            var messageBuffer = new StringBuilder();
-
-//            while (_ws != null && _ws.State == WebSocketState.Open && !_cts.IsCancellationRequested)
-//            {
-//                try
-//                {
-//                    var result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer), _cts.Token);
-
-//                    if (result.MessageType == WebSocketMessageType.Close)
-//                    {
-//                        Debug.WriteLine("[LcuManager] WebSocket 收到关闭帧");
-//                        break;
-//                    }
-
-//                    if (result.MessageType == WebSocketMessageType.Text)
-//                    {
-//                        messageBuffer.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
-
-//                        if (result.EndOfMessage)
-//                        {
-//                            string raw = messageBuffer.ToString();
-//                            messageBuffer.Clear();
-//                            await ProcessWsMessageAsync(raw);
-//                        }
-//                    }
-//                }
-//                catch (OperationCanceledException)
-//                {
-//                    break;
-//                }
-//                catch (WebSocketException ex)
-//                {
-//                    Debug.WriteLine($"[LcuManager] WebSocket 异常: {ex.Message}");
-//                    break;
-//                }
-//                catch (Exception ex)
-//                {
-//                    Debug.WriteLine($"[LcuManager] 接收异常: {ex.Message}");
-//                    // 不立刻退出，继续尝试接收
-//                }
-//            }
-//        }
-
-//        private async Task ProcessWsMessageAsync(string raw)
-//        {
-//            if (string.IsNullOrWhiteSpace(raw))
-//                return; // 空消息直接忽略
-
-//            try
-//            {
-//                var arr = JArray.Parse(raw);
-//                if (arr.Count < 3 || arr[0].Value<int>() != 8) return;
-
-//                var payload = arr[2] as JObject;
-//                if (payload == null) return;
-
-//                string uri = payload["uri"]?.ToString();
-//                var data = payload["data"];
-
-//                if (uri == "/lol-gameflow/v1/gameflow-phase" && data != null)
-//                {
-//                    string phase = data.Type == JTokenType.String
-//                        ? data.Value<string>()?.Trim('"')
-//                        : data.ToString();
-
-//                    if (!string.IsNullOrEmpty(phase) && phase != _lastPhase)
-//                    {
-//                        string oldPhase = _lastPhase;
-//                        _lastPhase = phase;
-
-//                        Debug.WriteLine($"[LcuManager] Phase: {oldPhase ?? "null"} → {phase}");
-
-//                        if (PhaseChanged != null)
-//                            await PhaseChanged.Invoke(phase, oldPhase);
-//                    }
-//                }
-//            }
-//            catch (JsonReaderException)
-//            {
-//                // 非 JSON 或空帧，直接忽略
-//            }
-//            catch (Exception ex)
-//            {
-//                Debug.WriteLine($"[LcuManager] 解析消息失败: {ex.Message}");
-//            }
-//        }
-
-//        // ========== 主动查询当前 phase（连接成功后补一次） ==========
-//        private async Task QueryCurrentPhaseAsync()
-//        {
-//            try
-//            {
-//                var response = await HttpClient.GetAsync("/lol-gameflow/v1/gameflow-phase");
-//                if (response.IsSuccessStatusCode)
-//                {
-//                    string content = await response.Content.ReadAsStringAsync();
-//                    string phase = content.Trim().Trim('"');
-//                    if (!string.IsNullOrEmpty(phase) && phase != _lastPhase)
-//                    {
-//                        string old = _lastPhase;
-//                        _lastPhase = phase;
-//                        if (PhaseChanged != null)
-//                            await PhaseChanged.Invoke(phase, old);
-//                    }
-//                }
-//            }
-//            catch { /* 忽略 */ }
-//        }
-
-//        private async Task SendWsAsync(string json)
-//        {
-//            if (_ws == null || _ws.State != WebSocketState.Open) return;
-//            var bytes = Encoding.UTF8.GetBytes(json);
-//            await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, _cts.Token);
-//        }
-
-//        private void DisconnectInternal()
-//        {
-//            try
-//            {
-//                if (_ws != null)
-//                {
-//                    if (_ws.State == WebSocketState.Open)
-//                    {
-//                        try
-//                        {
-//                            _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "closing", CancellationToken.None)
-//                               .Wait(500);
-//                        }
-//                        catch { }
-//                    }
-//                    _ws.Dispose();
-//                }
-//            }
-//            catch { }
-
-//            _ws = null;
-//            State = LcuConnectionState.Disconnected;
-//        }
-
-//        private async Task SafeDelay(int ms)
-//        {
-//            try { await Task.Delay(ms, _cts.Token); }
-//            catch (OperationCanceledException) { }
-//        }
-
-//        // ==================== 缓存读写 ====================
-//        private void SaveCache(string port, string token)
-//        {
-//            try
-//            {
-//                var data = new
-//                {
-//                    Port = port,
-//                    Token = token,
-//                    Time = DateTime.Now
-//                };
-//                File.WriteAllText(_cacheFilePath, JsonConvert.SerializeObject(data, Formatting.Indented));
-//                Debug.WriteLine($"[LcuManager] 已更新缓存 → {_cacheFilePath}");
-//            }
-//            catch (Exception ex)
-//            {
-//                Debug.WriteLine($"[LcuManager] 保存缓存失败: {ex.Message}");
-//            }
-//        }
-
-//        private bool LoadCache(out string port, out string token)
-//        {
-//            port = null;
-//            token = null;
-
-//            try
-//            {
-//                if (!File.Exists(_cacheFilePath)) return false;
-
-//                var json = File.ReadAllText(_cacheFilePath);
-//                var obj = JObject.Parse(json);
-
-//                var time = obj["Time"]?.ToObject<DateTime>() ?? DateTime.MinValue;
-//                if ((DateTime.Now - time).TotalMinutes > CacheValidMinutes)
-//                {
-//                    Debug.WriteLine("[LcuManager] 缓存已过期");
-//                    return false;
-//                }
-
-//                port = obj["Port"]?.ToString();
-//                token = obj["Token"]?.ToString();
-
-//                return !string.IsNullOrEmpty(port) && !string.IsNullOrEmpty(token);
-//            }
-//            catch (Exception ex)
-//            {
-//                Debug.WriteLine($"[LcuManager] 读取缓存失败: {ex.Message}");
-//                return false;
-//            }
-//        }
-
-//        private string Clean(string value)
-//        {
-//            return value?.Trim().Trim('"', '\'', ' ', '\r', '\n');
-//        }
-
-//        // ========== 辅助方法 ==========
-//        private string GetCommandLine(Process process)
-//        {
-//            try
-//            {
-//                using var searcher = new ManagementObjectSearcher(
-//                    $"SELECT CommandLine FROM Win32_Process WHERE ProcessId = {process.Id}");
-//                using var collection = searcher.Get();
-//                foreach (ManagementObject obj in collection)
-//                    return obj["CommandLine"]?.ToString() ?? "";
-//            }
-//            catch (Exception ex)
-//            {
-//                Debug.WriteLine($"[LcuManager] 获取命令行失败: {ex.Message}");
-//            }
-//            return "";
-//        }
-
-//        private string ExtractArgument(string cmdLine, string key)
-//        {
-//            var match = Regex.Match(cmdLine, key + "([^ ]+)");
-//            return match.Success ? match.Groups[1].Value : null;
-//        }
-
-//        public void Dispose()
-//        {
-//            Stop();
-//            HttpClient?.HttpClient?.Dispose();
-//        }
-//    }
-//}
-
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 using System.Management;
@@ -598,34 +12,36 @@ namespace League.Clients
     {
         Disconnected,
         Connecting,
-        Reconnecting,   // 新增：曾经连上过，现在在重连
+        Reconnecting,
         Connected
     }
 
     /// <summary>
-    /// 专业级 LCU 连接管理器（HTTP + WebSocket 双通道）
-    /// 永久持续检测版本：软件启动后永远循环检测，连上忽略，断了立刻重连并通知 UI
-    /// 彻底解决网络抖动 / 掉线后「永远卡在检测中」的问题
+    /// 国服向 LCU 连接管理（永久循环）：
+    /// - 凭证：仅 LeagueClientUx 命令行 + 本地缓存（无 lockfile、无进程存活判定断线）
+    /// - 已连接：以 WebSocket 存活为主；约每 10 秒 HTTP 心跳，连续失败才软重连
+    /// - 单次心跳失败绝不 Abort WS，避免误杀连接导致面板卡在「检测中」
+    /// - 兼容「进游戏关闭客户端」：UX 没了仍可用缓存尝试保持/恢复 HTTP+WS
     /// </summary>
     public class LcuManager : IDisposable
     {
         public static LcuManager Instance { get; } = new LcuManager();
 
-        /// <summary>HTTP 客户端（供所有 Service 使用）</summary>
         public LcuClient HttpClient { get; private set; }
-
         public LcuConnectionState State { get; private set; } = LcuConnectionState.Disconnected;
 
-        /// <summary>连接成功（真正可用）</summary>
+        /// <summary>真正可用（HTTP+WS+summoner 就绪）</summary>
         public event Action Connected;
 
-        /// <summary>断线 / 重连中（UI 应显示“正在重新连接”）</summary>
+        /// <summary>确认断开（UI 可显示检测中并清面板）</summary>
         public event Action Disconnected;
+
+        /// <summary>软重连中（UI 不要 Clear 战绩面板）</summary>
+        public event Action Reconnecting;
 
         /// <summary>游戏阶段变化 (newPhase, oldPhase)</summary>
         public event Func<string, string, Task> PhaseChanged;
 
-        // 内部状态
         private ClientWebSocket _ws;
         private CancellationTokenSource _cts;
         private string _port;
@@ -633,12 +49,22 @@ namespace League.Clients
         private string _lastPhase;
         private bool _isRunning;
         private readonly object _lock = new object();
-        private int _consecutiveFailCount = 0;
-        private const int MaxFailBeforeClearCache = 5;
 
-        // ==================== 缓存相关 ====================
+        // ---------- 心跳：短间隔 + 连续失败才断（总感知约 20 秒内，而不是 90 秒）----------
+        private int _heartbeatFailCount;
+        private const int HeartbeatIntervalSeconds = 10;   // 每 10 秒一次
+        private const int HeartbeatTimeoutSeconds = 4;     // 单次超时
+        private const int HeartbeatFailThreshold = 2;      // 连续 2 次失败 → 软重连（约 20 秒）
+
+        private int _reconnectFailCount;
+        private const int HardDisconnectAfterReconnectFails = 6;
+
         private readonly string _cacheFilePath;
-        private const int CacheValidMinutes = 60;
+        private const int CacheValidMinutes = 180;         // 进游戏关客户端时缓存要能撑住
+
+        // 心跳用的轻量接口（国服可用；建连/心跳都用，避免 current-summoner 误判）
+        private const string HeartbeatPath = "/riotclient/auth-token";
+        private const string HeartbeatFallbackPath = "/riotclient/app-name";
 
         public LcuManager()
         {
@@ -646,18 +72,18 @@ namespace League.Clients
             _cacheFilePath = Path.Combine(appDir, "last_lcu_cache.json");
         }
 
-        // ========== 对外入口 ==========
-        public async Task StartAsync()
+        public Task StartAsync()
         {
             lock (_lock)
             {
-                if (_isRunning) return;
+                if (_isRunning) return Task.CompletedTask;
                 _isRunning = true;
             }
 
             _cts = new CancellationTokenSource();
             _ = Task.Run(ConnectionLoopAsync, _cts.Token);
-            Debug.WriteLine("[LcuManager] 启动永久连接循环（持续检测）");
+            Debug.WriteLine("[LcuManager] 启动永久连接循环（WS 为主 + 10s 心跳）");
+            return Task.CompletedTask;
         }
 
         public void Stop()
@@ -668,97 +94,87 @@ namespace League.Clients
                 _isRunning = false;
             }
 
-            _cts?.Cancel();
-            DisconnectInternal();
+            try { _cts?.Cancel(); } catch { }
+            DisconnectSocketOnly();
+            State = LcuConnectionState.Disconnected;
             Debug.WriteLine("[LcuManager] 已停止");
         }
 
-        // ========== 主连接循环（永久运行） ==========
+        // ==================== 主循环 ====================
         private async Task ConnectionLoopAsync()
         {
-            while (_isRunning && !_cts.IsCancellationRequested)
+            while (_isRunning && _cts != null && !_cts.IsCancellationRequested)
             {
                 try
                 {
-                    // 1. 获取凭证
                     if (!await TryGetCredentialsAsync())
                     {
-                        // 没有进程也没有有效缓存 → 真正断线
-                        if (State != LcuConnectionState.Disconnected)
-                        {
-                            State = LcuConnectionState.Disconnected;
-                            Disconnected?.Invoke();
-                            Debug.WriteLine("[LcuManager] 无进程/缓存，触发 Disconnected");
-                        }
+                        await EnterDisconnectedAsync("无可用凭证");
                         await SafeDelay(2500);
                         continue;
                     }
 
-                    // 2. 尝试建立连接
-                    bool wasConnected = State == LcuConnectionState.Connected;
-                    State = wasConnected ? LcuConnectionState.Reconnecting : LcuConnectionState.Connecting;
-                    Debug.WriteLine($"[LcuManager] 尝试连接 → Port:{_port}  State={State}");
+                    bool soft = State == LcuConnectionState.Connected
+                             || State == LcuConnectionState.Reconnecting;
 
-                    // 如果之前是 Connected，先通知 UI 进入重连状态
-                    if (wasConnected)
+                    State = soft ? LcuConnectionState.Reconnecting : LcuConnectionState.Connecting;
+                    if (soft)
                     {
-                        Disconnected?.Invoke();
+                        try { Reconnecting?.Invoke(); } catch { }
+                        Debug.WriteLine($"[LcuManager] 软重连 Port={_port}");
+                    }
+                    else
+                    {
+                        Debug.WriteLine($"[LcuManager] 连接中 Port={_port}");
                     }
 
-                    bool connected = await TryConnectWithRetryAsync(maxAttempts: 12, delayMs: 1200);
-
-                    if (!connected)
+                    bool ok = await TryConnectWithRetryAsync(maxAttempts: 8, delayMs: 800);
+                    if (!ok)
                     {
-                        _consecutiveFailCount++;
-                        Debug.WriteLine($"[LcuManager] 连接失败 (连续{_consecutiveFailCount}次)，稍后重试...");
+                        _reconnectFailCount++;
+                        Debug.WriteLine($"[LcuManager] 建连失败 count={_reconnectFailCount}");
 
-                        if (_consecutiveFailCount >= MaxFailBeforeClearCache)
+                        if (_reconnectFailCount >= HardDisconnectAfterReconnectFails)
                         {
-                            ClearCache();
-                            _consecutiveFailCount = 0;
-                            Debug.WriteLine("[LcuManager] 连续失败过多，已清除缓存");
+                            await EnterDisconnectedAsync("连续建连失败");
+                        }
+                        else if (soft)
+                        {
+                            try { Reconnecting?.Invoke(); } catch { }
+                        }
+                        else
+                        {
+                            await EnterDisconnectedAsync("建连失败");
                         }
 
-                        if (State != LcuConnectionState.Disconnected)
-                        {
-                            State = LcuConnectionState.Disconnected;
-                            Disconnected?.Invoke();
-                        }
-                        await SafeDelay(3000);
-                        continue;
-                    }
-
-                    // 3. HTTP + WS 已通，等待 summoner 就绪（更宽松）
-                    Debug.WriteLine("[LcuManager] HTTP/WS 已连接，等待 current-summoner 就绪...");
-                    bool summonerReady = await WaitForSummonerReadyAsync(maxAttempts: 45, delayMs: 800); // 约36秒
-                    if (!summonerReady)
-                    {
-                        Debug.WriteLine("[LcuManager] summoner 仍未就绪，本轮放弃，稍后重试");
-                        DisconnectInternal();
-                        _consecutiveFailCount++;
-                        if (State != LcuConnectionState.Disconnected)
-                        {
-                            State = LcuConnectionState.Disconnected;
-                            Disconnected?.Invoke();
-                        }
                         await SafeDelay(2000);
                         continue;
                     }
 
-                    // 4. 真正可用
+                    bool summonerOk = await WaitForSummonerReadyAsync(maxAttempts: 30, delayMs: 600);
+                    if (!summonerOk)
+                    {
+                        // 进游戏关客户端后，有时 summoner 接口不稳；HTTP+WS 已通则仍视为可连
+                        Debug.WriteLine("[LcuManager] summoner 未完全就绪，但 HTTP/WS 已通，继续保持连接");
+                    }
+
                     State = LcuConnectionState.Connected;
-                    _consecutiveFailCount = 0;
+                    _heartbeatFailCount = 0;
+                    _reconnectFailCount = 0;
                     SaveCache(_port, _token);
 
-                    Connected?.Invoke();
-                    Debug.WriteLine("[LcuManager] ★ 连接成功，触发 Connected");
-                    await Task.Delay(300); // 给主窗体注入时间
+                    try { Connected?.Invoke(); }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[LcuManager] Connected 回调异常: {ex.Message}");
+                    }
 
+                    Debug.WriteLine("[LcuManager] ★ Connected（进入 WS 接收 + 心跳）");
+                    await Task.Delay(200);
                     await QueryCurrentPhaseAsync();
 
-                    // 进入接收循环 + 后台健康检查
-                    Debug.WriteLine("[LcuManager] 已连接，进入接收循环 + 健康检查");
-                    await ReceiveLoopWithHealthCheckAsync();
+                    // 阻塞直到 WS 断开或心跳判定死亡
+                    await ReceiveLoopWithHeartbeatAsync();
                 }
                 catch (OperationCanceledException)
                 {
@@ -766,119 +182,92 @@ namespace League.Clients
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[LcuManager] 连接循环异常: {ex.Message}");
+                    Debug.WriteLine($"[LcuManager] 主循环异常: {ex.Message}");
                 }
 
-                // 走到这里说明连接断了
-                DisconnectInternal();
-
-                // 永远通知 UI 断线（不再用 _hasEverConnected 静默）
-                if (State != LcuConnectionState.Disconnected)
+                // 接收结束 = 链路断了 → 软重连，不要立刻当「客户端退出」
+                DisconnectSocketOnly();
+                if (State == LcuConnectionState.Connected)
                 {
-                    State = LcuConnectionState.Disconnected;
-                    Disconnected?.Invoke();
-                    Debug.WriteLine("[LcuManager] 已断线，3 秒后自动重连...");
+                    State = LcuConnectionState.Reconnecting;
+                    try { Reconnecting?.Invoke(); } catch { }
+                    Debug.WriteLine("[LcuManager] 链路中断 → Reconnecting");
                 }
 
-                await SafeDelay(3000);
+                await SafeDelay(2000);
             }
         }
 
-        // ========== 获取 port / token ==========
-        private async Task<bool> TryGetCredentialsAsync()
+        private async Task EnterDisconnectedAsync(string reason)
+        {
+            DisconnectSocketOnly();
+            if (State != LcuConnectionState.Disconnected)
+            {
+                State = LcuConnectionState.Disconnected;
+                Debug.WriteLine($"[LcuManager] Disconnected: {reason}");
+                try { Disconnected?.Invoke(); } catch { }
+            }
+        }
+
+        // ==================== 凭证（国服：命令行 + 缓存，无 lockfile）====================
+        private Task<bool> TryGetCredentialsAsync()
         {
             try
             {
-                // 1. 优先从 LeagueClientUx 获取（正常情况）
-                var uxProcess = Process.GetProcessesByName("LeagueClientUx").FirstOrDefault();
-                if (uxProcess != null)
+                var ux = Process.GetProcessesByName("LeagueClientUx").FirstOrDefault();
+                if (ux != null)
                 {
-                    string cmdLine = GetCommandLine(uxProcess);
-                    if (!string.IsNullOrEmpty(cmdLine))
+                    string cmd = GetCommandLine(ux);
+                    if (!string.IsNullOrEmpty(cmd))
                     {
-                        string port = ExtractArgument(cmdLine, "--app-port=");
-                        string token = ExtractArgument(cmdLine, "--remoting-auth-token=");
-
+                        string port = Clean(ExtractArgument(cmd, "--app-port="));
+                        string token = Clean(ExtractArgument(cmd, "--remoting-auth-token="));
                         if (!string.IsNullOrEmpty(port) && !string.IsNullOrEmpty(token))
                         {
-                            _port = Clean(port);
-                            _token = Clean(token);
+                            _port = port;
+                            _token = token;
                             SaveCache(_port, _token);
-                            Debug.WriteLine($"[LcuManager] 从 LeagueClientUx 获取凭证成功 → Port:{_port}");
-                            return true;
+                            Debug.WriteLine($"[LcuManager] 凭证←Ux Port={_port}");
+                            return Task.FromResult(true);
                         }
                     }
                 }
 
-                // 2. UX 不存在，检查是否还存在 LeagueClient.exe（游戏内关闭客户端）
-                var clientProcess = Process.GetProcessesByName("LeagueClient").FirstOrDefault();
-                if (clientProcess != null)
+                // UX 不在（含进游戏关客户端）：用缓存继续尝试 LCU
+                if (LoadCache(out string cp, out string ct))
                 {
-                    if (LoadCache(out string cachedPort, out string cachedToken))
-                    {
-                        _port = cachedPort;
-                        _token = cachedToken;
-                        Debug.WriteLine($"[LcuManager] UX 已关闭，使用缓存凭证 → Port:{_port}");
-                        return true;
-                    }
-                    else
-                    {
-                        Debug.WriteLine("[LcuManager] UX 已关闭，且没有有效缓存");
-                    }
-                }
-                else
-                {
-                    // 3. 两个进程都没有时，也尝试一次缓存（极少数时序）
-                    if (LoadCache(out string cachedPort, out string cachedToken))
-                    {
-                        _port = cachedPort;
-                        _token = cachedToken;
-                        Debug.WriteLine($"[LcuManager] 进程检测不到，强制使用缓存 → Port:{_port}");
-                        return true;
-                    }
+                    _port = cp;
+                    _token = ct;
+                    Debug.WriteLine($"[LcuManager] 凭证←缓存 Port={_port}");
+                    return Task.FromResult(true);
                 }
 
-                return false;
+                return Task.FromResult(false);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[LcuManager] 获取凭证失败: {ex.Message}");
-                return false;
+                Debug.WriteLine($"[LcuManager] 取凭证异常: {ex.Message}");
+                return Task.FromResult(false);
             }
         }
 
-        /// <summary>
-        /// 带重试的连接
-        /// </summary>
         private async Task<bool> TryConnectWithRetryAsync(int maxAttempts, int delayMs)
         {
             for (int i = 1; i <= maxAttempts; i++)
             {
-                if (_cts.IsCancellationRequested) return false;
-
+                if (_cts == null || _cts.IsCancellationRequested) return false;
                 try
                 {
-                    // 每次重试都重新读一次凭证
                     await TryGetCredentialsAsync();
-
                     await ConnectHttpAndWsAsync();
-                    Debug.WriteLine($"[LcuManager] 第 {i} 次尝试连接成功");
+                    Debug.WriteLine($"[LcuManager] 第 {i} 次建连成功");
                     return true;
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[LcuManager] 第 {i}/{maxAttempts} 次连接失败: {ex.Message}");
-
-                    try
-                    {
-                        _ws?.Abort();
-                        _ws?.Dispose();
-                    }
-                    catch { }
-                    _ws = null;
-
-                    if (i < maxAttempts)
-                        await SafeDelay(delayMs);
+                    Debug.WriteLine($"[LcuManager] 第 {i}/{maxAttempts} 建连失败: {ex.Message}");
+                    DisconnectSocketOnly();
+                    if (i < maxAttempts) await SafeDelay(delayMs);
                 }
             }
             return false;
@@ -886,23 +275,17 @@ namespace League.Clients
 
         private async Task ConnectHttpAndWsAsync()
         {
-            // --- HTTP ---
-            HttpClient?.HttpClient?.Dispose();
-            HttpClient = new LcuClient(_port, _token);
+            var newClient = new LcuClient(_port, _token);
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(4));
-            var response = await HttpClient.GetAsync("/lol-summoner/v1/current-summoner");
+            // 建连探测（仅此时用 HTTP，带超时）
+            if (!await PingHttpAsync(newClient, HeartbeatTimeoutSeconds))
+                throw new Exception("HTTP 建连探测失败");
 
-            // 刚登录或网络抖动时 current-summoner 可能暂时失败，只要不是「连接被拒绝」就算 HTTP 通了
-            if (!response.IsSuccessStatusCode)
-            {
-                response = await HttpClient.GetAsync("/riotclient/app-name");
-                if (!response.IsSuccessStatusCode)
-                    throw new Exception($"HTTP 测试失败: {response.StatusCode}");
-            }
+            var old = HttpClient;
+            HttpClient = newClient;
+            try { old?.HttpClient?.Dispose(); } catch { }
 
-            // --- WebSocket ---
-            _ws?.Dispose();
+            DisconnectSocketOnly();
             _ws = new ClientWebSocket();
             _ws.Options.RemoteCertificateValidationCallback = (s, c, ch, e) => true;
             _ws.Options.SetRequestHeader("Authorization",
@@ -911,21 +294,15 @@ namespace League.Clients
             var uri = new Uri($"wss://127.0.0.1:{_port}/");
             await _ws.ConnectAsync(uri, _cts.Token);
 
-            // 订阅 phase
+            // 订阅 phase（可按需加更多事件）
             await SendWsAsync("[5,\"OnJsonApiEvent_lol-gameflow_v1_gameflow-phase\"]");
         }
 
-        /// <summary>
-        /// 等待 current-summoner 真正可用（登录完成）
-        /// 更宽松：网络抖动后客户端自己重连时可能需要更长时间
-        /// </summary>
-        private async Task<bool> WaitForSummonerReadyAsync(int maxAttempts = 45, int delayMs = 800)
+        private async Task<bool> WaitForSummonerReadyAsync(int maxAttempts, int delayMs)
         {
             for (int i = 1; i <= maxAttempts; i++)
             {
-                if (_cts == null || _cts.IsCancellationRequested)
-                    return false;
-
+                if (_cts == null || _cts.IsCancellationRequested) return false;
                 try
                 {
                     var response = await HttpClient.GetAsync("/lol-summoner/v1/current-summoner");
@@ -937,87 +314,87 @@ namespace League.Clients
                             var obj = JObject.Parse(json);
                             if (!string.IsNullOrEmpty(obj["puuid"]?.ToString()))
                             {
-                                Debug.WriteLine($"[LcuManager] current-summoner 已就绪（第 {i} 次）");
+                                Debug.WriteLine($"[LcuManager] summoner 就绪 ({i})");
                                 return true;
                             }
                         }
                     }
-                    Debug.WriteLine($"[LcuManager] current-summoner 未就绪 ({i}/{maxAttempts}) status={response.StatusCode}");
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[LcuManager] 等待 summoner 异常 ({i}/{maxAttempts}): {ex.Message}");
+                    Debug.WriteLine($"[LcuManager] 等 summoner ({i}): {ex.Message}");
                 }
-
                 await SafeDelay(delayMs);
             }
-
-            Debug.WriteLine("[LcuManager] 等待 current-summoner 超时");
             return false;
         }
 
-        // ========== 接收循环 + 健康检查（永久方案核心） ==========
-        private async Task ReceiveLoopWithHealthCheckAsync()
+        // ==================== WS 接收 + 心跳（心跳失败不立刻杀 WS）====================
+        private async Task ReceiveLoopWithHeartbeatAsync()
         {
             var buffer = new byte[16384];
             var messageBuffer = new StringBuilder();
-            var lastHealthCheck = DateTime.UtcNow;
-            const int HealthCheckIntervalSeconds = 20;   // 稍微放宽一点
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
 
-            // 单独的健康检查取消源（只在需要主动断开时用）
-            using var healthCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
-
-            // 启动后台健康检查任务
-            var healthTask = Task.Run(async () =>
+            // 后台心跳：只计数，达到阈值才 Abort，让 Receive 退出并走软重连
+            var heartbeatTask = Task.Run(async () =>
             {
-                while (!healthCts.Token.IsCancellationRequested)
+                while (!linked.Token.IsCancellationRequested && State == LcuConnectionState.Connected)
                 {
                     try
                     {
-                        await Task.Delay(TimeSpan.FromSeconds(HealthCheckIntervalSeconds), healthCts.Token);
+                        await Task.Delay(TimeSpan.FromSeconds(HeartbeatIntervalSeconds), linked.Token);
+                        if (State != LcuConnectionState.Connected) break;
 
-                        bool healthy = await DoHealthCheckAsync();
-                        if (!healthy)
+                        bool ok = await PingHttpAsync(HttpClient, HeartbeatTimeoutSeconds);
+                        if (ok)
                         {
-                            Debug.WriteLine("[LcuManager] 健康检查失败，主动中断 WebSocket 以触发重连");
-                            try
-                            {
-                                _ws?.Abort();   // 强制让下面的 Receive 退出
-                            }
-                            catch { }
+                            if (_heartbeatFailCount > 0)
+                                Debug.WriteLine("[LcuManager] 心跳恢复");
+                            _heartbeatFailCount = 0;
+                            continue;
+                        }
+
+                        _heartbeatFailCount++;
+                        Debug.WriteLine($"[LcuManager] 心跳失败 {_heartbeatFailCount}/{HeartbeatFailThreshold}");
+
+                        // 关键：只有连续失败才认为链路死了，避免偶发超时误杀
+                        if (_heartbeatFailCount >= HeartbeatFailThreshold)
+                        {
+                            Debug.WriteLine("[LcuManager] 心跳连续失败 → 结束接收以软重连");
+                            try { _ws?.Abort(); } catch { }
                             break;
                         }
                     }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
+                    catch (OperationCanceledException) { break; }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"[LcuManager] 健康检查任务异常: {ex.Message}");
+                        Debug.WriteLine($"[LcuManager] 心跳任务异常: {ex.Message}");
                     }
                 }
-            }, healthCts.Token);
+            }, linked.Token);
 
             try
             {
-                while (_ws != null && _ws.State == WebSocketState.Open && !_cts.IsCancellationRequested)
+                while (_ws != null
+                       && _ws.State == WebSocketState.Open
+                       && _cts != null
+                       && !_cts.IsCancellationRequested
+                       && State == LcuConnectionState.Connected)
                 {
                     try
                     {
-                        // 正常长接收，不再用短超时取消
                         var result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer), _cts.Token);
 
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
-                            Debug.WriteLine("[LcuManager] WebSocket 收到关闭帧");
+                            Debug.WriteLine("[LcuManager] WS Close 帧");
                             break;
                         }
 
                         if (result.MessageType == WebSocketMessageType.Text)
                         {
                             messageBuffer.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
-
                             if (result.EndOfMessage)
                             {
                                 string raw = messageBuffer.ToString();
@@ -1026,78 +403,63 @@ namespace League.Clients
                             }
                         }
                     }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
+                    catch (OperationCanceledException) { break; }
                     catch (WebSocketException ex)
                     {
-                        Debug.WriteLine($"[LcuManager] WebSocket 异常: {ex.Message}");
+                        Debug.WriteLine($"[LcuManager] WS 异常: {ex.Message}");
                         break;
                     }
                     catch (Exception ex)
                     {
                         Debug.WriteLine($"[LcuManager] 接收异常: {ex.Message}");
-                        // 轻微异常继续尝试
                     }
                 }
             }
             finally
             {
-                // 停止健康检查任务
-                try { healthCts.Cancel(); } catch { }
-                try { await healthTask; } catch { }
+                try { linked.Cancel(); } catch { }
+                try { await heartbeatTask; } catch { }
             }
         }
 
         /// <summary>
-        /// 健康检查：轻量 ping，确认会话还活着
+        /// 轻量心跳/建连探测。成功返回 true。不抛到外层。
         /// </summary>
-        private async Task<bool> DoHealthCheckAsync()
+        private async Task<bool> PingHttpAsync(LcuClient client, int timeoutSeconds)
         {
+            if (client == null) return false;
             try
             {
-                if (HttpClient == null) return false;
-
-                // 用独立的短超时，避免影响主连接
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-
-                // 优先测最关键的端点
-                var response = await HttpClient.GetAsync("/lol-summoner/v1/current-summoner");
-                if (response.IsSuccessStatusCode)
-                {
-                    var json = await response.Content.ReadAsStringAsync(cts.Token);
-                    if (!string.IsNullOrWhiteSpace(json))
-                    {
-                        var obj = JObject.Parse(json);
-                        if (!string.IsNullOrEmpty(obj["puuid"]?.ToString()))
-                        {
-                            return true;
-                        }
-                    }
-                }
-
-                // 兜底测一个几乎总会存在的端点
-                response = await HttpClient.GetAsync("/riotclient/app-name");
-                return response.IsSuccessStatusCode;
-            }
-            catch (OperationCanceledException)
-            {
-                Debug.WriteLine("[LcuManager] 健康检查超时");
-                return false;
+                if (await PingOneAsync(client, HeartbeatPath, timeoutSeconds))
+                    return true;
+                return await PingOneAsync(client, HeartbeatFallbackPath, timeoutSeconds);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[LcuManager] 健康检查异常: {ex.Message}");
+                Debug.WriteLine($"[LcuManager] Ping 异常: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static async Task<bool> PingOneAsync(LcuClient client, string path, int timeoutSeconds)
+        {
+            try
+            {
+                var getTask = client.GetAsync(path);
+                var finished = await Task.WhenAny(getTask, Task.Delay(TimeSpan.FromSeconds(timeoutSeconds)));
+                if (finished != getTask) return false;
+                var resp = await getTask;
+                return resp.IsSuccessStatusCode;
+            }
+            catch
+            {
                 return false;
             }
         }
 
         private async Task ProcessWsMessageAsync(string raw)
         {
-            if (string.IsNullOrWhiteSpace(raw))
-                return;
-
+            if (string.IsNullOrWhiteSpace(raw)) return;
             try
             {
                 var arr = JArray.Parse(raw);
@@ -1119,54 +481,47 @@ namespace League.Clients
                     {
                         string oldPhase = _lastPhase;
                         _lastPhase = phase;
-
                         Debug.WriteLine($"[LcuManager] Phase: {oldPhase ?? "null"} → {phase}");
-
                         if (PhaseChanged != null)
                             await PhaseChanged.Invoke(phase, oldPhase);
                     }
                 }
             }
-            catch (JsonReaderException)
-            {
-                // 非 JSON 或空帧，忽略
-            }
+            catch (JsonReaderException) { }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[LcuManager] 解析消息失败: {ex.Message}");
+                Debug.WriteLine($"[LcuManager] WS 消息处理: {ex.Message}");
             }
         }
 
-        // ========== 主动查询当前 phase ==========
         private async Task QueryCurrentPhaseAsync()
         {
             try
             {
+                if (HttpClient == null) return;
                 var response = await HttpClient.GetAsync("/lol-gameflow/v1/gameflow-phase");
-                if (response.IsSuccessStatusCode)
+                if (!response.IsSuccessStatusCode) return;
+                string content = (await response.Content.ReadAsStringAsync()).Trim().Trim('"');
+                if (!string.IsNullOrEmpty(content) && content != _lastPhase)
                 {
-                    string content = await response.Content.ReadAsStringAsync();
-                    string phase = content.Trim().Trim('"');
-                    if (!string.IsNullOrEmpty(phase) && phase != _lastPhase)
-                    {
-                        string old = _lastPhase;
-                        _lastPhase = phase;
-                        if (PhaseChanged != null)
-                            await PhaseChanged.Invoke(phase, old);
-                    }
+                    string old = _lastPhase;
+                    _lastPhase = content;
+                    if (PhaseChanged != null)
+                        await PhaseChanged.Invoke(content, old);
                 }
             }
-            catch { /* 忽略 */ }
+            catch { }
         }
 
         private async Task SendWsAsync(string json)
         {
-            if (_ws == null || _ws.State != WebSocketState.Open) return;
+            if (_ws == null || _ws.State != WebSocketState.Open || _cts == null) return;
             var bytes = Encoding.UTF8.GetBytes(json);
             await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, _cts.Token);
         }
 
-        private void DisconnectInternal()
+        /// <summary>只关 WS，不改 State、不 Dispose HttpClient（重连时再替换）</summary>
+        private void DisconnectSocketOnly()
         {
             try
             {
@@ -1177,7 +532,7 @@ namespace League.Clients
                         try
                         {
                             _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "closing", CancellationToken.None)
-                               .Wait(500);
+                               .Wait(400);
                         }
                         catch { }
                     }
@@ -1185,34 +540,32 @@ namespace League.Clients
                 }
             }
             catch { }
-
             _ws = null;
-            // 注意：这里不强制改 State，由调用方决定
         }
 
         private async Task SafeDelay(int ms)
         {
-            try { await Task.Delay(ms, _cts.Token); }
+            try
+            {
+                if (_cts != null)
+                    await Task.Delay(ms, _cts.Token);
+                else
+                    await Task.Delay(ms);
+            }
             catch (OperationCanceledException) { }
         }
 
-        // ==================== 缓存读写 ====================
+        // ==================== 缓存 ====================
         private void SaveCache(string port, string token)
         {
             try
             {
-                var data = new
-                {
-                    Port = port,
-                    Token = token,
-                    Time = DateTime.Now
-                };
+                var data = new { Port = port, Token = token, Time = DateTime.Now };
                 File.WriteAllText(_cacheFilePath, JsonConvert.SerializeObject(data, Formatting.Indented));
-                Debug.WriteLine($"[LcuManager] 已更新缓存 → {_cacheFilePath}");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[LcuManager] 保存缓存失败: {ex.Message}");
+                Debug.WriteLine($"[LcuManager] 写缓存失败: {ex.Message}");
             }
         }
 
@@ -1220,52 +573,25 @@ namespace League.Clients
         {
             port = null;
             token = null;
-
             try
             {
                 if (!File.Exists(_cacheFilePath)) return false;
-
-                var json = File.ReadAllText(_cacheFilePath);
-                var obj = JObject.Parse(json);
-
+                var obj = JObject.Parse(File.ReadAllText(_cacheFilePath));
                 var time = obj["Time"]?.ToObject<DateTime>() ?? DateTime.MinValue;
-                if ((DateTime.Now - time).TotalMinutes > CacheValidMinutes)
-                {
-                    Debug.WriteLine("[LcuManager] 缓存已过期");
-                    return false;
-                }
-
+                if ((DateTime.Now - time).TotalMinutes > CacheValidMinutes) return false;
                 port = obj["Port"]?.ToString();
                 token = obj["Token"]?.ToString();
-
                 return !string.IsNullOrEmpty(port) && !string.IsNullOrEmpty(token);
             }
-            catch (Exception ex)
+            catch
             {
-                Debug.WriteLine($"[LcuManager] 读取缓存失败: {ex.Message}");
                 return false;
             }
         }
 
-        private void ClearCache()
-        {
-            try
-            {
-                if (File.Exists(_cacheFilePath))
-                {
-                    File.Delete(_cacheFilePath);
-                    Debug.WriteLine("[LcuManager] 缓存已清除");
-                }
-            }
-            catch { }
-        }
+        private static string Clean(string value) =>
+            value?.Trim().Trim('"', '\'', ' ', '\r', '\n');
 
-        private string Clean(string value)
-        {
-            return value?.Trim().Trim('"', '\'', ' ', '\r', '\n');
-        }
-
-        // ========== 辅助方法 ==========
         private string GetCommandLine(Process process)
         {
             try
@@ -1278,21 +604,22 @@ namespace League.Clients
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[LcuManager] 获取命令行失败: {ex.Message}");
+                Debug.WriteLine($"[LcuManager] 读命令行失败: {ex.Message}");
             }
             return "";
         }
 
         private string ExtractArgument(string cmdLine, string key)
         {
-            var match = Regex.Match(cmdLine, key + "([^ ]+)");
+            if (string.IsNullOrEmpty(cmdLine)) return null;
+            var match = Regex.Match(cmdLine, Regex.Escape(key) + "([^ ]+)");
             return match.Success ? match.Groups[1].Value : null;
         }
 
         public void Dispose()
         {
             Stop();
-            HttpClient?.HttpClient?.Dispose();
+            try { HttpClient?.HttpClient?.Dispose(); } catch { }
         }
     }
 }

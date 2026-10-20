@@ -149,6 +149,7 @@ namespace League.Parsers
 
             string gameName = summonerInfo?["gameName"]?.ToString() ?? "未知玩家";
             string tagLine = summonerInfo?["tagLine"]?.ToString() ?? "";
+            int summonerLevel = summonerInfo?["summonerLevel"]?.Value<int>() ?? 0;
             string privacyStatus = summonerInfo?["privacy"]?.ToString().Equals("PUBLIC", StringComparison.OrdinalIgnoreCase) == true
                 ? "公开" : "隐藏";
             puuid = summonerInfo?["puuid"]?.ToString() ?? puuid;
@@ -161,11 +162,19 @@ namespace League.Parsers
                 return _factory.CreateHiddenPlayerInfo(0, championId);
             }
 
-            var rankedStats = await _fetcher.GetRankedStatsAsync(puuid);
+            // 获取排位信息 + 熟练度（并行）
+            var rankedTask = Globals.lcuClient.GetCurrentRankedStatsAsync(puuid);
+            var masteryTask = Globals.lcuClient.GetTopChampionMasteryAsync(puuid, 8);
+
+            await Task.WhenAll(rankedTask, masteryTask);
+
+            var rankedJson = await rankedTask;
+            var topMasteries = await masteryTask;
+
+            var rankedStats = RankedStats.FromJson(rankedJson) ?? new Dictionary<string, RankedStats>();
             string soloRank = GetFormattedRank(rankedStats, "单双排");
             string flexRank = GetFormattedRank(rankedStats, "灵活组排");
 
-            //var matchesJson = await _fetcher.GetPlayerMatchesAsync(puuid, _filterByGameMode);
             var matchesJson = await _fetcher.GetPlayerMatchesAsync(puuid, _filterByGameMode, _matchHistoryCount);
             var result = _parser.ParsePlayerMatchInfo(puuid, matchesJson);
 
@@ -176,11 +185,13 @@ namespace League.Parsers
                 ChampionId = championId,
                 ChampionName = Globals.resLoading.GetChampionById(championId)?.Name ?? "Unknown",
                 Avatar = await Globals.resLoading.GetChampionIconAsync(championId),
-                GameName = gameName,          // 短名字（显示用）
-                FullName = fullName,          // 完整名字（复制用）  ← 关键
+                GameName = gameName,
+                FullName = fullName,
                 SoloRank = soloRank,
                 FlexRank = flexRank,
-                IsPublic = privacyStatus
+                IsPublic = privacyStatus,
+                TopMasteries = topMasteries,
+                SummonerLevel = summonerLevel
             };
 
             // 计算玩家是否压力怪
