@@ -507,6 +507,15 @@ public class GameBarBridgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Publish_AnySnapshot_AnnouncesAugmentChat()
+    {
+        // The widget shows the augment pick bar only when the main program can send the picks.
+        JObject snapshot = await PublishSnapshotAsync(RosterPublish());
+
+        Assert.Equal(true, (bool?)snapshot["chatAugments"]);
+    }
+
+    [Fact]
     public async Task Publish_CompositionWithoutAPage_OmitsTheKeyInsteadOfNullingIt()
     {
         JObject snapshot = await PublishSnapshotAsync(RosterPublish(composition: null));

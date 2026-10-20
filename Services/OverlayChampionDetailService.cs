@@ -234,12 +234,17 @@ public sealed class OverlayChampionDetailService : IDisposable
             _ => "参考分路",
         };
 
+    private static readonly (string Key, string Title)[] AugmentRarities =
+    [
+        ("kPrismatic", "棱彩强化"),
+        ("kGold", "黄金强化"),
+        ("kSilver", "白银强化"),
+    ];
+
     public static JObject FromAramMeta(AramMetaPage page, int hero)
     {
         var sections = new JArray();
-        foreach (
-            var (key, title) in new[] { ("kPrismatic", "棱彩强化"), ("kGold", "黄金强化"), ("kSilver", "白银强化") }
-        )
+        foreach (var (key, title) in AugmentRarities)
         {
             sections.Add(
                 Section(
@@ -257,6 +262,15 @@ public sealed class OverlayChampionDetailService : IDisposable
                             var row = Row("", icons: [icon], stats: Stats(r.WinRate, r.PickRate, r.Games, true));
                             row["winRateText"] = "胜率 " + Rate(r.WinRate);
                             row["pickRateText"] = "选取率 " + Rate(r.PickRate);
+                            // The widget sorts by these; a missing rate is left out rather than written as null.
+                            if (r.WinRate is double win)
+                            {
+                                row["winRate"] = win;
+                            }
+                            if (r.PickRate is double pick)
+                            {
+                                row["pickRate"] = pick;
+                            }
                             UpdateAugmentSearch(row);
                             return row;
                         })
@@ -564,6 +578,19 @@ public sealed class OverlayChampionDetailService : IDisposable
                     (long?)row["play"]
                 ))
                 .ToArray();
+    }
+
+    /// <summary>The hero's augment statistics of every rarity, as the detail page lists them, with the patch.</summary>
+    public async Task<(string Patch, AramMetaRecommendation[] Rows)> ReadAugmentsAsync(
+        int hero,
+        CancellationToken token
+    )
+    {
+        var page = await _am.GetAsync(hero, false, token);
+        return (
+            page.Index.Patch,
+            AugmentRarities.SelectMany(r => AramMetaRecommendation.Read(page, hero, r.Key)).ToArray()
+        );
     }
 
     public async Task<AramMetaIndex> LoadAramMetaIndexAsync(CancellationToken token) =>

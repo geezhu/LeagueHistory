@@ -15,9 +15,13 @@ public sealed record OverlayChatRequest(
     string Kind = "tier",
     string Text = "",
     bool Confirmed = false,
-    int Spell = -1
+    int Spell = -1,
+    IReadOnlyList<int>? Augments = null
 )
 {
+    /// <summary>The most augments one request may name; the message splits by length, this bounds the request.</summary>
+    public const int MaxAugments = 8;
+
     public bool IsVoice => Kind == "voice";
 
     /// <summary>Requests that do not select roster players: confirmed voice text and wave summaries.</summary>
@@ -65,6 +69,11 @@ public sealed record OverlayChatRequest(
             return null;
         }
 
+        if (ReadAugments(value, kind, target) is not { } augments)
+        {
+            return null;
+        }
+
         // Premades and control lists describe a side; a single hero is not offered.
         if (kind is "party" or "controls" or "hardControls" or "composition" && target == "single")
         {
@@ -92,7 +101,8 @@ public sealed record OverlayChatRequest(
             (bool)value["dismissed"]!,
             (bool)value["cancelled"]!,
             kind,
-            Spell: spell
+            Spell: spell,
+            Augments: augments
         );
     }
 
@@ -109,7 +119,8 @@ public sealed record OverlayChatRequest(
                 or "composition"
                 or "voice"
                 or "waves"
-                or "summoner";
+                or "summoner"
+                or "augments";
 
     // A summoner spell names one of the selected hero's two spells (0 or 1); other requests carry none (-1).
     private static int? ReadSpell(JObject value, string kind, string target)
@@ -122,6 +133,28 @@ public sealed record OverlayChatRequest(
         return target == "single" && value["spell"]?.Type == JTokenType.Integer && (int)value["spell"]! is 0 or 1
             ? (int)value["spell"]!
             : null;
+    }
+
+    // Augment requests name the detail hero's augments by id; the receiver looks up their rates itself.
+    private static int[]? ReadAugments(JObject value, string kind, string target)
+    {
+        if (kind != "augments")
+        {
+            return value["augments"] == null ? [] : null;
+        }
+
+        if (target != "single" || value["augments"] is not JArray list || list.Count is 0 or > MaxAugments)
+        {
+            return null;
+        }
+
+        if (list.Any(id => id.Type != JTokenType.Integer || (long)id <= 0 || (long)id > int.MaxValue))
+        {
+            return null;
+        }
+
+        int[] ids = list.Select(id => (int)id).ToArray();
+        return ids.Distinct().Count() == ids.Length ? ids : null;
     }
 
     private static Guid? ReadCommandId(JObject value, string session)
@@ -196,7 +229,8 @@ public sealed record OverlayChatRequest(
         && Kind == other.Kind
         && Text == other.Text
         && Confirmed == other.Confirmed
-        && Spell == other.Spell;
+        && Spell == other.Spell
+        && (Augments ?? []).SequenceEqual(other.Augments ?? []);
 }
 
 public static class OverlayVoiceChatText

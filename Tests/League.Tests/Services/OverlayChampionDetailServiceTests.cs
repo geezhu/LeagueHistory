@@ -270,6 +270,19 @@ public class OverlayChampionDetailServiceTests : IDisposable
         Assert.Equal(pickRate, (string?)row["pickRateText"]);
     }
 
+    [Theory]
+    [InlineData(0, 0.5682, 0.0509)]
+    [InlineData(1, 0.5549, 0.0628)]
+    [InlineData(2, 0.5441, 0.0498)]
+    public void FromAramMeta_EachRarity_CarriesNumericRatesForSorting(int index, double winRate, double pickRate)
+    {
+        JToken[] sections = Sections(Page(AramMetaFixture.Detail()));
+
+        JObject row = (JObject)Augments(sections)[index]!["rows"]![0]!;
+        Assert.Equal(winRate, (double)row["winRate"]!, 4);
+        Assert.Equal(pickRate, (double)row["pickRate"]!, 4);
+    }
+
     [Fact]
     public void FromAramMeta_TheCapturedPool_KeepsAll129AugmentRows()
     {

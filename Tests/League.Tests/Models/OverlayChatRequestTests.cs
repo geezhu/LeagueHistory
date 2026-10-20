@@ -336,6 +336,89 @@ public class OverlayChatRequestTests
         Assert.Equal(-1, request?.Spell);
     }
 
+    // ---- the augment list ----
+
+    private static JObject AugmentRequest(JToken augments, string target = "single", int slot = 3, int hero = 77)
+    {
+        JObject value = Request("augments", target, slot, hero);
+        value["augments"] = augments;
+        return value;
+    }
+
+    [Fact]
+    public void Parse_AnAugmentRequestForTheDetailHero_KeepsThePickedOrder()
+    {
+        JObject value = AugmentRequest(new JArray(1205, 1001, 2072));
+
+        var request = OverlayChatRequest.Parse(value, "s", Seats((3, 77)), 1000);
+
+        Assert.Equal([1205, 1001, 2072], request?.Augments);
+    }
+
+    [Fact]
+    public void Parse_AnAugmentRequestNamingASide_IsRefused()
+    {
+        // The rates belong to one hero, so the request names the hero on the detail page.
+        JObject value = AugmentRequest(new JArray(1001), "own", -1, 0);
+
+        Assert.Null(OverlayChatRequest.Parse(value, "s", new int[10], 1000));
+    }
+
+    [Fact]
+    public void Parse_AnAugmentRequestForAHeroNotInThatSeat_IsRefused()
+    {
+        JObject value = AugmentRequest(new JArray(1001));
+
+        Assert.Null(OverlayChatRequest.Parse(value, "s", Seats((3, 78)), 1000));
+    }
+
+    public static TheoryData<JToken> MalformedAugmentLists =>
+        new()
+        {
+            new JArray(),
+            new JArray(1001, 1001),
+            new JArray(1001, 0),
+            new JArray(1001, -5),
+            new JArray(1001, "1002"),
+            new JArray(1001, 1.5),
+            new JArray(1001, 3_000_000_000L),
+            new JArray(Enumerable.Range(1001, OverlayChatRequest.MaxAugments + 1)),
+            "1001",
+            JValue.CreateNull(),
+        };
+
+    [Theory]
+    [MemberData(nameof(MalformedAugmentLists))]
+    public void Parse_AnAugmentListThatIsEmptyRepeatedOrMalformed_IsRefused(JToken augments)
+    {
+        Assert.Null(OverlayChatRequest.Parse(AugmentRequest(augments), "s", Seats((3, 77)), 1000));
+    }
+
+    [Fact]
+    public void Parse_AnAugmentRequestWithoutTheList_IsRefused()
+    {
+        Assert.Null(OverlayChatRequest.Parse(Request("augments", "single", 3, 77), "s", Seats((3, 77)), 1000));
+    }
+
+    [Fact]
+    public void Parse_AnAugmentListOfTheMaximumLength_IsAccepted()
+    {
+        JObject value = AugmentRequest(new JArray(Enumerable.Range(1001, OverlayChatRequest.MaxAugments)));
+
+        var request = OverlayChatRequest.Parse(value, "s", Seats((3, 77)), 1000);
+
+        Assert.Equal(OverlayChatRequest.MaxAugments, request?.Augments?.Count);
+    }
+
+    [Fact]
+    public void Parse_AnyOtherKindCarryingAugments_IsRefused()
+    {
+        JObject value = Request("tier");
+        value["augments"] = new JArray(1001);
+
+        Assert.Null(OverlayChatRequest.Parse(value, "s", new int[10], 1000));
+    }
+
     // ---- voice ----
 
     [Fact]
@@ -417,6 +500,7 @@ public class OverlayChatRequestTests
     [InlineData("Text")]
     [InlineData("Confirmed")]
     [InlineData("Spell")]
+    [InlineData("Augments")]
     [InlineData("Id")]
     [InlineData("Session")]
     public void SameCommand_ARequestDifferingInOneMember_IsADifferentCommand(string member)
@@ -432,6 +516,7 @@ public class OverlayChatRequestTests
             "Text" => one with { Text = "u" },
             "Confirmed" => one with { Confirmed = true },
             "Spell" => one with { Spell = 1 },
+            "Augments" => one with { Augments = [1001] },
             "Id" => one with { Id = "j" },
             _ => one with { Session = "t" },
         };

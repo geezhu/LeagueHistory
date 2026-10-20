@@ -30,6 +30,30 @@ public sealed partial class GameBarBridge : IDisposable
         Completion = Task.WhenAll(Task.Run(WriteLoop), Task.Run(WriteDetailLoop), Task.Run(WriteChatLoop));
     }
 
+    // The protocols and chat kinds this main program handles; an older one leaves a flag out and the widget hides it.
+    private static JProperty[] Capabilities() =>
+        [
+            new("detailProtocol", 1),
+            new("chatProtocol", 1),
+            new("chatMastery", true),
+            new("chatDeathStreak", true),
+            new("chatWaves", true),
+            new("chatRecord", true),
+            new("chatParty", true),
+            new("chatControls", true),
+            // The control list without slows.
+            new("chatHardControls", true),
+            new("chatComposition", true),
+            new("compositionProtocol", 1),
+            new("controlProtocol", 1),
+            new("chatVoice", true),
+            new("voiceProtocol", 2),
+            // Right-clicking an ally's summoner spell sends its timer.
+            new("chatSummoner", true),
+            // Augments picked on the detail page send their win rates.
+            new("chatAugments", true),
+        ];
+
     public void Publish(
         LoadingRoster? roster,
         IReadOnlyDictionary<string, PlayerChampionTier> ranks,
@@ -84,26 +108,9 @@ public sealed partial class GameBarBridge : IDisposable
             enabled && active ? _instance + ":" + session : "",
             rows.Select(r => (int?)r["championId"] ?? 0).ToArray()
         );
-        var snapshot = new JObject
+        var snapshot = new JObject(Capabilities())
         {
-            ["detailProtocol"] = 1,
-            ["chatProtocol"] = 1,
-            ["chatMastery"] = true,
-            ["chatDeathStreak"] = true,
-            ["chatWaves"] = true,
-            ["chatRecord"] = true,
-            ["chatParty"] = true,
-            ["chatControls"] = true,
-            // The control list without slows; older main programs leave it out and the widget hides the button.
-            ["chatHardControls"] = true,
-            ["chatComposition"] = true,
-            ["compositionProtocol"] = 1,
-            ["controlProtocol"] = 1,
-            ["chatVoice"] = true,
-            ["voiceProtocol"] = 2,
             ["chatTeams"] = roster?.Players.Any(p => p.Self) ?? false,
-            // Right-clicking an ally's summoner spell sends its timer.
-            ["chatSummoner"] = true,
             ["queue"] = roster?.Queue ?? 0,
             ["protocol"] = 1,
             ["revision"] = _instance + ":" + (++_revision),

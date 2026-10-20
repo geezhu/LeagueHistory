@@ -15,9 +15,11 @@ TextBlock chatStatus = MakeText(ChatIdleText, 12, 0x91acbb);
 bool supportsChat = false, supportsMasteryChat = false, supportsDeathStreakChat = false, supportsRecordChat = false,
      supportsPartyChat = false, supportsControlChat = false, supportsHardControlChat = false, supportsWaveChat = false,
      chatTeams = false, chatPending = false, chatWriting = false, chatReading = false, chatDismissed = false,
-     chatCancelled = false, chatCleanup = false;
+     chatCancelled = false, chatCleanup = false, supportsAugmentChat = false;
 hstring chatId, chatSession, chatTarget, chatKind, chatText, pendingChatWrite;
 int chatSlot = -1, chatHero = 0, chatSpell = -1;
+// The picks at the moment of sending; later taps change the page, not the pending request.
+std::vector<int> chatAugments;
 int64_t chatCreated = 0;
 
 void InitializeChat()
@@ -159,6 +161,7 @@ void UpdateChatButtons()
     waveChatMenu.IsEnabled(waveReady);
     for (int i = 0; i < 3; ++i)
         waveChatTargets[i].IsEnabled(waveReady && WaveChatAvailable(WaveChatKeys[i]));
+    UpdateAugmentChatPicks();
     cancelChat.Visibility(chatPending ? Visibility::Visible : Visibility::Collapsed);
     cancelChat.IsEnabled(!chatCancelled);
     UpdateVoiceButtons();
@@ -184,6 +187,9 @@ bool CanQueueChat(hstring const &target, hstring const &kind) const
     if (kind == L"summoner")
         return supportsSummonerChat && target == L"single" && summonerChatCard >= 0 && summonerChatCard < 5 &&
                cards[summonerChatCard].hero > 0;
+    if (kind == L"augments")
+        return supportsAugmentChat && target == L"single" && (detailQueue == 2400 || detailQueue == 3270) &&
+               !augmentChatPicks.empty() && selectedCard >= 0 && cards[selectedCard].hero > 0;
     if ((kind != L"tier" && kind != L"mastery" && kind != L"deathStreak" && kind != L"record" && kind != L"party" &&
          kind != L"controls" && kind != L"hardControls" && kind != L"composition" && kind != L"voice") ||
         (kind == L"mastery" && !supportsMasteryChat) || (kind == L"deathStreak" && !supportsDeathStreakChat) ||
@@ -223,6 +229,7 @@ void QueueChat(hstring const &target, hstring const &kind)
     chatSlot = kind == L"summoner" ? summonerChatCard : target == L"single" ? selectedCard : -1;
     chatHero = chatSlot >= 0 ? cards[chatSlot].hero : 0;
     chatSpell = kind == L"summoner" ? summonerChatSpell : -1;
+    chatAugments = kind == L"augments" ? augmentChatPicks : std::vector<int>();
     auto name = kind == L"waves"     ? L"兵线"
                 : kind == L"voice"   ? L"已确认的文字"
                 : target == L"own"   ? L"我方英雄"
@@ -236,6 +243,7 @@ void QueueChat(hstring const &target, hstring const &kind)
                                                    : kind == L"controls"     ? L"控制技能"
                                                    : kind == L"hardControls" ? L"硬控技能"
                                                    : kind == L"composition"  ? L"阵容能力"
+                                                   : kind == L"augments"     ? L"海克斯胜率"
                                                    : target == L"spawn"      ? L"出波与炮车"
                                                    : target == L"super"      ? L"超级兵"
                                                    : target == L"deaths"     ? L"阵亡代价"
@@ -270,6 +278,13 @@ JsonObject CreateChatRequest() const
     }
     if (chatKind == L"summoner")
         request.Insert(L"spell", JsonValue::CreateNumberValue(chatSpell));
+    if (chatKind == L"augments")
+    {
+        JsonArray augments;
+        for (int id : chatAugments)
+            augments.Append(JsonValue::CreateNumberValue(id));
+        request.Insert(L"augments", augments);
+    }
     request.Insert(L"slot", JsonValue::CreateNumberValue(chatSlot));
     request.Insert(L"championId", JsonValue::CreateNumberValue(chatHero));
     request.Insert(L"updatedAt", JsonValue::CreateNumberValue(double(chatCreated)));

@@ -72,7 +72,7 @@ internal sealed partial class LoadingOverlayManager
                 return;
             }
 
-            var messages = BuildChatMessages(roster, request);
+            var messages = await BuildRequestedMessagesAsync(roster, request);
             Report("waiting", "请在 20 秒内按 Win＋G 返回游戏，保持聊天输入框关闭；返回后发送到游戏聊天。");
             var readiness = await WaitForChatReadinessAsync(request, Current);
             if (!Current() || readiness == OverlayChatReadiness.Cancelled)
@@ -166,6 +166,50 @@ internal sealed partial class LoadingOverlayManager
             ),
             _ => OverlayTierChatMessage.Build(roster!, request, _ranks, Champion),
         };
+
+    // Augment rates come from arammeta's cache, which may need a read; every other message is built from polled data.
+    private async Task<IReadOnlyList<string>> BuildRequestedMessagesAsync(
+        LoadingRoster? roster,
+        OverlayChatRequest request
+    ) =>
+        request.Kind == "augments"
+            ? await BuildAugmentMessagesAsync(roster, request)
+            : BuildChatMessages(roster, request);
+
+    private async Task<IReadOnlyList<string>> BuildAugmentMessagesAsync(
+        LoadingRoster? roster,
+        OverlayChatRequest request
+    )
+    {
+        if (roster?.Queue is not (2400 or 3270))
+        {
+            throw new InvalidOperationException("未发送：只有海克斯大乱斗提供海克斯胜率。");
+        }
+
+        string patch;
+        AramMetaRecommendation[] rows;
+        try
+        {
+            (patch, rows) = await _championDetails.ReadAugmentsAsync(request.ChampionId, _life.Token);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            AppLog.Shared.Warn(LogCategory.Data, "读取海克斯胜率失败，未发送", e);
+            throw new InvalidOperationException("未发送：海克斯胜率读取失败，请稍后重试。", e);
+        }
+
+        var entries = AugmentChatMessage.Select(
+            rows,
+            request.Augments ?? [],
+            id => FormMain.Globals.resLoading?.GetAugmentById(id)?.Name
+        );
+        if (entries.Length == 0)
+        {
+            throw new InvalidOperationException("未发送：所选海克斯没有该英雄的统计。");
+        }
+
+        return AugmentChatMessage.Build(Champion(request.ChampionId), patch, entries);
+    }
 
     private bool CurrentChatContext(
         OverlayChatRequest request,

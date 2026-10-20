@@ -26,6 +26,13 @@ int detailRarity = 0;
 // results below it, so it keeps focus.
 TextBox augmentSearch{nullptr};
 StackPanel augmentResults;
+// Tapping an augment tile picks it for the win-rate message, in tap order; a new hero starts with none.
+std::vector<int> augmentChatPicks;
+// 0 keeps the source's order, 1 sorts by win rate, 2 by pick rate; it stays across heroes.
+int augmentSort = 0;
+StackPanel augmentPickBar{nullptr};
+TextBlock augmentPickText{nullptr};
+Button augmentSendButton{nullptr};
 uint64_t detailRender = 0;
 
 static hstring NewDetailId()
@@ -226,6 +233,8 @@ void OpenDetails(int index)
         details.Visibility(Visibility::Visible);
         return;
     }
+    if (selectedCard != index)
+        augmentChatPicks.clear();
     selectedCard = index;
     detailData = JsonObject();
     detailRevision = L"";
@@ -259,6 +268,7 @@ void CloseDetails(bool notify)
 {
     ++detailRender;
     selectedCard = -1;
+    augmentChatPicks.clear();
     detailRequest = L"";
     detailRevision = L"";
     detailData = JsonObject();
@@ -469,9 +479,90 @@ void RenderRarityChoices()
                 });
             rarities.Children().Append(b);
         }
+        std::array<hstring, 3> sorts{L"推荐顺序", L"按胜率", L"按选取率"};
+        for (int i = 0; i < 3; ++i)
+        {
+            auto b = DetailButton(sorts[i]);
+            b.Margin({i == 0 ? 12.0 : 0.0, 0, 6, 0});
+            b.Background(MakeBrush(i == augmentSort ? 0x1f5a66 : 0x143542));
+            b.Click(
+                [this, i](auto &&, auto &&)
+                {
+                    augmentSort = i;
+                    RenderDetails(false);
+                });
+            rarities.Children().Append(b);
+        }
         detailBody.Children().Append(rarities);
+        detailBody.Children().Append(AugmentPickBar());
         detailBody.Children().Append(augmentResults);
     }
+}
+StackPanel AugmentPickBar()
+{
+    if (!augmentPickBar)
+    {
+        augmentPickBar = StackPanel();
+        augmentPickBar.Orientation(Orientation::Horizontal);
+        augmentPickBar.Margin({0, 0, 0, 6});
+        augmentPickText = MakeText(L"", 12, 0x91acbb);
+        augmentPickText.VerticalAlignment(VerticalAlignment::Center);
+        augmentPickText.Margin({0, 0, 8, 0});
+        augmentSendButton = DetailButton(L"发送所选胜率");
+        augmentSendButton.Margin({0, 0, 6, 0});
+        augmentSendButton.Click([this](auto &&, auto &&) { QueueChat(L"single", L"augments"); });
+        ToolTipService::SetToolTip(augmentSendButton,
+                                   box_value(L"把所选海克斯的调整后胜率与选取率发到队伍聊天，按点选顺序排列。\n"
+                                             L"需以管理员身份运行 League；点击后按 Win＋G 返回游戏。"));
+        auto clear = DetailButton(L"清空");
+        clear.Click(
+            [this](auto &&, auto &&)
+            {
+                augmentChatPicks.clear();
+                RenderAugmentResults();
+            });
+        augmentPickBar.Children().Append(augmentPickText);
+        augmentPickBar.Children().Append(augmentSendButton);
+        augmentPickBar.Children().Append(clear);
+    }
+    UpdateAugmentChatPicks();
+    return augmentPickBar;
+}
+void UpdateAugmentChatPicks()
+{
+    if (!augmentPickBar)
+        return;
+    augmentPickText.Text(augmentChatPicks.empty()
+                             ? L"点选海克斯后可发送胜率（最多 " + to_hstring(MaxAugmentChatPicks) + L" 个）"
+                             : L"已选 " + to_hstring(augmentChatPicks.size()) + L" 个");
+    augmentPickBar.Visibility(supportsAugmentChat ? Visibility::Visible : Visibility::Collapsed);
+    augmentSendButton.IsEnabled(CanQueueChat(L"single", L"augments"));
+}
+static constexpr size_t MaxAugmentChatPicks = 8;
+void ToggleAugmentChatPick(int id)
+{
+    auto found = std::find(augmentChatPicks.begin(), augmentChatPicks.end(), id);
+    if (found != augmentChatPicks.end())
+        augmentChatPicks.erase(found);
+    else if (augmentChatPicks.size() < MaxAugmentChatPicks)
+        augmentChatPicks.push_back(id);
+    RenderAugmentResults();
+}
+static int AugmentId(JsonObject const &row)
+{
+    auto icons = row.GetNamedArray(L"icons", JsonArray());
+    return icons.Size() == 0 ? 0 : static_cast<int>(icons.GetObjectAt(0).GetNamedNumber(L"id", 0));
+}
+// Stable, so equal or missing rates keep the source's order; a missing rate sorts last.
+void SortAugments(std::vector<std::pair<JsonObject, hstring>> &rows) const
+{
+    if (augmentSort == 0)
+        return;
+    auto key = augmentSort == 1 ? L"winRate" : L"pickRate";
+    std::stable_sort(rows.begin(),
+                     rows.end(),
+                     [key](auto const &a, auto const &b)
+                     { return a.first.GetNamedNumber(key, -1) > b.first.GetNamedNumber(key, -1); });
 }
 static constexpr std::array<wchar_t const *, 3> AugmentRarities{L"棱彩", L"黄金", L"白银"};
 // 0 when the name or its initials match, 1 when only the description does, -1 for no match.
@@ -491,6 +582,7 @@ static int AugmentMatch(JsonObject const &row, std::wstring const &query)
 bool RenderAugmentResults()
 {
     augmentResults.Children().Clear();
+    UpdateAugmentChatPicks();
     std::vector<JsonObject> sections;
     for (auto const &entry : detailData.GetNamedArray(L"sections", JsonArray()))
         if (entry.GetObject().GetNamedString(L"tab", L"") == L"augments")
@@ -507,6 +599,7 @@ bool RenderAugmentResults()
         std::vector<std::pair<JsonObject, hstring>> rows;
         for (auto const &value : section.GetNamedArray(L"rows", JsonArray()))
             rows.emplace_back(value.GetObject(), hstring());
+        SortAugments(rows);
         augmentResults.Children().Append(RecommendationTiles(rows));
         return true;
     }
@@ -522,6 +615,8 @@ bool RenderAugmentResults()
             else if (match == 1)
                 descriptions.emplace_back(row, rarity);
         }
+    SortAugments(names);
+    SortAugments(descriptions);
     names.insert(names.end(), descriptions.begin(), descriptions.end());
     if (names.empty())
     {
@@ -614,11 +709,20 @@ Grid RecommendationTiles(std::vector<std::pair<JsonObject, hstring>> const &rows
 StackPanel CreateRecommendationTile(JsonObject const &row, JsonArray const &icons, hstring const &label)
 {
     auto icon = icons.GetObjectAt(0);
+    bool augment = icon.GetNamedString(L"kind", L"") == L"augment" && supportsAugmentChat;
+    int id = augment ? AugmentId(row) : 0;
+    auto pick = std::find(augmentChatPicks.begin(), augmentChatPicks.end(), id);
+    bool picked = id > 0 && pick != augmentChatPicks.end();
     StackPanel card;
     card.Padding({8});
     card.Margin({0, 0, 6, 6});
-    card.Background(MakeBrush(0x112f3c));
-    auto name = MakeText((label.empty() ? hstring() : label + L" · ") + icon.GetNamedString(L"name", L"推荐"), 13);
+    card.Background(MakeBrush(picked ? 0x3e375c : 0x112f3c));
+    if (id > 0)
+        card.Tapped([this, id](auto &&, auto &&) { ToggleAugmentChatPick(id); });
+    hstring mark = picked ? L"✓" + to_hstring(pick - augmentChatPicks.begin() + 1) + L" " : hstring();
+    auto name = MakeText(mark + (label.empty() ? hstring() : label + L" · ") + icon.GetNamedString(L"name", L"推荐"),
+                         13,
+                         picked ? 0xe0c688 : 0xe2eef3);
     card.Children().Append(name);
     StackPanel metrics;
     metrics.Orientation(Orientation::Horizontal);
