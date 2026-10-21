@@ -154,6 +154,42 @@ public class GameBarBridgeTests : IDisposable
         Assert.Equal(10, snapshot["players"]!.Count());
     }
 
+    [Fact]
+    public async Task Publish_AChampionWithGameData_GetsALevelOneSheetBeforeTheGame()
+    {
+        // The champion select page already shows the abilities; before the game reports anything the sheet is the
+        // champion's level 1 stats, which is what makes those numbers available that early.
+        var stats = new ChampionBaseStats(600, 90, 35, 5, 32, 2);
+
+        JObject snapshot = await PublishSnapshotAsync(RosterPublish(statPages: StatPages(stats)));
+
+        JObject sheet = (JObject)Row(snapshot, 0)["sheet"]!;
+        Assert.NotEmpty((JArray)sheet["stats"]!);
+    }
+
+    [Fact]
+    public async Task Publish_ASeatWithoutGameData_GetsNoSheetAtAll()
+    {
+        // The page source map only holds the champions whose data was read; a seat without one is left alone rather
+        // than given an empty page.
+        var sources = new StatPageSources(new Dictionary<int, StatPageSource>(), null, "KIWI");
+
+        JObject snapshot = await PublishSnapshotAsync(RosterPublish(statPages: sources));
+
+        Assert.Null(Row(snapshot, 0)["sheet"]);
+    }
+
+    [Fact]
+    public async Task Publish_ADataSourceWithoutBaseStats_StillBuildsAPageFromTheFacts()
+    {
+        // Level 1 stats may be missing (the Data Dragon file was not read); the abilities can still be listed, only
+        // without the computed numbers.
+        JObject snapshot = await PublishSnapshotAsync(RosterPublish(statPages: StatPages(stats: null)));
+
+        JObject sheet = (JObject)Row(snapshot, 0)["sheet"]!;
+        Assert.Empty((JArray)sheet["stats"]!);
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
@@ -599,19 +635,31 @@ public class GameBarBridgeTests : IDisposable
 
     private static Dictionary<string, OverlayPartyMarker> Parties() => new() { ["self-key"] = new(5, 0xcba2ff) };
 
+    /// <summary>The champion data for the self seat (champion 2), with level 1 base stats so a sheet can be built.</summary>
+    private static StatPageSources StatPages(ChampionBaseStats? stats = null) =>
+        new(
+            new Dictionary<int, StatPageSource> { [2] = new(ChampionSpellFacts.None, new JObject(), stats) },
+            null,
+            "KIWI"
+        );
+
     private static Action<GameBarBridge> RosterPublish(
         bool enabled = true,
         bool active = true,
         int waveOpacity = LeagueConfig.DefaultGameBarWaveOpacity,
-        GameComposition? composition = null
-    ) => bridge => PublishRoster(bridge, enabled, active, waveOpacity, composition);
+        GameComposition? composition = null,
+        StatPageSources? statPages = null,
+        OverlayLiveState? live = null
+    ) => bridge => PublishRoster(bridge, enabled, active, waveOpacity, composition, statPages, live);
 
     private static void PublishRoster(
         GameBarBridge bridge,
         bool enabled,
         bool active,
         int waveOpacity,
-        GameComposition? composition = null
+        GameComposition? composition = null,
+        StatPageSources? statPages = null,
+        OverlayLiveState? live = null
     )
     {
         using var icon = new Bitmap(32, 32);
@@ -630,7 +678,9 @@ public class GameBarBridgeTests : IDisposable
             deathStreaks: DeathStreaks(),
             parties: Parties(),
             waveOpacity: waveOpacity,
-            composition: composition?.Json
+            composition: composition?.Json,
+            statPages: statPages,
+            live: live
         );
     }
 
