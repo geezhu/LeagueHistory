@@ -174,7 +174,7 @@ public sealed class MatchStatisticsView : UserControl
 
     private void PaintTeamDivider(DataGridViewCellPaintingEventArgs e)
     {
-        if (e.ColumnIndex != _teamDivider || _teamDivider < 0)
+        if (e.ColumnIndex != _teamDivider || _teamDivider < 0 || e.Graphics is not { } graphics)
         {
             return;
         }
@@ -186,7 +186,7 @@ public sealed class MatchStatisticsView : UserControl
         }
 
         using var line = new SolidBrush(Theme.DividerStrong);
-        e.Graphics.FillRectangle(line, e.CellBounds.Right - 2, e.CellBounds.Top, 2, e.CellBounds.Height);
+        graphics.FillRectangle(line, e.CellBounds.Right - 2, e.CellBounds.Top, 2, e.CellBounds.Height);
     }
 
     private void PaintPlayerHeader(DataGridViewCellPaintingEventArgs e)
