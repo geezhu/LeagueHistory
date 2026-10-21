@@ -533,6 +533,65 @@ public class LoadingRosterIdentityServiceTests
 
     private static LoadingPlayer Anonymous() => new("2", "", "", 2L, 0, 0, false);
 
+    // ---- the two paths that skip the lookup ----
+
+    [Fact]
+    public async Task MergeAsync_APlayerAlreadyCarryingAFullRiotId_AsksForNothing()
+    {
+        // The name already has a tag and the live game reports it exactly once, so the account is settled and there
+        // is nothing to look up. Traced: the request counter stays at zero.
+        var handler = new StubHandler(Summoner);
+        var service = new LoadingRosterIdentityService(StubHandler.Counted(handler));
+        const string full = "玩家甲#1234";
+        var roster = new LoadingRoster(
+            "game-1",
+            450,
+            "ARAM",
+            [new LoadingPlayer("key-a", full, "a", 1L, 99, 100, true)]
+        );
+
+        var merged = await service.MergeAsync(roster, Flow(), SelfPuuid, Live(full), _ => 99, default);
+
+        Assert.Equal(0, handler.Calls);
+        Assert.Equal(full, merged.Players[0].Name);
+    }
+
+    [Fact]
+    public async Task MergeAsync_AProfileCarryingGameNameAndTagline_JoinsThemIntoTheRiotId()
+    {
+        // The client's newer profile shape has the two halves apart; the merged list carries them as one name, which
+        // is also the name the live game reports.
+        var handler = new StubHandler(
+            (path, _) =>
+                Task.FromResult(
+                    new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(
+                            new JObject
+                            {
+                                ["puuid"] = "a",
+                                ["summonerId"] = 1,
+                                ["gameName"] = "玩家甲",
+                                ["tagLine"] = "1234",
+                            }.ToString()
+                        ),
+                    }
+                )
+        );
+        var service = new LoadingRosterIdentityService(StubHandler.Counted(handler));
+        var roster = new LoadingRoster(
+            "game-1",
+            450,
+            "ARAM",
+            [new LoadingPlayer("key-a", "旧名称甲", "", 1L, 99, 100, true)]
+        );
+
+        var merged = await service.MergeAsync(roster, Flow(), SelfPuuid, Live("玩家甲#1234"), _ => 99, default);
+
+        Assert.Equal("玩家甲#1234", merged.Players[0].Name);
+        Assert.Equal(1, handler.Calls);
+    }
+
     private static LoadingRoster PoolRoster() =>
         new(
             "game-1",
