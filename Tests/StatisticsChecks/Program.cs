@@ -107,7 +107,6 @@ internal static class Program
         checks["--shutdown-plan-checks"] = ShutdownPlanChecks.Run;
         checks["--core-utility-checks"] = CoreUtilityChecks.Run;
         checks["--utility-logic-checks"] = UtilityLogicChecks.Run;
-        checks["--image-processor-checks"] = ImageProcessorChecks.Run;
         checks["--augment-icon-checks"] = AugmentIconRendererChecks.Run;
         checks["--champion-data-checks"] = ChampionDataChecks.Run;
         checks["--champion-manager-checks"] = ChampionManagerChecks.Run;

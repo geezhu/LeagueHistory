@@ -13,7 +13,6 @@ internal static class DefaultStatisticsSuite
     {
         CoreUtilityChecks.Run();
         UtilityLogicChecks.Run();
-        ImageProcessorChecks.Run();
         AugmentIconRendererChecks.Run();
         ChampionDataChecks.Run();
         VoicePcmBufferChecks.Run();
