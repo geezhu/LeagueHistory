@@ -60,8 +60,14 @@ namespace League
         // 热键业务处理管理器
         private GameChatSender? _chatSender;
 
+        private readonly FormMainOptions _options;
+
         public FormMain()
+            : this(new FormMainOptions()) { }
+
+        public FormMain(FormMainOptions options)
         {
+            _options = options;
             InitializeComponent();
             ConfigureWindowChrome();
             ConfigureLauncherSettings();
@@ -98,10 +104,13 @@ namespace League
             // ★★★ 修改为先传 null ★★★
             _chatMessageBuilder = null; // 或者 new ChatMessageBuilder(..., null!) 但建议直接 null
 
-            // 热键管理
-            _hotkeyManager = new HotkeyManager(this);
-            _loadingOverlay = new LoadingOverlayManager(this);
-            Disposed += (_, _) => _loadingOverlay?.Dispose();
+            // 热键注册全局生效，对局速览管理器启动轮询定时器；两者都可以不创建，使用处按空值处理。
+            if (_options.StartGameIntegration)
+            {
+                _hotkeyManager = new HotkeyManager(this);
+                _loadingOverlay = new LoadingOverlayManager(this);
+                Disposed += (_, _) => _loadingOverlay?.Dispose();
+            }
 
             // 新增：业务处理管理器
             _chatSender = new GameChatSender(this, _chatMessageBuilder);
@@ -109,9 +118,12 @@ namespace League
             _clientUtility = new ClientUtilityService(); // 初始化客户端辅助
 
             // 订阅热键
-            _hotkeyManager.OnMyTeamHotkey += async () => await _chatSender.HandleMyTeamAsync();
-            _hotkeyManager.OnFullTeamHotkey += async () => await _chatSender.HandleFullTeamAsync();
-            _hotkeyManager.OnChampSelectF7 += async () => await _chatSender.HandleChampSelectF7Async();
+            if (_hotkeyManager != null)
+            {
+                _hotkeyManager.OnMyTeamHotkey += async () => await _chatSender.HandleMyTeamAsync();
+                _hotkeyManager.OnFullTeamHotkey += async () => await _chatSender.HandleFullTeamAsync();
+                _hotkeyManager.OnChampSelectF7 += async () => await _chatSender.HandleChampSelectF7Async();
+            }
         }
 
         internal Task SendOverlayTiersAsync(
@@ -135,7 +147,10 @@ namespace League
             try
             {
                 // 检查更新（不等待，避免阻塞UI）
-                _ = _configUpdateManager.CheckForUpdates();
+                if (_options.StartBackgroundServices)
+                {
+                    _ = _configUpdateManager.CheckForUpdates();
+                }
 
                 LoadTabImages();
 
@@ -146,13 +161,21 @@ namespace League
                 _appConfig = _configUpdateManager!.LoadConfig();
                 ConfigureAramMetaSettings();
                 ConfigureSettingsLayout();
-                var assistant = new ChampionSelectAssistant(this);
-                Disposed += (_, _) => assistant.Dispose();
+                if (_options.StartBackgroundServices)
+                {
+                    var assistant = new ChampionSelectAssistant(this);
+                    Disposed += (_, _) => assistant.Dispose();
+                }
 
                 // 先恢复控件状态再绑定事件，防止初始化触发不必要的自动保存
                 RestoreSettingControls();
                 RestoreSendMode();
                 BindSettingEvents();
+
+                if (!_options.StartBackgroundServices)
+                {
+                    return;
+                }
 
                 // 启动轮询 LCU 检测
                 StartLcuConnectPolling();

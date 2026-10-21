@@ -10,7 +10,7 @@ public partial class FormMain
         var controller = new ShutdownSettingsController(
             this,
             tabControl1.Font,
-            schedulerService ?? new ScheduledShutdownService()
+            schedulerService ?? new ScheduledShutdownService(tasks: _options.ShutdownTasks)
         );
         SettingsCard(parent, "到点关机 · 防熬夜", controller.Content);
         controller.Attach();
