@@ -38,12 +38,6 @@ public class GameBarBridgeAugmentTests : IDisposable
     private static LoadingRoster Roster() =>
         new("123", 2400, "KIWI", [Player(2, self: true, "self-key"), Player(1, self: false, "enemy-key")]);
 
-    private static LiveAugmentStack Stack(TrackedAugment augment, string player = "self-key") =>
-        new(
-            new AugmentSelection(player, augment, new AugmentStackAnchor(100, 3)),
-            new AugmentStackState(5, 4, 1, true, "据此推算")
-        );
-
     private JObject Publish(Action<GameBarBridge>? configure = null)
     {
         using var icon = new Bitmap(8, 8);
@@ -99,6 +93,116 @@ public class GameBarBridgeAugmentTests : IDisposable
     {
         // A missing augment would be one the widget could not offer.
         Assert.Equal(AugmentCatalog.All.Length, ((JArray)Publish()["augmentCatalog"]!).Count);
+    }
+
+    // ---- the counted stacks ----
+
+    [Fact]
+    public void Publish_ACountedStack_CarriesItsAnchorAndItsCount()
+    {
+        // Both ends travel: the anchor is where the widget resumes its own corrections from, and stacks is the number
+        // counted to now. The widget keeps them apart, so the row names them separately.
+        JObject stack = FirstStack(Stack(TrackedAugment.InfiniteRecursion));
+
+        Assert.Equal("self-key", (string?)stack["player"]);
+        Assert.Equal("InfiniteRecursion", (string?)stack["augment"]);
+        Assert.Equal("无限循环往复", (string?)stack["name"]);
+        Assert.Equal(100, (double)stack["time"]!, 3);
+        Assert.Equal(3, (int)stack["start"]!);
+        Assert.Equal(5, (int)stack["stacks"]!);
+    }
+
+    [Fact]
+    public void Publish_AFewDeaths_MakeTheCountApproximate()
+    {
+        // Deaths take stacks away, and the bridge cannot always see how many; the row says so rather than pretending
+        // the number is exact.
+        JObject stack = FirstStack(Stack(TrackedAugment.SoulEater));
+
+        Assert.True((bool)stack["approximate"]!);
+    }
+
+    [Fact]
+    public void Publish_AnAugmentDeathCannotTake_KeepsTheCountExact()
+    {
+        // Infinite Recursion keeps its stacks when you die, so a death does not make the count a guess.
+        JObject stack = FirstStack(Stack(TrackedAugment.InfiniteRecursion));
+
+        Assert.False((bool)stack["approximate"]!);
+    }
+
+    [Fact]
+    public void Publish_NoDeaths_IsExactWhateverTheAugment()
+    {
+        // Without a death there is nothing to have lost track of.
+        JObject stack = FirstStack(Stack(TrackedAugment.SoulEater, deaths: 0));
+
+        Assert.False((bool)stack["approximate"]!);
+    }
+
+    [Fact]
+    public void Publish_ATakedownsAugment_ExplainsWhereTheCountCameFrom()
+    {
+        // The reader needs the anchor, the kills and the deaths to check the number themselves.
+        JObject stack = FirstStack(Stack(TrackedAugment.InfiniteRecursion));
+
+        string note = (string)stack["note"]!;
+        Assert.StartsWith("起点 3 层，之后参与击杀 5 次、死亡 1 次。", note, StringComparison.Ordinal);
+        Assert.EndsWith("据此推算", note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Publish_AManualAugment_ExplainsWhatItDoesInstead()
+    {
+        // A manual augment is not counted from kills, so the note describes the effect and then adds the state's note.
+        JObject stack = FirstStack(Stack(TrackedAugment.SoulEater));
+
+        Assert.Equal(AugmentCatalog.Get(TrackedAugment.SoulEater).Effect + "。据此推算", (string?)stack["note"]);
+    }
+
+    /// <summary>One stack: anchored at 100 seconds on 3 layers, now counted to 5.</summary>
+    private static LiveAugmentStack Stack(TrackedAugment augment, int deaths = 1) =>
+        new(
+            new AugmentSelection("self-key", augment, new AugmentStackAnchor(100, 3)),
+            new AugmentStackState(5, 5, deaths, true, "据此推算")
+        );
+
+    /// <summary>Publishes one stack and hands back the first entry of the resulting list.</summary>
+    private JObject FirstStack(LiveAugmentStack stack)
+    {
+        using var icon = new Bitmap(8, 8);
+        GameBarBridge bridge = new(_folder.Root);
+        bridge.Publish(
+            Roster(),
+            new Dictionary<string, PlayerChampionTier>(),
+            new Dictionary<int, Image> { [1] = icon, [2] = icon },
+            champion: id => "英雄" + id,
+            details: _ => "",
+            session: "match-1",
+            status: "当前对局",
+            enabled: true,
+            active: true,
+            show: true,
+            live: new OverlayLiveState(
+                new LiveMatchInsight(
+                    300,
+                    new LiveTeamInsight(0, 0, 0, 0, 0),
+                    new LiveTeamInsight(0, 0, 0, 0, 0),
+                    new Dictionary<string, LivePlayerInsight>(),
+                    [],
+                    ""
+                ),
+                [],
+                ""
+            )
+            {
+                AugmentStacks = [stack],
+            }
+        );
+        bridge.Dispose();
+        bridge.Completion.Wait(TimeSpan.FromSeconds(10));
+        JObject snapshot = JObject.Parse(File.ReadAllText(Directory.GetFiles(_folder.Root, "*.json").First()));
+        return (JObject)((JArray)snapshot["augmentStacks"]!)[0]!;
     }
 
     // ---- the file readers ----
