@@ -759,6 +759,32 @@ public class GameBarVoiceRecognitionTests
         return await bridge.HintAsync();
     }
 
+    // ---- polls that must do nothing at all ----
+
+    [Fact]
+    public async Task PollAsync_NoTransportDirectory_OpensNoMicrophone()
+    {
+        // The widget did not tell us where the transport lives yet; there is nothing to read, and nothing to open.
+        await using var bridge = new Bridge();
+
+        await bridge.Service.PollAsync("", bridge.Session, enabled: true, time: bridge.Now);
+
+        Assert.Equal(0, bridge.Sessions.Count);
+    }
+
+    [Fact]
+    public async Task PollAsync_AfterBeingDisposed_OpensNoMicrophone()
+    {
+        // A closed widget must not start a recording on a later poll.
+        Bridge bridge = new Bridge();
+        bridge.Service.Dispose();
+
+        await bridge.Service.PollAsync(bridge.Root, bridge.Session, enabled: true, time: bridge.Now);
+
+        Assert.Equal(0, bridge.Sessions.Count);
+        await bridge.DisposeAsync();
+    }
+
     /// <summary>
     /// One recognition bridge over its own temporary transport directory, fed by a stub recognizer factory. The stub
     /// completes its result without posting the continuation, so the bridge's cleanup runs on the thread that calls
