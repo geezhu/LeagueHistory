@@ -115,6 +115,33 @@ public class OverlayTierChatMessageBuildTests
         Assert.Contains("S+", line, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Build_TheEnemySide_IsNamedAsSuch()
+    {
+        // The target decides which word the line opens with; the roster's two sides are named differently.
+        LoadingRoster roster = new("game", 420, "CLASSIC", [Player(100, 1, self: true), Player(200, 3)]);
+
+        string line = Assert.Single(
+            OverlayTierChatMessage.Build(roster, Request("enemy"), Ranks(("p200-3", Rank())), Name)
+        );
+
+        Assert.Contains("对方", line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Build_ATargetThatIsNeitherSide_IsRefusedBeforeAnyLineIsBuilt()
+    {
+        // The "champion" wording is only reachable if a target that is neither side still selects players, and it does
+        // not: an unknown target selects nobody, so the refusal fires first. Pinned as the real behaviour.
+        LoadingRoster roster = Roster(Player(100, 1, self: true));
+
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(() =>
+            OverlayTierChatMessage.Build(roster, Request("champion"), Ranks(("p100-1", Rank())), Name)
+        );
+
+        Assert.Equal("未发送：无法确定所选阵营或英雄，请等待名单更新。", error.Message);
+    }
+
     [Theory]
     [InlineData("top", "上路")]
     [InlineData("jungle", "打野")]
