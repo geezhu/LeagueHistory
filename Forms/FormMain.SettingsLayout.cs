@@ -21,28 +21,16 @@ public partial class FormMain
     private void ConfigureSettingsTabs()
     {
         tabControl1.Font = new Font("Microsoft YaHei UI", 9);
+        // Flat buttons with a one-pixel header leave no visible strip or page border; the side list replaces them.
+        tabControl1.Appearance = TabAppearance.FlatButtons;
         tabControl1.SizeMode = TabSizeMode.Fixed;
-        tabControl1.ItemSize = new Size(116, 36);
-        tabControl1.DrawMode = TabDrawMode.OwnerDrawFixed;
-        tabControl1.DrawItem += (_, e) =>
-        {
-            bool selected = e.Index == tabControl1.SelectedIndex;
-            using var background = new SolidBrush(selected ? Color.White : Theme.Canvas);
-            e.Graphics.FillRectangle(background, e.Bounds);
-            TextRenderer.DrawText(
-                e.Graphics,
-                tabControl1.TabPages[e.Index].Text,
-                tabControl1.Font,
-                e.Bounds,
-                selected ? Theme.Accent : Theme.Muted,
-                TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter
-            );
-            if (selected)
-            {
-                using var line = new SolidBrush(Theme.Accent);
-                e.Graphics.FillRectangle(line, e.Bounds.X + 18, e.Bounds.Bottom - 3, e.Bounds.Width - 36, 3);
-            }
-        };
+        tabControl1.ItemSize = new Size(0, 1);
+        var navigation = new SettingsNavigation(tabControl1) { Dock = DockStyle.Left };
+        tabPage3.Padding = Padding.Empty;
+        tabPage3.UseVisualStyleBackColor = false;
+        tabPage3.BackColor = Theme.Canvas;
+        tabPage3.Controls.Add(navigation);
+        tabControl1.BringToFront();
     }
 
     private void ConfigureGeneralSettings()
@@ -465,33 +453,56 @@ public partial class FormMain
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 3,
             RowCount = rows.Length,
-            CellBorderStyle = TableLayoutPanelCellBorderStyle.Single,
-            BackColor = Theme.SurfaceSubtle,
+            BackColor = Theme.Surface,
         };
-        var header = new Font(tabControl1.Font, FontStyle.Bold);
-        table.Disposed += (_, _) => header.Dispose();
+        var keyFont = new Font(tabControl1.Font, FontStyle.Bold);
+        table.Disposed += (_, _) => keyFont.Dispose();
         for (int row = 0; row < rows.Length; row++)
         {
             string[] cells = { rows[row].Key, rows[row].Scene, rows[row].Content };
             for (int column = 0; column < cells.Length; column++)
             {
-                var cell = new Label
-                {
-                    Text = cells[column],
-                    AutoSize = true,
-                    Margin = new Padding(10, 6, 16, 6),
-                    ForeColor = Color.FromArgb(59, 81, 99),
-                };
-                if (row == 0 || column == 0)
-                {
-                    cell.Font = header;
-                }
-
-                table.Controls.Add(cell, column, row);
+                table.Controls.Add(
+                    ShortcutCell(cells[column], header: row == 0, key: row > 0 && column == 0, keyFont),
+                    column,
+                    row
+                );
             }
         }
 
+        // Thin rules under each row instead of a full grid.
+        table.Paint += (_, e) =>
+        {
+            using var rule = new Pen(Theme.Divider);
+            int y = 0;
+            foreach (int height in table.GetRowHeights())
+            {
+                y += height;
+                e.Graphics.DrawLine(rule, 0, y - 1, table.Width, y - 1);
+            }
+        };
         return table;
+    }
+
+    private static Label ShortcutCell(string text, bool header, bool key, Font keyFont)
+    {
+        var cell = new Label
+        {
+            Text = text,
+            AutoSize = true,
+            Margin = new Padding(0, 6, 28, 6),
+            ForeColor = header ? Theme.Muted : Theme.Ink,
+        };
+        if (key)
+        {
+            // Key names read as key caps.
+            cell.Font = keyFont;
+            cell.BackColor = Theme.ControlFill;
+            cell.Padding = new Padding(6, 2, 6, 2);
+            cell.Margin = new Padding(0, 4, 28, 4);
+        }
+
+        return cell;
     }
 
     private void ConfigureMessageDiagnostics(FlowLayoutPanel messages)
@@ -582,8 +593,8 @@ public partial class FormMain
             {
                 Text = title,
                 AutoSize = true,
-                Font = new Font(tabControl1.Font.FontFamily, 17, FontStyle.Bold),
-                ForeColor = Color.FromArgb(35, 58, 76),
+                Font = new Font(tabControl1.Font.FontFamily, 16, FontStyle.Bold),
+                ForeColor = Theme.Heading,
                 Margin = new Padding(0, 0, 0, 18),
             }
         );
@@ -608,9 +619,9 @@ public partial class FormMain
             {
                 Text = title,
                 AutoSize = true,
-                Font = new Font(tabControl1.Font, FontStyle.Bold),
-                ForeColor = Color.FromArgb(39, 62, 79),
-                Margin = new Padding(0, 0, 0, rows ? 4 : 14),
+                Font = new Font(tabControl1.Font.FontFamily, 10.5f, FontStyle.Bold),
+                ForeColor = Theme.Heading,
+                Margin = new Padding(0, 0, 0, rows ? 6 : 14),
             }
         );
         foreach (var control in controls)
@@ -623,7 +634,7 @@ public partial class FormMain
                 if (control is TextBox box && box.Multiline)
                 {
                     box.Height = 132;
-                    box.BorderStyle = BorderStyle.FixedSingle;
+                    box.BorderStyle = BorderStyle.Fixed3D; // Themed border: light grey, accent on focus.
                 }
             }
 

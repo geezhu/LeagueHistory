@@ -101,6 +101,9 @@ internal sealed class SettingRow : TableLayoutPanel
         control.ForeColor = Color.FromArgb(59, 81, 99);
         switch (control)
         {
+            case CheckBox check when string.IsNullOrEmpty(check.Text):
+                ToggleSwitch.Apply(check);
+                break;
             case CheckBox check:
                 check.AutoSize = true;
                 break;

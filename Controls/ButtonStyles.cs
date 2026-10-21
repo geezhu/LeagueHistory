@@ -5,6 +5,16 @@ namespace League.Controls;
 /// </summary>
 internal static class ButtonStyles
 {
+    /// <summary>The one main action of a card, such as saving a plan or choosing the install folder.</summary>
+    public static void Primary(Button button)
+    {
+        Flat(button);
+        button.BackColor = Theme.Accent;
+        button.ForeColor = Color.White;
+        button.FlatAppearance.MouseOverBackColor = Theme.AccentHover;
+        button.FlatAppearance.MouseDownBackColor = Theme.AccentPressed;
+    }
+
     /// <summary>Everyday actions such as refresh, filter or paging: a quiet fill without a border.</summary>
     public static void Secondary(Button button)
     {

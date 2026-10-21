@@ -101,8 +101,7 @@ internal sealed class ShutdownSettingsController : IDisposable
         _summary.Font = _summaryFont;
         _clockRow = ClockRow();
         _actions = ButtonRow(_create, _delete, _log);
-        _create.BackColor = Color.FromArgb(0, 145, 155);
-        _create.ForeColor = Color.White;
+        ButtonStyles.Primary(_create);
         _result.TextChanged += (_, _) => _result.Visible = !string.IsNullOrWhiteSpace(_result.Text);
         _time.ValueChanged += (_, _) => InputsChanged();
         _countdown.ValueChanged += (_, _) => InputsChanged();
@@ -172,7 +171,7 @@ internal sealed class ShutdownSettingsController : IDisposable
             {
                 _schedulerState = SchedulerState.Failed;
                 _summary.Text = "每日关机计划读取失败";
-                _summary.ForeColor = Color.FromArgb(176, 70, 70);
+                _summary.ForeColor = Theme.Loss;
                 _nextRun.Text = "";
                 _status.Text = "读取计划失败：" + error.Message;
                 _status.Visible = true;
@@ -196,7 +195,7 @@ internal sealed class ShutdownSettingsController : IDisposable
             ? $"{(view.Plan.Enabled ? "已启用" : "已停用")} · 每天 {view.Plan.Time} · 倒计时 {view.Plan.CountdownSeconds} 秒"
                 + (view.NextRun is { } upcoming ? $" · 下次 {upcoming:MM-dd HH:mm}" : "")
             : "尚未创建每日关机计划";
-        _summary.ForeColor = view.Plan.Enabled ? Color.FromArgb(0, 145, 155) : Color.FromArgb(70, 92, 112);
+        _summary.ForeColor = view.Plan.Enabled ? Theme.Win : Theme.Muted;
         _nextRun.Text = view.NextRun is { } next
             ? $"下次执行：{next:yyyy-MM-dd HH:mm}（到点后检查对局状态）"
             : "下次执行：—";
@@ -362,9 +361,7 @@ internal sealed class ShutdownSettingsController : IDisposable
         foreach (var button in buttons)
         {
             button.Size = new Size(110, 32);
-            button.FlatStyle = FlatStyle.Flat;
-            button.FlatAppearance.BorderColor = Color.FromArgb(207, 220, 230);
-            button.BackColor = Theme.SurfaceSubtle;
+            ButtonStyles.Secondary(button);
             button.Margin = new Padding(0, 0, 8, 4);
             row.Controls.Add(button);
         }

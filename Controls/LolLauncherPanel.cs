@@ -16,16 +16,12 @@ internal sealed class LolLauncherPanel : UserControl
         ReadOnly = true,
         BorderStyle = BorderStyle.None,
         BackColor = Theme.Canvas,
-        ForeColor = Color.FromArgb(39, 62, 79),
+        ForeColor = Theme.Ink,
         Text = "尚未识别安装位置",
         AccessibleName = "英雄联盟安装路径",
     };
     private readonly FlowLayoutPanel _buttons = new() { WrapContents = true, Margin = Padding.Empty };
-    private readonly Label _hint = new()
-    {
-        Text = "也可手动启动游戏，登录后会自动连接。",
-        ForeColor = Color.FromArgb(112, 129, 145),
-    };
+    private readonly Label _hint = new() { Text = "也可手动启动游戏，登录后会自动连接。", ForeColor = Theme.Muted };
     private readonly Button _official = new()
     {
         Text = "启动官方客户端",
@@ -58,11 +54,15 @@ internal sealed class LolLauncherPanel : UserControl
         {
             button.AutoSize = false;
             button.Size = new Size(button == _wegame ? 132 : 124, 34);
-            button.FlatStyle = FlatStyle.Flat;
             button.Margin = new Padding(0, 0, 8, 6);
-            button.BackColor = button == choose ? Theme.Accent : Theme.SurfaceSubtle;
-            button.ForeColor = button == choose ? Color.White : Color.FromArgb(59, 81, 99);
-            button.FlatAppearance.BorderColor = button == choose ? button.BackColor : Color.FromArgb(207, 220, 230);
+            if (button == choose)
+            {
+                ButtonStyles.Primary(button);
+            }
+            else
+            {
+                ButtonStyles.Secondary(button);
+            }
         }
         _buttons.Controls.AddRange(new Control[] { choose, _official, _wegame });
         _pathFrame.Controls.Add(_path);

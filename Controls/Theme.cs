@@ -30,6 +30,10 @@ internal static class Theme
     /// <summary>Links, the selection bar and filled buttons with white text.</summary>
     public static readonly Color Accent = Color.FromArgb(46, 103, 190);
 
+    /// <summary>Hover and pressed fills of a primary button.</summary>
+    public static readonly Color AccentHover = Color.FromArgb(38, 90, 170);
+    public static readonly Color AccentPressed = Color.FromArgb(31, 77, 148);
+
     /// <summary>Background of a selected row or the profile header.</summary>
     public static readonly Color AccentSoft = Color.FromArgb(232, 241, 253);
 
