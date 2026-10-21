@@ -116,7 +116,6 @@ internal static class Program
         {
             Background(DiagnosticLogChecks.RunAsync);
             Background(AppLogChecks.RunAsync);
-            Background(UiHangMonitorChecks.RunAsync);
         };
         checks["--history-data-checks"] = HistoryDataChecks.Run;
         checks["--match-parse-checks"] = () => Background(MatchParsingChecks.RunAsync);
