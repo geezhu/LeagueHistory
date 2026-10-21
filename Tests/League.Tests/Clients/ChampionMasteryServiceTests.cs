@@ -710,47 +710,36 @@ public class ChampionMasteryServiceTests
     [Fact]
     public async Task GetAsync_TheRequestTimesOut_HandsBackTheCachedCopyMarkedStale()
     {
-        // A request that hangs is caught and the copy already on screen is kept, marked so the reader knows it is old.
+        // A request that never answers is caught and the copy already on screen is kept, marked so the reader knows it
+        // is old. The stub cancels its own request rather than the test cancelling the caller's token: both end in
+        // the same catch, but only the first is free of the race between "the request started" and "the token fired".
         MasteryStub stub = new();
         using var client = Client(stub);
         using var folder = new TempFolder("mastery-timeout");
         ChampionMasteryService service = Service(() => client, folder.Root);
         ChampionMasteryPage loaded = await service.GetAsync(Player, CancellationToken.None);
+        stub.Refuse = true;
 
-        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        stub.Gate = gate;
-        using var cancelling = new CancellationTokenSource();
-        Task<ChampionMasteryPage> pending = service.GetAsync(Player, cancelling.Token, refresh: true);
-        using var waiting = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        await stub.Waiting.WaitAsync(waiting.Token);
-        await cancelling.CancelAsync();
-        ChampionMasteryPage timedOut = await pending;
+        ChampionMasteryPage timedOut = await service.GetAsync(Player, CancellationToken.None, refresh: true);
 
         Assert.True(timedOut.Stale);
-        Assert.Equal("请求超时，后台稍后重试。", timedOut.Message);
+        Assert.Equal("请求超时，请重试。", timedOut.Message);
         Assert.Equal(loaded.Data?.Count, timedOut.Data?.Count);
     }
 
     [Fact]
     public async Task GetAsync_TheFirstRequestTimesOut_SaysSoInsteadOfInventingAPage()
     {
-        // Nothing is cached, so there is no copy to fall back to.
-        MasteryStub stub = new();
+        // Nothing is cached, so there is no copy to fall back to either.
+        MasteryStub stub = new() { Refuse = true };
         using var client = Client(stub);
         using var folder = new TempFolder("mastery-timeout-first");
         ChampionMasteryService service = Service(() => client, folder.Root);
-        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        stub.Gate = gate;
-        using var cancelling = new CancellationTokenSource();
 
-        Task<ChampionMasteryPage> pending = service.GetAsync(Player, cancelling.Token);
-        using var waiting = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        await stub.Waiting.WaitAsync(waiting.Token);
-        await cancelling.CancelAsync();
-        ChampionMasteryPage timedOut = await pending;
+        ChampionMasteryPage timedOut = await service.GetAsync(Player, CancellationToken.None);
 
         Assert.Null(timedOut.Data);
-        Assert.Equal("英雄成就读取超时，后台稍后重试。", timedOut.Message);
+        Assert.Equal("请求超时，请重试。", timedOut.Message);
     }
 
     private static ChampionMasteryService Service(Func<HttpClient?> client, string directory) =>
@@ -778,6 +767,9 @@ public class ChampionMasteryServiceTests
         /// <summary>Held open to keep one request in flight while the test inspects the cache.</summary>
         public TaskCompletionSource? Gate { get; set; }
 
+        /// <summary>Cancels the request it was given, which is how a timeout reaches the service.</summary>
+        public bool Refuse { get; set; }
+
         public int Calls => Volatile.Read(ref _calls);
 
         public Uri? LastRequest { get; private set; }
@@ -792,6 +784,11 @@ public class ChampionMasteryServiceTests
         {
             Interlocked.Increment(ref _calls);
             LastRequest = request.RequestUri;
+            if (Refuse)
+            {
+                throw new OperationCanceledException();
+            }
+
             if (Gate != null)
             {
                 _waiting.TrySetResult();

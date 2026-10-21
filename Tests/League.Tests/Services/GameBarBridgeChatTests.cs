@@ -14,15 +14,31 @@ namespace League.Tests.Services;
 ///
 /// Every test here stops before a request is accepted, because the session the bridge publishes carries a per-process
 /// instance id that a test cannot know in advance. What is pinned is the refusals, and they are most of the code.
+///
+/// The bridges are kept and drained in <see cref="Dispose"/>: they write on pool threads, and deleting the folder
+/// while a temporary file is still open turns the whole suite red on a machine that is merely busy.
 /// </summary>
 public class GameBarBridgeChatTests : IDisposable
 {
     private readonly TempFolder _folder = new("bridge-chat");
+    private readonly List<GameBarBridge> _bridges = [];
 
     public void Dispose()
     {
+        foreach (GameBarBridge bridge in _bridges)
+        {
+            bridge.Dispose();
+            bridge.Completion.Wait(TimeSpan.FromSeconds(10));
+        }
+
         _folder.Dispose();
         GC.SuppressFinalize(this);
+    }
+
+    private GameBarBridge Track(GameBarBridge bridge)
+    {
+        _bridges.Add(bridge);
+        return bridge;
     }
 
     private static LoadingPlayer Player(int championId, bool self, string key) =>
@@ -43,7 +59,7 @@ public class GameBarBridgeChatTests : IDisposable
     private GameBarBridge Published()
     {
         using var icon = new Bitmap(8, 8);
-        GameBarBridge bridge = new(_folder.Root);
+        GameBarBridge bridge = Track(new GameBarBridge(_folder.Root));
         bridge.Publish(
             Roster(),
             new Dictionary<string, PlayerChampionTier>(),
@@ -61,11 +77,13 @@ public class GameBarBridgeChatTests : IDisposable
 
     private string RequestPath => Path.Combine(_folder.Root, "chat-request.json");
 
-    private static string RequestJson(string session = "other") =>
+    private static string RequestJson(string session) =>
         $$"""
             {"protocol":1,"session":"{{session}}","id":"6f9619ff-8b86-d011-b42d-00cf4fc964ff",
             "target":"own","createdAt":1,"updatedAt":2,"dismissed":false,"cancelled":false}
             """;
+
+    private static OverlayChatRequest RequestFrom(string session) => new("i", session, "own", -1, 0, 1, false, false);
 
     // ---- before there is anything to read ----
 
@@ -73,7 +91,7 @@ public class GameBarBridgeChatTests : IDisposable
     public async Task ReadChatRequestAsync_BeforeAnythingWasPublished_IsNothing()
     {
         // The session is what the request is matched against; without one there is nothing to read it for.
-        using GameBarBridge bridge = new(_folder.Root);
+        GameBarBridge bridge = Track(new GameBarBridge(_folder.Root));
 
         Assert.Null(await bridge.ReadChatRequestAsync());
     }
@@ -81,7 +99,7 @@ public class GameBarBridgeChatTests : IDisposable
     [Fact]
     public async Task ReadChatRequestAsync_NoFile_YieldsNothing()
     {
-        using GameBarBridge bridge = Published();
+        GameBarBridge bridge = Published();
 
         Assert.Null(await bridge.ReadChatRequestAsync());
     }
@@ -90,7 +108,7 @@ public class GameBarBridgeChatTests : IDisposable
     public async Task ReadChatRequestAsync_AFileThatIsTooLarge_IsRefused()
     {
         // Four kilobytes is the writer's own limit; a larger file is not a request.
-        using GameBarBridge bridge = Published();
+        GameBarBridge bridge = Published();
         await File.WriteAllTextAsync(RequestPath, new string('x', 5000));
 
         Assert.Null(await bridge.ReadChatRequestAsync());
@@ -100,7 +118,7 @@ public class GameBarBridgeChatTests : IDisposable
     public async Task ReadChatRequestAsync_AFileThatIsNotJson_IsRefusedInsteadOfThrowing()
     {
         // The widget replaces the file atomically, so a read during the swap must be harmless.
-        using GameBarBridge bridge = Published();
+        GameBarBridge bridge = Published();
         await File.WriteAllTextAsync(RequestPath, "{ not json ");
 
         Assert.Null(await bridge.ReadChatRequestAsync());
@@ -110,8 +128,8 @@ public class GameBarBridgeChatTests : IDisposable
     public async Task ReadChatRequestAsync_ARequestForAnotherSession_IsRefused()
     {
         // The file names the session it belongs to; one written before the roster changed must not be applied now.
-        using GameBarBridge bridge = Published();
-        await File.WriteAllTextAsync(RequestPath, RequestJson(session: "another-game"));
+        GameBarBridge bridge = Published();
+        await File.WriteAllTextAsync(RequestPath, RequestJson("another-game"));
 
         Assert.Null(await bridge.ReadChatRequestAsync());
     }
@@ -133,9 +151,8 @@ public class GameBarBridgeChatTests : IDisposable
         // A closed bridge must not start a write.
         GameBarBridge bridge = Published();
         bridge.Dispose();
-        OverlayChatRequest request = new("i", "s", "own", -1, 0, 1, false, false);
 
-        bridge.PublishChatStatus(request, "sending", "正在发送", complete: false);
+        bridge.PublishChatStatus(RequestFrom("s"), "sending", "正在发送", complete: false);
 
         Assert.False(File.Exists(Path.Combine(_folder.Root, "chat-status.json")));
     }
@@ -143,21 +160,20 @@ public class GameBarBridgeChatTests : IDisposable
     [Fact]
     public void PublishChatStatus_ARequestFromAnotherSession_WritesNothing()
     {
-        // A status is only about a request the published session made; anything else would be answering another game.
-        using GameBarBridge bridge = Published();
-        OverlayChatRequest request = new("i", "another-game", "own", -1, 0, 1, false, false);
+        // A status only answers a request the published session made; anything else would be answering another game.
+        GameBarBridge bridge = Published();
 
-        bridge.PublishChatStatus(request, "sending", "正在发送", complete: false);
+        bridge.PublishChatStatus(RequestFrom("another-game"), "sending", "正在发送", complete: false);
 
         Assert.False(File.Exists(Path.Combine(_folder.Root, "chat-status.json")));
     }
 
     [Fact]
-    public void PublishChatStatus_TogetherWithTheWriteLoop_ProducesNoStatusForAnotherSession()
+    public void PublishChatStatus_TogetherWithTheWriteLoop_WritesNoStatusForAnotherSession()
     {
         // Even when the write loop drains, a queued status for another session is skipped rather than written.
         GameBarBridge bridge = Published();
-        bridge.PublishChatStatus(new("i", "another-game", "own", -1, 0, 1, false, false), "sending", "x", false);
+        bridge.PublishChatStatus(RequestFrom("another-game"), "sending", "x", complete: false);
         bridge.Dispose();
         bridge.Completion.Wait(TimeSpan.FromSeconds(10));
 
@@ -165,14 +181,14 @@ public class GameBarBridgeChatTests : IDisposable
     }
 
     [Fact]
-    public async Task PublishChatStatus_LeavesNoTemporaryFileBehind()
+    public void PublishChatStatus_WritesNothingAndLeavesNoTemporaryFileBehind()
     {
-        // The write is atomic: a temporary file is renamed into place, and none is left even when nothing is written.
-        using GameBarBridge bridge = Published();
-        bridge.PublishChatStatus(new("i", "another-game", "own", -1, 0, 1, false, false), "sending", "x", false);
+        // The write is atomic: a temporary file is renamed into place, and none is left when nothing is written.
+        GameBarBridge bridge = Published();
+        bridge.PublishChatStatus(RequestFrom("another-game"), "sending", "x", complete: false);
+        bridge.Dispose();
+        bridge.Completion.Wait(TimeSpan.FromSeconds(10));
 
         Assert.Empty(Directory.GetFiles(_folder.Root, "chat-*.tmp"));
-
-        await Task.CompletedTask;
     }
 }
