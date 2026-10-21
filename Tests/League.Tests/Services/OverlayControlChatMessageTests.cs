@@ -48,4 +48,66 @@ public class OverlayControlChatMessageTests
 
         Assert.Throws<InvalidOperationException>(build);
     }
+
+    [Fact]
+    public void Build_ASideNobodyCanBeFoundFor_IsRefusedBeforeTheAbilitiesAreConsulted()
+    {
+        // The roster has no enemies, so there is no side to describe - a different problem from missing abilities.
+        LoadingRoster selfOnly = new("1", 450, "ARAM", [new("self", "自己#1", "", 1, 143, 100, true)]);
+
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(() =>
+            OverlayControlChatMessage.Build(selfOnly, Request("controls"), Controls, null, Hero)
+        );
+
+        Assert.Equal("未发送：无法确定所选阵营，请等待名单更新。", error.Message);
+    }
+
+    [Fact]
+    public void Build_ASideWhoseAbilitiesAreNotLoadedYet_IsRefusedWithItsOwnReason()
+    {
+        // The champions are known but none of them has abilities in hand; the user is told to wait, not that the
+        // side is unknown.
+        Dictionary<int, ControlSkill[]> onlySelf = new() { [143] = [new("Q", "缠绕", ["禁锢"], "")] };
+
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(() =>
+            OverlayControlChatMessage.Build(Roster, Request("controls"), onlySelf, null, Hero)
+        );
+
+        Assert.Equal("未发送：英雄技能还在读取，请稍后重试。", error.Message);
+    }
+
+    [Fact]
+    public void Build_ASideThatDoesNotFitOneMessage_ContinuesInTheNext()
+    {
+        // The limit is one chat message; the tail must not be dropped, and the header is repeated so the reader knows
+        // which side the continuation belongs to. Five enemies with long names cannot fit in 180 characters.
+        LoadingRoster wide = new(
+            "1",
+            450,
+            "ARAM",
+            [
+                new("self", "自己#1", "", 1, 143, 100, true),
+                new("e1", "敌1#2", "", 2, 21, 200, false),
+                new("e2", "敌2#3", "", 3, 22, 200, false),
+                new("e3", "敌3#4", "", 4, 23, 200, false),
+                new("e4", "敌4#5", "", 5, 24, 200, false),
+                new("e5", "敌5#6", "", 6, 25, 200, false),
+            ]
+        );
+        Dictionary<int, ControlSkill[]> abilities = new()
+        {
+            [21] = [new("Q", "缠绕", ["禁锢"], "")],
+            [22] = [new("Q", "缠绕", ["禁锢"], "")],
+            [23] = [new("Q", "缠绕", ["禁锢"], "")],
+            [24] = [new("Q", "缠绕", ["禁锢"], "")],
+            [25] = [new("Q", "缠绕", ["禁锢"], "")],
+        };
+        static string LongName(int id) => "名字很长的英雄" + id + new string('·', 80);
+
+        var messages = OverlayControlChatMessage.Build(wide, Request("hardControls"), abilities, null, LongName);
+
+        Assert.True(messages.Count > 1, $"Expected a continuation line, got {messages.Count}.");
+        Assert.All(messages, line => Assert.True(line.Length <= 180, $"'{line}' is longer than one message."));
+        Assert.All(messages, line => Assert.StartsWith("【硬控·对方】", line, StringComparison.Ordinal));
+    }
 }
