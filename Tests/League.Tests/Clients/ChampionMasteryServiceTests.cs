@@ -690,6 +690,69 @@ public class ChampionMasteryServiceTests
         Assert.Equal("英雄成就已更新，请重新查询。", page.Message);
     }
 
+    // ---- identities the caller cannot ask about, and a request that never finishes ----
+
+    [Fact]
+    public async Task Invalidate_ANonPublicIdentity_IsIgnored()
+    {
+        // There is nothing cached under an identity the service refuses to query, so invalidating it does nothing -
+        // and must not throw on the way to finding that out.
+        MasteryStub stub = new();
+        using var client = Client(stub);
+        using var folder = new TempFolder("mastery-invalidate-none");
+        ChampionMasteryService service = Service(() => client, folder.Root);
+
+        service.Invalidate("");
+
+        Assert.Equal(0, stub.Calls);
+    }
+
+    [Fact]
+    public async Task GetAsync_TheRequestTimesOut_HandsBackTheCachedCopyMarkedStale()
+    {
+        // A request that hangs is caught and the copy already on screen is kept, marked so the reader knows it is old.
+        MasteryStub stub = new();
+        using var client = Client(stub);
+        using var folder = new TempFolder("mastery-timeout");
+        ChampionMasteryService service = Service(() => client, folder.Root);
+        ChampionMasteryPage loaded = await service.GetAsync(Player, CancellationToken.None);
+
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        stub.Gate = gate;
+        using var cancelling = new CancellationTokenSource();
+        Task<ChampionMasteryPage> pending = service.GetAsync(Player, cancelling.Token, refresh: true);
+        using var waiting = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await stub.Waiting.WaitAsync(waiting.Token);
+        await cancelling.CancelAsync();
+        ChampionMasteryPage timedOut = await pending;
+
+        Assert.True(timedOut.Stale);
+        Assert.Equal("请求超时，后台稍后重试。", timedOut.Message);
+        Assert.Equal(loaded.Data?.Count, timedOut.Data?.Count);
+    }
+
+    [Fact]
+    public async Task GetAsync_TheFirstRequestTimesOut_SaysSoInsteadOfInventingAPage()
+    {
+        // Nothing is cached, so there is no copy to fall back to.
+        MasteryStub stub = new();
+        using var client = Client(stub);
+        using var folder = new TempFolder("mastery-timeout-first");
+        ChampionMasteryService service = Service(() => client, folder.Root);
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        stub.Gate = gate;
+        using var cancelling = new CancellationTokenSource();
+
+        Task<ChampionMasteryPage> pending = service.GetAsync(Player, cancelling.Token);
+        using var waiting = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await stub.Waiting.WaitAsync(waiting.Token);
+        await cancelling.CancelAsync();
+        ChampionMasteryPage timedOut = await pending;
+
+        Assert.Null(timedOut.Data);
+        Assert.Equal("英雄成就读取超时，后台稍后重试。", timedOut.Message);
+    }
+
     private static ChampionMasteryService Service(Func<HttpClient?> client, string directory) =>
         new(client, () => Scope, directory);
 
