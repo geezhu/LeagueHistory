@@ -38,7 +38,7 @@ public sealed class SearchComboBox : ComboBox
         int arrowWidth = SystemInformation.VerticalScrollBarWidth;
         using var background = new SolidBrush(BackColor);
         graphics.FillRectangle(background, Width - arrowWidth - 1, 0, arrowWidth + 1, Height);
-        using var arrow = new Pen(Enabled ? Color.FromArgb(111, 123, 139) : SystemColors.GrayText, 1.2f);
+        using var arrow = new Pen(Enabled ? Theme.Muted : SystemColors.GrayText, 1.2f);
         int x = Width - arrowWidth / 2 - 1,
             y = Height / 2;
         graphics.DrawLines(arrow, new[] { new Point(x - 3, y - 1), new Point(x, y + 2), new Point(x + 3, y - 1) });

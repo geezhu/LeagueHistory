@@ -1,3 +1,4 @@
+using League.Controls;
 using League.Models;
 using Newtonsoft.Json.Linq;
 
@@ -136,8 +137,8 @@ namespace League.UIState
             );
         }
 
-        private static readonly Color ScoreboardInk = Color.FromArgb(36, 48, 65);
-        private static readonly Color ScoreboardMuted = Color.FromArgb(111, 123, 139);
+        private static readonly Color ScoreboardInk = Theme.Ink;
+        private static readonly Color ScoreboardMuted = Theme.Muted;
 
         private Label ScoreboardText(Panel row, string text, int x, int width, Color color, bool bold = false)
         {
@@ -194,7 +195,7 @@ namespace League.UIState
         {
             if (isSelf)
             {
-                row.Controls.Add(new Panel { BackColor = Color.FromArgb(46, 103, 190), Size = new Size(3, 44) });
+                row.Controls.Add(new Panel { BackColor = Theme.Accent, Size = new Size(3, 44) });
             }
 
             CachedScoreboardIcon(row, _championCache, player["championId"]?.Value<int>() ?? 0, 12, 5, 34);
@@ -208,8 +209,8 @@ namespace League.UIState
                 Location = new Point(58, 4),
                 Size = new Size(180, 30),
                 Font = new Font("Microsoft YaHei UI", 9f, isSelf ? FontStyle.Bold : FontStyle.Regular),
-                LinkColor = isSelf ? Color.FromArgb(46, 103, 190) : ScoreboardInk,
-                ActiveLinkColor = Color.FromArgb(46, 103, 190),
+                LinkColor = isSelf ? Theme.Accent : ScoreboardInk,
+                ActiveLinkColor = Theme.Accent,
                 ForeColor = ScoreboardInk,
             };
             nameLabel.ProfileRequested += id => PlayerProfileRequested?.Invoke(id);
@@ -316,9 +317,9 @@ namespace League.UIState
         }
 
         private static Color ScoreboardHighlight(JObject player) =>
-            player["win"]?.Value<bool>() == true ? Color.FromArgb(38, 139, 113)
-            : player["win"]?.Value<bool>() == false ? Color.FromArgb(191, 81, 91)
-            : Color.FromArgb(46, 103, 190);
+            player["win"]?.Value<bool>() == true ? Theme.Win
+            : player["win"]?.Value<bool>() == false ? Theme.Loss
+            : Theme.Accent;
 
         private void AddScoreboardKda(Panel row, JObject player, MatchInfo match, Color highlight)
         {

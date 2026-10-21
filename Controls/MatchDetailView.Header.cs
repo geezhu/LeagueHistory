@@ -63,7 +63,7 @@ public partial class MatchDetailView
                 Text = values[i].Item2,
                 Dock = DockStyle.Fill,
                 AutoEllipsis = true,
-                ForeColor = Color.FromArgb(36, 63, 98),
+                ForeColor = Theme.Heading,
                 TextAlign = ContentAlignment.MiddleLeft,
             };
             cell.Controls.Add(value);
@@ -73,7 +73,7 @@ public partial class MatchDetailView
                     Text = values[i].Item1,
                     Dock = DockStyle.Top,
                     Height = 22,
-                    ForeColor = Color.FromArgb(111, 123, 139),
+                    ForeColor = Theme.Muted,
                 }
             );
             _toolTip.SetToolTip(
@@ -104,7 +104,7 @@ public partial class MatchDetailView
             buttons.Controls.Add(action);
         }
         actions[0].FlatAppearance.BorderSize = 0;
-        actions[0].ForeColor = Color.FromArgb(46, 103, 190);
+        actions[0].ForeColor = Theme.Accent;
         _toolTip.SetToolTip(actions[0], $"查看比赛 {match.GameId} 的回放");
         return buttons;
     }

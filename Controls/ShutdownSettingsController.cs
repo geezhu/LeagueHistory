@@ -364,7 +364,7 @@ internal sealed class ShutdownSettingsController : IDisposable
             button.Size = new Size(110, 32);
             button.FlatStyle = FlatStyle.Flat;
             button.FlatAppearance.BorderColor = Color.FromArgb(207, 220, 230);
-            button.BackColor = Color.FromArgb(247, 250, 252);
+            button.BackColor = Theme.SurfaceSubtle;
             button.Margin = new Padding(0, 0, 8, 4);
             row.Controls.Add(button);
         }

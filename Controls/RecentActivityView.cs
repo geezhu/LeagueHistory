@@ -35,7 +35,7 @@ internal sealed class RecentActivityView : Control
     {
         DoubleBuffered = true;
         BackColor = Color.White;
-        ForeColor = Color.FromArgb(36, 63, 98);
+        ForeColor = Theme.Heading;
         Height = 86;
         Font = new Font("Microsoft YaHei UI", 9f);
         SizeChanged += (_, _) =>

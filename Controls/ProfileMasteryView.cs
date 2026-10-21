@@ -43,7 +43,7 @@ public sealed class ProfileMasteryView : UserControl
     {
         Dock = DockStyle.Top,
         Height = 26,
-        ForeColor = Color.FromArgb(111, 123, 139),
+        ForeColor = Theme.Muted,
     };
     private readonly Button _refresh = new()
     {
@@ -80,7 +80,7 @@ public sealed class ProfileMasteryView : UserControl
         _champion = champion ?? FormMain.Globals.resLoading.GetChampionInfoAsync;
         _heading.Font = _headingFont;
         BackColor = Color.White;
-        ForeColor = Color.FromArgb(36, 63, 98);
+        ForeColor = Theme.Heading;
         Height = 100;
         Padding = new Padding(16);
         var header = new Panel { Dock = DockStyle.Top, Height = 32 };

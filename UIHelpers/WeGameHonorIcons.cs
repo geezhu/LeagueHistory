@@ -1,3 +1,4 @@
+using League.Controls;
 using Newtonsoft.Json.Linq;
 
 namespace League.UIHelpers
@@ -25,7 +26,7 @@ namespace League.UIHelpers
                 drop.AddBezier(8, 2, 7, 5, 3, 8, 3, 10);
                 drop.AddBezier(3, 10, 3, 16, 13, 16, 13, 10);
                 drop.AddBezier(13, 10, 13, 8, 9, 5, 8, 2);
-                using var brush = new SolidBrush(Color.FromArgb(191, 81, 91));
+                using var brush = new SolidBrush(Theme.Loss);
                 graphics.FillPath(brush, drop);
                 return icon;
             }

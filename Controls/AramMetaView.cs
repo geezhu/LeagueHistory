@@ -103,7 +103,7 @@ internal sealed partial class AramMetaView : UserControl
         _imageHttp = images;
         Dock = DockStyle.Fill;
         Font = new Font("Microsoft YaHei UI", 9);
-        BackColor = Color.FromArgb(244, 247, 251);
+        BackColor = Theme.Canvas;
         _role.Items.AddRange(new object[] { "全部职业", "战士", "法师", "刺客", "射手", "辅助", "坦克" });
         _role.SelectedIndex = 0;
         var (home, refresh) = ConfigureToolbar();

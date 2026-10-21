@@ -124,7 +124,7 @@ internal sealed class SettingRow : TableLayoutPanel
                 );
                 button.FlatStyle = FlatStyle.Flat;
                 button.FlatAppearance.BorderColor = Color.FromArgb(207, 220, 230);
-                button.BackColor = Color.FromArgb(247, 250, 252);
+                button.BackColor = Theme.SurfaceSubtle;
                 break;
         }
     }

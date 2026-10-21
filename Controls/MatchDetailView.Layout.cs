@@ -56,7 +56,7 @@ public partial class MatchDetailView
                 FlatStyle = FlatStyle.Flat,
                 Text = "›",
                 Font = new Font("Microsoft YaHei UI", 12f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(46, 103, 190),
+                ForeColor = Theme.Accent,
                 Cursor = Cursors.Hand,
             };
             pageButton.FlatAppearance.BorderSize = 0;

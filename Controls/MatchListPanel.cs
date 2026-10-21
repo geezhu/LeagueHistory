@@ -204,9 +204,9 @@ namespace League.Controls
 
         private readonly List<(Rectangle Bounds, string Text)> _imageHints = new();
         private readonly List<Tuple<Rectangle, PlayerInfo>> _playerRegions = new();
-        private static readonly Color Ink = Color.FromArgb(36, 48, 65);
-        private static readonly Color Muted = Color.FromArgb(111, 123, 139);
-        private static readonly Color Accent = Color.FromArgb(46, 103, 190);
+        private static readonly Color Ink = Theme.Ink;
+        private static readonly Color Muted = Theme.Muted;
+        private static readonly Color Accent = Theme.Accent;
 
         private Rectangle ScreenRect(int x, int y, int width, int height)
         {
@@ -237,7 +237,7 @@ namespace League.Controls
         private void PaintCompact(Graphics g)
         {
             var color = MatchInfo.ResultColor;
-            g.Clear(SelectedMatch ? Color.FromArgb(232, 241, 253) : Color.White);
+            g.Clear(SelectedMatch ? Theme.AccentSoft : Color.White);
             using var stripe = new SolidBrush(color);
             if (SelectedMatch)
             {
@@ -266,11 +266,11 @@ namespace League.Controls
                 0f
             );
             g.FillRectangle(resultBackground, resultArea);
-            Draw(MatchInfo.Mode, 50, 9, Width - 112, Color.FromArgb(36, 48, 65));
+            Draw(MatchInfo.Mode, 50, 9, Width - 112, Theme.Ink);
             string date = DateTime.TryParse(MatchInfo.GameTime, out var played)
                 ? played.ToString("MM-dd")
                 : MatchInfo.GameTime;
-            Draw(date, 50, 31, Width - 112, Color.FromArgb(111, 123, 139));
+            Draw(date, 50, 31, Width - 112, Theme.Muted);
             using var resultFont = new Font(Font.FontFamily, 12f, FontStyle.Bold);
             TextRenderer.DrawText(
                 g,
@@ -294,7 +294,7 @@ namespace League.Controls
                 float width = Width / scale;
                 float height = Height / scale;
                 g.Clear(Color.White);
-                using var border = new Pen(Color.FromArgb(225, 231, 239));
+                using var border = new Pen(Theme.Divider);
                 g.DrawRectangle(border, 0, 0, width - 1, height - 1);
                 using var resultBrush = new SolidBrush(MatchInfo.ResultColor);
                 g.FillRectangle(resultBrush, 0, 0, 4, height);

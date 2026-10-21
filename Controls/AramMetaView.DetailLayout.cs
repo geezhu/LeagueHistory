@@ -233,7 +233,7 @@ internal sealed partial class AramMetaView
             ColumnCount = 5,
             RowCount = 1,
             Margin = new Padding(0, 0, 0, 3),
-            BackColor = heading ? Color.FromArgb(235, 242, 247) : Color.FromArgb(247, 250, 252),
+            BackColor = heading ? Color.FromArgb(235, 242, 247) : Theme.SurfaceSubtle,
         };
         row.RowStyles.Add(new RowStyle(SizeType.Absolute, heading ? 34 : 54));
         row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48));

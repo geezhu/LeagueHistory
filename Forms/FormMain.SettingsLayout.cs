@@ -466,7 +466,7 @@ public partial class FormMain
             ColumnCount = 3,
             RowCount = rows.Length,
             CellBorderStyle = TableLayoutPanelCellBorderStyle.Single,
-            BackColor = Color.FromArgb(247, 250, 252),
+            BackColor = Theme.SurfaceSubtle,
         };
         var header = new Font(tabControl1.Font, FontStyle.Bold);
         table.Disposed += (_, _) => header.Dispose();
@@ -567,7 +567,7 @@ public partial class FormMain
         page.Controls.Clear();
         page.Padding = Padding.Empty;
         page.UseVisualStyleBackColor = false;
-        page.BackColor = Color.FromArgb(244, 247, 251);
+        page.BackColor = Theme.Canvas;
         var flow = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,

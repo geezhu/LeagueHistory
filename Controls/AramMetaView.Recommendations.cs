@@ -353,7 +353,7 @@ internal sealed partial class AramMetaView
     {
         foreach (Control sibling in list.Controls)
         {
-            sibling.BackColor = Color.FromArgb(247, 250, 252);
+            sibling.BackColor = Theme.SurfaceSubtle;
         }
         row.BackColor = Color.FromArgb(218, 241, 243);
         string description = FormMain.Globals.resLoading.GetAugmentById(entry.Ids[0])?.Description ?? entry.Description;

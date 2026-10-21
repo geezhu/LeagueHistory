@@ -208,7 +208,7 @@ public partial class MatchDetailView
                 Width = 34,
                 Height = 34,
                 SizeMode = PictureBoxSizeMode.Zoom,
-                BackColor = Color.FromArgb(232, 241, 253),
+                BackColor = Theme.AccentSoft,
             };
             _toolTip.SetToolTip(picture, id > 0 ? $"英雄 {id}" : "未禁用英雄");
             content.Controls.Add(picture);

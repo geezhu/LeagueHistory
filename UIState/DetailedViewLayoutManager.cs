@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Text.RegularExpressions;
+using League.Controls;
 using League.Models;
 using League.Services;
 using League.UIHelpers;
@@ -59,7 +60,7 @@ namespace League.UIState
                 Location = new Point(x, y),
                 Size = new Size(1120, 44),
                 BorderStyle = BorderStyle.None,
-                BackColor = isSelf ? Color.FromArgb(232, 241, 253) : Color.White,
+                BackColor = isSelf ? Theme.AccentSoft : Color.White,
             };
             await PreloadAllAsync(participant, matchInfo); // 修改：传入matchInfo
             await RetryMissingAugmentsAsync(participant, matchInfo);

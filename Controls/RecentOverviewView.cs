@@ -14,7 +14,7 @@ internal sealed class RecentOverviewView : Control
     {
         DoubleBuffered = true;
         BackColor = Color.White;
-        ForeColor = Color.FromArgb(36, 63, 98);
+        ForeColor = Theme.Heading;
         Font = new Font("Microsoft YaHei UI", 9f);
         Height = 170;
         SizeChanged += (_, _) =>

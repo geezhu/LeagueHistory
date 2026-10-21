@@ -90,7 +90,7 @@ internal sealed class TimelineGoldChart : Control
 
     private static void DrawSegment(Graphics graphics, float zero, PointF a, PointF b, bool positive)
     {
-        var color = positive ? Color.FromArgb(46, 153, 190) : Color.FromArgb(191, 81, 91);
+        var color = positive ? Color.FromArgb(46, 153, 190) : Theme.Loss;
         using var fill = new SolidBrush(Color.FromArgb(65, color));
         using var pen = new Pen(color, 2);
         graphics.FillPolygon(fill, new[] { new PointF(a.X, zero), a, b, new PointF(b.X, zero) });
@@ -99,7 +99,7 @@ internal sealed class TimelineGoldChart : Control
 
     private void DrawSelection(Graphics graphics, Plot plot, MatchTimeline data)
     {
-        using var cursor = new Pen(Color.FromArgb(111, 123, 139)) { DashStyle = DashStyle.Dash };
+        using var cursor = new Pen(Theme.Muted) { DashStyle = DashStyle.Dash };
         float x = plot.Point(data.Frames[Math.Clamp(Selected, 0, data.Frames.Count - 1)], 0).X;
         graphics.DrawLine(cursor, x, plot.Area.Top, x, plot.Area.Bottom);
         TextRenderer.DrawText(graphics, "人均经济差 · 蓝正 / 红负", Font, new Point(plot.Area.Left, 3), ForeColor);

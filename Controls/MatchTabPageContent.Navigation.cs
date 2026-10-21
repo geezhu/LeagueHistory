@@ -104,7 +104,7 @@ public partial class MatchTabPageContent
         _backToProfile.FlatAppearance.BorderSize = 0;
         _backToProfile.TextAlign = ContentAlignment.MiddleLeft;
         _backToProfile.ForeColor = Color.FromArgb(89, 115, 151);
-        _backToProfile.FlatAppearance.MouseOverBackColor = Color.FromArgb(225, 237, 253);
+        _backToProfile.FlatAppearance.MouseOverBackColor = Theme.AccentSoftHover;
     }
 
     private void ConfigureCompactMatch(Control? control)

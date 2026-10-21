@@ -86,7 +86,7 @@ public partial class FormMain
 
     private (Panel Surface, Label Status) CreateRoomMatchSurface()
     {
-        var surface = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(244, 247, 251) };
+        var surface = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Canvas };
         _roomMatchSurface = surface;
         var back = new Button
         {

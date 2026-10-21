@@ -30,7 +30,7 @@ public partial class MatchDetailView
         var loading = new Label
         {
             Text = "正在加载比赛数据…",
-            ForeColor = Color.FromArgb(111, 123, 139),
+            ForeColor = Theme.Muted,
             AutoSize = true,
             Location = new Point(20, 10),
         };
@@ -101,9 +101,9 @@ public partial class MatchDetailView
         var win = team.Players.Select(p => p["win"]?.Value<bool>()).FirstOrDefault(v => v.HasValue);
         Color teamColor =
             match.IsRemake ? MatchResult.RemakeColor
-            : win == true ? Color.FromArgb(38, 139, 113)
-            : win == false ? Color.FromArgb(191, 81, 91)
-            : Color.FromArgb(111, 123, 139);
+            : win == true ? Theme.Win
+            : win == false ? Theme.Loss
+            : Theme.Muted;
         var title =
             $"{(match.IsRemake ? "重开" : win == true ? "胜方" : win == false ? "败方" : "队伍")} · {(teamId == 100 ? "蓝队" : "红队")}";
         team.Section.Controls.Add(
@@ -138,7 +138,7 @@ public partial class MatchDetailView
                 Location = new Point(x, 32),
                 Size = new Size(width, 30),
                 FlatStyle = FlatStyle.Flat,
-                ForeColor = Color.FromArgb(111, 123, 139),
+                ForeColor = Theme.Muted,
                 BackColor = team.Section.BackColor,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Font = new Font("Microsoft YaHei UI", 9f),

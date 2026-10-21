@@ -9,7 +9,7 @@ internal sealed class MasteryGalleryView : UserControl
         Dock = DockStyle.Fill,
         AutoScroll = true,
         Padding = new Padding(12),
-        BackColor = Color.FromArgb(244, 247, 251),
+        BackColor = Theme.Canvas,
     };
     private readonly Dictionary<MasteryPoster, int> _pending = new();
     private readonly System.Windows.Forms.Timer _loadTimer = new() { Interval = 100 };
@@ -51,7 +51,7 @@ internal sealed class MasteryGalleryView : UserControl
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Font = _headingFont,
-                ForeColor = Color.FromArgb(36, 63, 98),
+                ForeColor = Theme.Heading,
             }
         );
         header.Controls.Add(back);

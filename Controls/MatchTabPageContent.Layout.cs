@@ -8,7 +8,7 @@ public partial class MatchTabPageContent
         Text = "1",
         Size = new Size(32, 32),
         TextAlign = ContentAlignment.MiddleCenter,
-        BackColor = Color.FromArgb(46, 103, 190),
+        BackColor = Theme.Accent,
         ForeColor = Color.White,
     };
 
@@ -17,8 +17,8 @@ public partial class MatchTabPageContent
         SuspendLayout();
         try
         {
-            BackColor = Color.FromArgb(244, 247, 251);
-            ForeColor = Color.FromArgb(36, 48, 65);
+            BackColor = Theme.Canvas;
+            ForeColor = Theme.Ink;
             ApplyOwnedFont(this, new Font("Microsoft YaHei UI", 9f));
             Padding = new Padding(12);
             var header = CreateProfileHeader();
@@ -60,14 +60,14 @@ public partial class MatchTabPageContent
         {
             Dock = DockStyle.Fill,
             Margin = Padding.Empty,
-            BackColor = Color.FromArgb(232, 241, 253),
+            BackColor = Theme.AccentSoft,
         };
         identity.Controls.Add(
             new Panel
             {
                 Dock = DockStyle.Left,
                 Width = 3,
-                BackColor = Color.FromArgb(46, 103, 190),
+                BackColor = Theme.Accent,
             }
         );
         ConfigureProfileIdentity(identity);
@@ -86,13 +86,13 @@ public partial class MatchTabPageContent
         linkGameName.SetBounds(136, 52, 230, 36);
         linkGameName.TextAlign = ContentAlignment.MiddleLeft;
         ApplyOwnedFont(linkGameName, new Font(Font.FontFamily, 15f, FontStyle.Bold));
-        linkGameName.LinkColor = Color.FromArgb(46, 103, 190);
+        linkGameName.LinkColor = Theme.Accent;
         linkGameName.LinkBehavior = LinkBehavior.HoverUnderline;
         linkGameName.AutoEllipsis = true;
         lblLevel.Visible = false;
         lblPrivacy.Location = new Point(136, 94);
         lblPrivacy.Visible = false;
-        lblLevel.ForeColor = lblPrivacy.ForeColor = Color.FromArgb(111, 123, 139);
+        lblLevel.ForeColor = lblPrivacy.ForeColor = Theme.Muted;
         identity.Controls.AddRange(new Control[] { picChampionId, linkGameName, lblLevel, lblPrivacy });
     }
 
@@ -103,7 +103,7 @@ public partial class MatchTabPageContent
             IsCopy = true,
             Size = new Size(28, 36),
             Font = linkGameName.Font,
-            ForeColor = Color.FromArgb(46, 103, 190),
+            ForeColor = Theme.Accent,
             Cursor = Cursors.Hand,
             AccessibleName = "复制 Riot ID",
             AccessibleRole = AccessibleRole.PushButton,
@@ -168,7 +168,7 @@ public partial class MatchTabPageContent
             Text = "—",
             Dock = DockStyle.Top,
             Height = 26,
-            ForeColor = Color.FromArgb(36, 63, 98),
+            ForeColor = Theme.Heading,
         };
         ApplyOwnedFont(_highestRank, new Font(Font.FontFamily, 12f, FontStyle.Bold));
         peak.Controls.Add(
@@ -264,7 +264,7 @@ public partial class MatchTabPageContent
             options.Controls.Add(filterControls[row], 1, row);
         }
         _filterScope.Text = "按需查找，满页即停；下一页继续加载";
-        _filterScope.ForeColor = Color.FromArgb(111, 123, 139);
+        _filterScope.ForeColor = Theme.Muted;
         options.Controls.Add(_filterScope, 0, 3);
         options.SetColumnSpan(_filterScope, 2);
         return options;
@@ -331,7 +331,7 @@ public partial class MatchTabPageContent
             button.Size = new Size(32, 32);
             button.FlatStyle = FlatStyle.Flat;
             button.FlatAppearance.BorderSize = 0;
-            button.FlatAppearance.MouseOverBackColor = Color.FromArgb(225, 237, 253);
+            button.FlatAppearance.MouseOverBackColor = Theme.AccentSoftHover;
             button.BackColor = Color.FromArgb(232, 239, 248);
             button.ForeColor = ForeColor;
             button.Text = "";
@@ -431,7 +431,7 @@ public partial class MatchTabPageContent
         tier.Dock = DockStyle.Top;
         tier.Height = 26;
         ApplyOwnedFont(tier, new Font(Font.FontFamily, 12f, FontStyle.Bold));
-        tier.ForeColor = Color.FromArgb(36, 63, 98);
+        tier.ForeColor = Theme.Heading;
         tier.AutoEllipsis = true;
         tier.TextAlign = ContentAlignment.MiddleCenter;
         group.Visible = false;
@@ -444,7 +444,7 @@ public partial class MatchTabPageContent
             Height = 28,
             AutoEllipsis = true,
             Visible = false,
-            ForeColor = Color.FromArgb(111, 123, 139),
+            ForeColor = Theme.Muted,
         };
         components ??= new System.ComponentModel.Container();
         var tip = new ToolTip(components);

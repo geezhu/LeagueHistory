@@ -12,7 +12,7 @@ public sealed class CareerStatisticsView : UserControl
     {
         Dock = DockStyle.Top,
         Height = 48,
-        ForeColor = Color.FromArgb(111, 123, 139),
+        ForeColor = Theme.Muted,
     };
     private readonly Label _summary = new()
     {
@@ -49,7 +49,7 @@ public sealed class CareerStatisticsView : UserControl
         Height = 320;
         Padding = new Padding(14);
         BackColor = Color.White;
-        ForeColor = Color.FromArgb(36, 63, 98);
+        ForeColor = Theme.Heading;
         var header = new Panel { Dock = DockStyle.Top, Height = 32 };
         header.Controls.Add(
             new Label

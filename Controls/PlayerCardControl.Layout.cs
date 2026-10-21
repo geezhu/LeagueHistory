@@ -13,7 +13,7 @@ public partial class PlayerCardControl
             BackColor = Color.White;
             Padding = new Padding(6);
             Font = new Font("Microsoft YaHei UI", 9f);
-            ForeColor = Color.FromArgb(36, 63, 98);
+            ForeColor = Theme.Heading;
             ConfigureSummaryPanel();
             ConfigureHistoryList();
         }

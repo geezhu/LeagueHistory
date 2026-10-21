@@ -1,10 +1,11 @@
+using League.Controls;
 using Newtonsoft.Json.Linq;
 
 namespace League.Models;
 
 public static class MatchResult
 {
-    public static readonly Color RemakeColor = Color.FromArgb(111, 123, 139);
+    public static readonly Color RemakeColor = Theme.Muted;
 
     public static bool IsRemake(JObject? entry, IEnumerable<JObject>? participants = null)
     {

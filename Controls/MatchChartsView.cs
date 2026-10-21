@@ -16,14 +16,14 @@ public sealed class MatchChartsView : UserControl
     {
         Dock = DockStyle.Fill;
         BackColor = Color.White;
-        ForeColor = Color.FromArgb(36, 63, 98);
+        ForeColor = Theme.Heading;
         var players = (match.AllParticipants ?? new()).OrderBy(p => (int?)p["teamId"] ?? 0).ToArray();
         _chart = new MatchComparisonChart(players, match.CurrPuuid, match.CurrSummonerId) { Dock = DockStyle.Fill };
         var sidebar = new Panel
         {
             Dock = DockStyle.Left,
             Width = 215,
-            BackColor = Color.FromArgb(244, 247, 251),
+            BackColor = Theme.Canvas,
         };
         sidebar.Controls.Add(CreateMetricChoices(players));
         Controls.Add(_chart);

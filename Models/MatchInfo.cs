@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using League.Controls;
+using Newtonsoft.Json.Linq;
 
 namespace League.Models
 {
@@ -17,14 +18,14 @@ namespace League.Models
             {
                 _resultText = value;
                 ResultColor =
-                    value == "胜利" ? Color.FromArgb(38, 139, 113)
+                    value == "胜利" ? Theme.Win
                     : value == "重开" ? MatchResult.RemakeColor
-                    : Color.FromArgb(191, 81, 91);
+                    : Theme.Loss;
             }
         }
 
         public bool IsRemake => _resultText == "重开" || MatchResult.IsRemake(RawGameData, AllParticipants);
-        private Color _resultColor = Color.FromArgb(191, 81, 91);
+        private Color _resultColor = Theme.Loss;
         public Color ResultColor
         {
             get => IsRemake ? MatchResult.RemakeColor : _resultColor;

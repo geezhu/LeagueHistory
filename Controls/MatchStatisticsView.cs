@@ -57,13 +57,13 @@ public sealed class MatchStatisticsView : UserControl
         _grid.DefaultCellStyle = new DataGridViewCellStyle
         {
             Font = Font,
-            ForeColor = Color.FromArgb(36, 63, 98),
+            ForeColor = Theme.Heading,
             BackColor = Color.White,
-            SelectionBackColor = Color.FromArgb(232, 241, 253),
-            SelectionForeColor = Color.FromArgb(36, 63, 98),
+            SelectionBackColor = Theme.AccentSoft,
+            SelectionForeColor = Theme.Heading,
             Alignment = DataGridViewContentAlignment.MiddleCenter,
         };
-        _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(244, 247, 251);
+        _grid.ColumnHeadersDefaultCellStyle.BackColor = Theme.Canvas;
     }
 
     private void CreatePlayerColumns(MatchInfo match)
@@ -106,8 +106,8 @@ public sealed class MatchStatisticsView : UserControl
             {
                 column.DefaultCellStyle = new DataGridViewCellStyle
                 {
-                    BackColor = Color.FromArgb(232, 241, 253),
-                    ForeColor = Color.FromArgb(46, 103, 190),
+                    BackColor = Theme.AccentSoft,
+                    ForeColor = Theme.Accent,
                     Font = _bold,
                 };
             }
@@ -188,9 +188,7 @@ public sealed class MatchStatisticsView : UserControl
             e.Graphics.Restore(state);
         }
         using var pen = new Pen(
-            (int?)_players[e.ColumnIndex - 1]["teamId"] == 100
-                ? Color.FromArgb(46, 153, 190)
-                : Color.FromArgb(191, 81, 91),
+            (int?)_players[e.ColumnIndex - 1]["teamId"] == 100 ? Color.FromArgb(46, 153, 190) : Theme.Loss,
             2
         );
         e.Graphics.DrawEllipse(pen, box);

@@ -48,7 +48,7 @@ public sealed class TimelineView : UserControl
         _match = match;
         _service = service ?? new(() => FormMain.Globals.lcuClient.Client);
         BackColor = Color.White;
-        ForeColor = Color.FromArgb(36, 63, 98);
+        ForeColor = Theme.Heading;
         var raw = match.RawGameData;
         raw = raw?["json"] as JObject ?? raw;
         raw = raw?["info"] as JObject ?? raw;

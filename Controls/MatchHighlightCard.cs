@@ -20,7 +20,7 @@ internal sealed class MatchHighlightCard : Control
         Height = 70;
         Margin = new Padding(0, 6, 10, 6);
         DoubleBuffered = true;
-        BackColor = Color.FromArgb(36, 63, 98);
+        BackColor = Theme.Heading;
         _ = LoadSplashAsync(championId);
     }
 

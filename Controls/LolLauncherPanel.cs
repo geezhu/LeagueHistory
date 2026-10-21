@@ -10,12 +10,12 @@ internal sealed class LolLauncherPanel : UserControl
         Text = "正在查找安装目录…",
         TextAlign = ContentAlignment.MiddleLeft,
     };
-    private readonly Panel _pathFrame = new() { BackColor = Color.FromArgb(244, 247, 251) };
+    private readonly Panel _pathFrame = new() { BackColor = Theme.Canvas };
     private readonly TextBox _path = new()
     {
         ReadOnly = true,
         BorderStyle = BorderStyle.None,
-        BackColor = Color.FromArgb(244, 247, 251),
+        BackColor = Theme.Canvas,
         ForeColor = Color.FromArgb(39, 62, 79),
         Text = "尚未识别安装位置",
         AccessibleName = "英雄联盟安装路径",
@@ -60,7 +60,7 @@ internal sealed class LolLauncherPanel : UserControl
             button.Size = new Size(button == _wegame ? 132 : 124, 34);
             button.FlatStyle = FlatStyle.Flat;
             button.Margin = new Padding(0, 0, 8, 6);
-            button.BackColor = button == choose ? AccentColors.Fill : Color.FromArgb(247, 250, 252);
+            button.BackColor = button == choose ? AccentColors.Fill : Theme.SurfaceSubtle;
             button.ForeColor = button == choose ? Color.White : Color.FromArgb(59, 81, 99);
             button.FlatAppearance.BorderColor = button == choose ? button.BackColor : Color.FromArgb(207, 220, 230);
         }

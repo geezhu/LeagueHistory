@@ -166,7 +166,7 @@ internal sealed partial class OpggView : UserControl
     {
         _client = client;
         Dock = DockStyle.Fill;
-        BackColor = Color.FromArgb(244, 247, 251);
+        BackColor = Theme.Canvas;
         Font = _viewFont;
         SetValue(_tier, _modeTiers["ranked"]);
         var refresh = ConfigureToolbar();

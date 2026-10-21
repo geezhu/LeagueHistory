@@ -204,7 +204,7 @@ public sealed class PlayerCardUIManager
             player?.Avatar!,
             player?.IsPublic ?? "",
             state.Info?.MatchItems ?? new(),
-            player?.NameColor ?? Color.FromArgb(36, 63, 98),
+            player?.NameColor ?? Theme.Heading,
             sid,
             champion,
             puuid,

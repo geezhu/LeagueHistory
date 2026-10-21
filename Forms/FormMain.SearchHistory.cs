@@ -1,3 +1,4 @@
+using League.Controls;
 using League.Services;
 
 namespace League;
@@ -23,14 +24,14 @@ public partial class FormMain
         {
             Dock = DockStyle.Top,
             Height = 32,
-            BackColor = Color.FromArgb(244, 247, 251),
+            BackColor = Theme.Canvas,
             Padding = new Padding(16, 8, 16, 8),
         };
         label1.Text = "战绩查询";
         label1.AutoSize = false;
         label1.SetBounds(16, 8, 130, 34);
         label1.Font = new Font("Microsoft YaHei UI", 12f, FontStyle.Bold);
-        label1.ForeColor = Color.FromArgb(36, 63, 98);
+        label1.ForeColor = Theme.Heading;
         label1.TextAlign = ContentAlignment.MiddleLeft;
         var search = new Panel
         {
@@ -42,14 +43,14 @@ public partial class FormMain
         RoundSearch(search);
         search.Paint += (_, e) =>
         {
-            using var pen = new Pen(Color.FromArgb(111, 123, 139), 1.6f);
+            using var pen = new Pen(Theme.Muted, 1.6f);
             e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             e.Graphics.DrawEllipse(pen, 10, 9, 10, 10);
             e.Graphics.DrawLine(pen, 19, 18, 24, 23);
         };
         txtGameName.FlatStyle = FlatStyle.Flat;
         txtGameName.SetBounds(28, 2, 164, 24);
-        txtGameName.ForeColor = Color.FromArgb(36, 63, 98);
+        txtGameName.ForeColor = Theme.Heading;
         txtGameName.BackColor = search.BackColor;
         txtGameName.AccessibleName = "输入 Riot ID，回车查询";
         search.Controls.Add(txtGameName);

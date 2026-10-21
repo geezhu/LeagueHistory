@@ -35,7 +35,7 @@ public partial class MatchDetailView : UserControl
     {
         _match = match;
         DoubleBuffered = true;
-        BackColor = Color.FromArgb(244, 247, 251);
+        BackColor = Theme.Canvas;
         _scoreboard = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true };
         var actions = CreateNavigation();
         Controls.Add(_scoreboard);
@@ -80,9 +80,9 @@ public partial class MatchDetailView : UserControl
         foreach (var (tab, button) in _tabButtons)
         {
             bool active = tab == selected;
-            button.BackColor = active ? Color.FromArgb(225, 237, 253) : BackColor;
-            button.ForeColor = active ? Color.FromArgb(46, 103, 190) : Color.FromArgb(111, 123, 139);
-            button.FlatAppearance.BorderColor = active ? Color.FromArgb(46, 103, 190) : BackColor;
+            button.BackColor = active ? Theme.AccentSoftHover : BackColor;
+            button.ForeColor = active ? Theme.Accent : Theme.Muted;
+            button.FlatAppearance.BorderColor = active ? Theme.Accent : BackColor;
         }
         _scoreboard.Visible = selected == DetailTab.Scoreboard;
         if (_timeline != null)
