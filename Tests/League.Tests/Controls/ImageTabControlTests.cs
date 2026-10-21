@@ -44,6 +44,57 @@ public class ImageTabControlTests
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DrawToBitmap_GlyphTabs_PaintsWithAndWithoutLabels(bool labels)
+    {
+        UiHost.Run(host =>
+        {
+            using var tabs = Tabs(host);
+            tabs.ShowLabels = labels;
+            tabs.TabPages.Add(new TabPage("查看历史") { Tag = new RailIcon("", "历史") });
+            tabs.TabPages.Add(new TabPage("功能配置") { Tag = new RailIcon("", "设置") });
+
+            using var painted = Repaint(tabs);
+
+            Assert.Equal(tabs.Size, painted.Size);
+        });
+    }
+
+    [Theory]
+    [InlineData(false, 50)]
+    [InlineData(true, 64)]
+    public void ShowLabels_Switched_SizesTheRowsForTheLabel(bool labels, int rowHeight)
+    {
+        UiHost.Run(host =>
+        {
+            using var tabs = Tabs(host);
+            tabs.TabPages.Add(new TabPage("查看历史") { Tag = new RailIcon("", "历史") });
+
+            tabs.ShowLabels = labels;
+
+            Assert.Equal(rowHeight, tabs.GetTabRect(0).Height);
+        });
+    }
+
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(3, false)]
+    public void Move_OverOrPastTheTabs_ShowsTheHandOnlyOverATab(int tab, bool hand)
+    {
+        UiHost.Run(host =>
+        {
+            using var tabs = Tabs(host);
+            tabs.TabPages.Add(new TabPage("查看历史") { Tag = new RailIcon("", "历史") });
+            tabs.TabPages.Add(new TabPage("功能配置") { Tag = new RailIcon("", "设置") });
+
+            WindowMessages.Move(tabs, new Point(20, 25 + tab * 50));
+
+            Assert.Equal(hand ? Cursors.Hand : Cursors.Default, tabs.Cursor);
+        });
+    }
+
     private static ImageTabControl Tabs(Form host)
     {
         var tabs = new ImageTabControl { Dock = DockStyle.Fill };

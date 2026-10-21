@@ -152,7 +152,7 @@ namespace League
                     _ = _configUpdateManager.CheckForUpdates();
                 }
 
-                LoadTabImages();
+                ConfigureRailIcons();
 
                 // 绑定事件
                 imageTabControl1.MouseMove += (s, ev) => _uiManager!.HandleImageTabControlMouseMove(s, ev);
@@ -190,15 +190,13 @@ namespace League
             }
         }
 
-        private void LoadTabImages()
+        // Glyphs from Segoe Fluent Icons / MDL2 Assets: History, People, Setting.
+        private void ConfigureRailIcons()
         {
-            var img1 = Image.FromFile(Path.Combine(AppContext.BaseDirectory, "Assets", "Defaults", "01.png"));
-            var img2 = Image.FromFile(Path.Combine(AppContext.BaseDirectory, "Assets", "Defaults", "02.png"));
-            var img3 = Image.FromFile(Path.Combine(AppContext.BaseDirectory, "Assets", "Defaults", "03.png"));
-
-            imageTabControl1.TabPages[0].Tag = img1;
-            imageTabControl1.TabPages[1].Tag = img2;
-            imageTabControl1.TabPages[2].Tag = img3;
+            imageTabControl1.ShowLabels = true;
+            imageTabControl1.TabPages[0].Tag = new RailIcon("\uE81C", "历史");
+            imageTabControl1.TabPages[1].Tag = new RailIcon("\uE716", "玩家");
+            imageTabControl1.TabPages[2].Tag = new RailIcon("\uE713", "设置");
         }
 
         private void RestoreSettingControls()

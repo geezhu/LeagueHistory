@@ -19,11 +19,11 @@ public partial class FormMain
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        // The title bar continues the navigation rail. Windows 10 rejects these attributes and keeps the
+        // A white title bar runs into the white navigation rail. Windows 10 rejects these attributes and keeps the
         // system title bar, which still works, so the result is not checked.
-        SetWindowColor(DwmCaptionColor, Theme.Rail);
-        SetWindowColor(DwmBorderColor, Theme.Rail);
-        SetWindowColor(DwmTextColor, Theme.RailText);
+        SetWindowColor(DwmCaptionColor, Theme.Surface);
+        SetWindowColor(DwmBorderColor, Theme.Divider);
+        SetWindowColor(DwmTextColor, Theme.Ink);
     }
 
     private void SetWindowColor(int attribute, Color color)

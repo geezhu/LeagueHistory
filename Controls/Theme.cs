@@ -53,12 +53,6 @@ internal static class Theme
     public static readonly Color BlueTeam = Color.FromArgb(58, 128, 210);
     public static readonly Color RedTeam = Color.FromArgb(214, 80, 96);
 
-    /// <summary>The navigation rail and title bar framing the light pages.</summary>
-    public static readonly Color Rail = Color.FromArgb(24, 32, 44);
-    public static readonly Color RailHover = Color.FromArgb(36, 47, 62);
-    public static readonly Color RailSelected = Color.FromArgb(44, 57, 75);
-    public static readonly Color RailText = Color.FromArgb(226, 232, 240);
-
     public const string FontName = "Microsoft YaHei UI";
 
     // Bahnschrift ships with Windows 10 1709 and later; its weights install as separate families.

@@ -1,19 +1,33 @@
 ﻿using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.Drawing.Text;
 
 namespace League.Controls
 {
     /// <summary>
-    /// The main window's navigation rail: page icons down a dark strip on the left, with the selected
-    /// page marked by an accent bar and the others dimmed until hovered.
+    /// The main window's navigation rail: a light strip of page icons on the left, matching the settings page list. The
+    /// selected page gets the accent bar and a tinted row; icons are glyphs from the Windows icon font
+    /// (<see cref="RailIcon"/>), with an image tag still drawn for pages that carry one.
     /// </summary>
     public class ImageTabControl : TabControl
     {
-        private const int IconInset = 7;
         private const int SelectionBarWidth = 3;
-        private const float IdleIconOpacity = 0.55f;
-        private const float IconMargin = 0.11f;
+        private const int ImageInset = 9;
+        private const float IdleImageOpacity = 0.6f;
+
+        // Windows 11 ships Segoe Fluent Icons; Windows 10 has the older MDL2 face with the same code points.
+        private static readonly Lazy<string> IconFamily = new(() =>
+        {
+            using var installed = new InstalledFontCollection();
+            return installed.Families.Any(family => family.Name == "Segoe Fluent Icons")
+                ? "Segoe Fluent Icons"
+                : "Segoe MDL2 Assets";
+        });
+
+        private readonly Font _glyphFont = new(IconFamily.Value, 15f);
+        private readonly Font _labelFont = new(Theme.FontName, 8f);
         private int _hoverIndex = -1;
+        private bool _showLabels;
 
         public ImageTabControl()
         {
@@ -31,20 +45,36 @@ namespace League.Controls
             ItemSize = new Size(50, 50);
         }
 
+        /// <summary>Draws each <see cref="RailIcon"/>'s short label under its glyph; the rows grow to fit.</summary>
+        public bool ShowLabels
+        {
+            get => _showLabels;
+            set
+            {
+                _showLabels = value;
+                // Left-aligned tabs swap the axes: Width is the row height and Height the rail width.
+                ItemSize = value ? new Size(64, 62) : new Size(50, 50);
+                Invalidate();
+            }
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
             e.Graphics.Clear(Theme.Canvas);
-            using (var rail = new SolidBrush(Theme.Rail))
+            var rail = RailBounds();
+            using (var surface = new SolidBrush(Theme.Surface))
             {
-                e.Graphics.FillRectangle(rail, RailBounds());
+                e.Graphics.FillRectangle(surface, rail);
             }
 
-            e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
             for (int i = 0; i < TabPages.Count; i++)
             {
                 DrawTab(e.Graphics, i);
             }
+
+            using var divider = new Pen(Theme.Divider);
+            e.Graphics.DrawLine(divider, rail.Right - 1, 0, rail.Right - 1, Height);
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
@@ -64,6 +94,17 @@ namespace League.Controls
             // OnPaint draws the whole rail.
         }
 
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _glyphFont.Dispose();
+                _labelFont.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+
         private Rectangle RailBounds()
         {
             if (TabPages.Count == 0)
@@ -79,67 +120,79 @@ namespace League.Controls
         private void DrawTab(Graphics g, int index)
         {
             Rectangle tab = GetTabRect(index);
+            var row = new Rectangle(0, tab.Y, RailBounds().Width - 1, tab.Height);
             bool selected = SelectedIndex == index;
-            if (selected || index == _hoverIndex)
+            bool hover = index == _hoverIndex;
+            if (selected || hover)
             {
-                using var fill = new SolidBrush(selected ? Theme.RailSelected : Theme.RailHover);
-                g.FillRectangle(fill, tab.X, tab.Y, RailBounds().Width, tab.Height);
+                using var fill = new SolidBrush(selected ? Theme.AccentSoft : Theme.Canvas);
+                g.FillRectangle(fill, row);
             }
 
             if (selected)
             {
                 using var bar = new SolidBrush(Theme.Accent);
-                g.FillRectangle(bar, 0, tab.Y + 8, SelectionBarWidth, tab.Height - 16);
+                g.FillRectangle(bar, 0, row.Y + 10, SelectionBarWidth, row.Height - 20);
             }
 
-            if (TabPages[index].Tag is Image icon)
+            Color ink =
+                selected ? Theme.Accent
+                : hover ? Theme.Ink
+                : Theme.Muted;
+            switch (TabPages[index].Tag)
             {
-                var area = Rectangle.Inflate(tab, -IconInset, -IconInset);
-                DrawIcon(g, icon, Fit(icon.Size, area), selected || index == _hoverIndex ? 1f : IdleIconOpacity);
+                case RailIcon icon:
+                    DrawGlyph(g, icon, row, ink);
+                    break;
+                case Image image:
+                    DrawImage(g, image, row, selected || hover ? 1f : IdleImageOpacity);
+                    break;
             }
         }
 
-        private static void DrawIcon(Graphics g, Image icon, Rectangle bounds, float opacity)
+        private void DrawGlyph(Graphics g, RailIcon icon, Rectangle row, Color ink)
         {
-            // The page icons are drawn for a white strip and carry a white margin; cropping it and rounding the
-            // corners again turns them into tiles that sit on the dark rail.
-            var crop = new RectangleF(
-                icon.Width * IconMargin,
-                icon.Height * IconMargin,
-                icon.Width * (1 - 2 * IconMargin),
-                icon.Height * (1 - 2 * IconMargin)
+            var flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding;
+            if (!_showLabels)
+            {
+                TextRenderer.DrawText(g, icon.Glyph, _glyphFont, row, ink, flags);
+                return;
+            }
+
+            TextRenderer.DrawText(
+                g,
+                icon.Glyph,
+                _glyphFont,
+                new Rectangle(row.X, row.Y + 9, row.Width, 26),
+                ink,
+                flags
             );
-            using var attributes = new ImageAttributes();
-            attributes.SetColorMatrix(new ColorMatrix { Matrix33 = opacity });
-            using var texture = new TextureBrush(icon, crop, attributes);
-            texture.WrapMode = WrapMode.Clamp;
-            texture.TranslateTransform(bounds.X, bounds.Y);
-            texture.ScaleTransform(bounds.Width / crop.Width, bounds.Height / crop.Height);
-            using var tile = RoundedRectangle(bounds, bounds.Width / 4);
-            var smoothing = g.SmoothingMode;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.FillPath(texture, tile);
-            g.SmoothingMode = smoothing;
+            TextRenderer.DrawText(
+                g,
+                icon.Label,
+                _labelFont,
+                new Rectangle(row.X, row.Y + 37, row.Width, 18),
+                ink,
+                flags | TextFormatFlags.SingleLine
+            );
         }
 
-        private static GraphicsPath RoundedRectangle(Rectangle bounds, int radius)
+        private static void DrawImage(Graphics g, Image image, Rectangle row, float opacity)
         {
-            int diameter = radius * 2;
-            var path = new GraphicsPath();
-            path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
-            path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
-            path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
-            path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
-            path.CloseFigure();
-            return path;
-        }
-
-        private static Rectangle Fit(Size image, Rectangle area)
-        {
+            var area = Rectangle.Inflate(row, -ImageInset, -ImageInset);
             float ratio = Math.Min((float)area.Width / image.Width, (float)area.Height / image.Height);
             int width = (int)(image.Width * ratio);
             int height = (int)(image.Height * ratio);
-            return new Rectangle(area.X + (area.Width - width) / 2, area.Y + (area.Height - height) / 2, width, height);
+            var bounds = new Rectangle(
+                area.X + (area.Width - width) / 2,
+                area.Y + (area.Height - height) / 2,
+                width,
+                height
+            );
+            using var attributes = new ImageAttributes();
+            attributes.SetColorMatrix(new ColorMatrix { Matrix33 = opacity });
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.DrawImage(image, bounds, 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, attributes);
         }
 
         private int TabIndexAt(Point location)
