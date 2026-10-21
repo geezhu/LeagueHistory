@@ -105,6 +105,7 @@ internal static class SettingsChecks
             "选人助手",
             "英雄预选",
             "对局自动化",
+            "英雄提醒",
             "客户端维护",
             "到点关机 · 防熬夜",
             "关于与交流",

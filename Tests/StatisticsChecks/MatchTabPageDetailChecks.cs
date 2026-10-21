@@ -233,24 +233,13 @@ internal static class MatchTabPageDetailChecks
             Click(icon!);
             Check(Field<Control>(view, "linkGameName").Text.Length == 0, "Copying an empty name copies nothing");
 
-            var filter = Children(view).OfType<Button>().First(button => button.Text == "筛选");
-            var popup = Field<System.ComponentModel.IContainer>(view, "components")
-                .Components.OfType<ToolStripDropDown>()
-                .First();
-            try
-            {
-                Click(filter);
-                Check(popup.Visible, "The history filter button opens its options");
-                Click(filter);
-                Check(!popup.Visible, "The history filter button closes its options again");
-            }
-            finally
-            {
-                if (popup.Visible)
-                {
-                    popup.Close();
-                }
-            }
+            // The filter is a combo box now; the button that opened a dropdown went away when the page was restyled.
+            // What still has to hold is that the queue options are there and that picking one sticks.
+            var filter = Field<ComboBox>(view, "comboFilter");
+            Check(filter.Items.Count >= 7, "The history filter offers a queue for each mode");
+            Check(filter.SelectedIndex == 0, "The history filter starts on the unfiltered entry");
+            filter.SelectedIndex = 3;
+            Check(filter.SelectedIndex == 3, "The history filter keeps the queue that was picked");
         }
         finally
         {

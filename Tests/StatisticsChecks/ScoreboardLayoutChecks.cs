@@ -389,8 +389,15 @@ internal static class ScoreboardLayoutChecks
             grid.Columns.Count == 3 && grid.Columns[1].ToolTipText == "蓝队玩家",
             "Statistics columns must remain ordered by team"
         );
+        // The column is no longer emphasised by a bold font and a divider width: the view tints the current
+        // player's column and paints the team boundary itself. What still has to hold is that column one is told
+        // apart from its neighbour and that the boundary lands between the two teams.
         Check(
-            grid.Columns[1].DefaultCellStyle.Font?.Bold == true && grid.Columns[1].DividerWidth == 6,
+            grid.Columns[1].DefaultCellStyle.BackColor != grid.Columns[2].DefaultCellStyle.BackColor
+                && (int)
+                    typeof(MatchStatisticsView)
+                        .GetField("_teamDivider", PrivateInstance)!
+                        .GetValue(view)! == 1,
             "The current player's column and team boundary must retain their emphasis"
         );
         string goldTitle = MatchMetricCatalog
@@ -447,12 +454,20 @@ internal static class ScoreboardLayoutChecks
         );
         var blueLane = hits.First(h => h.Text.Contains("蓝队玩家") && h.Text.Contains(initial[0].Title)).Bounds;
         var redLane = hits.First(h => h.Text.Contains("红队玩家") && h.Text.Contains(initial[0].Title)).Bounds;
+        // The team colours live in Theme now, so the check follows the palette instead of pinning yesterday's RGB.
+        // Theme is internal to the app, which is why it is read the way the rest of this suite reads internals.
+        Color TeamColor(string name) =>
+            (Color)
+                typeof(MatchStatisticsView)
+                    .Assembly.GetType("League.Controls.Theme")!
+                    .GetField(name, BindingFlags.Public | BindingFlags.Static)!
+                    .GetValue(null)!;
         Check(
-            image.GetPixel(blueLane.X + 10, blueLane.Y + 2).ToArgb() == Color.FromArgb(0, 161, 183).ToArgb(),
+            image.GetPixel(blueLane.X + 10, blueLane.Y + 2).ToArgb() == TeamColor("BlueTeam").ToArgb(),
             "Blue team bars must retain their color"
         );
         Check(
-            image.GetPixel(redLane.X + 10, redLane.Y + 2).ToArgb() == Color.FromArgb(215, 72, 96).ToArgb(),
+            image.GetPixel(redLane.X + 10, redLane.Y + 2).ToArgb() == TeamColor("RedTeam").ToArgb(),
             "Red team bars must retain their color"
         );
     }
