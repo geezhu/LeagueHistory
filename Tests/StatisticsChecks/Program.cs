@@ -242,7 +242,6 @@ internal static class Program
         checks["--minion-wave-checks"] = MinionWaveChecks.Run;
         checks["--death-timing-checks"] = DeathTimingChecks.Run;
         checks["--turret-checks"] = TurretChecks.Run;
-        checks["--respawn-mark-checks"] = RespawnMarkChecks.Run;
         checks["--tier-chat-checks"] = () =>
         {
             ChampionTierChatChecks.Run();

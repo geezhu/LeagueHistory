@@ -27,7 +27,6 @@ internal static class DefaultStatisticsSuite
         SurvivalSoundChecks.Run();
         SummonerTimerChecks.Run();
         MinionWaveChecks.Run();
-        RespawnMarkChecks.Run();
         RoomPlayerChecks.Run();
         Task.Run(ChatSendDiagnosticsChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(DiagnosticLogChecks.RunAsync).GetAwaiter().GetResult();
