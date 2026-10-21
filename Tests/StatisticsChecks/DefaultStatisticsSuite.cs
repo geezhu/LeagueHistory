@@ -97,7 +97,6 @@ internal static class DefaultStatisticsSuite
         MayhemAssistantChecks.Run();
         RosterChecks.Run();
         AssistantRosterWindowChecks.Run();
-        LiveMatchChecks.Run();
         Task.Run(LiveInsightChecks.RunAsync).GetAwaiter().GetResult();
         GameBarPackageChecks.Run();
         StatisticsViewChecks.Run();

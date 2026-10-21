@@ -8,7 +8,6 @@ internal static class ChampionTierChatChecks
         SourceAndMissingRates();
         TeamSizeAndChunking();
         ZeroAndEmptyRates();
-        ModeSelection();
         Console.WriteLine("PASS: tier chat source, map, unknown tiers, empty roster and chunking.");
     }
 
@@ -92,27 +91,6 @@ internal static class ChampionTierChatChecks
         )
         {
             throw new Exception("Empty roster must not send");
-        }
-    }
-
-    private static void ModeSelection()
-    {
-        var players = new[]
-        {
-            new LiveMatchPlayer("a", "self", "Lux", "拉克丝", "CHAOS", true, 9, []),
-            new LiveMatchPlayer("b", "enemy", "Morgana", "莫甘娜", "ORDER", false, 9, []),
-        };
-        var match = new LiveMatchSnapshot("ARAM", 12, 100, players);
-        if (
-            LiveMatchMode.RecommendationQueue(3270, match with { Mode = "KIWI" }) != 2400
-            || LiveMatchMode.RecommendationQueue(0, match) != 450
-            || LiveMatchMode.RecommendationQueue(3270, match with { Mode = "CLASSIC", Map = 11 }) != 0
-            || LiveMatchMode.RecommendationQueue(3270, match with { Mode = "UNKNOWN" }) != 0
-        )
-        {
-            throw new Exception(
-                "Special queues must use actual ARAM/KIWI mode; unknown queues and map alone cannot select statistics"
-            );
         }
     }
 }

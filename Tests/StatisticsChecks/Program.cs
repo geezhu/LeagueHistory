@@ -165,7 +165,6 @@ internal static class Program
         checks["--overlay-lifecycle-checks"] = () => Ui(OverlayLifecycleChecks.Run);
         checks["--shutdown-ui-checks"] = () => Ui(ShutdownUiChecks.Run);
         checks["--settings-checks"] = () => Ui(SettingsChecks.Render);
-        checks["--live-match-checks"] = LiveMatchChecks.Run;
         checks["--live-insight-checks"] = () => Background(LiveInsightChecks.RunAsync);
         checks["--gamebar-package-checks"] = GameBarPackageChecks.Run;
         checks["--statistics-view-checks"] = () => Ui(StatisticsViewChecks.Run);

@@ -1,4 +1,5 @@
 using League.Models;
+using Newtonsoft.Json.Linq;
 
 namespace League.Tests.Models;
 
@@ -226,5 +227,89 @@ public class LiveMatchSnapshotTests
         );
 
         Assert.Equal("UNKNOWN", snapshot.TeamLabel(snapshot.Players[1]));
+    }
+
+    // ---- parsing a live game document ----
+
+    // Three players: an enemy Lux with one item, ourselves with an empty bag, and an ally Lux the game sent no
+    // items for. Four kills give us a death streak that reaches two, breaks, and is one again.
+    private const string Game = """
+        {"activePlayer":{"riotId":"Self#CN"},"gameData":{"gameMode":"ARAM","mapNumber":12,"gameTime":125},"allPlayers":[
+        {"riotId":"Enemy#CN","rawChampionName":"game_character_displayname_Lux","championName":"拉克丝","team":"ORDER","level":8,"scores":{"kills":3,"deaths":1},"items":[{"itemID":3089,"displayName":"灭世者的死亡之帽","count":1}]},
+        {"riotId":"Self#CN","rawChampionName":"game_character_displayname_Morgana","championName":"莫甘娜","team":"CHAOS","level":9,"scores":{"kills":1,"deaths":3},"items":[]},
+        {"riotId":"Ally#CN","rawChampionName":"game_character_displayname_Lux","championName":"拉克丝","team":"CHAOS","level":8,"scores":{"kills":0,"deaths":0}}
+        ],"events":{"Events":[{"EventID":0,"EventName":"GameStart","EventTime":0},
+        {"EventID":1,"EventName":"ChampionKill","EventTime":10,"KillerName":"Enemy#CN","VictimName":"Self#CN"},
+        {"EventID":2,"EventName":"ChampionKill","EventTime":20,"KillerName":"Enemy#CN","VictimName":"Self#CN"},
+        {"EventID":3,"EventName":"ChampionKill","EventTime":30,"KillerName":"Self#CN","VictimName":"Enemy#CN"},
+        {"EventID":4,"EventName":"ChampionKill","EventTime":40,"KillerName":"Enemy#CN","VictimName":"Self#CN"}]}}
+        """;
+
+    [Fact]
+    public void Parse_RawChampionName_KeepsTheAliasAndTheItemIds()
+    {
+        LiveMatchSnapshot snapshot = LiveMatchSnapshot.Parse(JObject.Parse(Game));
+
+        Assert.Equal("Lux", snapshot.Players[0].ChampionAlias);
+        Assert.Equal(3089, snapshot.Players[0].Items![0].Id);
+    }
+
+    [Fact]
+    public void Parse_EmptyItemList_IsNotTheSameAsMissingItems()
+    {
+        LiveMatchSnapshot snapshot = LiveMatchSnapshot.Parse(JObject.Parse(Game));
+
+        Assert.Empty(snapshot.Players[1].Items!);
+        Assert.Null(snapshot.Players[2].Items);
+    }
+
+    [Fact]
+    public void Parse_SameChampionTwice_KeepsTwoSeparatePlayers()
+    {
+        LiveMatchSnapshot snapshot = LiveMatchSnapshot.Parse(JObject.Parse(Game));
+
+        Assert.Equal(3, snapshot.Players.Length);
+        Assert.NotEqual(snapshot.Players[0].Key, snapshot.Players[2].Key);
+    }
+
+    [Fact]
+    public void Parse_ActivePlayerKnown_NamesTheSidesFromOurs()
+    {
+        LiveMatchSnapshot snapshot = LiveMatchSnapshot.Parse(JObject.Parse(Game));
+
+        Assert.Equal("对方", snapshot.TeamLabel(snapshot.Players[0]));
+        Assert.Equal("我方", snapshot.TeamLabel(snapshot.Players[1]));
+    }
+
+    [Fact]
+    public void Parse_NoActivePlayer_MarksNobodyAsSelf()
+    {
+        var game = JObject.Parse(Game);
+        game.Remove("activePlayer");
+
+        LiveMatchSnapshot snapshot = LiveMatchSnapshot.Parse(game);
+
+        Assert.DoesNotContain(snapshot.Players, player => player.Self);
+        Assert.Equal("ORDER", snapshot.TeamLabel(snapshot.Players[0]));
+    }
+
+    [Fact]
+    public void Parse_MidgameEvents_RebuildsTheCurrentAndHighestDeathStreak()
+    {
+        LiveMatchSnapshot snapshot = LiveMatchSnapshot.Parse(JObject.Parse(Game));
+
+        var streak = snapshot.DeathStreaks[snapshot.Players[1].Key];
+
+        Assert.Equal(1, streak.Current);
+        Assert.Equal(2, streak.Highest);
+        Assert.True(streak.Complete);
+    }
+
+    [Fact]
+    public void Parse_DocumentWithoutGameData_IsRejected()
+    {
+        var empty = new JObject();
+
+        Assert.Throws<InvalidDataException>(() => LiveMatchSnapshot.Parse(empty));
     }
 }
