@@ -56,6 +56,9 @@ namespace League.Models
 
         public int Assists { get; set; }
 
+        /// <summary>(Kills + assists) / deaths, with no deaths counted as one, the same rule as the career view.</summary>
+        public double KdaRatio => (Kills + Assists) / (double)Math.Max(1, Deaths);
+
         public Image[] SummonerSpells { get; set; } = new Image[2];
 
         public Item[] Items { get; set; } = (from _ in Enumerable.Range(0, 6) select new Item()).ToArray();

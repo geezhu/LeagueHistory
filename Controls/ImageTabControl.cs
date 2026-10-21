@@ -12,6 +12,7 @@ namespace League.Controls
         private const int IconInset = 7;
         private const int SelectionBarWidth = 3;
         private const float IdleIconOpacity = 0.55f;
+        private const float IconMargin = 0.11f;
         private int _hoverIndex = -1;
 
         public ImageTabControl()
@@ -100,9 +101,37 @@ namespace League.Controls
 
         private static void DrawIcon(Graphics g, Image icon, Rectangle bounds, float opacity)
         {
+            // The page icons are drawn for a white strip and carry a white margin; cropping it and rounding the
+            // corners again turns them into tiles that sit on the dark rail.
+            var crop = new RectangleF(
+                icon.Width * IconMargin,
+                icon.Height * IconMargin,
+                icon.Width * (1 - 2 * IconMargin),
+                icon.Height * (1 - 2 * IconMargin)
+            );
             using var attributes = new ImageAttributes();
             attributes.SetColorMatrix(new ColorMatrix { Matrix33 = opacity });
-            g.DrawImage(icon, bounds, 0, 0, icon.Width, icon.Height, GraphicsUnit.Pixel, attributes);
+            using var texture = new TextureBrush(icon, crop, attributes);
+            texture.WrapMode = WrapMode.Clamp;
+            texture.TranslateTransform(bounds.X, bounds.Y);
+            texture.ScaleTransform(bounds.Width / crop.Width, bounds.Height / crop.Height);
+            using var tile = RoundedRectangle(bounds, bounds.Width / 4);
+            var smoothing = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.FillPath(texture, tile);
+            g.SmoothingMode = smoothing;
+        }
+
+        private static GraphicsPath RoundedRectangle(Rectangle bounds, int radius)
+        {
+            int diameter = radius * 2;
+            var path = new GraphicsPath();
+            path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
+            path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
+            path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
+            path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
+            path.CloseFigure();
+            return path;
         }
 
         private static Rectangle Fit(Size image, Rectangle area)

@@ -16,7 +16,7 @@ public partial class PlayerCardControl
             {
                 Dock = DockStyle.Bottom,
                 Height = 32,
-                BackColor = Color.FromArgb(237, 243, 250),
+                BackColor = Theme.Canvas,
             };
             _historyStatusText = new Label
             {
@@ -42,7 +42,7 @@ public partial class PlayerCardControl
         }
         _retryHistory = retry;
         _historyStatusText!.Text = text;
-        _historyStatusText.ForeColor = canRetry ? Color.FromArgb(180, 75, 85) : Color.FromArgb(94, 118, 140);
+        _historyStatusText.ForeColor = canRetry ? Theme.Loss : Theme.Muted;
         _historyRetry!.Visible = canRetry;
         _historyStatus.Visible = text.Length > 0;
     }

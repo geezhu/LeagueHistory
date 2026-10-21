@@ -86,7 +86,7 @@ public partial class PlayerCardControl
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             var circle = new Rectangle(6, 4, Width - 12, Width - 12);
-            using var ring = new Pen(Color.FromArgb(0, 160, 175), 3);
+            using var ring = new Pen(Theme.Accent, 3);
             g.DrawEllipse(ring, circle);
             circle.Inflate(-4, -4);
             using var clip = new GraphicsPath();
@@ -113,7 +113,7 @@ public partial class PlayerCardControl
                     _level.ToString(),
                     Font,
                     new Rectangle(0, Height - 16, Width, 16),
-                    Color.FromArgb(0, 142, 160),
+                    Theme.Accent,
                     BackColor,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
                 );

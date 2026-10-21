@@ -12,6 +12,7 @@ public partial class PlayerCardControl
     {
         _recentKda.Text = "KDA  —";
         _recentWinRate.Text = "胜率  —";
+        _recentWinRate.ForeColor = Theme.Ink;
         _statisticsTips?.SetToolTip(_recentKda, "");
         _statisticsTips?.SetToolTip(_recentWinRate, "");
     }
@@ -21,6 +22,10 @@ public partial class PlayerCardControl
         var statistics = RoomRecentStatistics.From(info);
         _recentKda.Text = statistics.Kda is double kda ? $"KDA  {kda:0.0}" : "KDA  —";
         _recentWinRate.Text = statistics.WinRate is double rate ? $"胜率  {rate:0.#}%" : "胜率  —";
+        _recentWinRate.ForeColor =
+            statistics.WinRate is not double shown ? Theme.Ink
+            : shown >= 50 ? Theme.Win
+            : Theme.Loss;
         var sample = $"当前战绩列表最近 {statistics.Games} 场（最多 20 场，包含重开）";
         _statisticsTips?.SetToolTip(_recentKda, sample + "\nKDA = 3 ×（总击杀 + 总助攻）/ 总死亡；零死亡按 1 计算。");
         _statisticsTips?.SetToolTip(_recentWinRate, sample + "\n胜率 = 胜场 / 总场次。");

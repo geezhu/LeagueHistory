@@ -8,7 +8,7 @@ public partial class PlayerCardControl
     {
         Height = 42,
         Dock = DockStyle.Bottom,
-        BackColor = Color.FromArgb(226, 238, 245),
+        BackColor = Theme.Canvas,
     };
     private readonly PictureBox _currentHero = new()
     {
@@ -28,7 +28,7 @@ public partial class PlayerCardControl
         Height = 18,
         AutoSize = false,
         AutoEllipsis = true,
-        ForeColor = Color.FromArgb(0, 142, 150),
+        ForeColor = Theme.Accent,
     };
     private Func<int, Task<PlayerChampionTier>>? _tierLoader;
     private Action<int, PlayerChampionTier>? _openHero;

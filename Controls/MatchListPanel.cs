@@ -239,10 +239,7 @@ namespace League.Controls
             var color = MatchInfo.ResultColor;
             g.Clear(SelectedMatch ? Theme.AccentSoft : Color.White);
             using var stripe = new SolidBrush(color);
-            if (SelectedMatch)
-            {
-                g.FillRectangle(stripe, 0, 0, 3, Height);
-            }
+            g.FillRectangle(stripe, 0, 0, SelectedMatch ? 4 : 3, Height);
 
             if (MatchInfo.HeroIcon != null)
             {
@@ -270,7 +267,13 @@ namespace League.Controls
             string date = DateTime.TryParse(MatchInfo.GameTime, out var played)
                 ? played.ToString("MM-dd")
                 : MatchInfo.GameTime;
-            Draw(date, 50, 31, Width - 112, Theme.Muted);
+            Draw(
+                $"{date}  ·  {MatchInfo.Kills}/{MatchInfo.Deaths}/{MatchInfo.Assists}",
+                50,
+                31,
+                Width - 112,
+                Theme.Muted
+            );
             using var resultFont = new Font(Font.FontFamily, 12f, FontStyle.Bold);
             TextRenderer.DrawText(
                 g,
@@ -296,6 +299,9 @@ namespace League.Controls
                 g.Clear(Color.White);
                 using var border = new Pen(Theme.Divider);
                 g.DrawRectangle(border, 0, 0, width - 1, height - 1);
+                // A faint wash of the result colour behind the result column makes wins and losses scannable down the list.
+                using var resultBand = new SolidBrush(Color.FromArgb(18, MatchInfo.ResultColor));
+                g.FillRectangle(resultBand, 4, 1, 76, height - 2);
                 using var resultBrush = new SolidBrush(MatchInfo.ResultColor);
                 g.FillRectangle(resultBrush, 0, 0, 4, height);
                 using var canvas = new RowCanvas(this, g);
@@ -329,14 +335,17 @@ namespace League.Controls
 
         private void PaintItems(RowCanvas canvas)
         {
+            string score = $"{MatchInfo.Kills} / {MatchInfo.Deaths} / {MatchInfo.Assists}";
+            canvas.Text(score, canvas.Headline, Ink, 282, 13, 194, 34);
+            int ratioX = 282 + (int)canvas.Graphics.MeasureString(score, canvas.Headline).Width + 4;
+            bool standout = MatchInfo.KdaRatio >= 5;
             canvas.Text(
-                $"{MatchInfo.Kills} / {MatchInfo.Deaths} / {MatchInfo.Assists}",
-                canvas.Headline,
-                Ink,
-                282,
-                13,
-                194,
-                34
+                $"{MatchInfo.KdaRatio:0.0} KDA",
+                standout ? canvas.StrongSmall : canvas.Small,
+                standout ? Accent : Muted,
+                ratioX,
+                24,
+                Math.Max(1, 476 - ratioX)
             );
             for (int i = 0; i < 6; i++)
             {
@@ -458,6 +467,7 @@ namespace League.Controls
             public Font Strong { get; } = new("Microsoft YaHei UI", 13.33f, FontStyle.Bold, GraphicsUnit.Pixel);
             public Font Headline { get; } = new("Microsoft YaHei UI", 21.33f, FontStyle.Bold, GraphicsUnit.Pixel);
             public Font Small { get; } = new("Microsoft YaHei UI", 10.67f, FontStyle.Regular, GraphicsUnit.Pixel);
+            public Font StrongSmall { get; } = new("Microsoft YaHei UI", 10.67f, FontStyle.Bold, GraphicsUnit.Pixel);
 
             public void Text(string? text, Font font, Color color, int x, int y, int w, int h = 24)
             {
@@ -487,6 +497,7 @@ namespace League.Controls
                 Strong.Dispose();
                 Headline.Dispose();
                 Small.Dispose();
+                StrongSmall.Dispose();
             }
         }
 
