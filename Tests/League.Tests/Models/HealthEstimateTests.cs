@@ -10,8 +10,9 @@ namespace League.Tests.Models;
 /// bar. Below zero it stops being linear: the formula becomes 100 / (100 - resistance), which grows faster the further
 /// below zero it goes - so a hundred points of negative resistance does not mean "half as much health", it means half.
 ///
-/// The full estimate (base stats, items, augments, Glass Cannon's cap) needs three more records and is not covered
-/// here; what is covered is the arithmetic that estimate ends in.
+/// The full estimate grows base stats by level, adds the items and the recorded augments, applies the percentage
+/// increases and then Glass Cannon's cap; a later section covers it with a real champion's numbers so the growth
+/// curve is checked against the game rather than against itself.
 /// </summary>
 public class HealthEstimateTests
 {
@@ -105,5 +106,89 @@ public class HealthEstimateTests
         Assert.Equal(1500, estimate.Health);
         Assert.Equal(80, estimate.Armor);
         Assert.Equal(60, estimate.MagicResist);
+    }
+
+    // ---- the full estimate, against a real champion ----
+    //
+    // Maokai's Data Dragon 16.20.1 numbers, the same reference Tests/StatisticsChecks/HealthEstimateChecks.cs used:
+    // hp 665 + 109, armour 35 + 5.2, magic resistance 32 + 2.05. At level 17 the growth term is
+    // 109 × 16 × (0.7025 + 0.0175 × 16) = 1713.48, so the grown health is 2378.48.
+
+    private static readonly ChampionBaseStats Maokai = new(
+        Health: 665,
+        HealthPerLevel: 109,
+        Armor: 35,
+        ArmorPerLevel: 5.2,
+        MagicResist: 32,
+        MagicResistPerLevel: 2.05
+    );
+
+    [Fact]
+    public void Estimate_TheBaseStatsGrownToTheLevel_FollowTheGameCurve()
+    {
+        HealthEstimate estimate = HealthEstimate.Estimate(Maokai, 17, ItemStats.None, AugmentEffects.None);
+
+        Assert.Equal(2378.48, estimate.Health, 2);
+    }
+
+    [Fact]
+    public void Estimate_AtLevelOne_IsTheBaseValue()
+    {
+        // Traced: no steps up, so no growth term.
+        Assert.Equal(665, HealthEstimate.Estimate(Maokai, 1, ItemStats.None, AugmentEffects.None).Health, 3);
+    }
+
+    [Fact]
+    public void Estimate_ItemsAddTheirFlatHealth()
+    {
+        ItemStats items = new(Health: 550, Armor: 0, MagicResist: 0, AbilityHaste: 0);
+
+        Assert.Equal(2928.48, HealthEstimate.Estimate(Maokai, 17, items, AugmentEffects.None).Health, 2);
+    }
+
+    [Fact]
+    public void Estimate_TankEngineMultipliesTheWholeHealth()
+    {
+        // Traced: (2378.48 + 550) × 1.1 = 3221.328 - the augment multiplies the item health too.
+        ItemStats items = new(Health: 550, Armor: 0, MagicResist: 0, AbilityHaste: 0);
+        AugmentEffects augments = AugmentEffects.None with { HealthMultiplier = 1.1 };
+
+        Assert.Equal(3221.328, HealthEstimate.Estimate(Maokai, 17, items, augments).Health, 2);
+    }
+
+    [Fact]
+    public void Estimate_GlassCannon_CapsTheHealthAtSeventyPercent()
+    {
+        // Traced: the multiplier applies first, then the cap: 2928.48 × 1.1 × 0.7 = 2254.93.
+        ItemStats items = new(Health: 550, Armor: 0, MagicResist: 0, AbilityHaste: 0);
+        AugmentEffects augments = AugmentEffects.None with { HealthMultiplier = 1.1, GlassCannon = true };
+
+        Assert.Equal(2928.48 * 1.1 * AugmentEffects.GlassCannonShare, HealthEstimate.Estimate(Maokai, 17, items, augments).Health, 2);
+    }
+
+    [Fact]
+    public void Estimate_ResistancesAreTheGrownBasePlusItemsPlusAugments()
+    {
+        // Traced: armour 35 + 5.2 × 16 × 0.9825 = 116.744, plus 40 from the items and 10 from the augments.
+        ItemStats items = new(Health: 0, Armor: 40, MagicResist: 25, AbilityHaste: 0);
+        AugmentEffects augments = AugmentEffects.None with { Armor = 10, MagicResist = 5 };
+
+        HealthEstimate estimate = HealthEstimate.Estimate(Maokai, 17, items, augments);
+
+        Assert.Equal(166.744, estimate.Armor, 3);
+        Assert.Equal(94.226, estimate.MagicResist, 2);
+    }
+
+    [Fact]
+    public void Estimate_TheEffectiveHealth_FollowsFromTheEstimatedStats()
+    {
+        // The estimate's own resistances are what the effective health is computed from, not the base ones.
+        ItemStats items = new(Health: 550, Armor: 40, MagicResist: 0, AbilityHaste: 0);
+        AugmentEffects augments = AugmentEffects.None with { HealthMultiplier = 1.1 };
+
+        HealthEstimate estimate = HealthEstimate.Estimate(Maokai, 17, items, augments);
+
+        Assert.Equal(estimate.Health * (1 + estimate.Armor / 100), estimate.PhysicalEffective, 2);
+        Assert.Equal(estimate.Health * (1 + estimate.MagicResist / 100), estimate.MagicEffective, 2);
     }
 }

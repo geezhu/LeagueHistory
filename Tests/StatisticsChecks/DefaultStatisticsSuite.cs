@@ -23,7 +23,6 @@ internal static class DefaultStatisticsSuite
         LiveChampionChecks.Run();
         LiveDeathStreakChecks.Run();
         AugmentStackChecks.Run();
-        HealthEstimateChecks.Run();
         CooldownChecks.Run();
         CooldownOptionChecks.Run();
         SurvivalSoundChecks.Run();

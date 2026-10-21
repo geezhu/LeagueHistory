@@ -97,7 +97,6 @@ internal static class Program
         checks["--live-champion-checks"] = LiveChampionChecks.Run;
         checks["--death-streak-checks"] = LiveDeathStreakChecks.Run;
         checks["--augment-stack-checks"] = AugmentStackChecks.Run;
-        checks["--health-checks"] = HealthEstimateChecks.Run;
         checks["--cooldown-checks"] = CooldownChecks.Run;
         checks["--cooldown-option-checks"] = CooldownOptionChecks.Run;
         checks["--survival-sound-checks"] = SurvivalSoundChecks.Run;
