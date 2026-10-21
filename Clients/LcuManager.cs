@@ -50,14 +50,19 @@ namespace League.Clients
         private bool _isRunning;
         private readonly object _lock = new object();
 
-        // ---------- 心跳：短间隔 + 连续失败才断（总感知约 20 秒内，而不是 90 秒）----------
+        // ---------- 心跳 ----------
         private int _heartbeatFailCount;
-        private const int HeartbeatIntervalSeconds = 10;   // 每 10 秒一次
-        private const int HeartbeatTimeoutSeconds = 4;     // 单次超时
-        private const int HeartbeatFailThreshold = 2;      // 连续 2 次失败 → 软重连（约 20 秒）
+        private const int HeartbeatIntervalSeconds = 10;
+        private const int HeartbeatTimeoutSeconds = 4;
+        private const int HeartbeatFailThreshold = 2;   // 连续 2 次心跳失败 → 软重连
 
+        // ---------- 硬断开：不要再 6 轮 ----------
         private int _reconnectFailCount;
-        private const int HardDisconnectAfterReconnectFails = 6;
+        private const int HardDisconnectAfterReconnectFails = 2; // 连续 2 轮建连失败 → 检测中
+
+        // 软重连最长等待（从进入 Reconnecting 起算）
+        private DateTime _reconnectingSinceUtc = DateTime.MinValue;
+        private static readonly TimeSpan SoftReconnectMax = TimeSpan.FromSeconds(15);
 
         private readonly string _cacheFilePath;
         private const int CacheValidMinutes = 180;         // 进游戏关客户端时缓存要能撑住
@@ -101,12 +106,14 @@ namespace League.Clients
         }
 
         // ==================== 主循环 ====================
+        
         private async Task ConnectionLoopAsync()
         {
             while (_isRunning && _cts != null && !_cts.IsCancellationRequested)
             {
                 try
                 {
+                    // 凭证：Ux 命令行 或 缓存（有凭证 ≠ 已连接，只是可以去试）
                     if (!await TryGetCredentialsAsync())
                     {
                         await EnterDisconnectedAsync("无可用凭证");
@@ -120,23 +127,38 @@ namespace League.Clients
                     State = soft ? LcuConnectionState.Reconnecting : LcuConnectionState.Connecting;
                     if (soft)
                     {
+                        if (_reconnectingSinceUtc == DateTime.MinValue)
+                            _reconnectingSinceUtc = DateTime.UtcNow;
+
                         try { Reconnecting?.Invoke(); } catch { }
                         Debug.WriteLine($"[LcuManager] 软重连 Port={_port}");
                     }
                     else
                     {
+                        _reconnectingSinceUtc = DateTime.MinValue;
                         Debug.WriteLine($"[LcuManager] 连接中 Port={_port}");
                     }
 
-                    bool ok = await TryConnectWithRetryAsync(maxAttempts: 8, delayMs: 800);
+                    // 软重连少试几次，更快得出「这轮失败」
+                    int attempts = soft ? 4 : 8;
+                    bool ok = await TryConnectWithRetryAsync(maxAttempts: attempts, delayMs: 600);
+
                     if (!ok)
                     {
                         _reconnectFailCount++;
                         Debug.WriteLine($"[LcuManager] 建连失败 count={_reconnectFailCount}");
 
-                        if (_reconnectFailCount >= HardDisconnectAfterReconnectFails)
+                        bool tooManyRounds = _reconnectFailCount >= HardDisconnectAfterReconnectFails;
+                        bool tooLong = soft
+                            && _reconnectingSinceUtc != DateTime.MinValue
+                            && (DateTime.UtcNow - _reconnectingSinceUtc) >= SoftReconnectMax;
+
+                        // 真实连不上：轮数到了 或 软重连超过约 15 秒 → 才算断开（出检测中）
+                        if (tooManyRounds || tooLong)
                         {
-                            await EnterDisconnectedAsync("连续建连失败");
+                            _reconnectingSinceUtc = DateTime.MinValue;
+                            await EnterDisconnectedAsync(
+                                tooLong ? "软重连超时（约15秒仍连不上）" : "连续建连失败");
                         }
                         else if (soft)
                         {
@@ -144,23 +166,24 @@ namespace League.Clients
                         }
                         else
                         {
+                            // 从未连上过的首次连接失败
                             await EnterDisconnectedAsync("建连失败");
                         }
 
-                        await SafeDelay(2000);
+                        await SafeDelay(1500);
                         continue;
                     }
 
-                    bool summonerOk = await WaitForSummonerReadyAsync(maxAttempts: 30, delayMs: 600);
+                    // summoner 尽量等，不作为唯一成败条件
+                    bool summonerOk = await WaitForSummonerReadyAsync(maxAttempts: 20, delayMs: 500);
                     if (!summonerOk)
-                    {
-                        // 进游戏关客户端后，有时 summoner 接口不稳；HTTP+WS 已通则仍视为可连
-                        Debug.WriteLine("[LcuManager] summoner 未完全就绪，但 HTTP/WS 已通，继续保持连接");
-                    }
+                        Debug.WriteLine("[LcuManager] summoner 未完全就绪，HTTP/WS 已通，继续");
 
+                    // ★ 真正连上：清零所有失败计数
                     State = LcuConnectionState.Connected;
                     _heartbeatFailCount = 0;
                     _reconnectFailCount = 0;
+                    _reconnectingSinceUtc = DateTime.MinValue;
                     SaveCache(_port, _token);
 
                     try { Connected?.Invoke(); }
@@ -173,7 +196,6 @@ namespace League.Clients
                     await Task.Delay(200);
                     await QueryCurrentPhaseAsync();
 
-                    // 阻塞直到 WS 断开或心跳判定死亡
                     await ReceiveLoopWithHeartbeatAsync();
                 }
                 catch (OperationCanceledException)
@@ -185,28 +207,33 @@ namespace League.Clients
                     Debug.WriteLine($"[LcuManager] 主循环异常: {ex.Message}");
                 }
 
-                // 接收结束 = 链路断了 → 软重连，不要立刻当「客户端退出」
+                // WS/心跳判定链路断了 → 先软重连，不立刻当「客户端退出」
                 DisconnectSocketOnly();
                 if (State == LcuConnectionState.Connected)
                 {
                     State = LcuConnectionState.Reconnecting;
+                    _reconnectingSinceUtc = DateTime.UtcNow;
                     try { Reconnecting?.Invoke(); } catch { }
                     Debug.WriteLine("[LcuManager] 链路中断 → Reconnecting");
                 }
 
-                await SafeDelay(2000);
+                await SafeDelay(1500);
             }
         }
 
         private async Task EnterDisconnectedAsync(string reason)
         {
             DisconnectSocketOnly();
+            _reconnectingSinceUtc = DateTime.MinValue;
+
             if (State != LcuConnectionState.Disconnected)
             {
                 State = LcuConnectionState.Disconnected;
                 Debug.WriteLine($"[LcuManager] Disconnected: {reason}");
                 try { Disconnected?.Invoke(); } catch { }
             }
+
+            await Task.CompletedTask;
         }
 
         // ==================== 凭证（国服：命令行 + 缓存，无 lockfile）====================
