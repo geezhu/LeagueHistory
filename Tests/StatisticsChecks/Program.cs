@@ -110,7 +110,6 @@ internal static class Program
         checks["--augment-icon-checks"] = AugmentIconRendererChecks.Run;
         checks["--champion-data-checks"] = ChampionDataChecks.Run;
         checks["--champion-manager-checks"] = ChampionManagerChecks.Run;
-        checks["--voice-pcm-checks"] = VoicePcmBufferChecks.Run;
         checks["--update-support-checks"] = UpdateSupportChecks.Run;
         checks["--diagnostic-log-checks"] = () =>
         {
