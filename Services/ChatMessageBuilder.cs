@@ -124,19 +124,22 @@ namespace League.Services
                 return $"{displayName} 暂无战绩";
 
             double winRate = CalculateWinRate(info, gameCount);
-            string behavior = info.Behavior?.BehaviorSummary ?? "";
             string gameText = $"近{gameCount}场";
             string baseStr = $"{displayName} {gameText} 胜率 [{winRate:F0}%]";
 
+            var b = info.Behavior;
+            string behavior = b?.BehaviorSummary ?? "";
+
+            // 没有特征 → 只显示胜率
             if (string.IsNullOrEmpty(behavior))
                 return baseStr;
 
+            // 有特征 → 显示次数 + 特征
             var details = new List<string>();
-            var b = info.Behavior;
-            if (b?.AvgMissingPings > 0) details.Add($"发问号 {b.AvgMissingPings:F1}");
-            if (b?.AvgVisionPings > 0) details.Add($"发提醒 {b.AvgVisionPings:F1}");
-            if (b?.AvgGetBackPings > 0) details.Add($"发撤退 {b.AvgGetBackPings:F1}");
-            if (b?.AvgDangerPings > 0) details.Add($"发危险 {b.AvgDangerPings:F1}");
+            if (b.TotalMissingPings > 0) details.Add($"发问号 {b.TotalMissingPings}次");
+            if (b.TotalVisionPings > 0) details.Add($"发提醒 {b.TotalVisionPings}次");
+            if (b.TotalGetBackPings > 0) details.Add($"发撤退 {b.TotalGetBackPings}次");
+            if (b.TotalDangerPings > 0) details.Add($"发危险 {b.TotalDangerPings}次");
 
             string detailStr = details.Count > 0 ? $" | {string.Join(" | ", details)}" : "";
             return baseStr + detailStr + $" 特征 [{behavior}]";
@@ -150,19 +153,22 @@ namespace League.Services
                 return $"{displayName} 暂无战绩";
 
             double winRate = CalculateWinRate(info, gameCount);
-            string behavior = info.Behavior?.BehaviorSummary ?? "";
             string gameText = $"近{gameCount}场";
             string baseStr = $"{displayName} {gameText} 胜率 [{winRate:F0}%]";
 
+            var b = info.Behavior;
+            string behavior = b?.BehaviorSummary ?? "";
+
+            // 没有特征 → 只显示胜率
             if (string.IsNullOrEmpty(behavior))
                 return baseStr;
 
+            // 有特征 → 显示次数 + 特征
             var details = new List<string>();
-            var b = info.Behavior;
-            if (b?.AvgMissingPings > 0) details.Add($"发问号 {b.AvgMissingPings:F1}");
-            if (b?.AvgVisionPings > 0) details.Add($"发提醒 {b.AvgVisionPings:F1}");
-            if (b?.AvgGetBackPings > 0) details.Add($"发撤退 {b.AvgGetBackPings:F1}");
-            if (b?.AvgDangerPings > 0) details.Add($"发危险 {b.AvgDangerPings:F1}");
+            if (b.TotalMissingPings > 0) details.Add($"发问号 {b.TotalMissingPings}次");
+            if (b.TotalVisionPings > 0) details.Add($"发提醒 {b.TotalVisionPings}次");
+            if (b.TotalGetBackPings > 0) details.Add($"发撤退 {b.TotalGetBackPings}次");
+            if (b.TotalDangerPings > 0) details.Add($"发危险 {b.TotalDangerPings}次");
 
             string detailStr = details.Count > 0 ? $" | {string.Join(" | ", details)}" : "";
             return baseStr + detailStr + $" 特征 [{behavior}]";

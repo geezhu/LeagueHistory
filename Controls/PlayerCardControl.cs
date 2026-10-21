@@ -20,6 +20,9 @@ namespace League.Controls
         {
             InitializeComponent();
 
+            // 设置等级显示成黑色半透明
+            SetLabelBackColor();
+
             // 绑定点击事件
             lblPlayerName.LinkClicked += LblPlayerName_LinkClicked;
             lblPlayerName.Cursor = Cursors.Hand;   // 鼠标变成手型，提示可点击
@@ -31,6 +34,24 @@ namespace League.Controls
             _nameToolTip.ShowAlways = true;
         }
 
+        private void SetLabelBackColor()
+        {
+            // 1. 基础设置
+            lblSummonerLevel.Parent = picHero;          // 必须设成图片的子控件
+            lblSummonerLevel.AutoSize = false;
+            lblSummonerLevel.ForeColor = Color.White;
+            lblSummonerLevel.TextAlign = ContentAlignment.MiddleRight;
+            lblSummonerLevel.Font = new Font("微软雅黑", 6F, FontStyle.Bold);  // 可按需调整
+                                                                           // 2. 固定大小（根据你图片大小调整，这里假设数字最多3位数）
+            lblSummonerLevel.Size = new Size(40, 10);         // 宽高自己微调
+                                                              // 3. 定位到右下角（关键！）
+            lblSummonerLevel.Location = new Point(
+        picHero.Width - lblSummonerLevel.Width - 1,   // 右边留4像素边距
+                picHero.Height - lblSummonerLevel.Height - 1  // 下边留4像素边距
+            );
+            // 4. 半透明黑色背景（真正有效的方法）
+            lblSummonerLevel.BackColor = Color.FromArgb(160, 0, 0, 0);   // 160是透明度，可调 100~200
+        }
         public ListView ListViewControl
         {
             get { return listViewGames; }

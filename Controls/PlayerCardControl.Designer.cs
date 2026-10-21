@@ -160,14 +160,15 @@
             // 
             lblSummonerLevel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             lblSummonerLevel.AutoSize = true;
-            lblSummonerLevel.BackColor = Color.FromArgb(140, 0, 0, 0);
+            lblSummonerLevel.BackColor = SystemColors.Control;
             lblSummonerLevel.Font = new Font("Microsoft YaHei UI", 6.75F, FontStyle.Regular, GraphicsUnit.Point, 134);
             lblSummonerLevel.ForeColor = Color.White;
-            lblSummonerLevel.Location = new Point(16, 25);
+            lblSummonerLevel.Location = new Point(14, 25);
             lblSummonerLevel.Name = "lblSummonerLevel";
-            lblSummonerLevel.Size = new Size(22, 14);
+            lblSummonerLevel.Size = new Size(27, 14);
             lblSummonerLevel.TabIndex = 6;
-            lblSummonerLevel.Text = "666";
+            lblSummonerLevel.Text = "6669";
+            lblSummonerLevel.TextAlign = ContentAlignment.MiddleRight;
             // 
             // PlayerCardControl
             // 
