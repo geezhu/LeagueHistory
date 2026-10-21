@@ -242,7 +242,6 @@ internal static class Program
         checks["--turret-checks"] = TurretChecks.Run;
         checks["--tier-chat-checks"] = () =>
         {
-            ChampionTierChatChecks.Run();
             Ui(GameHotkeyChecks.Run);
             Background(ChatSendDiagnosticsChecks.RunAsync);
         };

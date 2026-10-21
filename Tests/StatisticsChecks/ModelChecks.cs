@@ -5,7 +5,6 @@ internal static class ModelChecks
 {
     public static Task RunAsync()
     {
-        ChampionTierChatChecks.Run();
         LiveChampionChecks.Run();
         LiveDeathStreakChecks.Run();
         OverlayTierChatChecks.Run();

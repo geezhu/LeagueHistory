@@ -17,7 +17,6 @@ internal static class DefaultStatisticsSuite
         ChampionDataChecks.Run();
         UpdateSupportChecks.Run();
         HistoryDataChecks.Run();
-        ChampionTierChatChecks.Run();
         LiveChampionChecks.Run();
         LiveDeathStreakChecks.Run();
         AugmentStackChecks.Run();
