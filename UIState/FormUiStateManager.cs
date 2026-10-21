@@ -16,6 +16,7 @@ namespace League.UIState
         private Panel? _waitingPanel;
         private ToolTip _toolTip = new ToolTip();
         private int _lastIndex = -1;
+        private readonly HashSet<Control> _tooltipOwners = new();
 
         // 加载动画相关
         private System.Windows.Forms.Timer? _currentLoadingTimer;
@@ -342,6 +343,7 @@ namespace League.UIState
                     if (_lastIndex != i)
                     {
                         _lastIndex = i;
+                        HideToolTipWhenDestroyed(tabControl);
                         Point clientPos = tabControl.PointToClient(Cursor.Position);
                         _toolTip.Show(
                             tabControl.TabPages[i].Text,
@@ -357,6 +359,19 @@ namespace League.UIState
 
             _toolTip.SetToolTip(tabControl, null);
             _lastIndex = -1;
+        }
+
+        // The tooltip hides itself on a timer that reads the control's handle. Hide it while the handle still exists,
+        // or the timer's message reaches a disposed control and throws out of the message loop.
+        private void HideToolTipWhenDestroyed(Control owner)
+        {
+            if (!_tooltipOwners.Add(owner))
+            {
+                return;
+            }
+
+            owner.HandleDestroyed += (_, _) => _toolTip.Hide(owner);
+            owner.Disposed += (_, _) => _tooltipOwners.Remove(owner);
         }
 
         public void HandleTabSelectionChanged(int selectedIndex, Poller tab1Poller)
