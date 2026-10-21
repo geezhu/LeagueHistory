@@ -153,6 +153,224 @@ public class FormMainSettingsTests : IDisposable
         });
     }
 
+    [Fact]
+    public void Load_GeneralPage_ListsTheCardsInTheOrderTheyAreUsed()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+
+            var titles = CardTitles(Page(main, "功能辅助"));
+
+            // Champion select first, then the match, then the computer, then about.
+            Assert.Equal(
+                [
+                    "选人战绩",
+                    "选人助手",
+                    "英雄预选",
+                    "对局自动化",
+                    "英雄提醒",
+                    "客户端维护",
+                    "到点关机 · 防熬夜",
+                    "关于与交流",
+                ],
+                titles
+            );
+        });
+    }
+
+    [Fact]
+    public void Load_ShutdownCard_OffersCreateDeleteAndLogOnly()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+
+            var buttons = ShutdownCard(main).Controls.Cast<Control>().SelectMany(Descendants).OfType<Button>();
+
+            Assert.Equal(["CreateShutdownPlan", "DeleteShutdownPlan", "ShutdownLog"], buttons.Select(b => b.Name));
+        });
+    }
+
+    [Fact]
+    public void Load_ShutdownCard_ExplainsThatARunningMatchFinishesFirst()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+
+            var purpose = Find<Label>(main, "ShutdownPurpose");
+
+            Assert.Contains("本局结束", purpose.Text);
+        });
+    }
+
+    [Fact]
+    public void Load_NoShutdownTaskScheduled_SummarySaysNoneWasCreated()
+    {
+        UiHost.Run(async _ =>
+        {
+            using var main = Main();
+            var summary = Find<Label>(main, "ShutdownPlanSummary");
+            var read = new TaskCompletionSource();
+            summary.TextChanged += (_, _) => read.TrySetResult();
+            // The card reads the plan once its page is opened, and publishes the result through the label.
+            Open(main, "功能辅助");
+            var published = summary.Text == "正在读取每日关机计划…" ? read.Task : Task.CompletedTask;
+
+            // The delay only bounds a broken read.
+            await Task.WhenAny(published, Task.Delay(TimeSpan.FromSeconds(10)));
+
+            Assert.Equal("尚未创建每日关机计划", summary.Text);
+        });
+    }
+
+    [Fact]
+    public void Load_OverlayPage_HoldsTheOverlaySettingsAndNoShortcutSetting()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+
+            Assert.Contains(Find<Button>(main, "PreviewLoadingOverlay"), Descendants(Page(main, "对局速览")));
+            Assert.DoesNotContain(Descendants(Page(main, "功能辅助")), c => c.Name == "LoadingOverlayBackend");
+            Assert.DoesNotContain(Descendants(main), c => c.Name == "LoadingOverlayHotkey");
+        });
+    }
+
+    [Fact]
+    public void Load_OverlayPage_KeepsTheGameBarInstructions()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+
+            var instructions = Descendants(Page(main, "对局速览")).Where(c => c.Text.Contains("Win＋G"));
+
+            Assert.NotEmpty(instructions);
+        });
+    }
+
+    [Fact]
+    public void Load_DefaultConfig_ShowsTheOverlayAutomaticallyAndOffersThePreview()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+
+            Assert.True(Find<CheckBox>(main, "AutoShowLoadingOverlay").Checked);
+            Assert.True(Find<Button>(main, "PreviewLoadingOverlay").Enabled);
+        });
+    }
+
+    [Fact]
+    public void Load_DesktopOverlay_ShowsThePreviewAndHidesTheGameBarHelp()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+            Open(main, "对局速览");
+
+            var backend = Find<ComboBox>(main, "LoadingOverlayBackend");
+            var help = Descendants(main).OfType<Label>().Single(c => c.Text.StartsWith("按 Win＋G"));
+
+            // The Game Bar choice is not exercised: showing it checks the installed package through powershell.exe.
+            Assert.Equal(0, backend.SelectedIndex);
+            Assert.True(Find<Button>(main, "PreviewLoadingOverlay").Visible);
+            Assert.False(help.Visible);
+        });
+    }
+
+    [Fact]
+    public void Load_ShortcutTable_ListsAHeaderAndThreeShortcuts()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+
+            var table = Find<TableLayoutPanel>(main, "ShortcutTable");
+
+            Assert.Equal(4, table.RowCount);
+        });
+    }
+
+    [Fact]
+    public void Load_HistoryCount_Offers10To50AndStartsAt20()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+
+            var count = Find<ComboBox>(main, "CardMatchHistoryCount");
+
+            Assert.Equal([10, 20, 30, 50], count.Items.Cast<int>());
+            Assert.Equal(20, count.SelectedItem);
+        });
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AutoAccept_Switched_OffersTheDelayOnlyWhileOn(bool on)
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+            var delay = Find<ComboBox>(main, "AutoAcceptDelaySeconds");
+
+            Find<CheckBox>(main, "chkAutoAccept").Checked = on;
+
+            Assert.Equal(on, delay.Enabled);
+            Assert.Equal(3, delay.Items.Count);
+        });
+    }
+
+    [Theory]
+    [InlineData(650)]
+    [InlineData(1235)]
+    public void Resize_MainWindowWidth_KeepsEveryGeneralCardInsideThePage(int width)
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+            Open(main, "功能辅助");
+
+            main.ClientSize = new Size(width, 720);
+            var page = Page(main, "功能辅助").Controls.OfType<FlowLayoutPanel>().Single();
+
+            Assert.All(
+                Cards(page),
+                card => Assert.True(card.Right <= page.ClientSize.Width, $"{card.Right} > {page.ClientSize.Width}")
+            );
+        });
+    }
+
+    private static TabPage Page(Control main, string title) =>
+        Find<TabControl>(main, "tabControl1").TabPages.Cast<TabPage>().Single(page => page.Text == title);
+
+    private static void Open(Control main, string title)
+    {
+        Find<TabControl>(main, "imageTabControl1").SelectedTab = Find<TabPage>(main, "tabPage3"); // 功能配置
+        Find<TabControl>(main, "tabControl1").SelectedTab = Page(main, title);
+    }
+
+    // A settings card is a flow panel directly inside the page's scrolling flow; its first child is the title.
+    private static IEnumerable<FlowLayoutPanel> Cards(FlowLayoutPanel page) => page.Controls.OfType<FlowLayoutPanel>();
+
+    private static IEnumerable<string> CardTitles(TabPage page) =>
+        Cards(page.Controls.OfType<FlowLayoutPanel>().Single()).Select(card => card.Controls[0].Text);
+
+    private static Control ShutdownCard(Control main)
+    {
+        Control card = Find<Label>(main, "ShutdownPlanSummary");
+        while (card.Parent is not FlowLayoutPanel { AutoScroll: true })
+        {
+            card = card.Parent!;
+        }
+
+        return card;
+    }
+
     private static FormMain Main()
     {
         var main = new FormMain(
