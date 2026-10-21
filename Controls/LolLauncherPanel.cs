@@ -10,13 +10,15 @@ internal sealed class LolLauncherPanel : UserControl
         Text = "正在查找安装目录…",
         TextAlign = ContentAlignment.MiddleLeft,
     };
-    private readonly Panel _pathFrame = new() { BackColor = Theme.Canvas };
+
+    // The path reads as a quiet line of text, but stays a read-only box so it can be selected and copied.
+    private readonly Panel _pathFrame = new() { BackColor = Theme.Surface };
     private readonly TextBox _path = new()
     {
         ReadOnly = true,
         BorderStyle = BorderStyle.None,
-        BackColor = Theme.Canvas,
-        ForeColor = Theme.Ink,
+        BackColor = Theme.Surface,
+        ForeColor = Theme.Muted,
         Text = "尚未识别安装位置",
         AccessibleName = "英雄联盟安装路径",
     };
@@ -34,6 +36,7 @@ internal sealed class LolLauncherPanel : UserControl
         AutoSize = true,
         Enabled = false,
     };
+    private readonly Button _choose = new() { Text = "选择安装目录", AutoSize = true };
     private readonly ToolTip _tips = new();
     private LolInstallation? _installation;
     private bool _selected;
@@ -49,28 +52,19 @@ internal sealed class LolLauncherPanel : UserControl
     {
         Font = _panelFont;
         Size = new Size(580, 156);
-        var choose = new Button { Text = "选择安装目录", AutoSize = true };
-        foreach (var button in new[] { choose, _official, _wegame })
+        foreach (var button in new[] { _choose, _official, _wegame })
         {
             button.AutoSize = false;
             button.Size = new Size(button == _wegame ? 132 : 124, 34);
             button.Margin = new Padding(0, 0, 8, 6);
-            if (button == choose)
-            {
-                ButtonStyles.Primary(button);
-            }
-            else
-            {
-                ButtonStyles.Secondary(button);
-            }
         }
-        _buttons.Controls.AddRange(new Control[] { choose, _official, _wegame });
+        _buttons.Controls.AddRange(new Control[] { _choose, _official, _wegame });
         _pathFrame.Controls.Add(_path);
         Controls.AddRange(new Control[] { _status, _pathFrame, _buttons, _hint });
-        Arrange();
+        ShowButtonRoles();
         _official.Click += async (_, _) => await StartAsync(_installation?.OfficialPath);
         _wegame.Click += async (_, _) => await StartAsync(_installation?.WeGamePath);
-        choose.Click += async (_, _) => await ChooseInstallationAsync(choose);
+        _choose.Click += async (_, _) => await ChooseInstallationAsync(_choose);
     }
 
     private async Task ChooseInstallationAsync(Button choose)
@@ -172,6 +166,45 @@ internal sealed class LolLauncherPanel : UserControl
         _wegame.Enabled = installation?.WeGamePath != null;
         _tips.SetToolTip(_official, installation?.OfficialPath);
         _tips.SetToolTip(_wegame, installation?.WeGamePath);
+        ShowButtonRoles();
+    }
+
+    // Launching is the action people come for, so a found game is the primary button and changing the folder is a
+    // link; without one, choosing the folder is the only thing to do. Launchers the folder lacks are hidden.
+    private void ShowButtonRoles()
+    {
+        _official.Visible = _installation?.OfficialPath != null;
+        _wegame.Visible = _installation?.WeGamePath != null;
+        Button? launch =
+            _wegame.Visible ? _wegame
+            : _official.Visible ? _official
+            : null;
+        foreach (var button in new[] { _official, _wegame })
+        {
+            if (button == launch)
+            {
+                ButtonStyles.Primary(button);
+            }
+            else
+            {
+                ButtonStyles.Secondary(button);
+            }
+        }
+
+        if (launch == null)
+        {
+            _choose.Text = "选择安装目录";
+            ButtonStyles.Primary(_choose);
+        }
+        else
+        {
+            _choose.Text = "更换目录";
+            ButtonStyles.Ghost(_choose);
+            _buttons.Controls.SetChildIndex(launch, 0);
+        }
+
+        _buttons.Controls.SetChildIndex(_choose, _buttons.Controls.Count - 1);
+        Arrange();
     }
 
     protected override void OnSizeChanged(EventArgs e)
@@ -190,13 +223,18 @@ internal sealed class LolLauncherPanel : UserControl
         int width = Math.Max(180, ClientSize.Width),
             line = Math.Max(22, Font.Height + 5);
         _status.SetBounds(0, 0, width, line);
-        int pathHeight = Math.Max(38, _path.PreferredHeight + 16);
-        _pathFrame.SetBounds(0, _status.Bottom + 6, width, pathHeight);
-        _path.SetBounds(12, (pathHeight - _path.PreferredHeight) / 2, width - 24, _path.PreferredHeight);
+        int pathHeight = _path.PreferredHeight + 4;
+        _pathFrame.SetBounds(0, _status.Bottom + 2, width, pathHeight);
+        _path.SetBounds(0, 2, width, _path.PreferredHeight);
         int rows = 1,
             used = 0;
         foreach (Control button in _buttons.Controls)
         {
+            if (!Offered(button))
+            {
+                continue;
+            }
+
             int space = button.Width + button.Margin.Horizontal;
             if (used > 0 && used + space > width)
             {
@@ -215,6 +253,10 @@ internal sealed class LolLauncherPanel : UserControl
             Height = height;
         }
     }
+
+    // Hidden launchers take no room; the folder button is always offered.
+    private bool Offered(Control button) =>
+        button == _choose || (button == _official ? _installation?.OfficialPath : _installation?.WeGamePath) != null;
 
     private async Task StartAsync(string? path)
     {

@@ -55,6 +55,18 @@ internal static class Theme
 
     public const string FontName = "Microsoft YaHei UI";
 
+    // Windows 11 ships Segoe Fluent Icons; Windows 10 has the older MDL2 face with the same code points.
+    private static readonly Lazy<string> IconFamily = new(() =>
+    {
+        using var installed = new System.Drawing.Text.InstalledFontCollection();
+        return installed.Families.Any(family => family.Name == "Segoe Fluent Icons")
+            ? "Segoe Fluent Icons"
+            : "Segoe MDL2 Assets";
+    });
+
+    /// <summary>The Windows icon font for line glyphs such as the navigation rail and status cards.</summary>
+    public static string IconFontName => IconFamily.Value;
+
     // Bahnschrift ships with Windows 10 1709 and later; its weights install as separate families.
     private const string NumberFamily = "Bahnschrift";
     private const string StrongNumberFamily = "Bahnschrift SemiBold";

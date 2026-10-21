@@ -14,6 +14,8 @@ public partial class FormMain
         // The rail already separates the navigation from the pages; the outer border only doubled the window frame.
         panel1.BorderStyle = BorderStyle.None;
         panel1.BackColor = Theme.Canvas;
+        // The players page kept the designer's system grey; every page shares the canvas.
+        tabPage2.BackColor = Theme.Canvas;
     }
 
     protected override void OnHandleCreated(EventArgs e)

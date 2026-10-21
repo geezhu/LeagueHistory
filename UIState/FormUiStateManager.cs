@@ -264,6 +264,11 @@ namespace League.UIState
 
         private bool IsStatusPanel(Panel panel)
         {
+            if (panel is ClientStatusCard)
+            {
+                return true;
+            }
+
             var labels = panel.Controls.OfType<Label>();
             if (
                 labels.Any(l =>
@@ -284,56 +289,10 @@ namespace League.UIState
             return false;
         }
 
-        private Panel CreateStatusPanel(string message, bool showLolLauncher = false)
-        {
-            Panel containerPanel = new Panel
-            {
-                Width = 580,
-                Height = 280,
-                BackColor = Color.Transparent,
-            };
-
-            Label label = new Label
-            {
-                Text = message,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Dock = DockStyle.Top,
-                Height = 50,
-                Font = new Font("微软雅黑", 12f, FontStyle.Bold),
-            };
-
-            ProgressBar progress = new ProgressBar
-            {
-                Style = ProgressBarStyle.Marquee,
-                Width = 220,
-                Height = 30,
-                MarqueeAnimationSpeed = 30,
-            };
-            progress.Left = (containerPanel.Width - progress.Width) / 2;
-            progress.Top = label.Bottom + 10;
-
-            containerPanel.Controls.Add(label);
-            containerPanel.Controls.Add(progress);
-
-            if (showLolLauncher)
-            {
-                var launchers = new League.Controls.LolLauncherPanel
-                {
-                    Left = 0,
-                    Top = progress.Bottom + 8,
-                    Width = containerPanel.Width,
-                };
-                containerPanel.Controls.Add(launchers);
-                containerPanel.Height = launchers.Bottom + 16;
-                launchers.SizeChanged += (_, _) => containerPanel.Height = launchers.Bottom + 16;
-            }
-            return containerPanel;
-        }
-
         private void ShowLcuNotConnectedMessage(Control parentControl)
         {
             parentControl.Controls.Clear();
-            var panel = CreateStatusPanel("正在检测/重新连接客户端，请确保已登录游戏...", true);
+            var panel = new ClientStatusCard(ClientStatus.NotConnected);
             panel.Left = (parentControl.Width - panel.Width) / 2;
             panel.Top = (parentControl.Height - panel.Height) / 2;
             panel.Anchor = AnchorStyles.None;
@@ -355,7 +314,7 @@ namespace League.UIState
 
             League.Controls.PlayerTeamsLayout.Hide(_form.tableLayoutPanel1);
 
-            _waitingPanel = CreateStatusPanel("正在等待加入游戏，请稍后...", false);
+            _waitingPanel = new ClientStatusCard(ClientStatus.WaitingForGame);
             _waitingPanel.Left = (parentControl.Width - _waitingPanel.Width) / 2;
             _waitingPanel.Top = (parentControl.Height - _waitingPanel.Height) / 2;
             _waitingPanel.Anchor = AnchorStyles.None;

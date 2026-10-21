@@ -1,6 +1,5 @@
 ﻿using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
-using System.Drawing.Text;
 
 namespace League.Controls
 {
@@ -15,16 +14,7 @@ namespace League.Controls
         private const int ImageInset = 9;
         private const float IdleImageOpacity = 0.6f;
 
-        // Windows 11 ships Segoe Fluent Icons; Windows 10 has the older MDL2 face with the same code points.
-        private static readonly Lazy<string> IconFamily = new(() =>
-        {
-            using var installed = new InstalledFontCollection();
-            return installed.Families.Any(family => family.Name == "Segoe Fluent Icons")
-                ? "Segoe Fluent Icons"
-                : "Segoe MDL2 Assets";
-        });
-
-        private readonly Font _glyphFont = new(IconFamily.Value, 15f);
+        private readonly Font _glyphFont = new(Theme.IconFontName, 15f);
         private readonly Font _labelFont = new(Theme.FontName, 8f);
         private int _hoverIndex = -1;
         private bool _showLabels;
