@@ -90,4 +90,41 @@ public class LiveActivePlayerTests
 
         Assert.Equal(0, active!.CurrentGold);
     }
+
+    [Fact]
+    public void Parse_FullRunes_KeepsTheGeneralThenTheStatRunes()
+    {
+        // Traced: the general tree comes first, then the three stat shards, in the order the client lists them.
+        var data = new JObject
+        {
+            ["fullRunes"] = new JObject
+            {
+                ["generalRunes"] = new JArray(new JObject { ["id"] = 8005 }, new JObject { ["id"] = 9111 }),
+                ["statRunes"] = new JArray(new JObject { ["id"] = 5008 }, new JObject { ["id"] = 5002 }),
+            },
+        };
+
+        Assert.Equal([8005, 9111, 5008, 5002], LiveActivePlayer.Parse(data)!.Runes);
+    }
+
+    [Fact]
+    public void Parse_RunesWithoutAUsableId_AreDropped()
+    {
+        // Mayhem returns an empty fullRunes and the client falls back to its own page; a rune with no id is not a rune.
+        var data = new JObject
+        {
+            ["fullRunes"] = new JObject
+            {
+                ["generalRunes"] = new JArray(new JObject(), new JObject { ["id"] = 0 }, new JObject { ["id"] = 8005 }),
+            },
+        };
+
+        Assert.Equal([8005], LiveActivePlayer.Parse(data)!.Runes);
+    }
+
+    [Fact]
+    public void Parse_NoRunesAtAll_IsAnEmptyList()
+    {
+        Assert.Empty(LiveActivePlayer.Parse(new JObject())!.Runes);
+    }
 }

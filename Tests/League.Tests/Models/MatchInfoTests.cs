@@ -28,4 +28,15 @@ public class MatchInfoTests
 
         Assert.Equal(expected, ratio, 6);
     }
+
+    [Fact]
+    public void Dispose_Twice_IsHarmless()
+    {
+        // A row is disposed where it was created, but a caller that already released it must not get an exception
+        // from the second call - which is what the guard inside Dispose is for.
+        MatchInfo match = new();
+
+        match.Dispose();
+        match.Dispose();
+    }
 }
