@@ -181,4 +181,17 @@ public class BuildInfoTests
         Assert.NotNull(info.Commit);
         Assert.NotEmpty(info.Describe());
     }
+
+    [Fact]
+    public void FromAssembly_TheBuildFromThisRepository_CarriesTheCommitAndTheDirtyFlag()
+    {
+        // A build-configuration guard rather than a unit test: if League.csproj stops feeding SourceRevisionId and
+        // the uncommitted-changes flag into the assembly metadata, the diagnostic report silently loses the two facts
+        // that say which build a user is running. This takes over the last two assertions of
+        // Tests/StatisticsChecks/BuildInfoChecks.cs, which asserted exactly this and nothing else about the assembly.
+        BuildInfo info = BuildInfo.FromAssembly(typeof(BuildInfo).Assembly);
+
+        Assert.True(info.Commit.Length >= 7, $"The assembly records no commit (commit: '{info.Commit}').");
+        Assert.NotNull(info.Dirty);
+    }
 }

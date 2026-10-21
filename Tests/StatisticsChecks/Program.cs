@@ -114,7 +114,6 @@ internal static class Program
         checks["--champion-manager-checks"] = ChampionManagerChecks.Run;
         checks["--voice-pcm-checks"] = VoicePcmBufferChecks.Run;
         checks["--update-support-checks"] = UpdateSupportChecks.Run;
-        checks["--build-info-checks"] = BuildInfoChecks.Run;
         checks["--diagnostic-log-checks"] = () =>
         {
             Background(DiagnosticLogChecks.RunAsync);

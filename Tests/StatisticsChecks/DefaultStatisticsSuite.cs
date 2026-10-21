@@ -18,7 +18,6 @@ internal static class DefaultStatisticsSuite
         ChampionDataChecks.Run();
         VoicePcmBufferChecks.Run();
         UpdateSupportChecks.Run();
-        BuildInfoChecks.Run();
         HistoryDataChecks.Run();
         ChampionTierChatChecks.Run();
         LiveChampionChecks.Run();
