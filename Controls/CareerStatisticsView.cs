@@ -32,7 +32,6 @@ public sealed class CareerStatisticsView : UserControl
         Text = "刷新统计",
         Dock = DockStyle.Right,
         Width = 84,
-        FlatStyle = FlatStyle.Flat,
     };
     private CancellationTokenSource? _request;
     private Task? _requestWork;
@@ -60,6 +59,7 @@ public sealed class CareerStatisticsView : UserControl
             }
         );
         header.Controls.Add(_retry);
+        ButtonStyles.Secondary(_retry);
         _retry.Click += (_, _) => LoadPlayer(_puuid);
         foreach (var (title, width) in new[] { ("比赛模式", 150), ("有效场次", 90), ("胜率", 90), ("综合 KDA", 100) })
         {

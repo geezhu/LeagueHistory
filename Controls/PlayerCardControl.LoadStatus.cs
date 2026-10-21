@@ -30,9 +30,8 @@ public partial class PlayerCardControl
                 Text = "重试",
                 Dock = DockStyle.Right,
                 Width = 52,
-                FlatStyle = FlatStyle.Flat,
             };
-            _historyRetry.FlatAppearance.BorderSize = 0;
+            ButtonStyles.Ghost(_historyRetry);
             _historyRetry.Click += (_, _) => _retryHistory?.Invoke();
             _historyStatus.Controls.Add(_historyStatusText);
             _historyStatus.Controls.Add(_historyRetry);

@@ -53,13 +53,10 @@ public partial class MatchDetailView
                 Name = "MetricPage",
                 Width = 28,
                 Height = 28,
-                FlatStyle = FlatStyle.Flat,
                 Text = "›",
                 Font = new Font("Microsoft YaHei UI", 12f, FontStyle.Bold),
-                ForeColor = Theme.Accent,
-                Cursor = Cursors.Hand,
             };
-            pageButton.FlatAppearance.BorderSize = 0;
+            ButtonStyles.Ghost(pageButton);
             pageButton.Click += (_, _) => ToggleMetricPage(section);
             section.Controls.Add(pageButton);
         }

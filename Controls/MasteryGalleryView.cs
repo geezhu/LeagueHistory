@@ -40,9 +40,8 @@ internal sealed class MasteryGalleryView : UserControl
             Text = "‹ 返回主页",
             Dock = DockStyle.Right,
             Width = 110,
-            FlatStyle = FlatStyle.Flat,
         };
-        back.FlatAppearance.BorderSize = 0;
+        ButtonStyles.Ghost(back);
         back.Click += (_, _) => CloseRequested?.Invoke();
         header.Controls.Add(
             new Label

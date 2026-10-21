@@ -93,9 +93,9 @@ public partial class FormMain
             Text = "← 返回房间战绩",
             Dock = DockStyle.Top,
             Height = 34,
-            FlatStyle = FlatStyle.Flat,
+            TextAlign = ContentAlignment.MiddleLeft,
         };
-        back.FlatAppearance.BorderSize = 0;
+        ButtonStyles.Ghost(back);
         back.Click += (_, _) => surface.Dispose();
         var status = new Label
         {

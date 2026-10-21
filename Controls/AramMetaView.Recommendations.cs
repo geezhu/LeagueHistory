@@ -161,12 +161,8 @@ internal sealed partial class AramMetaView
             host.Controls.Add(Text(title));
             CreateEquipmentChooser(host, key, Recommendations(key));
         }
-        var more = new Button
-        {
-            Text = "查看后续装备 ›",
-            AutoSize = true,
-            FlatStyle = FlatStyle.Flat,
-        };
+        var more = new Button { Text = "查看后续装备 ›", AutoSize = true };
+        ButtonStyles.Ghost(more);
         host.Controls.Add(more);
         more.Click += (_, _) =>
             ((Button)_detail.Controls[1].Controls.OfType<FlowLayoutPanel>().Single().Controls[2]).PerformClick();

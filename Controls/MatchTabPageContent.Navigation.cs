@@ -97,14 +97,11 @@ public partial class MatchTabPageContent
             Text = "← 返回玩家主页",
             Dock = DockStyle.Top,
             Height = 32,
-            FlatStyle = FlatStyle.Flat,
             Visible = false,
         };
         _backToProfile.Click += (_, _) => ReturnToProfile();
-        _backToProfile.FlatAppearance.BorderSize = 0;
+        ButtonStyles.Ghost(_backToProfile);
         _backToProfile.TextAlign = ContentAlignment.MiddleLeft;
-        _backToProfile.ForeColor = Color.FromArgb(89, 115, 151);
-        _backToProfile.FlatAppearance.MouseOverBackColor = Theme.AccentSoftHover;
     }
 
     private void ConfigureCompactMatch(Control? control)
