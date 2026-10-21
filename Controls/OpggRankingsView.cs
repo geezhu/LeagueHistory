@@ -27,6 +27,7 @@ internal sealed class OpggRankingsView : UserControl
         BorderStyle = BorderStyle.None,
         CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal,
         ColumnHeadersHeight = 42,
+        ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None,
         EnableHeadersVisualStyles = false,
         AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
     };
@@ -72,8 +73,8 @@ internal sealed class OpggRankingsView : UserControl
             Font = _textFont,
             ForeColor = Color.FromArgb(40, 60, 80),
             BackColor = Color.White,
-            SelectionBackColor = Color.FromArgb(218, 238, 251),
-            SelectionForeColor = Color.FromArgb(27, 75, 106),
+            SelectionBackColor = Theme.AccentSoft,
+            SelectionForeColor = Theme.Heading,
             Alignment = DataGridViewContentAlignment.MiddleCenter,
         };
         _grid.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
@@ -248,13 +249,8 @@ internal sealed class OpggRankingsView : UserControl
         }
         else if (e.ColumnIndex == TierColumn)
         {
-            var color = row.Tier switch
-            {
-                1 => Color.FromArgb(0, 160, 206),
-                2 => Color.FromArgb(49, 171, 149),
-                3 => Color.FromArgb(91, 139, 202),
-                _ => Color.FromArgb(136, 146, 165),
-            };
+            // Same tier colours as the ARAM rankings, so T1 reads the same on both pages.
+            var color = AramMetaView.TierColor(row.Tier is >= 1 and <= 5 ? $"T{row.Tier}" : "—");
             int x = e.CellBounds.X + (e.CellBounds.Width - 24) / 2,
                 y = e.CellBounds.Y + 12;
             using var brush = new SolidBrush(color);

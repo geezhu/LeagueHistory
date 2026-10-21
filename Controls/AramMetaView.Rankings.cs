@@ -107,7 +107,7 @@ internal sealed partial class AramMetaView
         }
         else
         {
-            Color ink = champion.WinRate >= .5 ? Color.FromArgb(0, 144, 151) : Color.FromArgb(105, 124, 141);
+            Color ink = champion.WinRate >= .5 ? Theme.Win : Theme.Muted;
             TextRenderer.DrawText(
                 e.Graphics,
                 Rate(champion.WinRate),

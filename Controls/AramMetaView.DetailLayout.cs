@@ -135,7 +135,7 @@ internal sealed partial class AramMetaView
                     AutoSize = false,
                     Size = new Size(116, 46),
                     TextAlign = ContentAlignment.MiddleCenter,
-                    ForeColor = label == "调整后胜率" ? Color.FromArgb(0, 130, 141) : Color.FromArgb(115, 133, 145),
+                    ForeColor = label == "调整后胜率" ? Theme.Win : Theme.Muted,
                     Margin = new Padding(4),
                 }
             );
@@ -254,7 +254,7 @@ internal sealed partial class AramMetaView
                     Dock = DockStyle.Fill,
                     AutoEllipsis = true,
                     TextAlign = column == 1 ? ContentAlignment.MiddleLeft : ContentAlignment.MiddleCenter,
-                    ForeColor = column == 2 && !heading ? Color.FromArgb(0, 145, 153) : Color.FromArgb(55, 76, 94),
+                    ForeColor = column == 2 && !heading ? Theme.Win : Theme.Ink,
                 },
                 column++,
                 0

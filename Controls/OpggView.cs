@@ -189,6 +189,11 @@ internal sealed partial class OpggView : UserControl
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
         };
         var refresh = new Button { Text = "刷新数据", AutoSize = true };
+        foreach (var button in new[] { _back, _forward, refresh })
+        {
+            ButtonStyles.Secondary(button);
+        }
+
         toolbar.Controls.AddRange(
             new Control[] { _back, _forward, _mode, _region, _tier, _position, refresh, _follow }
         );

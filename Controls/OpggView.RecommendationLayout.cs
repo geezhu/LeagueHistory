@@ -30,7 +30,7 @@ internal sealed partial class OpggView
                     .Where(c => OpggBuild.Ratio(c["win"], c["play"]) >= 0.5)
                     .OrderByDescending(c => OpggBuild.Ratio(c["win"], c["play"]))
                     .ToArray(),
-                Color: Color.FromArgb(0, 143, 104)
+                Color: Theme.Win
             ),
             (
                 Title: "劣势对局 · 胜率 < 50%",
@@ -38,7 +38,7 @@ internal sealed partial class OpggView
                     .Where(c => OpggBuild.Ratio(c["win"], c["play"]) < 0.5)
                     .OrderBy(c => OpggBuild.Ratio(c["win"], c["play"]))
                     .ToArray(),
-                Color: Color.FromArgb(210, 77, 91)
+                Color: Theme.Loss
             ),
         };
         foreach (var group in groups)
@@ -149,7 +149,7 @@ internal sealed partial class OpggView
             Text = Percent((double?)data["pick_rate"]),
             Bounds = new Rectangle(100, 10, 76, 24),
             TextAlign = ContentAlignment.MiddleRight,
-            ForeColor = Color.FromArgb(0, 158, 171),
+            ForeColor = Theme.Heading,
             Font = _sectionHeadingFont ??= new Font(Font, FontStyle.Bold),
         };
         panel.Controls.AddRange(new Control[] { win, count, pick });

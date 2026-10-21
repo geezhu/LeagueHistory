@@ -27,9 +27,6 @@ internal sealed class OpggRuneRecommendations : FlowLayoutPanel
     {
         Text = "应用到工具专用符文页",
         Size = new Size(250, 34),
-        FlatStyle = FlatStyle.Flat,
-        BackColor = Color.FromArgb(0, 158, 171),
-        ForeColor = Color.White,
         Margin = new Padding(0, 6, 0, 0),
     };
     private readonly ToolTip _tips = new();
@@ -64,7 +61,7 @@ internal sealed class OpggRuneRecommendations : FlowLayoutPanel
         Margin = new Padding(0, 2, 0, 2);
         MinimumSize = new Size(200, 0);
         Controls.AddRange(new Control[] { _preview, _choices });
-        _apply.FlatAppearance.BorderSize = 0;
+        ButtonStyles.Primary(_apply);
         _apply.Click += async (_, _) => await Track(ApplySelectedAsync());
     }
 
@@ -140,7 +137,7 @@ internal sealed class OpggRuneRecommendations : FlowLayoutPanel
             Percent(plan.PickRate),
             Font,
             new Rectangle(158, 16, 85, 22),
-            Color.FromArgb(0, 158, 171),
+            Theme.Heading,
             TextFormatFlags.HorizontalCenter
         );
     }
@@ -207,8 +204,8 @@ internal sealed class OpggRuneRecommendations : FlowLayoutPanel
         foreach (var button in _buttons)
         {
             bool active = (int)button.Tag! == index;
-            button.BackColor = active ? Color.FromArgb(225, 244, 247) : Color.FromArgb(245, 247, 249);
-            button.FlatAppearance.BorderColor = active ? Color.FromArgb(0, 172, 188) : Color.FromArgb(235, 239, 242);
+            button.BackColor = active ? Theme.AccentSoft : Theme.SurfaceSubtle;
+            button.FlatAppearance.BorderColor = active ? Theme.Accent : Theme.Divider;
         }
     }
 

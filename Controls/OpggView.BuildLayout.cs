@@ -75,7 +75,7 @@ internal sealed partial class OpggView
         }
         var stats = build.Stats;
         double? win = (double?)stats["win_rate"] ?? OpggBuild.Ratio(stats["win"], stats["play"]);
-        top.Controls.Add(TextLabel($"胜率\n{Percent(win)}", Color.FromArgb(0, 148, 165)));
+        top.Controls.Add(TextLabel($"胜率\n{Percent(win)}", Theme.Win));
         top.Controls.Add(TextLabel($"登场率\n{Percent((double?)stats["pick_rate"])}"));
         top.Controls.Add(TextLabel($"禁用率\n{Percent((double?)stats["ban_rate"])}"));
         top.Controls.Add(TextLabel($"梯队\nT{stats["tier_data"]?["tier"] ?? stats["tier"]}"));
@@ -169,9 +169,7 @@ internal sealed partial class OpggView
                     $"胜率 {Percent(OpggBuild.Ratio(option["win"], option["play"]))}\n{option["play"]?.ToString() ?? "—"} 场"
                 )
             );
-            row.Controls.Add(
-                TextLabel($"选用率\n{Percent((double?)option["pick_rate"])}", Color.FromArgb(0, 153, 166))
-            );
+            row.Controls.Add(TextLabel($"选用率\n{Percent((double?)option["pick_rate"])}", Theme.Heading));
         }
     }
 

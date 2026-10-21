@@ -72,7 +72,7 @@ internal sealed partial class AramMetaView
                 Text = $"使用率 {entry.PickRate:P1}",
                 Location = new Point(305, 18),
                 Size = new Size(120, 22),
-                ForeColor = Color.FromArgb(0, 144, 153),
+                ForeColor = Theme.Heading,
             }
         );
     }
@@ -125,7 +125,7 @@ internal sealed partial class AramMetaView
                     Text = $"调整后胜率 {entry.WinRate:P1}",
                     Location = new Point(44, 28),
                     AutoSize = true,
-                    ForeColor = Color.FromArgb(0, 144, 153),
+                    ForeColor = Theme.Win,
                 };
                 tile.Controls.AddRange(new Control[] { name, metric });
                 _tips.SetToolTip(
@@ -216,9 +216,7 @@ internal sealed partial class AramMetaView
                 );
             }
 
-            card.Controls.Add(
-                Text($"胜率 {entry.WinRate:P1} · 使用率 {entry.PickRate:P1}", Color.FromArgb(0, 144, 153))
-            );
+            card.Controls.Add(Text($"胜率 {entry.WinRate:P1} · 使用率 {entry.PickRate:P1}", Theme.Win));
             _tips.SetToolTip(card, $"样本 {entry.Games:N0} 场");
         }
     }

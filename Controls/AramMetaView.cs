@@ -117,6 +117,11 @@ internal sealed partial class AramMetaView : UserControl
     {
         var refresh = new Button { Text = "刷新", AutoSize = true };
         var home = new Button { Text = "英雄榜", AutoSize = true };
+        foreach (var button in new[] { _back, _forward, home, refresh })
+        {
+            ButtonStyles.Secondary(button);
+        }
+
         var toolbar = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
@@ -141,8 +146,8 @@ internal sealed partial class AramMetaView : UserControl
     {
         _grid.RowTemplate.Height = 46;
         _grid.ColumnHeadersHeight = 36;
-        _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(222, 242, 243);
-        _grid.DefaultCellStyle.SelectionForeColor = Color.FromArgb(30, 60, 75);
+        _grid.DefaultCellStyle.SelectionBackColor = Theme.AccentSoft;
+        _grid.DefaultCellStyle.SelectionForeColor = Theme.Heading;
         _grid.Columns.Add(
             new DataGridViewImageColumn
             {
