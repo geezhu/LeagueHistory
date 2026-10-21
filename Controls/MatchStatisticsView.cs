@@ -19,6 +19,7 @@ public sealed class MatchStatisticsView : UserControl
     private readonly Dictionary<int, Image> _headers = new();
     private bool _loaded;
     private readonly JObject[] _players;
+    private int _teamDivider = -1;
     private readonly Font _bold = new("Microsoft YaHei UI", 9f, FontStyle.Bold);
 
     public MatchStatisticsView(MatchInfo match)
@@ -34,6 +35,7 @@ public sealed class MatchStatisticsView : UserControl
         }
         _grid.CellClick += (_, e) => ToggleMetricGroup(e.RowIndex);
         _grid.CellPainting += (_, e) => PaintPlayerHeader(e);
+        _grid.CellPainting += (_, e) => PaintTeamDivider(e);
         Controls.Add(_grid);
         _grid.SizeChanged += (_, _) => ResizePlayerColumns();
     }
@@ -50,6 +52,7 @@ public sealed class MatchStatisticsView : UserControl
         _grid.BackgroundColor = Color.White;
         _grid.BorderStyle = BorderStyle.None;
         _grid.CellBorderStyle = DataGridViewCellBorderStyle.None;
+        _grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
         _grid.EnableHeadersVisualStyles = false;
         _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         _grid.ColumnHeadersHeight = 64;
@@ -114,7 +117,7 @@ public sealed class MatchStatisticsView : UserControl
 
             if (i > 0 && !JToken.DeepEquals(player["teamId"], _players[i - 1]["teamId"]))
             {
-                _grid.Columns[i].DividerWidth = 6;
+                _teamDivider = i; // Column i holds the previous player, so the line goes on its right edge.
             }
 
             _grid.Columns.Add(column);
@@ -169,6 +172,23 @@ public sealed class MatchStatisticsView : UserControl
         _grid.ResumeLayout();
     }
 
+    private void PaintTeamDivider(DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.ColumnIndex != _teamDivider || _teamDivider < 0)
+        {
+            return;
+        }
+
+        if (!e.Handled)
+        {
+            e.Paint(e.ClipBounds, DataGridViewPaintParts.All);
+            e.Handled = true;
+        }
+
+        using var line = new SolidBrush(Theme.DividerStrong);
+        e.Graphics.FillRectangle(line, e.CellBounds.Right - 2, e.CellBounds.Top, 2, e.CellBounds.Height);
+    }
+
     private void PaintPlayerHeader(DataGridViewCellPaintingEventArgs e)
     {
         if (e.RowIndex != -1 || e.ColumnIndex <= 0)
@@ -187,10 +207,7 @@ public sealed class MatchStatisticsView : UserControl
             e.Graphics.DrawImage(image, box);
             e.Graphics.Restore(state);
         }
-        using var pen = new Pen(
-            (int?)_players[e.ColumnIndex - 1]["teamId"] == 100 ? Color.FromArgb(46, 153, 190) : Theme.Loss,
-            2
-        );
+        using var pen = new Pen((int?)_players[e.ColumnIndex - 1]["teamId"] == 100 ? Theme.BlueTeam : Theme.RedTeam, 2);
         e.Graphics.DrawEllipse(pen, box);
         TextRenderer.DrawText(
             e.Graphics,

@@ -31,12 +31,7 @@ public sealed class TimelineView : UserControl
         FullRowSelect = true,
         BorderStyle = BorderStyle.None,
     };
-    private readonly Button _retry = new()
-    {
-        Text = "重新加载",
-        AutoSize = true,
-        FlatStyle = FlatStyle.Flat,
-    };
+    private readonly Button _retry = new() { Text = "重新加载", AutoSize = true };
     private CancellationTokenSource? _request;
     private Task? _requestWork;
     private MatchTimeline? _data;
@@ -49,6 +44,7 @@ public sealed class TimelineView : UserControl
         _service = service ?? new(() => FormMain.Globals.lcuClient.Client);
         BackColor = Color.White;
         ForeColor = Theme.Heading;
+        ButtonStyles.Secondary(_retry);
         var raw = match.RawGameData;
         raw = raw?["json"] as JObject ?? raw;
         raw = raw?["info"] as JObject ?? raw;

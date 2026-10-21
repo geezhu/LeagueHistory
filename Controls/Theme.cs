@@ -18,6 +18,9 @@ internal static class Theme
     /// <summary>Thin borders and row dividers.</summary>
     public static readonly Color Divider = Color.FromArgb(225, 231, 239);
 
+    /// <summary>A divider that must stay visible, such as between the two teams, and an off switch.</summary>
+    public static readonly Color DividerStrong = Color.FromArgb(196, 206, 218);
+
     /// <summary>Body text.</summary>
     public static readonly Color Ink = Color.FromArgb(36, 48, 65);
 
@@ -45,6 +48,10 @@ internal static class Theme
 
     public static readonly Color Win = Color.FromArgb(38, 139, 113);
     public static readonly Color Loss = Color.FromArgb(191, 81, 91);
+
+    /// <summary>The two sides of a game in charts and headers, following the client's blue and red.</summary>
+    public static readonly Color BlueTeam = Color.FromArgb(58, 128, 210);
+    public static readonly Color RedTeam = Color.FromArgb(214, 80, 96);
 
     /// <summary>The navigation rail and title bar framing the light pages.</summary>
     public static readonly Color Rail = Color.FromArgb(24, 32, 44);

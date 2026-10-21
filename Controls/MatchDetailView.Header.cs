@@ -5,6 +5,8 @@ namespace League.Controls;
 
 public partial class MatchDetailView
 {
+    private const int ReplayGap = 10;
+
     private Control CreateMatchHeader(MatchInfo match, params Button[] actions)
     {
         var header = new BufferedPanel
@@ -92,7 +94,7 @@ public partial class MatchDetailView
     {
         var buttons = new FlowLayoutPanel
         {
-            Width = actions.Sum(action => action.Width + 6),
+            Width = actions.Sum(action => action.Width + 6) + ReplayGap,
             Height = 38,
             WrapContents = false,
             Margin = Padding.Empty,
@@ -103,7 +105,8 @@ public partial class MatchDetailView
             action.Font = font;
             buttons.Controls.Add(action);
         }
-        actions[0].FlatAppearance.BorderSize = 0;
+        // A wider gap keeps the replay action apart from the tabs that follow it.
+        actions[0].Margin = new Padding(0, 0, 6 + ReplayGap, 0);
         actions[0].ForeColor = Theme.Accent;
         _toolTip.SetToolTip(actions[0], $"查看比赛 {match.GameId} 的回放");
         return buttons;

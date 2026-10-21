@@ -122,7 +122,7 @@ namespace League.UIState
                 stats.damage,
                 stats.damageRank,
                 780,
-                Color.FromArgb(77, 184, 171)
+                Theme.Accent
             );
 
             AddScoreboardSecondaryMetrics(

@@ -31,6 +31,7 @@ internal static class ButtonStyles
         Flat(button);
         button.BackColor = Color.Transparent;
         button.ForeColor = Theme.Accent;
+        button.Cursor = Cursors.Hand; // Reads as a link, so it points like one.
         button.FlatAppearance.MouseOverBackColor = Theme.AccentSoft;
         button.FlatAppearance.MouseDownBackColor = Theme.AccentSoftHover;
     }
@@ -40,6 +41,5 @@ internal static class ButtonStyles
         button.FlatStyle = FlatStyle.Flat;
         button.FlatAppearance.BorderSize = 0;
         button.UseVisualStyleBackColor = false;
-        button.Cursor = Cursors.Hand;
     }
 }

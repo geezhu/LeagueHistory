@@ -33,7 +33,7 @@ public static class ToggleSwitch
         Color fill =
             !check.Enabled ? Theme.Divider
             : check.Checked ? Theme.Accent
-            : Color.FromArgb(196, 206, 218);
+            : Theme.DividerStrong;
         using (var path = Pill(track))
         using (var brush = new SolidBrush(fill))
         {

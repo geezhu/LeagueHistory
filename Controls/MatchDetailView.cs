@@ -45,7 +45,9 @@ public partial class MatchDetailView : UserControl
 
     private Button[] CreateNavigation()
     {
+        // Replay is an action, not a tab, so it looks like the other secondary buttons.
         var replay = NavigationButton("查看回放", 76);
+        ButtonStyles.Secondary(replay);
         replay.Click += (_, _) => ReplayRequested?.Invoke();
         foreach (
             var (tab, text, width) in new[]
@@ -65,14 +67,20 @@ public partial class MatchDetailView : UserControl
         return new[] { replay }.Concat(_tabButtons.Values).ToArray();
     }
 
-    private static Button NavigationButton(string text, int width) =>
-        new()
+    private static Button NavigationButton(string text, int width)
+    {
+        var button = new Button
         {
             Text = text,
             Width = width,
             Height = 32,
             FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand,
         };
+        button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor = Theme.AccentSoft;
+        return button;
+    }
 
     private void SelectTab(DetailTab selected)
     {
@@ -80,9 +88,9 @@ public partial class MatchDetailView : UserControl
         foreach (var (tab, button) in _tabButtons)
         {
             bool active = tab == selected;
+            // A filled pill marks the open tab, the same way the settings list marks its page.
             button.BackColor = active ? Theme.AccentSoftHover : BackColor;
             button.ForeColor = active ? Theme.Accent : Theme.Muted;
-            button.FlatAppearance.BorderColor = active ? Theme.Accent : BackColor;
         }
         _scoreboard.Visible = selected == DetailTab.Scoreboard;
         if (_timeline != null)

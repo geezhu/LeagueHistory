@@ -172,8 +172,7 @@ internal sealed class MatchComparisonChart : ScrollableControl
         {
             return;
         }
-        Color color =
-            (int?)_players[index]["teamId"] == 100 ? Color.FromArgb(0, 161, 183) : Color.FromArgb(215, 72, 96);
+        Color color = (int?)_players[index]["teamId"] == 100 ? Theme.BlueTeam : Theme.RedTeam;
         if (_self[index])
         {
             using var background = new SolidBrush(Color.FromArgb(239, 245, 254));

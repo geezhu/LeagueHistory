@@ -175,9 +175,8 @@ public partial class MatchDetailView
             Name = "TeamBans",
             Text = "BAN",
             Bounds = new Rectangle(1038, 2, 64, 26),
-            FlatStyle = FlatStyle.Flat,
         };
-        button.FlatAppearance.BorderColor = Color.FromArgb(215, 223, 233);
+        ButtonStyles.Secondary(button);
         section.Controls.Add(button);
         button.BringToFront();
         var token = _requestCancellation.Token;
