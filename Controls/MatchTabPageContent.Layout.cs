@@ -208,12 +208,14 @@ public partial class MatchTabPageContent
         };
         var filter = new Button
         {
-            Text = "筛选",
+            Text = "筛选  ▾",
             Dock = DockStyle.Right,
-            Width = 60,
-            FlatStyle = FlatStyle.Flat,
+            Width = 72,
+            Margin = Padding.Empty,
         };
-        filter.FlatAppearance.BorderSize = 0;
+        ButtonStyles.Secondary(filter);
+        // Keep the button a pill inside the 40-pixel toolbar rather than a full-height block.
+        toolbar.Padding = new Padding(0, 4, 0, 4);
         ApplyOwnedFont(heading, new Font(Font.FontFamily, 12f, FontStyle.Bold));
         toolbar.Controls.Add(heading);
         toolbar.Controls.Add(filter);
@@ -329,11 +331,7 @@ public partial class MatchTabPageContent
         {
             button.Dock = DockStyle.None;
             button.Size = new Size(32, 32);
-            button.FlatStyle = FlatStyle.Flat;
-            button.FlatAppearance.BorderSize = 0;
-            button.FlatAppearance.MouseOverBackColor = Theme.AccentSoftHover;
-            button.BackColor = Color.FromArgb(232, 239, 248);
-            button.ForeColor = ForeColor;
+            ButtonStyles.Secondary(button);
             button.Text = "";
             bool previous = column == 0;
             button.Paint += (_, e) => PaintPagingArrow(button, e.Graphics, previous);

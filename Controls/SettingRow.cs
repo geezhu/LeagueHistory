@@ -122,9 +122,7 @@ internal sealed class SettingRow : TableLayoutPanel
                     Math.Max(120, TextRenderer.MeasureText(button.Text, button.Font).Width + 28),
                     32
                 );
-                button.FlatStyle = FlatStyle.Flat;
-                button.FlatAppearance.BorderColor = Color.FromArgb(207, 220, 230);
-                button.BackColor = Theme.SurfaceSubtle;
+                ButtonStyles.Secondary(button);
                 break;
         }
     }

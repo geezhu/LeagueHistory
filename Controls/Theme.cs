@@ -33,6 +33,9 @@ internal static class Theme
     /// <summary>Background of a selected row or the profile header.</summary>
     public static readonly Color AccentSoft = Color.FromArgb(232, 241, 253);
 
+    /// <summary>Fill of a secondary button.</summary>
+    public static readonly Color ControlFill = Color.FromArgb(232, 239, 248);
+
     /// <summary>Hover over a soft button.</summary>
     public static readonly Color AccentSoftHover = Color.FromArgb(225, 237, 253);
 

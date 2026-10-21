@@ -88,7 +88,8 @@ public sealed class ProfileMasteryView : UserControl
         header.Controls.Add(_refresh);
         _refresh.Click += (_, _) => LoadPlayer(_puuid, true);
         header.Controls.Add(_all);
-        _all.FlatAppearance.BorderSize = 0;
+        ButtonStyles.Secondary(_refresh);
+        ButtonStyles.Ghost(_all);
         _all.Click += (_, _) => AllRequested?.Invoke(_records);
         for (int i = 0; i < 5; i++)
         {

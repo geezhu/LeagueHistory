@@ -8,6 +8,9 @@ internal sealed class RecentOverviewView : Control
     private RecentOverview _data = RecentOverview.Build(Array.Empty<CareerGame>());
     private string _status = "正在加载最近 50 场…";
     private readonly ToolTip _tip = new();
+
+    // Same section heading as the champion mastery card below it.
+    private readonly Font _headingFont = new("Microsoft YaHei UI", 11f, FontStyle.Bold);
     private readonly List<(Rectangle bounds, string text)> _hits = new();
 
     public RecentOverviewView()
@@ -45,13 +48,17 @@ internal sealed class RecentOverviewView : Control
         _hits.Clear();
         var graphics = e.Graphics;
         graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        const string heading = "数据总览";
+        var flags = TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter;
+        TextRenderer.DrawText(graphics, heading, _headingFont, new Rectangle(16, 8, Width - 32, 25), ForeColor, flags);
+        int statusX = 16 + TextRenderer.MeasureText(heading, _headingFont).Width + 4;
         TextRenderer.DrawText(
             graphics,
-            "数据总览 · " + _status,
+            _status,
             Font,
-            new Rectangle(16, 8, Width - 32, 25),
-            ForeColor,
-            TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine
+            new Rectangle(statusX, 9, Math.Max(1, Width - 16 - statusX), 25),
+            Theme.Muted,
+            flags
         );
         int columns = Width < 540 ? 3 : 5;
         float cell = Math.Max(1, (Width - 24) / (float)columns);
@@ -74,11 +81,13 @@ internal sealed class RecentOverviewView : Control
         int x = rect.X,
             y = rect.Y,
             size = rect.Width;
-        var color =
-            i == 0
-                ? (_data.UsesAramKda ? Color.FromArgb(132, 99, 190) : Color.FromArgb(181, 139, 43))
-                : Color.FromArgb(31, 157, 145);
         double? rate = i == 0 ? null : _data.Modes[i - 1].Rate;
+        // Mode gauges show a win rate, so they take the result colours; KDA keeps its own gold or purple.
+        var color =
+            i == 0 ? (_data.UsesAramKda ? Color.FromArgb(132, 99, 190) : Color.FromArgb(181, 139, 43))
+            : rate is not double shown ? Theme.Muted
+            : shown >= .5 ? Theme.Win
+            : Theme.Loss;
         DrawGauge(g, rect, color, i == 0 ? 344 : (float)(344 * (rate ?? 0)));
         string title = i == 0 ? "KDA" : _data.Modes[i - 1].Name;
         string value =
@@ -159,6 +168,7 @@ internal sealed class RecentOverviewView : Control
         if (disposing)
         {
             _tip.Dispose();
+            _headingFont.Dispose();
         }
 
         base.Dispose(disposing);
