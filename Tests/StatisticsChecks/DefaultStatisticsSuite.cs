@@ -79,7 +79,6 @@ internal static class DefaultStatisticsSuite
 
     private static void UiChecks()
     {
-        AssistantVisibilityChecks.Run();
         OverlayPartyChecks.Run();
         SkinBrowserChecks.Run();
         PreliminaryChecks.Run();

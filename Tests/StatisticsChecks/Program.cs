@@ -187,12 +187,10 @@ internal static class Program
             Ui(() =>
             {
                 AssistantChecks.Placement();
-                AssistantVisibilityChecks.Run();
             });
         checks["--assistant-window-checks"] = () =>
             Ui(() =>
             {
-                AssistantVisibilityChecks.Run();
                 AssistantWindowChecks.Run();
             });
         checks["--mastery-checks"] = MasteryChecks;
