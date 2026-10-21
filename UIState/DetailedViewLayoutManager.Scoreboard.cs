@@ -151,7 +151,7 @@ namespace League.UIState
                 BackColor = Color.Transparent,
                 AutoEllipsis = true,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Microsoft YaHei UI", 9f, bold ? FontStyle.Bold : FontStyle.Regular),
+                Font = Theme.NumberFont(10f, bold),
             };
             row.Controls.Add(label);
             _toolTip.SetToolTip(label, text);
@@ -334,7 +334,7 @@ namespace League.UIState
                 Size = new Size(90, 30),
                 ForeColor = ScoreboardInk,
                 BackColor = Color.Transparent,
-                Font = new Font("Microsoft YaHei UI", 9f, FontStyle.Bold),
+                Font = Theme.NumberFont(10f, strong: true),
                 TextAlign = ContentAlignment.MiddleLeft,
                 AutoEllipsis = true,
                 HighlightColor = highlight,

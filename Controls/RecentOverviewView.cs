@@ -62,7 +62,7 @@ internal sealed class RecentOverviewView : Control
         );
         int columns = Width < 540 ? 3 : 5;
         float cell = Math.Max(1, (Width - 24) / (float)columns);
-        using var valueFont = new Font(Font.FontFamily, 16, FontStyle.Bold);
+        using var valueFont = Theme.NumberFont(18, strong: true);
         for (int i = 0; i < 5; i++)
         {
             int size = (int)Math.Min(108, cell - 10);

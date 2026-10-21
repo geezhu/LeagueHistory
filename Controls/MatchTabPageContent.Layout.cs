@@ -316,7 +316,7 @@ public partial class MatchTabPageContent
         paging.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         paging.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 32));
         ConfigurePagingButtons(paging);
-        ApplyOwnedFont(_pageNumber, new Font("Microsoft YaHei UI", 10f, FontStyle.Bold));
+        ApplyOwnedFont(_pageNumber, Theme.NumberFont(11f, strong: true));
         _pageNumber.Anchor = AnchorStyles.Top;
         _pageNumber.Margin = Padding.Empty;
         paging.Controls.Add(_pageNumber, 1, 0);

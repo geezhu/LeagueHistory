@@ -76,7 +76,7 @@ internal sealed class MatchHighlightCard : Control
         );
         e.Graphics.FillRectangle(shade, ClientRectangle);
         using var titleFont = new Font("Microsoft YaHei UI", 9f);
-        using var valueFont = new Font("Microsoft YaHei UI", 15f, FontStyle.Bold);
+        using var valueFont = Theme.NumberFont(18f, strong: true);
         TextRenderer.DrawText(
             e.Graphics,
             _title,

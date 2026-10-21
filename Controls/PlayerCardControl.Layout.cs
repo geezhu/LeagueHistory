@@ -4,6 +4,7 @@ public partial class PlayerCardControl
 {
     public Panel SummaryPanel { get; private set; } = null!;
     private Font _historyStrong = null!;
+    private Font _historyFigure = null!;
 
     private void ConfigureCardLayout()
     {
@@ -120,6 +121,8 @@ public partial class PlayerCardControl
         listViewGames.BackColor = Theme.Surface;
         _historyStrong = new Font(Font, FontStyle.Bold);
         Disposed += (_, _) => _historyStrong.Dispose();
+        _historyFigure = Theme.NumberFont(Font.SizeInPoints + 1);
+        Disposed += (_, _) => _historyFigure.Dispose();
         var rowHeight = new ImageList(components) { ImageSize = new Size(1, 48), ColorDepth = ColorDepth.Depth32Bit };
         using (var blank = new Bitmap(1, 48))
         {
@@ -265,7 +268,7 @@ public partial class PlayerCardControl
         TextRenderer.DrawText(
             e.Graphics,
             Field(2),
-            Font,
+            _historyFigure,
             new Rectangle(rect.Right - 126, rect.Y + 24, 122, 20),
             Theme.Ink,
             flags | TextFormatFlags.Right

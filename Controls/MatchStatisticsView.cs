@@ -21,6 +21,8 @@ public sealed class MatchStatisticsView : UserControl
     private readonly JObject[] _players;
     private int _teamDivider = -1;
     private readonly Font _bold = new("Microsoft YaHei UI", 9f, FontStyle.Bold);
+    private readonly Font _figure = Theme.NumberFont(10f);
+    private readonly Font _strongFigure = Theme.NumberFont(10f, strong: true);
 
     public MatchStatisticsView(MatchInfo match)
     {
@@ -105,13 +107,15 @@ public sealed class MatchStatisticsView : UserControl
                 ToolTipText =
                     player["riotIdGameName"]?.ToString() ?? player["summonerName"]?.ToString() ?? $"玩家 {i + 1}",
             };
+            // Player columns hold only figures; the section rows keep their own Chinese font.
+            column.DefaultCellStyle.Font = _figure;
             if (self)
             {
                 column.DefaultCellStyle = new DataGridViewCellStyle
                 {
                     BackColor = Theme.AccentSoft,
                     ForeColor = Theme.Accent,
-                    Font = _bold,
+                    Font = _strongFigure,
                 };
             }
 
@@ -301,6 +305,8 @@ public sealed class MatchStatisticsView : UserControl
 
             _portraits.Clear();
             _bold.Dispose();
+            _figure.Dispose();
+            _strongFigure.Dispose();
         }
         base.Dispose(disposing);
     }

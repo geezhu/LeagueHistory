@@ -341,7 +341,7 @@ namespace League.Controls
             bool standout = MatchInfo.KdaRatio >= 5;
             canvas.Text(
                 $"{MatchInfo.KdaRatio:0.0} KDA",
-                standout ? canvas.StrongSmall : canvas.Small,
+                standout ? canvas.StrongFigure : canvas.Figure,
                 standout ? Accent : Muted,
                 ratioX,
                 24,
@@ -465,9 +465,10 @@ namespace League.Controls
             public Graphics Graphics { get; }
             public Font Normal { get; } = new("Microsoft YaHei UI", 12f, FontStyle.Regular, GraphicsUnit.Pixel);
             public Font Strong { get; } = new("Microsoft YaHei UI", 13.33f, FontStyle.Bold, GraphicsUnit.Pixel);
-            public Font Headline { get; } = new("Microsoft YaHei UI", 21.33f, FontStyle.Bold, GraphicsUnit.Pixel);
+            public Font Headline { get; } = Theme.NumberFont(24f, strong: true, GraphicsUnit.Pixel);
             public Font Small { get; } = new("Microsoft YaHei UI", 10.67f, FontStyle.Regular, GraphicsUnit.Pixel);
-            public Font StrongSmall { get; } = new("Microsoft YaHei UI", 10.67f, FontStyle.Bold, GraphicsUnit.Pixel);
+            public Font Figure { get; } = Theme.NumberFont(12.5f, unit: GraphicsUnit.Pixel);
+            public Font StrongFigure { get; } = Theme.NumberFont(12.5f, strong: true, GraphicsUnit.Pixel);
 
             public void Text(string? text, Font font, Color color, int x, int y, int w, int h = 24)
             {
@@ -497,7 +498,8 @@ namespace League.Controls
                 Strong.Dispose();
                 Headline.Dispose();
                 Small.Dispose();
-                StrongSmall.Dispose();
+                Figure.Dispose();
+                StrongFigure.Dispose();
             }
         }
 

@@ -60,4 +60,22 @@ internal static class Theme
     public static readonly Color RailText = Color.FromArgb(226, 232, 240);
 
     public const string FontName = "Microsoft YaHei UI";
+
+    // Bahnschrift ships with Windows 10 1709 and later; its weights install as separate families.
+    private const string NumberFamily = "Bahnschrift";
+    private const string StrongNumberFamily = "Bahnschrift SemiBold";
+    private static readonly Lazy<bool> HasNumberFamily = new(() =>
+    {
+        using var installed = new System.Drawing.Text.InstalledFontCollection();
+        return installed.Families.Any(family => family.Name == StrongNumberFamily);
+    });
+
+    /// <summary>
+    /// A font for figures only (KDA, rates, gold, damage): even digit widths keep columns aligned. It has no Chinese
+    /// glyphs, so text that mixes in Chinese stays on <see cref="FontName"/>. Falls back to that face when missing.
+    /// </summary>
+    public static Font NumberFont(float size, bool strong = false, GraphicsUnit unit = GraphicsUnit.Point) =>
+        HasNumberFamily.Value
+            ? new Font(strong ? StrongNumberFamily : NumberFamily, size, FontStyle.Regular, unit)
+            : new Font(FontName, size, strong ? FontStyle.Bold : FontStyle.Regular, unit);
 }
