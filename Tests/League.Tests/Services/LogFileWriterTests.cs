@@ -237,4 +237,38 @@ public class LogFileWriterTests : IDisposable
 
         Assert.Equal(Path_, writer.CurrentPath);
     }
+
+    [Fact]
+    public async Task Write_ThePathFunctionMovesToAnotherFile_StartsThatFileInstead()
+    {
+        // This is how the daily log works: the function reads today's date, so crossing midnight routes the next
+        // record into a new file without anyone telling the writer. Traced: the first line lands in the 15th, the
+        // second in the 16th, and neither file holds the other's line.
+        string day = "2026-10-15";
+        LogFileWriter writer = new(() => _folder.File($"app-{day}.log"), 1024 * 1024, 100);
+
+        writer.Write("first day");
+        await Flush(writer);
+
+        day = "2026-10-16";
+        writer.Write("next day");
+        await Flush(writer);
+
+        Assert.Equal(["first day"], await File.ReadAllLinesAsync(_folder.File("app-2026-10-15.log")));
+        Assert.Equal(["next day"], await File.ReadAllLinesAsync(_folder.File("app-2026-10-16.log")));
+    }
+
+    [Fact]
+    public async Task Write_ThePathFunctionMovesToAnotherFile_ReportsTheNewPath()
+    {
+        // The caller shows the path in the diagnostic report, so it has to follow the function too.
+        string day = "2026-10-15";
+        LogFileWriter writer = new(() => _folder.File($"app-{day}.log"), 1024 * 1024, 100);
+        writer.Write("first day");
+        await Flush(writer);
+
+        day = "2026-10-16";
+
+        Assert.Equal(_folder.File("app-2026-10-16.log"), writer.CurrentPath);
+    }
 }

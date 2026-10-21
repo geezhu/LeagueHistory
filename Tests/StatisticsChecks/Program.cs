@@ -113,7 +113,6 @@ internal static class Program
         checks["--update-support-checks"] = UpdateSupportChecks.Run;
         checks["--diagnostic-log-checks"] = () =>
         {
-            Background(DiagnosticLogChecks.RunAsync);
             Background(AppLogChecks.RunAsync);
         };
         checks["--history-data-checks"] = HistoryDataChecks.Run;

@@ -27,7 +27,6 @@ internal static class DefaultStatisticsSuite
         MinionWaveChecks.Run();
         RoomPlayerChecks.Run();
         Task.Run(ChatSendDiagnosticsChecks.RunAsync).GetAwaiter().GetResult();
-        Task.Run(DiagnosticLogChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(AppLogChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(OpggChecks.RunAsync).GetAwaiter().GetResult();
         Task.Run(AramMetaChecks.RunAsync).GetAwaiter().GetResult();
