@@ -345,6 +345,47 @@ public class FormMainSettingsTests : IDisposable
         });
     }
 
+    [Fact]
+    public void Navigation_BackToTheGeneralPage_LaysThePageOutOnce()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+            Open(main, "对局速览");
+            var navigation = Descendants(main).OfType<SettingsNavigation>().Single();
+            var bounds = navigation.RowBounds(0);
+            int layouts = 0;
+            PageFlow(main, "功能辅助").Layout += (_, _) => layouts++;
+
+            WindowMessages.Click(navigation, new Point(bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2));
+
+            // Each auto-sized card used to re-lay out the whole page as it came into view: 118 passes per switch.
+            Assert.Equal("功能辅助", Find<TabControl>(main, "tabControl1").SelectedTab!.Text);
+            Assert.InRange(layouts, 1, 3);
+        });
+    }
+
+    [Fact]
+    public void Rail_IntoTheSettings_LaysTheOpenSettingsPageOutOnce()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+            Open(main, "功能辅助");
+            var rail = Find<TabControl>(main, "imageTabControl1");
+            rail.SelectedIndex = 0;
+            int layouts = 0;
+            PageFlow(main, "功能辅助").Layout += (_, _) => layouts++;
+
+            rail.SelectedTab = Find<TabPage>(main, "tabPage3");
+
+            Assert.InRange(layouts, 1, 3);
+        });
+    }
+
+    private static FlowLayoutPanel PageFlow(Control main, string title) =>
+        Page(main, title).Controls.OfType<FlowLayoutPanel>().Single();
+
     private static TabPage Page(Control main, string title) =>
         Find<TabControl>(main, "tabControl1").TabPages.Cast<TabPage>().Single(page => page.Text == title);
 

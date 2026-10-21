@@ -31,7 +31,36 @@ public partial class FormMain
         tabPage3.BackColor = Theme.Canvas;
         tabPage3.Controls.Add(navigation);
         tabControl1.BringToFront();
+        HoldLayoutWhileSwitching(tabControl1, SettingsFlow);
+        HoldLayoutWhileSwitching(
+            imageTabControl1,
+            page => page == tabPage3 ? SettingsFlow(tabControl1.SelectedTab) : null
+        );
     }
+
+    // Bringing a settings page into view makes every auto-sized card re-measure, and each card then re-lays out the
+    // whole page: 功能辅助 took 118 page layouts (about 140 ms) per switch. The tab control only shows the page in
+    // SelectedIndexChanged, after Selected, so the page is held from Selecting until then and laid out once.
+    private static void HoldLayoutWhileSwitching(TabControl tabs, Func<TabPage?, Control?> content)
+    {
+        Control? held = null;
+        tabs.Selecting += (_, e) =>
+        {
+            // A cancelled switch never reaches SelectedIndexChanged; let go of its page before holding the next.
+            held?.ResumeLayout(true);
+            held = content(e.TabPage);
+            held?.SuspendLayout();
+        };
+        tabs.SelectedIndexChanged += (_, _) =>
+        {
+            var page = held;
+            held = null;
+            page?.ResumeLayout(true);
+        };
+    }
+
+    private static FlowLayoutPanel? SettingsFlow(TabPage? page) =>
+        page?.Controls.OfType<FlowLayoutPanel>().SingleOrDefault();
 
     private void ConfigureGeneralSettings()
     {
