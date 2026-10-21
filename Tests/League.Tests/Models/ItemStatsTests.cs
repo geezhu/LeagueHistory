@@ -52,4 +52,62 @@ public class ItemStatsTests
 
         Assert.Equal((20.0, 40.0), (total.AttackDamage, total.AbilityPower));
     }
+
+    // ---- descriptions with nothing to read ----
+
+    [Fact]
+    public void Parse_NoDescription_IsTheEmptyStats()
+    {
+        // An item the client has no text for still has to produce something the panel can add.
+        Assert.Equal(ItemStats.None, ItemStats.Parse(null));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("<mainText>no stats block here</mainText>")]
+    [InlineData("<mainText><passive>只有被动文字</passive></mainText>")]
+    public void Parse_NoStatsBlock_IsTheEmptyStats(string text)
+    {
+        // Everything is read out of the stats block; without one there is nothing to look at, and the passive text
+        // around it is deliberately not parsed.
+        Assert.Equal(ItemStats.None, ItemStats.Parse(text));
+    }
+
+    // ---- bonus attack speed keeps its own field ----
+
+    [Fact]
+    public void Parse_BonusAttackSpeed_IsReadRatherThanCountedAsSomethingElse()
+    {
+        // It is a percentage like the crit and move-speed lines, but it belongs to AttackSpeed - the haste estimate
+        // reads it, and folding it into another field would silently change that estimate.
+        var stats = ItemStats.Parse("<stats><attention>15%</attention>攻击速度</stats>");
+
+        Assert.Equal(15, stats.AttackSpeed);
+        Assert.Equal(0, stats.CritChance);
+        Assert.Equal(0, stats.MoveSpeedPercent);
+    }
+
+    [Fact]
+    public void Parse_TwoAttackSpeedLines_AddUp()
+    {
+        // An item can carry the line twice (a base and a bonus); both count.
+        var stats = ItemStats.Parse(
+            "<stats><attention>15%</attention>攻击速度<br><attention>10%</attention>攻击速度</stats>"
+        );
+
+        Assert.Equal(25, stats.AttackSpeed);
+    }
+
+    [Fact]
+    public void Parse_AttackSpeedAlongsideOtherStats_KeepsThemAll()
+    {
+        // The three loops read separate lines of the same block; none of them may swallow another's.
+        const string text =
+            "<stats><attention>30</attention>攻击力<br><attention>20%</attention>攻击速度<br>"
+            + "<attention>150</attention>生命值</stats>";
+
+        var stats = ItemStats.Parse(text);
+
+        Assert.Equal((30.0, 20.0, 150.0), (stats.AttackDamage, stats.AttackSpeed, stats.Health));
+    }
 }
