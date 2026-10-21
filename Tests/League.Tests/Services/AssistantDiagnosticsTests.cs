@@ -110,4 +110,15 @@ public class AssistantDiagnosticsTests : IAsyncLifetime
 
         Assert.False(File.Exists(diagnostics.LogPath), "An idle log leaves no file behind.");
     }
+
+    [Fact]
+    public void Shared_IsTheApplicationsOwnLogUnderTheLogsFolder()
+    {
+        // The application uses this one everywhere; it has to point into the logs directory that retention cleans,
+        // and into the data root the test setup redirected, not at the user's real files. Reading it writes nothing.
+        string path = AssistantDiagnostics.Shared.LogPath;
+
+        Assert.EndsWith(Path.Combine("Logs", "assistant.log"), path, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith(LogRetention.LogsDirectory, path, StringComparison.OrdinalIgnoreCase);
+    }
 }

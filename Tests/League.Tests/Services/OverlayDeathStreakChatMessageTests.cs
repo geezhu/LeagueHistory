@@ -235,6 +235,33 @@ public class OverlayDeathStreakChatMessageTests
     }
 
     [Fact]
+    public void Build_ATargetThatIsNeitherSide_NamesTheChampionInstead()
+    {
+        // "single" asks about one seat, so the header cannot claim a side. Traced: the self seat is slot 0 on team
+        // 100, so a request for slot 0 with champion 11 selects exactly that player.
+        LoadingRoster roster = Roster(Seat("a", 11, self: true), Seat("b", 12, team: 200));
+        OverlayChatRequest single = new(
+            Id: "i",
+            Session: "s",
+            Target: "single",
+            Slot: 0,
+            ChampionId: 11,
+            CreatedAt: 1,
+            Dismissed: false,
+            Cancelled: false
+        );
+
+        IReadOnlyList<string> lines = OverlayDeathStreakChatMessage.Build(
+            roster,
+            single,
+            new Dictionary<string, LiveDeathStreak> { ["a"] = Streak(1, 2) },
+            Champion
+        );
+
+        Assert.StartsWith("【召唤师峡谷·英雄】连死/本局最高：", Assert.Single(lines), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Build_TheHeaderNamesTheMapFromTheQueue()
     {
         // The queue decides the map name, so the same seats under a different queue read differently.
