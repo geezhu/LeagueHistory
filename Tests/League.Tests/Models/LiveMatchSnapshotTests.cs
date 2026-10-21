@@ -312,4 +312,96 @@ public class LiveMatchSnapshotTests
 
         Assert.Throws<InvalidDataException>(() => LiveMatchSnapshot.Parse(empty));
     }
+
+    // ---- players the game cannot name, and events it cannot place ----
+
+    /// <summary>The shared fixture, copied so a test can break one part of it.</summary>
+    private static JObject Fixture() => JObject.Parse(Game);
+
+    [Fact]
+    public void Parse_ABotTheGameCannotName_GetsAStandInName()
+    {
+        // A bot has no Riot ID and sometimes no summoner name either; the row still has to be called something.
+        JObject data = Fixture();
+        var bot = new JObject
+        {
+            ["isBot"] = true,
+            ["riotId"] = "",
+            ["championName"] = "小兵",
+            ["team"] = "CHAOS",
+            ["level"] = 1,
+        };
+        ((JArray)data["allPlayers"]!).Add(bot);
+
+        LiveMatchSnapshot snapshot = LiveMatchSnapshot.Parse(data);
+
+        Assert.Equal("机器人 4", snapshot.Players[^1].Name);
+    }
+
+    [Fact]
+    public void Parse_ABotWithASummonerName_KeepsThatName()
+    {
+        // The stand-in is only for a bot that cannot be named at all.
+        JObject data = Fixture();
+        ((JArray)data["allPlayers"]!).Add(
+            new JObject
+            {
+                ["isBot"] = true,
+                ["riotId"] = "",
+                ["summonerName"] = "电脑玩家",
+                ["championName"] = "小兵",
+                ["team"] = "CHAOS",
+                ["level"] = 1,
+            }
+        );
+
+        Assert.Equal("电脑玩家", LiveMatchSnapshot.Parse(data).Players[^1].Name);
+    }
+
+    [Fact]
+    public void Parse_AKillWithNoVictim_DropsTheWholeEventList()
+    {
+        // A kill event without a victim cannot be attributed. The list is reported as unavailable rather than
+        // silently missing that one line, because every panel that reads events would then be quietly wrong.
+        JObject data = Fixture();
+        ((JArray)data["events"]!["Events"]!).Add(
+            new JObject
+            {
+                ["EventID"] = 9,
+                ["EventName"] = "ChampionKill",
+                ["EventTime"] = 50,
+                ["KillerName"] = "Enemy#CN",
+            }
+        );
+
+        Assert.Null(LiveMatchSnapshot.Parse(data).Events);
+    }
+
+    [Fact]
+    public void Parse_AnEventWithANegativeTime_DropsTheWholeEventList()
+    {
+        JObject data = Fixture();
+        ((JArray)data["events"]!["Events"]!).Add(
+            new JObject
+            {
+                ["EventID"] = 9,
+                ["EventName"] = "GameStart",
+                ["EventTime"] = -1,
+            }
+        );
+
+        Assert.Null(LiveMatchSnapshot.Parse(data).Events);
+    }
+
+    [Fact]
+    public void Parse_BlankAssisters_AreLeftOut()
+    {
+        // The assister list carries names; a blank one is not a player and would otherwise become an empty alias.
+        JObject data = Fixture();
+        ((JArray)data["events"]!["Events"]!)[1]!["Assisters"] = new JArray("", "   ", "Ally#CN");
+
+        LiveMatchEvent kill = LiveMatchSnapshot.Parse(data).Events![1];
+
+        Assert.Equal(["Ally#CN"], kill.Assisters);
+    }
 }
