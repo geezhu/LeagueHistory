@@ -27,19 +27,19 @@ public partial class FormMain
         tabControl1.DrawItem += (_, e) =>
         {
             bool selected = e.Index == tabControl1.SelectedIndex;
-            using var background = new SolidBrush(selected ? Color.White : Color.FromArgb(239, 244, 248));
+            using var background = new SolidBrush(selected ? Color.White : Theme.Canvas);
             e.Graphics.FillRectangle(background, e.Bounds);
             TextRenderer.DrawText(
                 e.Graphics,
                 tabControl1.TabPages[e.Index].Text,
                 tabControl1.Font,
                 e.Bounds,
-                selected ? AccentColors.Accent : Color.FromArgb(95, 113, 130),
+                selected ? Theme.Accent : Theme.Muted,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter
             );
             if (selected)
             {
-                using var line = new SolidBrush(AccentColors.Accent);
+                using var line = new SolidBrush(Theme.Accent);
                 e.Graphics.FillRectangle(line, e.Bounds.X + 18, e.Bounds.Bottom - 3, e.Bounds.Width - 36, 3);
             }
         };

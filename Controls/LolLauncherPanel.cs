@@ -60,7 +60,7 @@ internal sealed class LolLauncherPanel : UserControl
             button.Size = new Size(button == _wegame ? 132 : 124, 34);
             button.FlatStyle = FlatStyle.Flat;
             button.Margin = new Padding(0, 0, 8, 6);
-            button.BackColor = button == choose ? AccentColors.Fill : Theme.SurfaceSubtle;
+            button.BackColor = button == choose ? Theme.Accent : Theme.SurfaceSubtle;
             button.ForeColor = button == choose ? Color.White : Color.FromArgb(59, 81, 99);
             button.FlatAppearance.BorderColor = button == choose ? button.BackColor : Color.FromArgb(207, 220, 230);
         }
@@ -164,7 +164,7 @@ internal sealed class LolLauncherPanel : UserControl
     {
         _installation = installation;
         _status.Text = installation != null ? "已识别安装目录" : "未找到安装目录 · 请手动选择";
-        _status.ForeColor = installation != null ? AccentColors.Accent : Color.FromArgb(166, 113, 44);
+        _status.ForeColor = installation != null ? Theme.Accent : Color.FromArgb(166, 113, 44);
         _path.Text = installation?.Root ?? "尚未设置英雄联盟安装路径";
         _tips.SetToolTip(_path, installation?.Root);
         _path.Select(0, 0);

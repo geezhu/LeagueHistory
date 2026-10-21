@@ -268,7 +268,7 @@ internal sealed partial class AramMetaView
                 Width = 100,
                 Height = 30,
                 FlatStyle = FlatStyle.Flat,
-                BackColor = i == _rarity ? AccentColors.Fill : Color.White,
+                BackColor = i == _rarity ? Theme.Accent : Color.White,
                 ForeColor = i == _rarity ? Color.White : Color.FromArgb(60, 82, 99),
             };
             filters.Controls.Add(button);

@@ -1,6 +1,6 @@
 namespace League.Controls;
 
-/// <summary>Shared teal accent for settings, the assistant and statistics views.</summary>
+/// <summary>Teal accent for the dark champion-select assistant and voice windows; light pages use <see cref="Theme.Accent"/>.</summary>
 internal static class AccentColors
 {
     /// <summary>Accent text, links and indicator lines.</summary>

@@ -191,8 +191,8 @@ public partial class PlayerCardControl
         bool win = e.Item.ForeColor == Color.Green;
         bool loss = e.Item.ForeColor == Color.Red;
         var accent =
-            win ? Color.FromArgb(28, 155, 144)
-            : loss ? Color.FromArgb(210, 84, 104)
+            win ? Theme.Win
+            : loss ? Theme.Loss
             : Color.FromArgb(126, 140, 154);
         var rect = new Rectangle(e.Bounds.X, e.Bounds.Y + 1, Math.Max(1, columnHeader1.Width - 1), e.Bounds.Height - 2);
         e.Graphics.FillRectangle(SystemBrushes.Window, e.Bounds);

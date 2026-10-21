@@ -109,7 +109,7 @@ internal sealed class SettingRow : TableLayoutPanel
                 break;
             case LinkLabel link:
                 link.AutoSize = true;
-                link.LinkColor = AccentColors.Accent;
+                link.LinkColor = Theme.Accent;
                 link.LinkBehavior = LinkBehavior.HoverUnderline;
                 break;
             case Label label:

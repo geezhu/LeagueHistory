@@ -39,5 +39,11 @@ internal static class Theme
     public static readonly Color Win = Color.FromArgb(38, 139, 113);
     public static readonly Color Loss = Color.FromArgb(191, 81, 91);
 
+    /// <summary>The navigation rail and title bar framing the light pages.</summary>
+    public static readonly Color Rail = Color.FromArgb(24, 32, 44);
+    public static readonly Color RailHover = Color.FromArgb(36, 47, 62);
+    public static readonly Color RailSelected = Color.FromArgb(44, 57, 75);
+    public static readonly Color RailText = Color.FromArgb(226, 232, 240);
+
     public const string FontName = "Microsoft YaHei UI";
 }
