@@ -75,7 +75,7 @@ internal static class AugmentIconRendererChecks
         return bitmap;
     }
 
-    private static readonly MethodInfo RenderMethod = typeof(League.UIHelpers.ImageProcessor)
+    private static readonly MethodInfo RenderMethod = typeof(League.FormMain)
         .Assembly.GetType("League.UIHelpers.AugmentIconRenderer")!
         .GetMethod("Render", BindingFlags.Public | BindingFlags.Static)!;
 }
