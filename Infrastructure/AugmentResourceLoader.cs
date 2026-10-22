@@ -111,11 +111,54 @@ namespace League.Infrastructure
                 return (null, augment.Name, fullDesc);
             }
 
+            var art = await LoadArtAsync(augment);
+            if (art != null)
+            {
+                return (art, augment.Name, fullDesc);
+            }
+
             using var image = await _imageCache.GetOrDownloadImageAsync(augment.IconPath, "augments", $"{id}.png", id);
 
             var displayImage =
                 image == null ? null : League.UIHelpers.AugmentIconRenderer.Render(image, augment.Rarity);
             return (displayImage, augment.Name, fullDesc);
+        }
+
+        private const int ArtSize = 64;
+
+        // The game shows an augment as its full-colour art, transparent and without a frame, its rarity in its own
+        // colours. The catalog only names the small icon, a white mask meant to be tinted, so the art is asked for at
+        // the same path with the large suffix; the tinted mask stays as the fallback. The art is 256 pixels and is
+        // drawn at 32 to 48, so it is reduced once here rather than kept at full size in every cache.
+        private async Task<Image?> LoadArtAsync(AugmentInfo augment)
+        {
+            string? path = LargeArtPath(augment.IconPath);
+            if (path == null)
+            {
+                return null;
+            }
+
+            using var art = await _imageCache.GetOrDownloadImageAsync(path, "augments-large", "", augment.Id);
+            if (art == null)
+            {
+                return null;
+            }
+
+            var reduced = new Bitmap(ArtSize, ArtSize, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using var graphics = Graphics.FromImage(reduced);
+            graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+            graphics.DrawImage(art, new Rectangle(0, 0, ArtSize, ArtSize));
+            return reduced;
+        }
+
+        /// <summary>The large art beside a small augment icon, or null when the path does not name a small icon.</summary>
+        public static string? LargeArtPath(string? smallIconPath)
+        {
+            const string small = "_small.";
+            int at = smallIconPath?.LastIndexOf(small, StringComparison.OrdinalIgnoreCase) ?? -1;
+            return at < 0 ? null : smallIconPath![..at] + "_large." + smallIconPath[(at + small.Length)..];
         }
 
         private static string CleanDescription(string desc) =>

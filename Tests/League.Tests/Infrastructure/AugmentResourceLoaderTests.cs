@@ -223,6 +223,28 @@ public class AugmentResourceLoaderTests : IDisposable
         Assert.Null(Loader(new Answer(HttpStatusCode.OK, "[]")).GetById(1200));
     }
 
+    // ---- the large art ----
+
+    [Theory]
+    [InlineData(
+        "/lol-game-data/assets/ASSETS/UX/Cherry/Augments/Icons/ApexInventor_small.png",
+        "/lol-game-data/assets/ASSETS/UX/Cherry/Augments/Icons/ApexInventor_large.png"
+    )]
+    [InlineData("/x/ADAPt_SMALL.png", "/x/ADAPt_large.png")]
+    public void LargeArtPath_ASmallIcon_NamesTheLargeArtBesideIt(string small, string large)
+    {
+        Assert.Equal(large, AugmentResourceLoader.LargeArtPath(small));
+    }
+
+    [Theory]
+    [InlineData("/x/aug.png")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void LargeArtPath_NotASmallIcon_HasNoLargeArt(string? path)
+    {
+        Assert.Null(AugmentResourceLoader.LargeArtPath(path));
+    }
+
     // ---- looking one up ----
 
     [Fact]
