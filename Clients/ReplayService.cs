@@ -6,6 +6,19 @@ using System.Text;
 namespace League.Clients
 {
     /// <summary>
+    /// 回放下载结果
+    /// </summary>
+    public enum ReplayDownloadResult
+    {
+        Success,
+        AlreadyExists,
+        Incompatible,   // 版本不兼容 / 回放已失效
+        Failed,
+        Timeout,
+        RequestError
+    }
+
+    /// <summary>
     /// 游戏回放服务
     /// </summary>
     public class ReplayService
@@ -20,9 +33,9 @@ namespace League.Clients
         }
 
         /// <summary>
-        /// 下载游戏回放
+        /// 下载游戏回放（返回详细结果）
         /// </summary>
-        public async Task<bool> DownloadReplayAsync(long gameId, string contextData = "match-history")
+        public async Task<ReplayDownloadResult> DownloadReplayAsync(long gameId, string contextData = "match-history")
         {
             try
             {
@@ -33,7 +46,14 @@ namespace League.Clients
                 if (existingCheck.exists && existingCheck.isValid)
                 {
                     Debug.WriteLine("[回放] 回放已存在且有效，跳过下载");
-                    return true;
+                    return ReplayDownloadResult.AlreadyExists;
+                }
+
+                // 如果已经是 incompatible，直接返回，避免无意义请求
+                if (existingCheck.exists && existingCheck.state == "incompatible")
+                {
+                    Debug.WriteLine("[回放] 现有状态为 incompatible，跳过下载");
+                    return ReplayDownloadResult.Incompatible;
                 }
 
                 // 发送下载请求
@@ -48,7 +68,7 @@ namespace League.Clients
                     response.StatusCode != HttpStatusCode.Accepted)
                 {
                     Debug.WriteLine("[回放] 下载请求失败");
-                    return false;
+                    return ReplayDownloadResult.RequestError;
                 }
 
                 // 等待下载完成
@@ -57,7 +77,7 @@ namespace League.Clients
             catch (Exception ex)
             {
                 Debug.WriteLine($"[回放] 下载异常: {ex}");
-                return false;
+                return ReplayDownloadResult.Failed;
             }
         }
 
@@ -95,7 +115,7 @@ namespace League.Clients
         /// <summary>
         /// 检查回放元数据
         /// </summary>
-        private async Task<(bool exists, bool isValid)> CheckExistingReplayAsync(long gameId)
+        private async Task<(bool exists, bool isValid, string state)> CheckExistingReplayAsync(long gameId)
         {
             try
             {
@@ -107,26 +127,26 @@ namespace League.Clients
                     var metaJson = JObject.Parse(content);
 
                     var state = metaJson["state"]?.ToString()?.ToLowerInvariant() ?? "";
-                    var progress = metaJson["downloadProgress"]?.Value<int>() ?? 0;
+                    var progress = ParseProgress(metaJson["downloadProgress"]);
 
                     Debug.WriteLine($"[回放] 现有metadata状态: {state}, 进度: {progress}%");
 
-                    return (exists: true, isValid: state == "watch" && progress >= 100);
+                    return (exists: true, isValid: state == "watch" && progress >= 100, state: state);
                 }
 
-                return (exists: false, isValid: false);
+                return (exists: false, isValid: false, state: "");
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[回放] 检查现有回放异常: {ex.Message}");
-                return (exists: false, isValid: false);
+                return (exists: false, isValid: false, state: "");
             }
         }
 
         /// <summary>
         /// 等待下载完成
         /// </summary>
-        private async Task<bool> WaitForDownloadCompleteAsync(long gameId)
+        private async Task<ReplayDownloadResult> WaitForDownloadCompleteAsync(long gameId)
         {
             var sw = Stopwatch.StartNew();
 
@@ -144,20 +164,26 @@ namespace League.Clients
                         var metaJson = JObject.Parse(content);
 
                         var state = metaJson["state"]?.ToString()?.ToLowerInvariant() ?? "";
-                        var progress = metaJson["downloadProgress"]?.Value<int>() ?? 0;
+                        var progress = ParseProgress(metaJson["downloadProgress"]);
 
                         Debug.WriteLine($"[回放] 下载状态: {state}, 进度: {progress}%");
 
                         if (state == "watch" && progress >= 100)
                         {
                             Debug.WriteLine("[回放] 下载完成");
-                            return true;
+                            return ReplayDownloadResult.Success;
                         }
 
-                        if (state == "failed" || state == "error" || state == "incompatible")
+                        if (state == "incompatible")
+                        {
+                            Debug.WriteLine("[回放] 版本不兼容");
+                            return ReplayDownloadResult.Incompatible;
+                        }
+
+                        if (state == "failed" || state == "error")
                         {
                             Debug.WriteLine("[回放] 下载失败");
-                            return false;
+                            return ReplayDownloadResult.Failed;
                         }
                     }
                 }
@@ -168,7 +194,36 @@ namespace League.Clients
             }
 
             Debug.WriteLine("[回放] 下载超时");
-            return false;
+            return ReplayDownloadResult.Timeout;
+        }
+
+        /// <summary>
+        /// 安全解析进度，避免溢出/乱读导致天文数字
+        /// </summary>
+        private static int ParseProgress(JToken? token)
+        {
+            if (token == null || token.Type == JTokenType.Null)
+                return 0;
+
+            try
+            {
+                if (token.Type == JTokenType.Integer || token.Type == JTokenType.Float)
+                {
+                    var val = token.Value<double>();
+                    if (val < 0 || val > 100)
+                        return 0;
+                    return (int)val;
+                }
+
+                if (int.TryParse(token.ToString(), out int p) && p >= 0 && p <= 100)
+                    return p;
+            }
+            catch
+            {
+                // ignore
+            }
+
+            return 0;
         }
     }
 }

@@ -352,15 +352,44 @@ namespace League.Controls
 
             Font linkFont = new Font("微软雅黑", 9f, FontStyle.Underline);
             string detailsText = "查看详情数据";
-            string replayText = MatchInfo.IsReplayDownloaded ? "播放回放" : "下载回放";
+            //string replayText = MatchInfo.IsReplayDownloaded ? "播放回放" : "下载回放";
+            //int detailsX = 570;
+            //int replayX = detailsX - 80;
+            //int linkY = runeY + 30 + 8;
+            //using (SolidBrush linkBrush = new SolidBrush(Color.DodgerBlue))
+            //{
+            //    g.DrawString(replayText, linkFont, linkBrush, replayX, linkY);
+            //    g.DrawString(detailsText, linkFont, linkBrush, detailsX, linkY);
+            //}
+
+            string replayText;
+            Color replayColor = Color.DodgerBlue;
+
+            if (MatchInfo.IsReplayExpired)
+            {
+                replayText = "回放已过期";
+                replayColor = Color.Gray;          // 灰色，表示不可点
+            }
+            else if (MatchInfo.IsReplayDownloaded)
+            {
+                replayText = "播放回放";
+            }
+            else
+            {
+                replayText = "下载回放";
+            }
+
             int detailsX = 570;
             int replayX = detailsX - 80;
             int linkY = runeY + 30 + 8;
-            using (SolidBrush linkBrush = new SolidBrush(Color.DodgerBlue))
+
+            using (SolidBrush replayBrush = new SolidBrush(replayColor))
+            using (SolidBrush detailsBrush = new SolidBrush(Color.DodgerBlue))
             {
-                g.DrawString(replayText, linkFont, linkBrush, replayX, linkY);
-                g.DrawString(detailsText, linkFont, linkBrush, detailsX, linkY);
+                g.DrawString(replayText, linkFont, replayBrush, replayX, linkY);
+                g.DrawString(detailsText, linkFont, detailsBrush, detailsX, linkY);
             }
+
             SizeF detailsSize = g.MeasureString(detailsText, linkFont);
             SizeF replaySize = g.MeasureString(replayText, linkFont);
             _detailsRect = new Rectangle(detailsX, linkY, (int)detailsSize.Width, (int)detailsSize.Height);
@@ -450,6 +479,10 @@ namespace League.Controls
             base.OnMouseClick(e);
             if (_replayRect.Contains(e.Location))
             {
+                // 已过期则不再响应点击
+                if (MatchInfo?.IsReplayExpired == true)
+                    return;
+
                 ReplayClicked?.Invoke(MatchInfo);
             }
             else if (_detailsRect.Contains(e.Location))
@@ -496,9 +529,16 @@ namespace League.Controls
                 return;
             }
             string tooltipText = null;
+            //if (_replayRect.Contains(e.Location))
+            //{
+            //    tooltipText = "查看本场比赛的回放";
+            //}
             if (_replayRect.Contains(e.Location))
             {
-                tooltipText = "查看本场比赛的回放";
+                if (MatchInfo?.IsReplayExpired == true)
+                    tooltipText = "该场回放已因版本更新失效，无法下载观看";
+                else
+                    tooltipText = MatchInfo.IsReplayDownloaded ? "播放本场比赛回放" : "下载并观看本场比赛回放";
             }
             else if (_detailsRect.Contains(e.Location))
             {
@@ -603,6 +643,24 @@ namespace League.Controls
             }
             input = input.Replace("<br>", "\n").Replace("<br/>", "\n");
             return Regex.Replace(input, "<.*?>", "").Trim();
+        }
+
+        /// <summary>
+        /// 设置回放链接状态（如：回放已过期）
+        /// </summary>
+        public void SetReplayStatus(MatchInfo matchInfo, string status)
+        {
+            if (matchInfo == null) return;
+
+            // 与当前面板绑定的是同一场时才更新
+            if (_matchInfo != null && _matchInfo.GameId == matchInfo.GameId)
+            {
+                if (status == "回放已过期" || status == "回放已失效")
+                {
+                    _matchInfo.IsReplayExpired = true;
+                }
+                Invalidate();
+            }
         }
     }
 }

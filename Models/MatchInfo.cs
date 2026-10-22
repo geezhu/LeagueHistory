@@ -109,6 +109,11 @@ namespace League.Models
 
         public bool IsReplayDownloaded { get; set; } = false;
 
+        /// <summary>
+        /// 回放是否已过期（版本不兼容，无法下载）
+        /// </summary>
+        public bool IsReplayExpired { get; set; } = false;
+
         public MatchInfo()
         {
             PrimaryRunes = (from _ in Enumerable.Range(0, 4)
