@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using League.Controls;
 using League.Services;
 
@@ -53,6 +54,13 @@ public partial class FormMain
         txtGameName.ForeColor = Theme.Heading;
         txtGameName.BackColor = search.BackColor;
         txtGameName.AccessibleName = "输入 Riot ID，回车查询";
+        // Without a hint the box reads as an empty drop-down rather than a search field. ComboBox has no
+        // PlaceholderText, so the native cue banner is set on its edit box each time the handle is made.
+        txtGameName.HandleCreated += (_, _) => SetCueBanner(txtGameName, "输入 Riot ID 查询");
+        if (txtGameName.IsHandleCreated)
+        {
+            SetCueBanner(txtGameName, "输入 Riot ID 查询");
+        }
         search.Controls.Add(txtGameName);
         label1.Visible = false;
         toolbar.Controls.Add(search);
@@ -210,7 +218,16 @@ public partial class FormMain
                     content.Controls.Add(_searchBox);
                 }
 
-                _searchBox.Location = new Point(Math.Max(0, content.ClientSize.Width - _searchBox.Width - 6), 0);
+                // Centred on the tab strip, so the box lines up with the tab titles beside it.
+                int strip = Enumerable
+                    .Range(0, tabs.TabCount)
+                    .Select(i => tabs.GetTabRect(i).Bottom)
+                    .DefaultIfEmpty(0)
+                    .Max();
+                _searchBox.Location = new Point(
+                    Math.Max(0, content.ClientSize.Width - _searchBox.Width - 6),
+                    Math.Max(0, (strip - _searchBox.Height) / 2)
+                );
                 _searchBox.BringToFront();
             }
             else
@@ -239,4 +256,12 @@ public partial class FormMain
         tabs.SelectedIndexChanged += (_, _) => Schedule();
         Arrange();
     }
+
+    private const int ComboBoxSetCueBanner = 0x1703;
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessage(IntPtr window, int message, IntPtr wParam, string lParam);
+
+    private static void SetCueBanner(ComboBox box, string text) =>
+        SendMessage(box.Handle, ComboBoxSetCueBanner, IntPtr.Zero, text);
 }

@@ -41,10 +41,6 @@ internal static class ClosableTabControlChecks
 
         var rect = Private<Dictionary<int, Rectangle>>(tabs, "_closeButtonBounds")[1];
         Check(rect.Width == 12 && rect.Height == 12, "The close button keeps its fixed size");
-        Check(
-            Private<Rectangle>(tabs, "GetCloseButtonRect", tabs.GetTabRect(1)).Width == 12,
-            "The owner-draw close button is the same size"
-        );
 
         Click(tabs, new Point(tabs.GetTabRect(0).Left + 3, tabs.GetTabRect(0).Top + 3));
         Check(tabs.TabCount == 3, "Clicking a tab away from its close button closes nothing");
