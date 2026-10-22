@@ -76,7 +76,7 @@ namespace League
             chkNormal = new CheckBox();
             lkbPreliminary = new LinkLabel();
             tabPage5 = new TabPage();
-            pictureBox1 = new PictureBox();
+            label8 = new Label();
             groupBox4 = new GroupBox();
             txtHotkeyFullTeam = new TextBox();
             lblHotkeyFullTeam = new Label();
@@ -104,7 +104,6 @@ namespace League
             groupBox2.SuspendLayout();
             groupBox1.SuspendLayout();
             tabPage5.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)pictureBox1).BeginInit();
             groupBox4.SuspendLayout();
             SuspendLayout();
             // 
@@ -594,7 +593,7 @@ namespace League
             // 
             // tabPage5
             // 
-            tabPage5.Controls.Add(pictureBox1);
+            tabPage5.Controls.Add(label8);
             tabPage5.Controls.Add(groupBox4);
             tabPage5.Controls.Add(chkUseChampionName);
             tabPage5.Controls.Add(chkHideSelf);
@@ -611,14 +610,13 @@ namespace League
             tabPage5.Text = "消息发送";
             tabPage5.UseVisualStyleBackColor = true;
             // 
-            // pictureBox1
+            // label8
             // 
-            pictureBox1.Image = (Image)resources.GetObject("pictureBox1.Image");
-            pictureBox1.Location = new Point(580, 308);
-            pictureBox1.Name = "pictureBox1";
-            pictureBox1.Size = new Size(533, 169);
-            pictureBox1.TabIndex = 8;
-            pictureBox1.TabStop = false;
+            label8.Location = new Point(563, 310);
+            label8.Name = "label8";
+            label8.Size = new Size(598, 323);
+            label8.TabIndex = 9;
+            label8.Text = resources.GetString("label8.Text");
             // 
             // groupBox4
             // 
@@ -708,18 +706,18 @@ namespace League
             // 
             // label3
             // 
-            label3.Location = new Point(580, 198);
+            label3.Location = new Point(563, 198);
             label3.Name = "label3";
-            label3.Size = new Size(440, 73);
+            label3.Size = new Size(598, 73);
             label3.TabIndex = 4;
             label3.Text = "发送自定义信息：\r\n· 在左侧输入要发送的内容，默认一行一条。\r\n· 选人阶段 / 游戏内按对应快捷键发送（与战绩模式使用同一套快捷键）。\r\n· 游戏内如需发到队伍或所有人，请先按 Tab 切换聊天频道。";
             // 
             // label2
             // 
             label2.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
-            label2.Location = new Point(580, 98);
+            label2.Location = new Point(563, 98);
             label2.Name = "label2";
-            label2.Size = new Size(440, 81);
+            label2.Size = new Size(598, 81);
             label2.TabIndex = 3;
             label2.Text = "发送战绩信息：\r\n· 选人阶段：按「选人阶段发送」快捷键，把我方近期战绩/消息发到选人聊天窗\r\n· 游戏内：按「游戏内·我方」只发我方；   按「游戏内·全队」发我方+敌方\r\n· 具体按键以左侧「快捷键」配置为准（点击编辑框后按下要绑定的键即可修改）";
             // 
@@ -784,7 +782,6 @@ namespace League
             groupBox1.PerformLayout();
             tabPage5.ResumeLayout(false);
             tabPage5.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)pictureBox1).EndInit();
             groupBox4.ResumeLayout(false);
             groupBox4.PerformLayout();
             ResumeLayout(false);
@@ -850,7 +847,7 @@ namespace League
         private Label lblHotkeyFullTeam;
         private TextBox txtHotkeyMyTeam;
         private Label lblHotkeyMyTeam;
-        private PictureBox pictureBox1;
         private Panel panelTab1;
+        private Label label8;
     }
 }
