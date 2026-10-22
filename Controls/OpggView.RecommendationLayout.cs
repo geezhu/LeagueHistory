@@ -22,6 +22,8 @@ internal sealed partial class OpggView
             return;
         }
         var layout = Inline(section);
+        // The two groups share the card's width half and half, and follow it when the page is resized.
+        layout.SizeChanged += (_, _) => FitMatchupColumns(layout);
         var groups = new[]
         {
             (
@@ -45,8 +47,28 @@ internal sealed partial class OpggView
         {
             await RenderMatchupGroupAsync(layout, group.Title, group.Rows, group.Color, token);
         }
+        FitMatchupColumns(layout);
     }
 
+    private const int MatchupsShown = 8;
+    private const int MatchupGap = 24;
+
+    private static void FitMatchupColumns(Control layout)
+    {
+        int width = Math.Max(240, (layout.ClientSize.Width - MatchupGap) / 2);
+        foreach (Control column in layout.Controls)
+        {
+            column.MinimumSize = new Size(width, 0);
+            column.MaximumSize = new Size(width, 0);
+            foreach (var row in column.Controls.OfType<MatchupRow>())
+            {
+                row.Width = width;
+            }
+        }
+    }
+
+    // Each side lists its first eight; the rest stay built but hidden behind a "show all" button, so a long guide
+    // does not end in fifty rows.
     private async Task RenderMatchupGroupAsync(
         Control layout,
         string title,
@@ -60,7 +82,7 @@ internal sealed partial class OpggView
             AutoSize = true,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            Margin = new Padding(0, 0, 12, 0),
+            Margin = new Padding(0, 0, layout.Controls.Count == 0 ? MatchupGap : 0, 0),
         };
         layout.Controls.Add(column);
         column.Controls.Add(
@@ -68,7 +90,7 @@ internal sealed partial class OpggView
             {
                 Text = $"{title}（{opponents.Length}）",
                 AutoSize = true,
-                ForeColor = Color.SlateGray,
+                ForeColor = Theme.Muted,
                 Margin = new Padding(2, 0, 0, 6),
             }
         );
@@ -76,19 +98,55 @@ internal sealed partial class OpggView
         {
             column.Controls.Add(TextLabel("暂无符合条件的对局"));
         }
+        var rows = new List<Control>();
         foreach (var opponent in opponents)
         {
             token.ThrowIfCancellationRequested();
-            await AddMatchupRowAsync(column, opponent, color, token);
+            var row = await AddMatchupRowAsync(column, opponent, color, token);
+            row.Visible = rows.Count < MatchupsShown;
+            rows.Add(row);
+        }
+        if (rows.Count > MatchupsShown)
+        {
+            column.Controls.Add(MatchupToggle(rows));
         }
     }
 
-    private async Task AddMatchupRowAsync(Control column, JObject opponent, Color color, CancellationToken token)
+    private Button MatchupToggle(List<Control> rows)
+    {
+        var toggle = new Button
+        {
+            Text = $"显示全部 {rows.Count} 个 ˅",
+            AutoSize = true,
+            Margin = new Padding(0, 6, 0, 0),
+        };
+        ButtonStyles.Ghost(toggle);
+        bool expanded = false;
+        toggle.Click += (_, _) =>
+        {
+            expanded = !expanded;
+            foreach (var row in rows.Skip(MatchupsShown))
+            {
+                row.Visible = expanded;
+            }
+            toggle.Text = expanded ? "收起 ˄" : $"显示全部 {rows.Count} 个 ˅";
+        };
+        return toggle;
+    }
+
+    private async Task<Control> AddMatchupRowAsync(
+        Control column,
+        JObject opponent,
+        Color color,
+        CancellationToken token
+    )
     {
         int id = (int)opponent["champion_id"]!;
-        var row = new Panel
+        long games = (long)opponent["play"]!;
+        double rate = OpggBuild.Ratio(opponent["win"], opponent["play"]) ?? 0.5;
+        var row = new MatchupRow(ChampionName(id), rate, games, color)
         {
-            Size = new Size(320, 38),
+            Width = Math.Max(240, column.Width),
             Margin = Padding.Empty,
             Tag = id,
         };
@@ -100,32 +158,87 @@ internal sealed partial class OpggView
             WrapContents = false,
         };
         row.Controls.Add(iconHost);
-        var name = new Label
-        {
-            Text = ChampionName(id),
-            Bounds = new Rectangle(40, 0, 115, 38),
-            TextAlign = ContentAlignment.MiddleLeft,
-            AutoEllipsis = true,
-        };
-        var count = new Label
-        {
-            Text = $"{(long)opponent["play"]!:N0} 场",
-            Bounds = new Rectangle(155, 0, 95, 38),
-            TextAlign = ContentAlignment.MiddleRight,
-            ForeColor = Color.Gray,
-        };
-        var rate = new Label
-        {
-            Text = $"{OpggBuild.Ratio(opponent["win"], opponent["play"]):P2}",
-            Bounds = new Rectangle(253, 0, 65, 38),
-            TextAlign = ContentAlignment.MiddleRight,
-            ForeColor = color,
-            Font = _sectionHeadingFont ??= new Font(Font, FontStyle.Bold),
-        };
-        row.Controls.AddRange(new Control[] { name, count, rate });
-        _tips.SetToolTip(name, ChampionName(id));
-        _tips.SetToolTip(rate, "当前攻略英雄对阵该英雄的胜率");
+        _tips.SetToolTip(row, $"{ChampionName(id)} · {games:N0} 场 · 当前攻略英雄对阵它的胜率 {rate:P1}");
         await AddIconAsync(iconHost, id, "champion", token);
+        return row;
+    }
+
+    /// <summary>
+    /// One opponent: icon, name, a bar for how far the win rate sits from 50% (a 15-point lead fills it), the rate and
+    /// the games. The bar lets 53% and 58% read as different at a glance.
+    /// </summary>
+    private sealed class MatchupRow : Panel
+    {
+        private const double FullLead = 0.15;
+        private readonly string _name;
+        private readonly double _rate;
+        private readonly long _games;
+        private readonly Color _color;
+
+        public MatchupRow(string name, double rate, long games, Color color)
+        {
+            _name = name;
+            _rate = rate;
+            _games = games;
+            _color = color;
+            DoubleBuffered = true;
+            Height = 38;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            var g = e.Graphics;
+            var flags = TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding;
+            const int nameLeft = 44,
+                nameWidth = 96,
+                rateWidth = 52,
+                gamesWidth = 64;
+            TextRenderer.DrawText(
+                g,
+                _name,
+                Font,
+                new Rectangle(nameLeft, 0, nameWidth, Height),
+                Theme.Ink,
+                flags | TextFormatFlags.EndEllipsis
+            );
+            int games = Width - gamesWidth;
+            int rate = games - rateWidth - 8;
+            int barLeft = nameLeft + nameWidth + 8;
+            int barWidth = Math.Max(0, rate - 12 - barLeft);
+            if (barWidth > 0)
+            {
+                var track = new Rectangle(barLeft, Height / 2 - 3, barWidth, 6);
+                using var trackBrush = new SolidBrush(Theme.ControlFill);
+                g.FillRectangle(trackBrush, track);
+                double lead = Math.Clamp(Math.Abs(_rate - 0.5) / FullLead, 0, 1);
+                using var fill = new SolidBrush(_color);
+                g.FillRectangle(fill, track.X, track.Y, Math.Max(2, (int)(track.Width * lead)), track.Height);
+            }
+            using var strong = new Font(Font, FontStyle.Bold);
+            TextRenderer.DrawText(
+                g,
+                $"{_rate:P1}",
+                strong,
+                new Rectangle(rate, 0, rateWidth, Height),
+                _color,
+                flags | TextFormatFlags.Right
+            );
+            TextRenderer.DrawText(
+                g,
+                $"{_games:N0} 场",
+                Font,
+                new Rectangle(games, 0, gamesWidth, Height),
+                Theme.Muted,
+                flags | TextFormatFlags.Right
+            );
+        }
+
+        protected override void OnResize(EventArgs eventargs)
+        {
+            base.OnResize(eventargs);
+            Invalidate();
+        }
     }
 
     private Control RecommendationStats(JToken data)
