@@ -2,6 +2,7 @@
 using League.Clients;
 using League.Models;
 using League.PrimaryElection;
+using League.Services;
 
 namespace League.Infrastructure
 {
@@ -48,6 +49,8 @@ namespace League.Infrastructure
                 Runes.LoadAsync(),
                 Augments.LoadAsync()
             );
+            // The game's augment descriptions come from tens of megabytes on the first run of a patch; nothing waits.
+            _ = Augments.LoadTextsAsync(patch => new AugmentTextData(patch: patch), CancellationToken.None);
 
             //Debug.WriteLine("✅ 所有游戏资源加载完成");
         }

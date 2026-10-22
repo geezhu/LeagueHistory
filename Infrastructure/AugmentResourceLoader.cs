@@ -117,6 +117,63 @@ namespace League.Infrastructure
 
         public AugmentInfo? GetById(int id) => _augments.FirstOrDefault(a => a.Id == id);
 
+        /// <summary>
+        /// Replaces the hand-written descriptions with the game's own, numbers filled, for every augment the game data
+        /// covers; the others keep theirs. Called after <see cref="LoadAsync"/>, in the background: until it finishes,
+        /// and if it fails, the hand-written ones stand.
+        /// </summary>
+        /// <param name="source">
+        /// Makes the reader for the client's patch, or for the bundled version file's when the client does not say.
+        /// </param>
+        public async Task LoadTextsAsync(Func<string?, AugmentTextData> source, CancellationToken token)
+        {
+            try
+            {
+                string? patch = await ClientPatchAsync(token).ConfigureAwait(false);
+                var texts = await source(patch).LoadAsync(token).ConfigureAwait(false);
+                foreach (var augment in _augments)
+                {
+                    if (texts.TryGetValue(augment.Id, out var text) && text.Tooltip.Length > 0)
+                    {
+                        augment.Description = text.Tooltip;
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                // The resources were replaced by a newer load; its own call reads the texts.
+            }
+            catch (Exception ex)
+            {
+                // Optional enrichment: without network or on a changed format the hand-written texts stay usable.
+                AppLog.Shared.Warn(LogCategory.Data, "海克斯说明加载失败", ex);
+            }
+        }
+
+        // The bundled version file follows Data Dragon, which publishes a patch days after the client has it, so the
+        // newest augments were missing. The client's own game version ("16.21.723.1234") is asked for instead.
+        private async Task<string?> ClientPatchAsync(CancellationToken token)
+        {
+            try
+            {
+                using var response = await _client.GetAsync("/lol-patch/v1/game-version", token).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
+                {
+                    return null;
+                }
+
+                string version = (await response.Content.ReadAsStringAsync(token).ConfigureAwait(false)).Trim('"', ' ');
+                var match = System.Text.RegularExpressions.Regex.Match(version, @"^(\d+\.\d+)\.");
+                return match.Success ? match.Groups[1].Value : null;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException)
+            {
+                // Without the client the version file decides; the texts may then miss the newest augments.
+                AppLog.Shared.Warn(LogCategory.Data, "读取客户端版本失败", ex);
+                return null;
+            }
+        }
+
         public async Task<(Image? image, string name, string description)> GetInfoAsync(int id)
         {
             var augment = GetById(id);

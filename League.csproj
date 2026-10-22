@@ -28,6 +28,8 @@
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="NVorbis" Version="0.10.5" />
 		<PackageReference Include="System.Management" Version="9.0.4" />
+		<!-- XXH3 for the game string table keys the augment descriptions are filed under. -->
+		<PackageReference Include="System.IO.Hashing" Version="9.0.4" />
 		<PackageReference Include="System.Speech" Version="9.0.4" />
 		<PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
 		<PackageReference Include="org.k2fsa.sherpa.onnx.runtime.win-x64" Version="1.13.8" />

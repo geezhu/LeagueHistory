@@ -1,6 +1,7 @@
 using System.Net;
 using League.Infrastructure;
 using League.Models;
+using League.Services;
 using Newtonsoft.Json.Linq;
 
 namespace League.Tests.Infrastructure;
@@ -307,6 +308,89 @@ public class AugmentResourceLoaderTests : IDisposable
         await loader.GetInfoAsync(3116);
 
         Assert.Equal(1, art.Requests);
+    }
+
+    // ---- the game's descriptions ----
+
+    [Fact]
+    public async Task LoadTextsAsync_TheGameHasTheAugment_ReplacesTheHandWrittenText()
+    {
+        AugmentResourceLoader loader = Loader(new Answer(HttpStatusCode.OK, Json(Row(3116, description: "手写"))));
+        await loader.LoadAsync();
+
+        await loader.LoadTextsAsync(_ => Texts(new TextFiles(fail: false)), CancellationToken.None);
+
+        Assert.Contains("持续5秒的效果", loader.GetById(3116)?.Description);
+    }
+
+    [Fact]
+    public async Task LoadTextsAsync_TheTextsCannotBeRead_KeepsTheHandWrittenText()
+    {
+        AugmentResourceLoader loader = Loader(new Answer(HttpStatusCode.OK, Json(Row(3116, description: "手写"))));
+        await loader.LoadAsync();
+
+        await loader.LoadTextsAsync(_ => Texts(new TextFiles(fail: true)), CancellationToken.None);
+
+        Assert.Equal("手写", loader.GetById(3116)?.Description);
+    }
+
+    [Theory]
+    [InlineData("\"16.21.723.1234\"", "16.21")]
+    [InlineData("not a version", null)]
+    public async Task LoadTextsAsync_TheClientsGameVersion_ChoosesThePatch(string version, string? patch)
+    {
+        // The client answers the version request; every other request gets the catalog.
+        AugmentResourceLoader loader = Loader(new Version(version, Json(Row(3116))));
+        await loader.LoadAsync();
+        string? chosen = "unset";
+
+        await loader.LoadTextsAsync(
+            asked =>
+            {
+                chosen = asked;
+                return Texts(new TextFiles(fail: true));
+            },
+            CancellationToken.None
+        );
+
+        Assert.Equal(patch, chosen);
+    }
+
+    private sealed class Version(string version, string catalog) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        {
+            bool asksVersion = request.RequestUri!.AbsolutePath == "/lol-patch/v1/game-version";
+            return Task.FromResult(
+                new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(asksVersion ? version : catalog),
+                }
+            );
+        }
+    }
+
+    private AugmentTextData Texts(HttpMessageHandler handler) =>
+        new(Path.Combine(_cache, "texts"), "16.21", new HttpClient(handler), "https://cdn.invalid");
+
+    // Serves the trimmed mode data and string table in TestData/CommunityDragon/Augments, or fails every request.
+    private sealed class TextFiles(bool fail) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        {
+            if (fail)
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+            }
+
+            string name = request.RequestUri!.AbsolutePath.EndsWith("kiwi.bin.json", StringComparison.Ordinal)
+                ? "kiwi.bin.json"
+                : "lol.stringtable.json";
+            string path = Path.Combine(AppContext.BaseDirectory, "TestData", "CommunityDragon", "Augments", name);
+            return Task.FromResult(
+                new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(File.OpenRead(path)) }
+            );
+        }
     }
 
     private const string SmallIcon = "/lol-game-data/assets/ASSETS/UX/Kiwi/Augments/Icons/TakeEmDownDownDown_small.png";

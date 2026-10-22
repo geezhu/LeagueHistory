@@ -1,0 +1,326 @@
+{
+ "{32445793}": {
+  "AugmentNameId": "TakeemDownDownDown",
+  "NameTra": "Kiwi_Augment_TakeemDownDownDown_Name",
+  "DescriptionTra": "Kiwi_Augment_TakeemDownDownDown_Description",
+  "AugmentTooltipTra": "Kiwi_Augment_TakeemDownDownDown_Tooltip",
+  "RootSpell": "{8679f7dd}",
+  "AdditionalSpells": [
+   "{b6df4b12}",
+   "{557ba0ec}"
+  ],
+  "AugmentLargeIconPath": "{02352f66caf65576}",
+  "AugmentSmallIconPath": "assets/ux/kiwi/augments/icons/takeemdowndowndown_small.tex",
+  "AugmentDisplayTags": [
+   1
+  ],
+  "rarity": 1,
+  "AugmentPlatformId": 3116,
+  "ResourceResolver": "{11109341}",
+  "__type": "AugmentData"
+ },
+ "{8679f7dd}": {
+  "mSpell": {
+   "DataValues": [
+    {
+     "name": "Stacks_Max_Minus_One",
+     "values": [
+      4.0,
+      4.0,
+      4.0,
+      4.0,
+      4.0,
+      4.0,
+      4.0
+     ],
+     "__type": "SpellDataValue"
+    },
+    {
+     "name": "Stacks_Max",
+     "values": [
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "__type": "SpellDataValue"
+    },
+    {
+     "name": "Stack_Duration",
+     "values": [
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "__type": "SpellDataValue"
+    },
+    {
+     "name": "Attack_Stacks",
+     "values": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+     ],
+     "__type": "SpellDataValue"
+    },
+    {
+     "name": "Ability_Stacks",
+     "values": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+     ],
+     "__type": "SpellDataValue"
+    },
+    {
+     "name": "Attack_Empower_Duration",
+     "values": [
+      4.0,
+      4.0,
+      4.0,
+      4.0,
+      4.0,
+      4.0,
+      4.0
+     ],
+     "__type": "SpellDataValue"
+    }
+   ],
+   "mSpellCalculations": {
+    "{c75ec8fe}": {
+     "mFormulaParts": [
+      {
+       "mStartValue": 5.0,
+       "mEndValue": 30.0,
+       "__type": "ByCharLevelInterpolationCalculationPart"
+      },
+      {
+       "mStat": 2,
+       "mStatFormula": 2,
+       "mCoefficient": 0.3499999940395355,
+       "__type": "StatByCoefficientCalculationPart"
+      },
+      {
+       "mCoefficient": 0.15000000596046448,
+       "__type": "StatByCoefficientCalculationPart"
+      }
+     ],
+     "mRangedMultiplier": {
+      "mNumber": 0.5,
+      "__type": "NumberCalculationPart"
+     },
+     "__type": "{e9a3c91d}"
+    },
+    "{25caecdf}": {
+     "mMultiplier": {
+      "mNumber": 0.20000000298023224,
+      "__type": "NumberCalculationPart"
+     },
+     "mModifiedGameCalculation": "{c75ec8fe}",
+     "__type": "GameCalculationModified"
+    },
+    "{0c0f49f5}": {
+     "mFormulaParts": [
+      {
+       "mNumber": 0.15000000596046448,
+       "__type": "NumberCalculationPart"
+      },
+      {
+       "mStat": 4,
+       "mStatFormula": 2,
+       "mCoefficient": 0.05000000074505806,
+       "__type": "StatByCoefficientCalculationPart"
+      },
+      {
+       "mStat": 11,
+       "mCoefficient": 0.001500000013038516,
+       "__type": "StatByCoefficientCalculationPart"
+      }
+     ],
+     "mDisplayAsPercent": true,
+     "mRangedMultiplier": {
+      "mNumber": 0.5,
+      "__type": "NumberCalculationPart"
+     },
+     "__type": "{e9a3c91d}"
+    },
+    "{c1fb65e1}": {
+     "mSimpleTooltipCalculationDisplay": 5,
+     "mExpandedTooltipCalculationDisplay": 5,
+     "mFormulaParts": [
+      {
+       "mNumber": 0.6700000166893005,
+       "__type": "NumberCalculationPart"
+      }
+     ],
+     "mDisplayAsPercent": true,
+     "mRangedMultiplier": {
+      "mNumber": 0.5,
+      "__type": "NumberCalculationPart"
+     },
+     "__type": "{e9a3c91d}"
+    }
+   }
+  },
+  "__type": "SpellObject"
+ },
+ "Maps/ModeSpecificData/Augments/ARAM_ImTheJuggernaut": {
+  "AugmentNameId": "ARAM_ImTheJuggernaut",
+  "NameTra": "Kiwi_Augment_ImTheJuggernaut_Name",
+  "DescriptionTra": "Kiwi_Augment_ImTheJuggernaut_Summary",
+  "AugmentTooltipTra": "Kiwi_Augment_ImTheJuggernaut_Tooltip",
+  "RootSpell": "Maps/ModeSpecificData/Augments/ARAM_ImTheJuggernaut/Augment_ARAM_ImTheJuggernaut",
+  "AdditionalSpells": [
+   "Maps/ModeSpecificData/Augments/ARAM_ImTheJuggernaut/Augment_ARAM_ImTheJuggernautStacks"
+  ],
+  "TooltipData": {
+   "{c4182067}": "Kiwi_Augment_ImTheJuggernaut_Tooltip",
+   "__type": "{5b441d9b}"
+  },
+  "AugmentLevelData": {
+   "__type": "{21dad86e}"
+  },
+  "AugmentLargeIconPath": "assets/ux/kiwi/augments/icons/iamthejuggernaut_large.tex",
+  "AugmentSmallIconPath": "assets/ux/kiwi/augments/icons/iamthejuggernaut_small.tex",
+  "AugmentDisplayTags": [
+   3,
+   1
+  ],
+  "rarity": 2,
+  "AugmentPlatformId": 1001,
+  "ResourceResolver": "Maps/ModeSpecificData/Augments/ARAM_ImTheJuggernaut/Resources",
+  "__type": "AugmentData"
+ },
+ "Maps/ModeSpecificData/Augments/ARAM_ImTheJuggernaut/Augment_ARAM_ImTheJuggernaut": {
+  "mSpell": {
+   "DataValues": [
+    {
+     "name": "Stacks_Max",
+     "values": [
+      10.0,
+      10.0,
+      10.0,
+      10.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "__type": "SpellDataValue"
+    },
+    {
+     "name": "Stack_Duration",
+     "values": [
+      6.0,
+      6.0,
+      6.0,
+      6.0,
+      6.0,
+      6.0,
+      6.0
+     ],
+     "__type": "SpellDataValue"
+    },
+    {
+     "name": "StacksPerHit",
+     "values": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+     ],
+     "__type": "SpellDataValue"
+    },
+    {
+     "name": "MaxLevel",
+     "values": [
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0
+     ],
+     "__type": "SpellDataValue"
+    }
+   ],
+   "mSpellCalculations": {
+    "Calc_AF": {
+     "mFormulaParts": [
+      {
+       "mStartValue": 25.0,
+       "mEndValue": 75.0,
+       "__type": "ByCharLevelInterpolationCalculationPart"
+      }
+     ],
+     "__type": "GameCalculation"
+    },
+    "Calc_Tenacity": {
+     "mSimpleTooltipCalculationDisplay": 5,
+     "mExpandedTooltipCalculationDisplay": 5,
+     "mFormulaParts": [
+      {
+       "mNumber": 0.07999999821186066,
+       "__type": "NumberCalculationPart"
+      }
+     ],
+     "mDisplayAsPercent": true,
+     "__type": "GameCalculation"
+    },
+    "Calc_Size": {
+     "mSimpleTooltipCalculationDisplay": 5,
+     "mExpandedTooltipCalculationDisplay": 5,
+     "mFormulaParts": [
+      {
+       "mNumber": 0.10000000149011612,
+       "__type": "NumberCalculationPart"
+      }
+     ],
+     "mDisplayAsPercent": true,
+     "__type": "GameCalculation"
+    },
+    "Calc_Defenses": {
+     "mFormulaParts": [
+      {
+       "mStartValue": 5.0,
+       "mEndValue": 10.0,
+       "__type": "ByCharLevelInterpolationCalculationPart"
+      }
+     ],
+     "__type": "GameCalculation"
+    },
+    "Calc_MS": {
+     "mSimpleTooltipCalculationDisplay": 5,
+     "mExpandedTooltipCalculationDisplay": 5,
+     "mFormulaParts": [
+      {
+       "mNumber": 0.07999999821186066,
+       "__type": "NumberCalculationPart"
+      }
+     ],
+     "mDisplayAsPercent": true,
+     "__type": "GameCalculation"
+    }
+   }
+  },
+  "__type": "SpellObject"
+ }
+}

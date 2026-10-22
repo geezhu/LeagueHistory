@@ -80,7 +80,15 @@ public sealed class SpellTextData
         ) || key.StartsWith("game_character_passive", StringComparison.Ordinal);
 
     /// <summary>The kept entries of a string table's "entries" object, reading the table once from start to end.</summary>
-    public static async Task<Dictionary<string, string>> ReadTooltipsAsync(JsonReader reader, CancellationToken token)
+    public static Task<Dictionary<string, string>> ReadTooltipsAsync(JsonReader reader, CancellationToken token) =>
+        ReadEntriesAsync(reader, Keeps, token);
+
+    /// <summary>The entries of a string table whose lower-case key passes <paramref name="keep"/>.</summary>
+    public static async Task<Dictionary<string, string>> ReadEntriesAsync(
+        JsonReader reader,
+        Func<string, bool> keep,
+        CancellationToken token
+    )
     {
         var texts = new Dictionary<string, string>();
         while (await reader.ReadAsync(token).ConfigureAwait(false))
@@ -95,7 +103,7 @@ public sealed class SpellTextData
             {
                 string key = ((string)reader.Value!).ToLowerInvariant();
                 string? value = await reader.ReadAsStringAsync(token).ConfigureAwait(false);
-                if (value != null && Keeps(key))
+                if (value != null && keep(key))
                 {
                     texts[key] = value;
                 }
