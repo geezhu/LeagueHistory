@@ -374,7 +374,11 @@ public sealed class OverlayChampionDetailService : IDisposable
         var lifetime = queue == 2400 ? _lifetime() : TimeSpan.FromMinutes(15);
         if (_cache.TryGetValue(key, out var cached) && DateTime.UtcNow - cached.Time < lifetime)
         {
-            return (JObject)cached.Data.DeepClone();
+            // Names and descriptions are filled again: the game's augment descriptions load in the background after
+            // start-up, and a detail built before they arrived would otherwise keep the old text for the whole lifetime.
+            var copy = (JObject)cached.Data.DeepClone();
+            Decorate(copy);
+            return copy;
         }
 
         var data = new JObject
