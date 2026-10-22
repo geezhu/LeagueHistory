@@ -515,10 +515,11 @@ internal static class OpggChecks
         using var narrow = new Bitmap(820, 600);
         form.DrawToBitmap(narrow, new Rectangle(0, 0, 820, 600));
         narrow.Save(Path.Combine(AppContext.BaseDirectory, "opgg-narrow.png"));
-        var skillSection = content
-            .Controls.Cast<Control>()
+        // The skill section sits in one of the guide's two columns, not directly in the content.
+        var skillSection = StatisticsCheckSupport
+            .Children(content)
             .First(c => c.Controls.OfType<Label>().Any(l => l.Text == "技能加点"));
-        content.AutoScrollPosition = new Point(0, skillSection.Top - content.DisplayRectangle.Y);
+        content.ScrollControlIntoView(skillSection);
         Application.DoEvents();
         using (var equipmentImage = new Bitmap(820, 600))
         {

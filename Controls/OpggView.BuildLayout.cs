@@ -39,16 +39,20 @@ internal sealed partial class OpggView
         _tiers.Visible = false;
         _content.Visible = true;
         await RenderChampionSummaryAsync(build, token);
+        // Left: the spells, then the build from the first purchase to the core items. Right: the runes, the skills and
+        // the items bought later. This split keeps the two columns close in height with real guides.
+        var (left, right) = Columns();
         if (build.Query.Mode != "arena")
         {
-            await RenderOptionsAsync(Section("召唤师技能"), build.Data["summoner_spells"], "spell", 2, token);
+            await RenderOptionsAsync(Section("召唤师技能", left), build.Data["summoner_spells"], "spell", 2, token);
         }
-        await RenderRunesAsync(build, token);
+        await RenderRunesAsync(build, right, token);
         token.ThrowIfCancellationRequested();
-        RenderSkills(build);
-        await RenderStartingEquipmentAsync(build, token);
-        await RenderLaterEquipmentAsync(build, token);
-        await RenderOptionsAsync(Section("核心装备组合"), build.Data["core_items"], "item", 5, token);
+        RenderSkills(build, right);
+        await RenderStartingEquipmentAsync(build, left, token);
+        await RenderOptionsAsync(Section("核心装备组合", left), build.Data["core_items"], "item", 5, token);
+        await RenderLaterEquipmentAsync(build, right, token);
+        LevelColumns(left.Parent!);
         await RenderMatchupsAsync(build, token);
         if (build.Query.Mode == "arena")
         {
@@ -71,15 +75,22 @@ internal sealed partial class OpggView
         token.ThrowIfCancellationRequested();
         if (top.Controls.OfType<PictureBox>().FirstOrDefault() is { } hero)
         {
-            hero.Size = new Size(52, 52);
+            hero.Size = new Size(72, 72);
+            hero.Margin = new Padding(0, 0, 16, 0);
         }
         var stats = build.Stats;
         double? win = (double?)stats["win_rate"] ?? OpggBuild.Ratio(stats["win"], stats["play"]);
-        top.Controls.Add(TextLabel($"胜率\n{Percent(win)}", Theme.Win));
-        top.Controls.Add(TextLabel($"登场率\n{Percent((double?)stats["pick_rate"])}"));
-        top.Controls.Add(TextLabel($"禁用率\n{Percent((double?)stats["ban_rate"])}"));
-        top.Controls.Add(TextLabel($"梯队\nT{stats["tier_data"]?["tier"] ?? stats["tier"]}"));
-        top.Controls.Add(TextLabel($"统计场次\n{stats["play"]?.ToString() ?? "—"}"));
+        string tier = $"T{stats["tier_data"]?["tier"] ?? stats["tier"]}";
+        var winColor =
+            win is not double rate ? Theme.Heading
+            : rate >= 0.5 ? Theme.Win
+            : Theme.Loss;
+        top.Controls.Add(SummaryMetric("胜率", Percent(win), winColor));
+        top.Controls.Add(SummaryMetric("登场率", Percent((double?)stats["pick_rate"]), Theme.Heading));
+        top.Controls.Add(SummaryMetric("禁用率", Percent((double?)stats["ban_rate"]), Theme.Heading));
+        top.Controls.Add(SummaryMetric("梯队", tier, AramMetaView.TierColor(tier)));
+        string plays = stats["play"] is { } play ? $"{(long)play:N0}" : "—";
+        top.Controls.Add(SummaryMetric("统计场次", plays, Theme.Heading));
         if (build.Query.Mode == "arena")
         {
             top.Controls.Add(
@@ -90,9 +101,41 @@ internal sealed partial class OpggView
         }
     }
 
-    private async Task RenderLaterEquipmentAsync(OpggBuild build, CancellationToken token)
+    // The guide's headline numbers: a small caption over a large figure, like the profile overview.
+    private Control SummaryMetric(string caption, string value, Color color)
     {
-        var strip = Inline(Section("后续装备"));
+        var metric = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Margin = new Padding(0, 6, 28, 0),
+        };
+        metric.Controls.Add(
+            new Label
+            {
+                Text = caption,
+                AutoSize = true,
+                ForeColor = Theme.Muted,
+                Margin = Padding.Empty,
+            }
+        );
+        metric.Controls.Add(
+            new Label
+            {
+                Text = value,
+                AutoSize = true,
+                ForeColor = color,
+                Font = _summaryFigureFont ??= Theme.NumberFont(18, strong: true),
+                Margin = new Padding(0, 2, 0, 0),
+            }
+        );
+        return metric;
+    }
+
+    private async Task RenderLaterEquipmentAsync(OpggBuild build, Control host, CancellationToken token)
+    {
+        var strip = Inline(Section("后续装备", host));
         foreach (
             var id in (build.Data["last_items"] as JArray ?? new())
                 .OfType<JObject>()
@@ -154,28 +197,34 @@ internal sealed partial class OpggView
             section.Controls.Add(TextLabel("暂无数据"));
         }
 
+        // Every row reserves room for the longest set, so the statistics line up whether a row has three items or four.
+        int widest = options.Select(o => (o["ids"] as JArray)?.Count ?? 0).DefaultIfEmpty(0).Max();
         foreach (var option in options)
         {
             token.ThrowIfCancellationRequested();
             var row = Inline(section);
+            var icons = new FlowLayoutPanel
+            {
+                Size = new Size(Math.Max(1, widest) * IconSlot, IconSlot),
+                WrapContents = false,
+                Margin = Padding.Empty,
+            };
+            row.Controls.Add(icons);
             foreach (var id in (option["ids"] as JArray ?? new()).Values<int>())
             {
-                await AddIconAsync(row, id, kind, token);
+                await AddIconAsync(icons, id, kind, token);
             }
 
             token.ThrowIfCancellationRequested();
-            row.Controls.Add(
-                TextLabel(
-                    $"胜率 {Percent(OpggBuild.Ratio(option["win"], option["play"]))}\n{option["play"]?.ToString() ?? "—"} 场"
-                )
-            );
-            row.Controls.Add(TextLabel($"选用率\n{Percent((double?)option["pick_rate"])}", Theme.Heading));
+            var stats = RecommendationStats(option);
+            stats.Margin = new Padding(12, 0, 0, 0);
+            row.Controls.Add(stats);
         }
     }
 
-    private async Task RenderRunesAsync(OpggBuild build, CancellationToken token)
+    private async Task RenderRunesAsync(OpggBuild build, Control host, CancellationToken token)
     {
-        var section = Section("推荐符文");
+        var section = Section("推荐符文", host);
         if (build.Runes.Length == 0)
         {
             section.Controls.Add(TextLabel("此模式暂无符文方案"));

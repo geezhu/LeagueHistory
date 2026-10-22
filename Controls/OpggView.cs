@@ -11,6 +11,7 @@ internal sealed partial class OpggView : UserControl
     private readonly Font _viewFont = new("Microsoft YaHei UI", 9f);
     private Font? _sectionHeadingFont;
     private Font? _championHeadingFont;
+    private Font? _summaryFigureFont;
     private bool _closing;
     private readonly HashSet<Task> _viewWork = new();
     private Task _cleanupWork = Task.CompletedTask;
@@ -145,6 +146,56 @@ internal sealed partial class OpggView : UserControl
         return box;
     }
 
+    // The lane is the filter changed most, so the lanes are one click apart instead of inside a drop-down. The combo
+    // box stays as the state behind the buttons, kept out of the toolbar, so everything that reads, sets, hides or
+    // disables the lane works as before and the buttons follow it.
+    private Control PositionSegments()
+    {
+        var strip = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = false,
+            Margin = new Padding(3),
+            Padding = Padding.Empty,
+        };
+        var buttons = new List<(Button Button, Choice Choice)>();
+        foreach (var lane in new[] { "top", "jungle", "mid", "adc", "support" })
+        {
+            var choice = _position.Items.Cast<Choice>().First(c => c.Value == lane);
+            var button = new Button
+            {
+                Text = choice.Text,
+                AutoSize = true,
+                MinimumSize = new Size(52, 0),
+                Margin = new Padding(0, 0, 2, 0),
+            };
+            button.Click += (_, _) => _position.SelectedItem = choice;
+            buttons.Add((button, choice));
+            strip.Controls.Add(button);
+        }
+        void Follow()
+        {
+            foreach (var (button, choice) in buttons)
+            {
+                if (ReferenceEquals(_position.SelectedItem, choice))
+                {
+                    ButtonStyles.Primary(button);
+                }
+                else
+                {
+                    ButtonStyles.Secondary(button);
+                }
+            }
+            strip.Visible = _position.Visible;
+            strip.Enabled = _position.Enabled;
+        }
+        _position.SelectedIndexChanged += (_, _) => Follow();
+        _position.VisibleChanged += (_, _) => Follow();
+        _position.EnabledChanged += (_, _) => Follow();
+        Follow();
+        return strip;
+    }
+
     private static string Value(ComboBox box) => ((Choice)box.SelectedItem!).Value;
 
     private static void SetValue(ComboBox box, string value)
@@ -195,7 +246,7 @@ internal sealed partial class OpggView : UserControl
         }
 
         toolbar.Controls.AddRange(
-            new Control[] { _back, _forward, _mode, _region, _tier, _position, refresh, _follow }
+            new Control[] { _back, _forward, _mode, _region, _tier, PositionSegments(), refresh, _follow }
         );
         Controls.Add(_content);
         Controls.Add(_tiers);
@@ -323,9 +374,16 @@ internal sealed partial class OpggView : UserControl
 
     private void ResizeContent()
     {
-        foreach (Control section in _content.Controls)
+        foreach (Control child in _content.Controls)
         {
-            ResizeSection(section);
+            if (ReferenceEquals(child.Tag, ColumnsTag))
+            {
+                ResizeColumns(child);
+            }
+            else
+            {
+                ResizeSection(child);
+            }
         }
     }
 
@@ -499,9 +557,106 @@ internal sealed partial class OpggView : UserControl
 
     private static string Percent(double? value) => value.HasValue ? $"{value:P1}" : "—";
 
+    private const int ColumnGap = 8;
+    private const int IconSlot = 36;
+    private const int MinimumColumnWidth = 420;
+    private static readonly object ColumnsTag = new();
+    private static readonly object ColumnTag = new();
+
+    private int FullWidth => Math.Max(320, _content.ClientSize.Width - 32);
+
+    // Two columns once each can hold a 420-pixel card; a narrower page stacks them into one.
+    private int ColumnWidth =>
+        FullWidth >= 2 * MinimumColumnWidth + ColumnGap ? (FullWidth - ColumnGap) / 2 : FullWidth;
+
+    private int SectionWidth(Control? host) => ReferenceEquals(host?.Tag, ColumnTag) ? ColumnWidth : FullWidth;
+
+    // The short cards of a guide sit in two columns side by side instead of each spanning the page with its numbers
+    // in the left third; the right column is for the runes, whose tree and schemes need the room.
+    private (FlowLayoutPanel Left, FlowLayoutPanel Right) Columns()
+    {
+        var grid = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+            Tag = ColumnsTag,
+        };
+        FlowLayoutPanel Column() =>
+            new()
+            {
+                AutoSize = true,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty,
+                Tag = ColumnTag,
+            };
+        var left = Column();
+        var right = Column();
+        grid.Controls.AddRange(new Control[] { left, right });
+        _content.Controls.Add(grid);
+        ResizeColumns(grid);
+        return (left, right);
+    }
+
+    private void ResizeColumns(Control grid)
+    {
+        int width = FullWidth;
+        grid.MinimumSize = new Size(width, 0);
+        grid.MaximumSize = new Size(width, 0);
+        grid.Width = width;
+        bool sideBySide = ColumnWidth < width;
+        int index = 0;
+        foreach (Control column in grid.Controls)
+        {
+            column.Margin = new Padding(sideBySide && index++ > 0 ? ColumnGap : 0, 0, 0, 0);
+            column.MinimumSize = new Size(ColumnWidth, 0);
+            column.MaximumSize = new Size(ColumnWidth, 0);
+            column.Width = ColumnWidth;
+            foreach (Control section in column.Controls)
+            {
+                ResizeSection(section);
+            }
+        }
+        LevelColumns(grid);
+    }
+
+    // The columns end level: the last card of the shorter one grows down to the taller one's bottom, so no patch of
+    // page background is left under it. Measured afresh each time, since resizing rewraps every card.
+    private static void LevelColumns(Control grid)
+    {
+        var columns = grid.Controls.Cast<Control>().Where(column => column.Controls.Count > 0).ToArray();
+        // Every card is reset, not just the last: a resize while the guide was still filling in may have stretched a
+        // card that has since had others added under it.
+        foreach (var column in columns)
+        {
+            foreach (Control card in column.Controls)
+            {
+                card.MinimumSize = new Size(card.MinimumSize.Width, 0);
+            }
+            column.PerformLayout();
+        }
+        grid.PerformLayout();
+        bool sideBySide = columns.Length == 2 && columns[0].Top == columns[1].Top;
+        if (!sideBySide)
+        {
+            return;
+        }
+
+        int bottom = columns.Max(column => column.Height);
+        foreach (var column in columns.Where(column => column.Height < bottom))
+        {
+            var last = column.Controls[column.Controls.Count - 1];
+            last.MinimumSize = new Size(last.MinimumSize.Width, last.Height + bottom - column.Height);
+        }
+    }
+
     private void ResizeSection(Control section)
     {
-        int width = Math.Max(320, _content.ClientSize.Width - 32);
+        int width = SectionWidth(section.Parent);
         section.MinimumSize = new Size(width, 0);
         section.MaximumSize = new Size(width, 0);
         section.Width = width;
@@ -524,9 +679,9 @@ internal sealed partial class OpggView : UserControl
         }
     }
 
-    private FlowLayoutPanel Section(string title)
+    private FlowLayoutPanel Section(string title, Control? host = null)
     {
-        int width = Math.Max(320, _content.ClientSize.Width - 32);
+        int width = SectionWidth(host);
         var panel = new FlowLayoutPanel
         {
             Width = width,
@@ -548,8 +703,8 @@ internal sealed partial class OpggView : UserControl
                 Margin = new Padding(0, 0, 0, 8),
             }
         );
+        (host ?? _content).Controls.Add(panel);
         panel.ControlAdded += (_, _) => ResizeSection(panel);
-        _content.Controls.Add(panel);
         return panel;
     }
 
@@ -876,8 +1031,14 @@ internal sealed partial class OpggView : UserControl
             _tips.Dispose();
             _sectionHeadingFont?.Dispose();
             _championHeadingFont?.Dispose();
+            _summaryFigureFont?.Dispose();
             _viewFont.Dispose();
         }
         base.Dispose(disposing);
+        if (disposing)
+        {
+            // The lane combo box is not in the control tree, so disposing the page does not reach it.
+            _position.Dispose();
+        }
     }
 }

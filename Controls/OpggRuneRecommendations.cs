@@ -116,30 +116,8 @@ internal sealed class OpggRuneRecommendations : FlowLayoutPanel
         {
             graphics.DrawImage(icon, new Rectangle(8, 11, 32, 32));
         }
-        TextRenderer.DrawText(
-            graphics,
-            Percent(plan.WinRate),
-            Font,
-            new Rectangle(46, 6, 110, 21),
-            Color.FromArgb(45, 61, 75),
-            TextFormatFlags.HorizontalCenter
-        );
-        TextRenderer.DrawText(
-            graphics,
-            $"{plan.Plays:N0} 场",
-            Font,
-            new Rectangle(46, 28, 110, 20),
-            Color.Gray,
-            TextFormatFlags.HorizontalCenter
-        );
-        TextRenderer.DrawText(
-            graphics,
-            Percent(plan.PickRate),
-            Font,
-            new Rectangle(158, 16, 85, 22),
-            Theme.Heading,
-            TextFormatFlags.HorizontalCenter
-        );
+        // The same cell as every other recommendation on the guide.
+        OpggStatCell.Draw(graphics, new Rectangle(48, 7, 194, 40), Font, plan.WinRate, plan.Plays, plan.PickRate);
     }
 
     private async Task SelectFromClickAsync(int index)

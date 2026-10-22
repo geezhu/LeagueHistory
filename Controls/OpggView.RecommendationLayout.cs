@@ -130,38 +130,18 @@ internal sealed partial class OpggView
 
     private Control RecommendationStats(JToken data)
     {
-        var panel = new Panel { Size = new Size(176, 44), Margin = Padding.Empty };
-        var win = new Label
-        {
-            Text = Percent(OpggBuild.Ratio(data["win"], data["play"])),
-            Bounds = new Rectangle(0, 2, 98, 20),
-            TextAlign = ContentAlignment.MiddleCenter,
-        };
-        var count = new Label
-        {
-            Text = (data["play"] is { } plays ? $"{(long)plays:N0} 场" : "— 场"),
-            Bounds = new Rectangle(0, 22, 98, 20),
-            TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Color.Gray,
-        };
-        var pick = new Label
-        {
-            Text = Percent((double?)data["pick_rate"]),
-            Bounds = new Rectangle(100, 10, 76, 24),
-            TextAlign = ContentAlignment.MiddleRight,
-            ForeColor = Theme.Heading,
-            Font = _sectionHeadingFont ??= new Font(Font, FontStyle.Bold),
-        };
-        panel.Controls.AddRange(new Control[] { win, count, pick });
-        _tips.SetToolTip(win, "胜率");
-        _tips.SetToolTip(count, "统计场次");
-        _tips.SetToolTip(pick, "选用率");
-        return panel;
+        var cell = new OpggStatCell(
+            OpggBuild.Ratio(data["win"], data["play"]),
+            (long?)data["play"],
+            (double?)data["pick_rate"]
+        );
+        _tips.SetToolTip(cell, "胜率按 50% 分色；条形为选用率");
+        return cell;
     }
 
-    private void RenderSkills(OpggBuild build)
+    private void RenderSkills(OpggBuild build, Control host)
     {
-        var section = Section("技能加点");
+        var section = Section("技能加点", host);
         var layout = Inline(section);
         var left = new FlowLayoutPanel
         {
@@ -240,9 +220,9 @@ internal sealed partial class OpggView
         }
     }
 
-    private async Task RenderStartingEquipmentAsync(OpggBuild build, CancellationToken token)
+    private async Task RenderStartingEquipmentAsync(OpggBuild build, Control host, CancellationToken token)
     {
-        var section = Section("出门装与鞋子");
+        var section = Section("出门装与鞋子", host);
         var layout = Inline(section);
         foreach (var (key, title) in new[] { ("starter_items", "出门装"), ("boots", "鞋子") })
         {
@@ -274,7 +254,11 @@ internal sealed partial class OpggView
                 var ids = (option["ids"] as JArray ?? new()).Values<int>().ToArray();
                 // Keep the three data columns together; only the entire section may wrap.
                 int iconWidth = Math.Max(108, ids.Length * 36);
-                var row = new Panel { Size = new Size(iconWidth + 180, 44), Margin = Padding.Empty };
+                var row = new Panel
+                {
+                    Size = new Size(iconWidth + 12 + OpggStatCell.CellWidth, 44),
+                    Margin = Padding.Empty,
+                };
                 column.Controls.Add(row);
                 var icons = new FlowLayoutPanel
                 {
@@ -291,7 +275,7 @@ internal sealed partial class OpggView
 
                 token.ThrowIfCancellationRequested();
                 var stats = RecommendationStats(option);
-                stats.Location = new Point(iconWidth, 0);
+                stats.Location = new Point(iconWidth + 12, 2);
                 row.Controls.Add(stats);
             }
         }
