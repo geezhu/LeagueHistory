@@ -161,13 +161,20 @@ internal sealed partial class AramMetaView
         int id = 0
     )
     {
+        bool augment = kind == "augment";
         var picture = new PictureBox
         {
             Size = new Size(size, size),
             SizeMode = PictureBoxSizeMode.Zoom,
             Margin = new Padding(2),
-            BackColor = Color.FromArgb(233, 239, 245),
+            BackColor = augment ? Color.Transparent : Color.FromArgb(233, 239, 245),
         };
+        if (augment)
+        {
+            // The disc alone stands in while the art loads; the composed images belong to this picture.
+            picture.Image = AugmentOnDisc(null, size);
+            picture.Disposed += (_, _) => picture.Image?.Dispose();
+        }
         parent.Controls.Add(picture);
         _tips.SetToolTip(picture, tooltip);
         _ = TrackWork(Load());
@@ -179,7 +186,16 @@ internal sealed partial class AramMetaView
                 var image = await ImageAsync(url, kind, id).WaitAsync(token);
                 if (!_closing && !picture.IsDisposed && !token.IsCancellationRequested)
                 {
-                    picture.Image = image;
+                    if (augment)
+                    {
+                        var previous = picture.Image;
+                        picture.Image = AugmentOnDisc(image, size);
+                        previous?.Dispose();
+                    }
+                    else
+                    {
+                        picture.Image = image;
+                    }
                 }
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -187,6 +203,29 @@ internal sealed partial class AramMetaView
                 // The retired render must not publish into a removed icon.
             }
         }
+    }
+
+    // Augment art is drawn for the game's dark cards: the prismatic glyphs are pale and wash out on a light page, and
+    // their outer rings are dark. A slate disc between the two keeps both readable. It is painted into the image,
+    // anti-aliased, rather than cut out with a region, whose edge would be jagged.
+    private static readonly Color AugmentBackdrop = Color.FromArgb(60, 72, 92);
+    private const int AugmentArtInset = 3;
+
+    private static Bitmap AugmentOnDisc(Image? art, int size)
+    {
+        var composed = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using var graphics = Graphics.FromImage(composed);
+        graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+        graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+        using var disc = new SolidBrush(AugmentBackdrop);
+        graphics.FillEllipse(disc, 0, 0, size - 1, size - 1);
+        if (art != null)
+        {
+            int inner = size - AugmentArtInset * 2;
+            graphics.DrawImage(art, AugmentArtInset, AugmentArtInset, inner, inner);
+        }
+        return composed;
     }
 
     private FlowLayoutPanel Section(string title)
