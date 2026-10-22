@@ -178,40 +178,15 @@ StackPanel CalcRecordedRow(CalcOptions const &options)
     row.Children().Append(edit);
     return row;
 }
-// One line per ability: rank with steps, the base cooldown at that rank and the result.
-Grid CalcAbilityRow(JsonObject const &ability, size_t index, double haste, bool estimated, CalcOptions const &options)
+// The base cooldown at the rank and the cooldown with haste and the recorded augments; "未学" before the first rank.
+static std::pair<hstring, hstring> CalcCooldownText(
+    JsonObject const &ability, int rank, double haste, bool estimated, CalcOptions const &options)
 {
     auto key = ability.GetNamedString(L"key", L"");
     size_t slot = std::wstring_view(L"QWER").find(std::wstring_view(key));
     auto cooldowns = ability.GetNamedArray(L"cooldowns", JsonArray());
     auto recharge = ability.GetNamedArray(L"recharge", JsonArray());
     auto charges = ability.GetNamedArray(L"charges", JsonArray());
-    int ranks = static_cast<int>(cooldowns.Size());
-    int rank = calcRanks[index] >= 0 ? calcRanks[index] : static_cast<int>(ability.GetNamedNumber(L"rank", 0));
-    rank = (std::clamp)(rank, 0, ranks);
-    Grid row;
-    row.Margin({0, 3, 0, 3});
-    for (double width : {120.0, 150.0, 130.0, 0.0})
-    {
-        ColumnDefinition column;
-        column.Width(width > 0 ? GridLength{width, GridUnitType::Pixel} : GridLength{1, GridUnitType::Star});
-        row.ColumnDefinitions().Append(column);
-    }
-    auto name =
-        MakeText(ability.GetNamedString(L"key", L"") + L" " + ability.GetNamedString(L"name", L""), 13, 0xe0c688);
-    name.VerticalAlignment(VerticalAlignment::Center);
-    name.TextTrimming(TextTrimming::CharacterEllipsis);
-    row.Children().Append(name);
-    StackPanel steps;
-    steps.Orientation(Orientation::Horizontal);
-    steps.Children().Append(CalcButton(L"−", [this, index, rank] { calcRanks[index] = rank - 1; }, rank > 0));
-    auto level = MakeText(to_hstring(rank) + L"/" + to_hstring(ranks) + L" 级", 13, 0xe2eef3);
-    level.Margin({6, 0, 2, 0});
-    level.VerticalAlignment(VerticalAlignment::Center);
-    steps.Children().Append(level);
-    steps.Children().Append(CalcButton(L"+", [this, index, rank] { calcRanks[index] = rank + 1; }, rank < ranks));
-    Grid::SetColumn(steps, 1);
-    row.Children().Append(steps);
     hstring baseText, resultText;
     if (options.ultimateSealed && slot == 3)
     {
@@ -235,6 +210,44 @@ Grid CalcAbilityRow(JsonObject const &ability, size_t index, double haste, bool 
                      : charged    ? L"充能 " + CalcSeconds(result) + L" · " + to_hstring(count) + L" 层"
                                   : CalcSeconds(result);
     }
+    return {baseText, resultText};
+}
+// The rank the calculator uses for one ability: the user's what-if, else the snapshot's.
+int CalcRank(JsonObject const &ability, size_t index)
+{
+    int ranks = static_cast<int>(ability.GetNamedArray(L"cooldowns", JsonArray()).Size());
+    int rank = calcRanks[index] >= 0 ? calcRanks[index] : static_cast<int>(ability.GetNamedNumber(L"rank", 0));
+    return (std::clamp)(rank, 0, ranks);
+}
+// One line per ability: rank with steps, the base cooldown at that rank and the result.
+Grid CalcAbilityRow(JsonObject const &ability, size_t index, double haste, bool estimated, CalcOptions const &options)
+{
+    int ranks = static_cast<int>(ability.GetNamedArray(L"cooldowns", JsonArray()).Size());
+    int rank = CalcRank(ability, index);
+    Grid row;
+    row.Margin({0, 3, 0, 3});
+    for (double width : {120.0, 150.0, 130.0, 0.0})
+    {
+        ColumnDefinition column;
+        column.Width(width > 0 ? GridLength{width, GridUnitType::Pixel} : GridLength{1, GridUnitType::Star});
+        row.ColumnDefinitions().Append(column);
+    }
+    auto name =
+        MakeText(ability.GetNamedString(L"key", L"") + L" " + ability.GetNamedString(L"name", L""), 13, 0xe0c688);
+    name.VerticalAlignment(VerticalAlignment::Center);
+    name.TextTrimming(TextTrimming::CharacterEllipsis);
+    row.Children().Append(name);
+    StackPanel steps;
+    steps.Orientation(Orientation::Horizontal);
+    steps.Children().Append(CalcButton(L"−", [this, index, rank] { calcRanks[index] = rank - 1; }, rank > 0));
+    auto level = MakeText(to_hstring(rank) + L"/" + to_hstring(ranks) + L" 级", 13, 0xe2eef3);
+    level.Margin({6, 0, 2, 0});
+    level.VerticalAlignment(VerticalAlignment::Center);
+    steps.Children().Append(level);
+    steps.Children().Append(CalcButton(L"+", [this, index, rank] { calcRanks[index] = rank + 1; }, rank < ranks));
+    Grid::SetColumn(steps, 1);
+    row.Children().Append(steps);
+    auto [baseText, resultText] = CalcCooldownText(ability, rank, haste, estimated, options);
     auto base = MakeText(baseText, 12, 0x91acbb);
     base.VerticalAlignment(VerticalAlignment::Center);
     Grid::SetColumn(base, 2);
@@ -245,6 +258,15 @@ Grid CalcAbilityRow(JsonObject const &ability, size_t index, double haste, bool 
     row.Children().Append(value);
     return row;
 }
+// Where the ranks and haste come from and how the cooldown is computed.
+static hstring CalcGuide(JsonObject const &calc)
+{
+    return calc.GetNamedString(L"rankSource", L"") + L" " + calc.GetNamedString(L"hasteDetails", L"") +
+           L"\n冷却 = 基础冷却 × 100 / (100 + 技能急速)，大招再加大招急速；已记录的海克斯按各自规则计入"
+           L"（面包系列、急速之追求只加对应技能，纯粹主义者 - 术师再乘 0.9，大招工具人只作用于大招并按 1.5 倍）。"
+           L"充能技能算每层充能时间。命中返还未计入。";
+}
+// Without the stat page's ability details the calculator stands alone, its ability rows included.
 void RenderCooldownCalculator()
 {
     auto calc = CalcData();
@@ -260,13 +282,7 @@ void RenderCooldownCalculator()
     StackPanel content;
     auto heading = MakeText(L"冷却计算", 15, 0xe0c688);
     content.Children().Append(heading);
-    auto guide = MakeText(
-        calc.GetNamedString(L"rankSource", L"") + L" " + calc.GetNamedString(L"hasteDetails", L"") +
-            L"\n冷却 = 基础冷却 × 100 / (100 + 技能急速)，大招再加大招急速；已记录的海克斯按各自规则计入"
-            L"（面包系列、急速之追求只加对应技能，纯粹主义者 - 术师再乘 0.9，大招工具人只作用于大招并按 1.5 倍）。"
-            L"充能技能算每层充能时间。命中返还未计入。",
-        12,
-        0x91acbb);
+    auto guide = MakeText(CalcGuide(calc), 12, 0x91acbb);
     guide.TextWrapping(TextWrapping::Wrap);
     guide.Margin({0, 2, 0, 4});
     content.Children().Append(guide);

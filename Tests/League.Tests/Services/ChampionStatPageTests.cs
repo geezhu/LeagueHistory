@@ -107,4 +107,77 @@ public class ChampionStatPageTests
 
         Assert.Contains("法力值", page["stats"]!.Select(row => (string?)row["name"]));
     }
+
+    [Theory]
+    [InlineData("暴击几率", "crit")]
+    [InlineData("攻击力", "ad")]
+    [InlineData("技能急速", "haste")]
+    [InlineData("法力值", "mana")]
+    public void Build_AStatRow_NamesItsIconInTheGamesPanel(string name, string icon)
+    {
+        var sheet = new ChampionStatSheet(1, true) { Mana = new(418, 418) };
+
+        var page = ChampionStatPage.Build(Source, sheet, AnnieTexts, "");
+
+        Assert.Equal(icon, (string?)page["stats"]!.Single(row => (string?)row["name"] == name)["icon"]);
+    }
+
+    [Fact]
+    public void Build_EveryStatRowIcon_IsOneTheAtlasCuts()
+    {
+        using var atlas = new Bitmap(StatIconAtlas.AtlasSize, StatIconAtlas.AtlasSize);
+        var cut = StatIconAtlas.Cut(atlas);
+
+        var page = ChampionStatPage.Build(Source, new ChampionStatSheet(1, false), AnnieTexts, "");
+
+        Assert.All(
+            page["stats"]!.Select(row => (string?)row["icon"]).Where(icon => icon is { Length: > 0 }),
+            icon => Assert.True(cut.ContainsKey(icon!), icon)
+        );
+    }
+
+    [Theory]
+    [InlineData("法力值", "mana")]
+    [InlineData("", "mana")]
+    [InlineData("能量", "energy")]
+    [InlineData("怒气", "fury")]
+    [InlineData("热量", "fury")]
+    public void ResourceBar_TheResource_IsColouredAsTheGamesHud(string resource, string bar)
+    {
+        Assert.Equal(bar, ChampionStatPage.ResourceBar(resource));
+    }
+
+    private static readonly StatPageSource Tryndamere = Source with
+    {
+        BaseStats = Source.BaseStats! with { Resource = "怒气" },
+    };
+
+    [Fact]
+    public void Build_Fury_HasNoRegenerationRow()
+    {
+        var sheet = new ChampionStatSheet(1, true) { Mana = new(100, 100) };
+
+        var page = ChampionStatPage.Build(Tryndamere, sheet, AnnieTexts, "");
+
+        Assert.DoesNotContain("怒气回复", page["stats"]!.Select(row => (string?)row["name"]));
+    }
+
+    [Fact]
+    public void Build_Fury_IsARedBarWithoutTheManaIcon()
+    {
+        var sheet = new ChampionStatSheet(1, true) { Mana = new(100, 100) };
+
+        var page = ChampionStatPage.Build(Tryndamere, sheet, AnnieTexts, "");
+
+        var fury = page["stats"]!.Single(row => (string?)row["name"] == "怒气");
+        Assert.Equal(("fury", ""), ((string?)fury["bar"], (string?)fury["icon"]));
+    }
+
+    [Fact]
+    public void Build_Health_IsTheHealthBar()
+    {
+        var page = ChampionStatPage.Build(Source, new ChampionStatSheet(1, true), AnnieTexts, "");
+
+        Assert.Equal("health", (string?)page["stats"]!.Single(row => (string?)row["name"] == "生命值")["bar"]);
+    }
 }

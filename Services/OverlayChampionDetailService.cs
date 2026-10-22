@@ -18,10 +18,12 @@ public sealed class OverlayChampionDetailService : IDisposable
     private readonly ConcurrentDictionary<int, JObject> _skills = new();
     private readonly ConcurrentDictionary<string, Task<string>> _images = new();
     private readonly SemaphoreSlim _imageGate = new(4, 4);
+    private readonly StatIconAtlas _statIcons;
 
-    public OverlayChampionDetailService(Func<TimeSpan> lifetime)
+    public OverlayChampionDetailService(Func<TimeSpan> lifetime, StatIconAtlas? statIcons = null)
     {
         _lifetime = lifetime;
+        _statIcons = statIcons ?? StatIconAtlas.Shared;
         _am = new(cacheLifetime: lifetime);
     }
 
@@ -666,6 +668,13 @@ public sealed class OverlayChampionDetailService : IDisposable
             token.ThrowIfCancellationRequested();
             await Task.WhenAll(chunk.Select(async icon => icon["image"] = await LoadImage(icon, token)));
         }
+        // The stat table's icons travel with the detail once, not with every snapshot that carries the table.
+        var statIcons = await _statIcons.LoadAsync(token);
+        if (statIcons.Count > 0)
+        {
+            data["statIcons"] = JObject.FromObject(statIcons);
+        }
+
         string artPath = (string?)data["artPath"] ?? "";
         data.Remove("artPath");
         if (artPath.StartsWith("/lol-game-data/assets/", StringComparison.OrdinalIgnoreCase))

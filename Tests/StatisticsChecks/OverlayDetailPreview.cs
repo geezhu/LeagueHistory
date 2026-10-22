@@ -123,6 +123,12 @@ internal static class OverlayDetailPreview
         content["state"] = "ready";
         content["mode"] = "布局测试";
         content["source"] = "本地测试样例 · 不代表当前对局";
+        // The game's stat icons, downloaded once into the user's cache; without network the table shows names only.
+        var statIcons = StatIconAtlas.Shared.LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
+        if (statIcons.Count > 0)
+        {
+            content["statIcons"] = JObject.FromObject(statIcons);
+        }
     }
 
     private static JObject CreateRoster(string heroIcon)

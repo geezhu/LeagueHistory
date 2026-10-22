@@ -588,7 +588,14 @@ Border CreateAugmentRow(uint32_t slot, JsonObject const &row, uint32_t accent, b
     player.Margin({8, 2, 0, 0});
     header.Children().Append(player);
     text.Children().Append(header);
-    auto key = cards[slot].key;
+    text.Children().Append(AugmentControls(cards[slot].key, timed));
+    layout.Children().Append(text);
+    return RecordCard(layout, accent);
+}
+// A player's recorded augments with their controls, the add button and the ultimate haste.
+StackPanel AugmentControls(hstring const &key, bool timed)
+{
+    StackPanel controls;
     // One augment per line: their controls differ in width, and a wrap grid would cut the wider ones.
     StackPanel picks;
     for (auto const &pick : augmentPicks)
@@ -597,9 +604,37 @@ Border CreateAugmentRow(uint32_t slot, JsonObject const &row, uint32_t accent, b
     auto add = AugmentAddButton(key, timed);
     add.HorizontalAlignment(HorizontalAlignment::Left);
     picks.Children().Append(add);
-    text.Children().Append(picks);
-    text.Children().Append(UltimateHasteLine(key));
-    layout.Children().Append(text);
+    controls.Children().Append(picks);
+    controls.Children().Append(UltimateHasteLine(key));
+    return controls;
+}
+// The hero page's version: the banner above already shows the hero and the player, so only the label and controls.
+Border CreateAugmentLine(uint32_t slot, uint32_t accent, bool timed)
+{
+    Grid layout;
+    ColumnDefinition label, details;
+    label.Width({1, GridUnitType::Auto});
+    details.Width({1, GridUnitType::Star});
+    layout.ColumnDefinitions().Append(label);
+    layout.ColumnDefinitions().Append(details);
+    auto title = MakeText(L"海克斯", 13, 0x91acbb);
+    title.Margin({0, 5, 12, 0});
+    layout.Children().Append(title);
+    auto key = cards[slot].key;
+    StackPanel controls;
+    for (auto const &pick : augmentPicks)
+        if (pick.player == key)
+            controls.Children().Append(AugmentPickControls(pick, timed));
+    // The add button and the ultimate haste share the last line, so a player with nothing recorded takes one.
+    StackPanel last;
+    last.Orientation(Orientation::Horizontal);
+    last.Children().Append(AugmentAddButton(key, timed));
+    auto haste = UltimateHasteLine(key);
+    haste.Margin({16, 0, 0, 0});
+    last.Children().Append(haste);
+    controls.Children().Append(last);
+    Grid::SetColumn(controls, 1);
+    layout.Children().Append(controls);
     return RecordCard(layout, accent);
 }
 void OpenAugmentPage()
@@ -704,9 +739,9 @@ std::vector<UIElement> AugmentSummaryChips(hstring const &player)
             chips.push_back(ControlChip(AugmentChipText(pick, AugmentState(pick)),
                                         0xb8a2ff,
                                         (entry ? AugmentText(entry, L"effect") : hstring()) +
-                                            L"\n在「海克斯」页或英雄的「属性」页修改。"));
+                                            L"\n在「海克斯」页或英雄的「技能」页修改。"));
         }
     if (chips.empty())
-        chips.push_back(MakeText(L"未记录（在「海克斯」页或英雄的「属性」页添加）", 12, 0x6f8793));
+        chips.push_back(MakeText(L"未记录（在「海克斯」页或英雄的「技能」页添加）", 12, 0x6f8793));
     return chips;
 }

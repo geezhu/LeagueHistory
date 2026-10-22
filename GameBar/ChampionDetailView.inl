@@ -10,9 +10,10 @@ Image detailArtwork;
 std::array<Button, 10> heroButtons;
 std::array<Image, 10> heroIcons;
 std::array<Border, 10> heroIndicators;
-std::array<Button, 7> tabButtons;
-static constexpr std::array<wchar_t const *, 7> DetailTabKeys{
-    L"skills", L"builds", L"runes", L"augments", L"live", L"stats", L"record"};
+std::array<Button, 6> tabButtons;
+// The skills tab carries the stat page too: its ability details are the same abilities with their numbers computed.
+static constexpr std::array<wchar_t const *, 6> DetailTabKeys{
+    L"skills", L"builds", L"runes", L"augments", L"live", L"record"};
 JsonObject detailData;
 hstring detailRequest, detailRevision, detailTab = L"skills";
 hstring pendingDetailRequest;
@@ -49,7 +50,7 @@ void ConfigureDetailPreview(hstring const &argument)
     auto tab = text.substr(prefix.size());
     if (tab != L"skills" && tab != L"builds" && tab != L"runes" && tab != L"augments" && tab != L"live" &&
         tab != L"record" && tab != L"roster" && tab != L"voice" && tab != L"waves" && tab != L"marks" &&
-        tab != L"controls" && tab != L"stats" && tab != L"augmentpage")
+        tab != L"controls" && tab != L"augmentpage")
         return;
     fixturePreview = true;
     fixtureOpened = false;
@@ -160,7 +161,7 @@ void InitializeDetailTabs()
     detailTabs.Orientation(Orientation::Horizontal);
     detailTabs.Margin({0, 8, 0, 8});
     // The player's record follows the hero tabs: it describes the account, not the champion.
-    std::array<hstring, 7> names{L"技能", L"出装", L"符文", L"海克斯", L"本局", L"属性", L"战绩"};
+    std::array<hstring, 6> names{L"技能", L"出装", L"符文", L"海克斯", L"本局", L"战绩"};
     for (size_t i = 0; i < names.size(); ++i)
     {
         auto &b = tabButtons[i];
@@ -216,7 +217,6 @@ void RefreshDetailHeader()
     tabButtons[2].Visibility(mayhem ? Visibility::Collapsed : Visibility::Visible);
     tabButtons[3].Visibility(mayhem ? Visibility::Visible : Visibility::Collapsed);
     tabButtons[4].Visibility(HasLivePanel() ? Visibility::Visible : Visibility::Collapsed);
-    tabButtons[5].Visibility(HasStatsPage() ? Visibility::Visible : Visibility::Collapsed);
 }
 // The in-game panel describes the active player only; 2999 exposes no other player's attributes.
 bool HasLivePanel()
@@ -253,8 +253,6 @@ void OpenDetails(int index)
             detailTab = L"live";
     }
     else if (detailTab == L"live")
-        detailTab = L"skills";
-    if (detailTab == L"stats" && !HasStatsPage())
         detailTab = L"skills";
     rosterPanel.Visibility(Visibility::Collapsed);
     details.Visibility(Visibility::Collapsed);
@@ -322,6 +320,42 @@ fire_and_forget WriteDetailRequest()
         }
     }
     requestBusy = false;
+}
+// Icons drawn again with every snapshot keep their decoded image, so the stat page does not blink as it refreshes.
+std::map<std::wstring, BitmapImage> detailIconCache;
+fire_and_forget CachedDetailImage(Image target, hstring data, int width)
+{
+    if (data.empty())
+        co_return;
+    std::wstring key(data);
+    if (auto found = detailIconCache.find(key); found != detailIconCache.end())
+    {
+        target.Source(found->second);
+        co_return;
+    }
+    auto lifetime = shared_from_this();
+    ++pendingDetailImages;
+    try
+    {
+        auto buffer = Windows::Security::Cryptography::CryptographicBuffer::DecodeFromBase64String(data);
+        InMemoryRandomAccessStream stream;
+        co_await stream.WriteAsync(buffer);
+        stream.Seek(0);
+        BitmapImage bitmap;
+        bitmap.DecodePixelWidth(width);
+        co_await bitmap.SetSourceAsync(stream);
+        // Ability icons change with the hero; the stat icons stay, so the cache stays small.
+        if (detailIconCache.size() >= 48)
+            detailIconCache.clear();
+        detailIconCache.emplace(key, bitmap);
+        if (!stopped)
+            target.Source(bitmap);
+    }
+    catch (...)
+    {
+        // A broken icon leaves the name beside it.
+    }
+    --pendingDetailImages;
 }
 fire_and_forget DecodeDetailImage(Image target, hstring data, uint64_t render, int width = 48)
 {
@@ -413,9 +447,12 @@ void RenderDetails(bool resetScroll = true)
         tabButtons[i].Background(MakeBrush(DetailTabKeys[i] == detailTab ? 0x008b98 : 0x143542));
     }
     RenderRarityChoices();
-    if (detailTab == L"stats")
+    if (detailTab == L"skills" && HasStatsPage())
     {
         RenderStatsPage();
+        RenderSkillSections(SheetData() != nullptr);
+        if (auto sheet = SheetData())
+            RenderStatsMore(sheet);
         DecodeDetailImage(detailArtwork, detailData.GetNamedString(L"art", L""), detailRender, 560);
         return;
     }
@@ -666,8 +703,7 @@ void RenderDetailSection(JsonObject const &section)
         detailBody.Children().Append(RecommendationTiles(tiles));
         return;
     }
-    if (detailTab == L"skills" && rows.GetObjectAt(0).GetNamedArray(L"icons", JsonArray()).Size() > 0 &&
-        rows.GetObjectAt(0).GetNamedArray(L"icons").GetObjectAt(0).GetNamedString(L"kind", L"") == L"skill")
+    if (detailTab == L"skills" && IsSkillChoiceSection(section))
     {
         RenderSkillChoices(rows);
         return;
@@ -675,6 +711,44 @@ void RenderDetailSection(JsonObject const &section)
     for (auto const &value : rows)
     {
         detailBody.Children().Append(CreateDetailRow(value.GetObject()));
+    }
+}
+// The client's ability list: one row per ability, each with its icon.
+static bool IsSkillChoiceSection(JsonObject const &section)
+{
+    auto rows = section.GetNamedArray(L"rows", JsonArray());
+    if (rows.Size() == 0)
+        return false;
+    auto icons = rows.GetObjectAt(0).GetNamedArray(L"icons", JsonArray());
+    return icons.Size() > 0 && icons.GetObjectAt(0).GetNamedString(L"kind", L"") == L"skill";
+}
+// The ability's icon from the client's list ("P" is listed as 被动), or null before the detail arrives.
+JsonObject SkillIcon(hstring const &key)
+{
+    auto listed = key == L"P" ? hstring(L"被动") : key;
+    for (auto const &entry : detailData.GetNamedArray(L"sections", JsonArray()))
+    {
+        auto section = entry.GetObject();
+        if (section.GetNamedString(L"tab", L"") != L"skills" || !IsSkillChoiceSection(section))
+            continue;
+        for (auto const &row : section.GetNamedArray(L"rows"))
+        {
+            auto icons = row.GetObject().GetNamedArray(L"icons", JsonArray());
+            if (icons.Size() > 0 && icons.GetObjectAt(0).GetNamedString(L"key", L"") == listed)
+                return icons.GetObjectAt(0);
+        }
+    }
+    return nullptr;
+}
+// Below the stat page: the skill order and the rest. The client's ability list only when the stat page has no
+// ability details, which repeat it with numbers.
+void RenderSkillSections(bool withAbilityDetails)
+{
+    for (auto const &entry : detailData.GetNamedArray(L"sections", JsonArray()))
+    {
+        auto section = entry.GetObject();
+        if (section.GetNamedString(L"tab", L"") == L"skills" && !(withAbilityDetails && IsSkillChoiceSection(section)))
+            RenderDetailSection(section);
     }
 }
 // Three tiles a row; a label (the rarity in search results) goes before each name.
