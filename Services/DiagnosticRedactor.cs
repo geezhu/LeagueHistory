@@ -51,7 +51,8 @@ public sealed partial class DiagnosticRedactor
     )]
     private static partial Regex AuthTokenArgument();
 
-    [GeneratedRegex(@"(?<scheme>\b[a-z][a-z0-9+.-]*://[^\s/:@]+:)[^\s/@]+@", RegexOptions.IgnoreCase)]
+    // The whole user-info part goes: a user name can identify someone as well as a password can.
+    [GeneratedRegex(@"(?<scheme>\b[a-z][a-z0-9+.-]*://)[^\s/:@]+:[^\s/@]+@", RegexOptions.IgnoreCase)]
     private static partial Regex UrlCredentials();
 
     [GeneratedRegex(@"\b(?<scheme>Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}", RegexOptions.IgnoreCase)]

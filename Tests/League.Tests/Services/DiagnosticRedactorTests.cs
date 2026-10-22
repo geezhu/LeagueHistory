@@ -81,11 +81,10 @@ public class DiagnosticRedactorTests
     }
 
     [Fact]
-    public void Redact_AUrlWithAPassword_LosesThePasswordButKeepsTheUser()
+    public void Redact_AUrlWithCredentials_LosesTheUserAndThePassword()
     {
-        // What is matched is "scheme://user:" and the password after it, so the password goes and the user name
-        // stays. That is what the pattern does, and it is worth knowing: a user name can identify someone too.
-        Assert.Equal("https://user:***@lcu.example/x", Redactor().Redact("https://user:pass@lcu.example/x"));
+        // A user name can identify someone as well as a password can, so the whole user-info part goes.
+        Assert.Equal("https://***@lcu.example/x", Redactor().Redact("https://user:pass@lcu.example/x"));
     }
 
     [Theory]
