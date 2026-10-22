@@ -17,7 +17,6 @@ internal sealed partial class LoadingOverlayManager
     private OverlayLiveState? _liveState;
     private JArray _liveSections = new();
     private string _liveRevision = "";
-    private int[]? _clientRunes;
     private double? _enemyPhysicalShare;
     private TeamPressure? _teamPressure;
     private DeathTimingAdvice? _shownDeathAdvice;
@@ -33,7 +32,6 @@ internal sealed partial class LoadingOverlayManager
         _liveState = null;
         _liveSections = new JArray();
         _liveRevision = "";
-        _clientRunes = null;
         _enemyPhysicalShare = null;
         _teamPressure = null;
         _shownDeathAdvice = null;
@@ -293,40 +291,13 @@ internal sealed partial class LoadingOverlayManager
         var stats = snapshot.Active?.Stats;
         await ReadEnemyShareAsync(roster, token);
         var builds = self is { ChampionId: > 0 } ? await ReadBuildsAsync(self.ChampionId, roster.Queue, token) : [];
-        int[] runes = snapshot.Active?.Runes ?? [];
-        string runeSource = "来自游戏内数据。";
-        if (runes.Length == 0)
-        {
-            runes = await ReadClientRunesAsync(token);
-            runeSource = "本模式游戏内不提供符文，显示客户端当前符文页。";
-        }
-
-        // The panel is built after the live state, so the player's recorded augments are already summed there.
-        var options =
-            self != null && _liveState?.Effects.GetValueOrDefault(self.Key) is { } effects
-                ? effects.Cooldown
-                : CooldownOptions.None;
         return new(
             insight,
             self != null ? insight.Players.GetValueOrDefault(self.Key) : null,
-            stats,
             stats != null ? LiveDefenseAdvice.Calculate(stats, _enemyPhysicalShare) : null,
             LiveBuildAdvice.Choose(builds, owned),
-            owned,
-            runes,
-            runeSource
-        )
-        {
-            Cooldowns = AbilityCooldowns.Describe(
-                self != null
-                    ? (_cooldowns.GetValueOrDefault(self.ChampionId) ?? []).Select(c => c.ForMode(CurrentMode()))
-                    : [],
-                snapshot.Active?.AbilityRanks ?? new Dictionary<string, int>(),
-                stats?.AbilityHaste ?? 0,
-                options
-            ),
-            CooldownOptions = options,
-        };
+            owned
+        );
     }
 
     private async Task ReadEnemyShareAsync(LoadingRoster roster, CancellationToken token)
@@ -381,25 +352,5 @@ internal sealed partial class LoadingOverlayManager
             _buildRetry = Environment.TickCount64 + 60000;
             return [];
         }
-    }
-
-    private async Task<int[]> ReadClientRunesAsync(CancellationToken token)
-    {
-        if (_clientRunes != null || FormMain.Globals.lcuClient?.Client is not { } client)
-        {
-            return _clientRunes ?? [];
-        }
-
-        try
-        {
-            var page = JObject.Parse(await client.GetStringAsync("/lol-perks/v1/currentpage", token));
-            _clientRunes = (page["selectedPerkIds"] as JArray ?? new()).Values<int>().Where(id => id > 0).ToArray();
-        }
-        catch (Exception e) when (e is HttpRequestException or Newtonsoft.Json.JsonException)
-        {
-            // The client page is a fallback; leave the rune section out until it can be read.
-        }
-
-        return _clientRunes ?? [];
     }
 }

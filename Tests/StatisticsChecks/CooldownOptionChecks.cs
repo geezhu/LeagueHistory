@@ -222,7 +222,7 @@ internal static class CooldownOptionChecks
         var now = AbilityCooldowns.Describe(spells, ranks, 40, options);
         Check(
             now[0].Current == 5 && now[1].Current == 12 * 100 / 260.0 && now[2].Current == 100 * 100 / 250.0,
-            "The live tab's cooldowns follow the records: " + string.Join(",", now.Select(c => c.Current))
+            "Cooldowns follow the records: " + string.Join(",", now.Select(c => c.Current))
         );
         var coverage = SlowCoverage.Estimate(
             new SlowAtLevel(new(40, 2, 0), 1, ""),
@@ -233,28 +233,6 @@ internal static class CooldownOptionChecks
         Check(
             coverage.Cooldown == 5 && coverage.Note.Contains("面包和黄油"),
             "Coverage uses the same haste: " + coverage.Note
-        );
-        var insight = new LiveMatchInsight(
-            60,
-            new(0, 0, 0, 0, 0),
-            new(0, 0, 0, 0, 0),
-            new Dictionary<string, LivePlayerInsight>(),
-            [],
-            ""
-        );
-        var sections = LivePanelSections.Build(
-            new LivePanelInput(insight, null, null, null, null, [], [], "")
-            {
-                Cooldowns = now,
-                CooldownOptions = options,
-            },
-            id => id.ToString()
-        );
-        Check(
-            sections
-                .OfType<JObject>()
-                .Any(s => ((string?)s["tip"] ?? "").Contains("已计入「海克斯」页的记录：面包和黄油")),
-            "The live tab says which recorded augments it used"
         );
     }
 

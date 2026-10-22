@@ -9,28 +9,29 @@ namespace League.Services;
 public sealed record LivePanelInput(
     LiveMatchInsight Insight,
     LivePlayerInsight? Self,
-    LiveChampionStats? Stats,
     LiveDefenseAdvice? Defense,
     LiveBuildAdvice? Build,
-    int[] OwnedItems,
-    int[] Runes,
-    string RuneSource
-)
-{
-    /// <summary>The active player's ability cooldowns now; empty until the champion's data has loaded.</summary>
-    public AbilityCooldown[] Cooldowns { get; init; } = [];
-
-    /// <summary>The cooldown page's options for the player, already applied to <see cref="Cooldowns"/>.</summary>
-    public CooldownOptions CooldownOptions { get; init; } = CooldownOptions.None;
-}
+    int[] OwnedItems
+);
 
 /// <summary>
-/// The "本局" detail tab as cards: the ending, the battle against the enemy team, the active player's state and
-/// attributes, the armor or magic resist choice, the next item and the rune page.
+/// The "本局" detail tab: what a player decides during a game, in as little space as the widget has. The battle and
+/// the player's own score in two lines, the defense choice as the enemy's damage mix with its verdict, and the next
+/// item against the reference build; the ending once the game is over. Attributes, cooldowns and the rune page are on
+/// the skills tab or known to the player, so they are not repeated here.
 /// </summary>
 public static class LivePanelSections
 {
     public const string Tab = "live";
+
+    /// <summary>Items on one or two lines: label, value in its tone, a small note, the explanation on hover.</summary>
+    public const string Strip = "strip";
+
+    /// <summary>The enemy's physical share as a bar with the verdict beside it, the strip's items under it.</summary>
+    public const string Split = "split";
+
+    /// <summary>The next item's icon and name, the reference build's icons with the owned ones dimmed.</summary>
+    public const string BuildLayout = "build";
 
     public static JArray Build(LivePanelInput input, Func<int, string> itemName)
     {
@@ -40,32 +41,15 @@ public static class LivePanelSections
             sections.Add(Ending(input));
         }
 
-        sections.Add(Battle(input.Insight));
-        if (input.Self != null || input.Stats != null)
+        sections.Add(Battle(input.Insight, input.Self));
+        if (input.Defense != null)
         {
-            sections.Add(State(input));
-        }
-
-        if (input.Cooldowns.Length > 0)
-        {
-            sections.Add(Cooldowns(input.Cooldowns, input.Stats?.AbilityHaste ?? 0, input.CooldownOptions.Summary()));
-        }
-
-        if (input.Defense?.PhysicalShare is double share)
-        {
-            sections.Add(DefenseChoice(input.Defense, share));
+            sections.Add(Defense(input.Defense));
         }
 
         if (input.Build != null)
         {
             sections.Add(Equipment(input.Build, input.OwnedItems, itemName));
-        }
-
-        if (input.Runes.Length > 0)
-        {
-            var runes = Section(Tab, "符文页", Tiles, [], input.RuneSource);
-            runes["icons"] = new JArray(input.Runes.Select(id => Icon("rune", id)));
-            sections.Add(runes);
         }
 
         return sections;
@@ -84,6 +68,21 @@ public static class LivePanelSections
     private static string Clock(double seconds) => $"{(int)(seconds / 60)}:{(int)(seconds % 60):00}";
 
     private static string Versus(int own, int enemy) => $"{own} : {enemy}";
+
+    // An item of a strip; line 1 is the second line.
+    private static JObject Item(
+        int line,
+        string title,
+        string value,
+        string stats = "",
+        string tone = "",
+        string tip = ""
+    )
+    {
+        var item = Tile(title, value, stats, tone, tip);
+        item["line"] = line;
+        return item;
+    }
 
     private static JObject Ending(LivePanelInput input)
     {
@@ -118,169 +117,76 @@ public static class LivePanelSections
         );
     }
 
-    private static JObject Battle(LiveMatchInsight insight)
+    // The teams on the first line, the player on the second.
+    private static JObject Battle(LiveMatchInsight insight, LivePlayerInsight? self)
     {
         var last = insight.Fights.LastOrDefault();
-        return Section(
-            Tab,
-            "战况",
-            Tiles,
-            [
-                Tile(
-                    "击杀",
-                    Versus(insight.Own.Kills, insight.Enemy.Kills),
-                    "我方 : 敌方",
-                    DetailCards.Compare(insight.Own.Kills, insight.Enemy.Kills)
-                ),
-                Tile(
-                    "经济",
-                    Lead(insight.GoldLead),
-                    $"装备 {Gold(insight.Own.ItemGold)} : {Gold(insight.Enemy.ItemGold)}",
-                    DetailCards.Compare(insight.GoldLead, 0),
-                    "按双方装备总价计算：2999 不提供他人金币。"
-                ),
-                Tile(
-                    "团战",
-                    insight.Fights.Length == 0 ? "暂无" : $"{insight.FightsWon} 胜 {insight.FightsLost} 负",
-                    last == null ? "" : $"{Clock(last.Start)} 杀 {last.OwnKills} 亡 {last.EnemyKills}",
-                    DetailCards.Compare(insight.FightsWon, insight.FightsLost),
-                    "三次以上击杀间隔不超过 12 秒记为一次团战；小字为最近一次的时间和我方击杀、阵亡。"
-                ),
-                Tile(
-                    "团灭",
-                    Versus(insight.Own.Aces, insight.Enemy.Aces),
-                    "我方 : 敌方",
-                    DetailCards.Compare(insight.Own.Aces, insight.Enemy.Aces)
-                ),
-                Tile(
-                    "多杀",
-                    Versus(insight.Own.Multikills, insight.Enemy.Multikills),
-                    "我方 : 敌方",
-                    DetailCards.Compare(insight.Own.Multikills, insight.Enemy.Multikills)
-                ),
-            ]
-        );
-    }
-
-    // One tile per ability: the cooldown after haste, with the rank and the base cooldown under it.
-    private static JObject Cooldowns(AbilityCooldown[] cooldowns, double haste, string options)
-    {
-        var tiles = cooldowns.Select(cooldown =>
+        var items = new List<JObject>
         {
-            string title = $"{cooldown.Key} {cooldown.Name}";
-            string rank = $"{cooldown.Rank}/{cooldown.Ranks} 级";
-            if (cooldown.Sealed)
-            {
-                return Tile(title, "已封印", "回归基本功");
-            }
-
-            if (cooldown.Rank == 0)
-            {
-                return Tile(title, "未学", "");
-            }
-
-            if (cooldown.Base <= 0)
-            {
-                return Tile(title, "—", rank + " · 数据里没有冷却");
-            }
-
-            string charges = cooldown.Charges > 0 ? $" · {cooldown.Charges} 层充能" : "";
-            return Tile(
-                title,
-                (cooldown.Charges > 0 ? "充能 " : "") + Seconds(cooldown.Current),
-                $"{rank}{charges} · 基础 {Seconds(cooldown.Base)}",
-                "info"
-            );
-        });
-        return Section(
-            Tab,
-            "技能冷却",
-            Tiles,
-            tiles,
-            $"按 2999 的技能急速 {haste:0}（与游戏属性面板相同）计算：冷却 = 基础冷却 × 100 / (100 + 急速)。"
-                + "充能技能显示每层的充能时间。"
-                + (
-                    options.Length > 0
-                        ? $"已计入「海克斯」页的记录：{options}。"
-                        : "大招急速和只对部分技能生效的海克斯（大招工具人、面包系列等）可在「海克斯」页记录。"
-                )
-                + "技能命中后的冷却返还未计入。"
-        );
-    }
-
-    private static string Seconds(double seconds) =>
-        seconds.ToString(seconds < 10 ? "0.#" : "0", CultureInfo.InvariantCulture) + " 秒";
-
-    // The player's score and survivability as tiles; attributes as smaller tiles under them.
-    private static JObject State(LivePanelInput input)
-    {
-        var tiles = new List<JObject>();
-        if (input.Self is { } self)
-        {
-            tiles.Add(Tile("KDA", self.Score.Length > 0 ? self.Score : "—", ""));
-            tiles.Add(Tile("参团", self.KillParticipation is double kp ? Percent(kp) : "—", ""));
-            tiles.Add(Tile("装备", Gold(self.ItemGold), "装备总价"));
-        }
-
-        if (input.Defense is { } defense)
-        {
-            tiles.Add(Tile("物理有效生命", $"{defense.PhysicalHealth:0}", "抵挡物理伤害"));
-            tiles.Add(Tile("魔法有效生命", $"{defense.MagicHealth:0}", "抵挡魔法伤害"));
-        }
-        else if (input.Stats is { } health)
-        {
-            tiles.Add(Tile("生命", $"{health.MaxHealth:0}", ""));
-        }
-
-        var section = Section(Tab, "你的状态", Tiles, tiles);
-        if (input.Stats is { } stats)
-        {
-            double reduction = stats.AbilityHaste > 0 ? stats.AbilityHaste / (100 + stats.AbilityHaste) : 0;
-            section["signals"] = new JArray(
-                Tile("护甲", $"{stats.Armor:0}", ""),
-                Tile("魔抗", $"{stats.MagicResist:0}", ""),
-                Tile("技能急速", $"{stats.AbilityHaste:0}", reduction > 0 ? "冷却 −" + Percent(reduction) : ""),
-                Tile(
-                    "物理穿透",
-                    $"{stats.PhysicalLethality:0} + {Percent(stats.ArmorPenetrationPercent)}",
-                    "固定 + 百分比"
-                ),
-                Tile(
-                    "法术穿透",
-                    $"{stats.MagicPenetrationFlat:0} + {Percent(stats.MagicPenetrationPercent)}",
-                    "固定 + 百分比"
-                )
-            );
-        }
-
-        if (input.Defense?.PhysicalShare == null)
-        {
-            section["tip"] = "敌方伤害构成暂不可用，仅显示当前有效生命。";
-        }
-
-        return section;
-    }
-
-    private static JObject DefenseChoice(LiveDefenseAdvice defense, double share)
-    {
-        string choice = defense.Priority switch
-        {
-            LiveDefensePriority.Armor => "优先护甲",
-            LiveDefensePriority.MagicResist => "优先魔抗",
-            _ => "收益接近",
+            Item(
+                0,
+                "击杀",
+                Versus(insight.Own.Kills, insight.Enemy.Kills),
+                tone: DetailCards.Compare(insight.Own.Kills, insight.Enemy.Kills),
+                tip: "我方 : 敌方"
+            ),
+            Item(
+                0,
+                "经济",
+                Lead(insight.GoldLead),
+                tone: DetailCards.Compare(insight.GoldLead, 0),
+                tip: $"装备总价 {Gold(insight.Own.ItemGold)} : {Gold(insight.Enemy.ItemGold)}。2999 不提供他人金币，按双方装备总价计算。"
+            ),
+            Item(
+                0,
+                "团战",
+                insight.Fights.Length == 0 ? "暂无" : $"{insight.FightsWon} 胜 {insight.FightsLost} 负",
+                last == null ? "" : $"最近 {Clock(last.Start)} 杀 {last.OwnKills} 亡 {last.EnemyKills}",
+                DetailCards.Compare(insight.FightsWon, insight.FightsLost),
+                "三次以上击杀间隔不超过 12 秒记为一次团战。"
+            ),
         };
-        return Section(
+        if (self != null)
+        {
+            items.Add(Item(1, "你", self.Score.Length > 0 ? self.Score : "—"));
+            items.Add(Item(1, "参团", self.KillParticipation is double kp ? Percent(kp) : "—"));
+            items.Add(Item(1, "装备", Gold(self.ItemGold), tip: "装备总价"));
+        }
+
+        return Section(Tab, "战况", Strip, items);
+    }
+
+    // The verdict first: the enemy's damage mix and which resistance to buy, the effective healths and what 10 more
+    // of each would hold under it. Without the mix only the effective healths are known.
+    private static JObject Defense(LiveDefenseAdvice defense)
+    {
+        var health = Item(0, "有效生命", $"物理 {defense.PhysicalHealth:0} · 魔法 {defense.MagicHealth:0}");
+        if (defense.PhysicalShare is not double share)
+        {
+            return Section(Tab, "防装", Strip, [health], "敌方伤害构成暂不可用，仅显示当前有效生命。");
+        }
+
+        var section = Section(
             Tab,
-            "防装建议",
-            Tiles,
+            "防装",
+            Split,
             [
-                Tile("敌方物理伤害", Percent(share), "魔法 " + Percent(1 - share)),
-                Tile($"+{LiveDefenseAdvice.Step:0} 护甲", $"多抵 {defense.ArmorGain:0}", "点伤害"),
-                Tile($"+{LiveDefenseAdvice.Step:0} 魔抗", $"多抵 {defense.MagicGain:0}", "点伤害"),
-                Tile("下一件防装", choice, "", "info"),
+                health,
+                Item(0, $"+{LiveDefenseAdvice.Step:0} 护甲", $"多抵 {defense.ArmorGain:0}"),
+                Item(0, $"+{LiveDefenseAdvice.Step:0} 魔抗", $"多抵 {defense.MagicGain:0}"),
             ],
-            "按 arammeta 英雄伤害构成估算，不含真实伤害和穿透。"
+            "按 arammeta 英雄伤害构成估算，不含真实伤害和穿透；「多抵」是多加这些抗性后多抵挡的伤害。"
         );
+        section["share"] = share;
+        section["left"] = "物理 " + Percent(share);
+        section["right"] = "魔法 " + Percent(1 - share);
+        section["verdict"] = defense.Priority switch
+        {
+            LiveDefensePriority.Armor => "下一件优先护甲",
+            LiveDefensePriority.MagicResist => "下一件优先魔抗",
+            _ => "护甲魔抗收益接近",
+        };
+        return section;
     }
 
     private static JObject Equipment(LiveBuildAdvice advice, int[] owned, Func<int, string> itemName)
@@ -288,29 +194,30 @@ public static class LivePanelSections
         var build = advice.Build;
         var section = Section(
             Tab,
-            "出装对照",
-            Tiles,
+            "出装",
+            BuildLayout,
             [
-                Tile(
-                    "下一件",
-                    advice.Next is int next ? itemName(next) : "已全部完成",
-                    "",
-                    advice.Next == null ? "good" : "info"
-                ),
-                Tile(
+                Item(0, "进度", $"{advice.Owned}/{build.Ids.Length}"),
+                Item(
+                    0,
                     "参照组合",
                     build.WinRate is double win ? "胜率 " + Percent(win) : "胜率 —",
                     build.PickRate is double pick ? "使用率 " + Percent(pick) : ""
                 ),
-                Tile("进度", $"{advice.Owned}/{build.Ids.Length}", "已有装备"),
             ],
             "按与已有装备重合最多的推荐组合对照；已拥有的装备显示为暗色。"
         );
+        section["nextName"] = advice.Next is int next ? itemName(next) : "已全部完成";
+        if (advice.Next is int id)
+        {
+            section["next"] = Icon("item", id);
+        }
+
         section["icons"] = new JArray(
-            build.Ids.Select(id =>
+            build.Ids.Select(item =>
             {
-                var icon = Icon("item", id);
-                icon["owned"] = owned.Contains(id);
+                var icon = Icon("item", item);
+                icon["owned"] = owned.Contains(item);
                 return icon;
             })
         );

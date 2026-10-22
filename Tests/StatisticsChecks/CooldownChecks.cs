@@ -61,13 +61,10 @@ internal static class CooldownChecks
             active.AbilityRanks.Count == 2 && active.AbilityRanks["Q"] == 3 && active.AbilityRanks["E"] == 4,
             "2999's ability levels are read for Q, W, E and R; malformed ones are left out"
         );
-        CheckSection(now);
         HasteAndCoverage(cooldowns);
         ModeOverrides();
         Task.Run(() => BridgeAsync(cooldowns)).GetAwaiter().GetResult();
-        Console.WriteLine(
-            "PASS: cooldowns per rank, defaults, charges, ability haste and the live tab's cooldown cards."
-        );
+        Console.WriteLine("PASS: cooldowns per rank, defaults, charges and ability haste.");
     }
 
     // Others' haste comes from items and added augments; coverage is a slow's duration over the hasted cooldown.
@@ -195,35 +192,6 @@ internal static class CooldownChecks
         }
     }
 
-    private static void CheckSection(AbilityCooldown[] now)
-    {
-        var insight = new LiveMatchInsight(
-            60,
-            new(0, 0, 0, 0, 0),
-            new(0, 0, 0, 0, 0),
-            new Dictionary<string, LivePlayerInsight>(),
-            [],
-            ""
-        );
-        var stats = new LiveChampionStats(2000, 50, 40, 50, 0, 0, 0, 0);
-        var sections = LivePanelSections.Build(
-            new LivePanelInput(insight, null, stats, null, null, [], [], "") { Cooldowns = now },
-            id => id.ToString()
-        );
-        var section = sections.OfType<JObject>().Single(s => (string?)s["title"] == "技能冷却");
-        var tiles = section["rows"]!.OfType<JObject>().Select(t => $"{t["value"]}|{t["stats"]}").ToArray();
-        Check(
-            tiles.SequenceEqual([
-                "4.7 秒|3/6 级 · 基础 7 秒",
-                "未学|",
-                "充能 10 秒|4/5 级 · 3 层充能 · 基础 15 秒",
-                "53 秒|1/3 级 · 基础 80 秒",
-            ]) && ((string?)section["tip"] ?? "").Contains("技能急速 50"),
-            "The live tab lists each ability's cooldown after haste: " + string.Join(" ; ", tiles)
-        );
-    }
-
-    // ARAM and Mayhem replace some cooldowns and slow values (Hecarim E 16 there instead of 20, Teemo R slows 20%).
     private static void ModeOverrides()
     {
         var bin = Bin();

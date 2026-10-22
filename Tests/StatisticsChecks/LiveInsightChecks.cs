@@ -126,39 +126,30 @@ internal static class LiveInsightChecks
             new(
                 insight,
                 insight.Players["r-a1"],
-                stats,
                 LiveDefenseAdvice.Calculate(stats, 0.7),
                 new(new([3071, 3053], 0.55, 0.2, 500), 1, 3053),
-                [3071],
-                snapshot.Active.Runes,
-                "来自游戏内数据。"
+                [3071]
             ),
             id => "装备" + id
         );
         string[] titles = sections.Select(s => (string)s["title"]!).ToArray();
         Check(
-            titles.SequenceEqual(["本局结束", "战况", "你的状态", "防装建议", "出装对照", "符文页"])
-                && sections.All(s => (string?)s["tab"] == LivePanelSections.Tab)
-                && sections.All(s => (string?)s["layout"] == "tiles"),
-            "The live tab shows the ending, battle, state, defense, build and runes as cards: "
-                + string.Join(",", titles)
+            titles.SequenceEqual(["本局结束", "战况", "防装", "出装"])
+                && sections.All(s => (string?)s["tab"] == LivePanelSections.Tab),
+            "The live tab shows the ending, battle, defense and build: " + string.Join(",", titles)
         );
-        var build = (JObject)sections[4]!;
+        var build = (JObject)sections[3]!;
         Check(
-            (string?)build["rows"]![0]!["value"] == "装备3053"
+            (string?)build["nextName"] == "装备3053"
                 && (bool)build["icons"]![0]!["owned"]!
                 && !(bool)build["icons"]![1]!["owned"]!,
-            "The build cards name the next item and dim owned ones"
+            "The build names the next item and dims owned ones"
         );
         var battle = (JArray)sections[1]["rows"]!;
         Check(
             battle.Any(t => (string?)t["value"] == "领先 2.4k" && (string?)t["tone"] == "good")
                 && battle.Any(t => (string?)t["title"] == "团战" && (string?)t["value"] == "1 胜 0 负"),
-            "The battle cards show the lead and fights: " + battle
-        );
-        Check(
-            ((JArray)sections[2]["signals"]!).Count == 5 && ((JArray)sections[5]["icons"]!).Count > 0,
-            "Attributes follow the state as small cards; the rune page keeps its icons"
+            "The battle shows the lead and fights: " + battle
         );
         return sections;
     }

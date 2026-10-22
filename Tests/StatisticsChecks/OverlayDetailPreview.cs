@@ -297,23 +297,10 @@ internal static class OverlayDetailPreview
         var input = new LivePanelInput(
             insight,
             self,
-            stats,
             LiveDefenseAdvice.Calculate(stats, 0.64),
             new(new([3071, 3053, 3742], 0.543, 0.12, 1800), 1, 3053),
-            [3071],
-            [8010, 9111, 9104, 8299, 8473, 8242, 5005, 5008, 5011],
-            "布局样例 · 不代表当前对局"
-        )
-        {
-            // Long names, an unlearned ability and a charge ability check the tile widths.
-            Cooldowns =
-            [
-                new("Q", "光之束缚", 3, 5, 9, 7.2),
-                new("W", "棱光屏障", 0, 5, 0, 0),
-                new("E", "透光奇点", 4, 5, 15, 12) { Charges = 3 },
-                new("R", "终极闪光", 2, 3, 60, 48),
-            ],
-        };
+            [3071]
+        );
         roster["teamSummaries"] = new JArray("18 杀 · 41.2k · 领先 2.3k", "14 杀 · 38.9k");
         roster["liveRevision"] = "fixture-live-1";
         roster["liveSections"] = LivePanelSections.Build(input, id => $"布局装备 {id}");
