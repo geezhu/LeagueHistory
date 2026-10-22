@@ -89,16 +89,18 @@ internal sealed class OpggRankingsView : UserControl
 
     private void ConfigureColumns()
     {
+        // The figures keep fixed widths side by side and the last column takes what is left, so a wide window no
+        // longer spreads one row across the whole screen.
         foreach (
-            var (title, weight, min) in new[]
+            var (title, width) in new[]
             {
-                ("排名", 45, 45),
-                ("英雄", 200, 175),
-                ("梯队", 65, 55),
-                ("胜率", 100, 80),
-                ("登场率", 100, 80),
-                ("禁用率", 100, 80),
-                ("劣势对局", 130, 112),
+                ("排名", 64),
+                ("英雄", 190),
+                ("梯队", 70),
+                ("胜率", 96),
+                ("登场率", 96),
+                ("禁用率", 96),
+                ("劣势对局", 0),
             }
         )
         {
@@ -106,12 +108,17 @@ internal sealed class OpggRankingsView : UserControl
                 new DataGridViewTextBoxColumn
                 {
                     HeaderText = title,
-                    FillWeight = weight,
-                    MinimumWidth = min,
+                    AutoSizeMode =
+                        width > 0 ? DataGridViewAutoSizeColumnMode.None : DataGridViewAutoSizeColumnMode.Fill,
+                    Width = width > 0 ? width : 120,
+                    MinimumWidth = width > 0 ? width : 120,
                     SortMode = DataGridViewColumnSortMode.Programmatic,
                 }
             );
         }
+        // The counter icons start at the left of the wide last column, so its title does too.
+        _grid.Columns[CountersColumn].HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        _grid.Columns[CountersColumn].HeaderCell.Style.Padding = new Padding(6, 0, 0, 0);
     }
 
     private void BindGridEvents()
@@ -211,6 +218,11 @@ internal sealed class OpggRankingsView : UserControl
                 ""
             );
             _grid.Rows[index].Tag = row;
+            if (row.WinRate is double rate)
+            {
+                // The same green and red as the guide's statistics, split at 50%.
+                _grid.Rows[index].Cells[WinRateColumn].Style.ForeColor = rate >= 0.5 ? Theme.Win : Theme.Loss;
+            }
         }
         foreach (DataGridViewColumn col in _grid.Columns)
         {
