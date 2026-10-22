@@ -10,6 +10,7 @@ internal sealed partial class AramMetaView
     private const int BuildTab = 2;
     private Font? _heroHeadingFont;
     private Font? _sectionHeadingFont;
+    private Font? _summaryFigureFont;
     private AramMetaPage? _detailData;
     private FlowLayoutPanel? _detailBody;
     private int _detailHero,
@@ -94,51 +95,65 @@ internal sealed partial class AramMetaView
     {
         var summary = Section(Name(champion));
         summary.BackColor = Color.FromArgb(226, 242, 243);
-        summary.Controls[0].Font = _heroHeadingFont ??= new Font(Font.FontFamily, 14, FontStyle.Bold);
+        // The name sits beside the portrait above the figures instead of on a line of its own.
+        var title = summary.Controls[0];
+        title.Font = _heroHeadingFont ??= new Font(Font.FontFamily, 14, FontStyle.Bold);
+        title.Margin = Padding.Empty;
         var header = Row(summary);
-        Icon(header, (string?)champion.Data["image"], Name(champion), token, 48, "champion", champion.Id);
-        var tierInk = TierColor(champion.Tier);
-        header.Controls.Add(
-            new Label
-            {
-                Text = champion.Tier,
-                Size = new Size(44, 30),
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = tierInk,
-                BackColor = Color.FromArgb(24, tierInk),
-                Margin = new Padding(4, 17, 8, 0),
-            }
+        var portrait = Icon(
+            header,
+            (string?)champion.Data["image"],
+            Name(champion),
+            token,
+            72,
+            "champion",
+            champion.Id
         );
-        AddChampionMetrics(header, page, champion);
+        portrait.Margin = new Padding(0, 0, 16, 0);
+        var identity = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Margin = Padding.Empty,
+        };
+        header.Controls.Add(identity);
+        identity.Controls.Add(title);
+        var metrics = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = true,
+            Margin = Padding.Empty,
+        };
+        identity.Controls.Add(metrics);
+        AddChampionMetrics(metrics, page, champion);
         _tips.SetToolTip(
             summary,
             "调整后胜率来自 arammeta 的统计模型；样本选取率按完整 5v5 样本计算，仅代表来源样本。"
         );
     }
 
+    // The same headline figures as the OP.GG guide: the adjusted win rate split green and red at 50%, the tier in its
+    // own colour, the rest in the heading ink.
     private void AddChampionMetrics(Control header, AramMetaPage page, AramMetaChampion champion)
     {
+        var winColor =
+            champion.WinRate is not double rate ? Theme.Heading
+            : rate >= 0.5 ? Theme.Win
+            : Theme.Loss;
+        var figure = _summaryFigureFont ??= Theme.NumberFont(18, strong: true);
         foreach (
-            var (label, value) in new[]
+            var (caption, value, color) in new[]
             {
-                ("调整后胜率", Rate(champion.WinRate)),
-                ("原始胜率", Rate(champion.RawWinRate)),
-                ("样本选取率", Rate(page.Index.PickRate(champion))),
-                ("样本量", champion.Games?.ToString("N0") ?? "—"),
+                ("调整后胜率", Rate(champion.WinRate), winColor),
+                ("原始胜率", Rate(champion.RawWinRate), Theme.Heading),
+                ("梯队", champion.Tier, TierColor(champion.Tier)),
+                ("样本选取率", Rate(page.Index.PickRate(champion)), Theme.Heading),
+                ("样本量", champion.Games?.ToString("N0") ?? "—", Theme.Heading),
             }
         )
         {
-            header.Controls.Add(
-                new Label
-                {
-                    Text = value + "\n" + label,
-                    AutoSize = false,
-                    Size = new Size(116, 46),
-                    TextAlign = ContentAlignment.MiddleCenter,
-                    ForeColor = label == "调整后胜率" ? Theme.Win : Theme.Muted,
-                    Margin = new Padding(4),
-                }
-            );
+            header.Controls.Add(SummaryMetric.Create(caption, value, color, figure));
         }
     }
 
@@ -146,7 +161,12 @@ internal sealed partial class AramMetaView
     {
         var navigation = Section("");
         navigation.Controls[0].Dispose();
+        // The tabs sit on the page itself rather than in a card of their own, which cost a card's padding and gap.
+        navigation.BackColor = Theme.Canvas;
+        navigation.Padding = Padding.Empty;
+        navigation.Margin = new Padding(0, 0, 0, 8);
         var tabs = Row(navigation);
+        tabs.Margin = Padding.Empty;
         var names = new[] { "概览", "强化比较", "出装与技能" };
         for (int i = 0; i < names.Length; i++)
         {
@@ -174,8 +194,20 @@ internal sealed partial class AramMetaView
     {
         for (int i = 0; i < tabs.Controls.Count; i++)
         {
-            tabs.Controls[i].BackColor = i == _detailTab ? Theme.Accent : Color.White;
-            tabs.Controls[i].ForeColor = i == _detailTab ? Color.White : Color.FromArgb(60, 82, 99);
+            StyleChoice((Button)tabs.Controls[i], i == _detailTab);
+        }
+    }
+
+    // Tabs and filters read like the OP.GG lane buttons: the chosen one solid, the rest a quiet fill without a border.
+    private static void StyleChoice(Button button, bool chosen)
+    {
+        if (chosen)
+        {
+            ButtonStyles.Primary(button);
+        }
+        else
+        {
+            ButtonStyles.Secondary(button);
         }
     }
 
@@ -213,55 +245,5 @@ internal sealed partial class AramMetaView
         {
             _detailBody.ResumeLayout(true);
         }
-    }
-
-    private TableLayoutPanel AddStatsRow(
-        Control host,
-        Control? icon,
-        string name,
-        string win,
-        string pick,
-        string games,
-        bool heading = false
-    )
-    {
-        var row = new TableLayoutPanel
-        {
-            Height = heading ? 34 : 54,
-            Width = Math.Max(510, host.Width - 24),
-            MinimumSize = new Size(510, 0),
-            ColumnCount = 5,
-            RowCount = 1,
-            Margin = new Padding(0, 0, 0, 3),
-            BackColor = heading ? Color.FromArgb(235, 242, 247) : Theme.SurfaceSubtle,
-        };
-        row.RowStyles.Add(new RowStyle(SizeType.Absolute, heading ? 34 : 54));
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48));
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (int i = 0; i < 3; i++)
-        {
-            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 94));
-        }
-
-        row.Controls.Add(icon ?? new Panel(), 0, 0);
-        int column = 1;
-        foreach (var text in new[] { name, win, pick, games })
-        {
-            row.Controls.Add(
-                new Label
-                {
-                    Text = text,
-                    Dock = DockStyle.Fill,
-                    AutoEllipsis = true,
-                    TextAlign = column == 1 ? ContentAlignment.MiddleLeft : ContentAlignment.MiddleCenter,
-                    ForeColor = column == 2 && !heading ? Theme.Win : Theme.Ink,
-                },
-                column++,
-                0
-            );
-        }
-
-        host.Controls.Add(row);
-        return row;
     }
 }

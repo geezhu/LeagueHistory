@@ -16,65 +16,42 @@ internal sealed partial class AramMetaView
     private string RecommendationName(AramMetaRecommendation r, bool augment) =>
         augment ? FormMain.Globals.resLoading.GetAugmentById(r.Ids[0])?.Name ?? r.Name : r.Name;
 
-    private void RecommendationRow(
-        Control parent,
-        AramMetaRecommendation entry,
-        bool augment = false,
-        bool spell = false
-    )
+    // A single item as a small tile, several to a row, like the OP.GG guide's later items: twenty full-width rows
+    // used to fill the left of the page and leave the rest empty.
+    private void ItemTile(Control parent, AramMetaRecommendation entry)
     {
-        var card = new Panel
+        int id = entry.Ids[0];
+        var tile = new Panel
         {
-            Size = new Size(430, 54),
-            Margin = new Padding(0, 0, 0, 4),
-            BackColor = Color.FromArgb(239, 245, 248),
+            Size = new Size(140, 46),
+            Margin = new Padding(0, 0, 8, 8),
+            BackColor = Theme.SurfaceSubtle,
         };
-        parent.Controls.Add(card);
-        var row = new FlowLayoutPanel
+        parent.Controls.Add(tile);
+        var icon = new FlowLayoutPanel
         {
-            Location = new Point(5, 6),
-            Size = new Size(170, 42),
+            Bounds = new Rectangle(4, 4, 40, 40),
             Margin = Padding.Empty,
+            WrapContents = false,
         };
-        card.Controls.Add(row);
-        foreach (int id in entry.Ids)
+        tile.Controls.Add(icon);
+        string name = FormMain.Globals.resLoading.GetItemById(id)?.Name ?? entry.Name;
+        Icon(icon, null, TooltipText.Format(name, ""), _detailToken, 36, "item", id);
+        tile.Paint += (_, e) =>
         {
-            string description = augment
-                ? FormMain.Globals.resLoading.GetAugmentById(id)?.Description ?? entry.Description
-                : "";
-            string name =
-                augment ? RecommendationName(entry, true)
-                : spell ? FormMain.Globals.resLoading.GetSpellById(id)?.Name ?? entry.Name
-                : FormMain.Globals.resLoading.GetItemById(id)?.Name ?? entry.Name;
-            Icon(
-                row,
-                null,
-                TooltipText.Format(name, description),
-                _detailToken,
-                36,
-                augment ? "augment"
-                    : spell ? "spell"
-                    : "item",
-                id
-            );
-        }
-        card.Controls.Add(
-            new Label
-            {
-                Text = $"胜率 {entry.WinRate:P1}\n{entry.Games:N0} 场",
-                Location = new Point(180, 8),
-                Size = new Size(120, 40),
-            }
-        );
-        card.Controls.Add(
-            new Label
-            {
-                Text = $"使用率 {entry.PickRate:P1}",
-                Location = new Point(305, 18),
-                Size = new Size(120, 22),
-                ForeColor = Theme.Heading,
-            }
-        );
+            var flags = TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter;
+            int half = tile.Height / 2;
+            var winColor =
+                entry.WinRate is not double rate ? Theme.Muted
+                : rate >= 0.5 ? Theme.Win
+                : Theme.Loss;
+            using var strong = new Font(tile.Font, FontStyle.Bold);
+            var text = new Rectangle(48, 2, tile.Width - 50, half - 2);
+            TextRenderer.DrawText(e.Graphics, $"胜率 {entry.WinRate:P1}", strong, text, winColor, flags);
+            text.Y = half;
+            TextRenderer.DrawText(e.Graphics, $"选用 {entry.PickRate:P1}", tile.Font, text, Theme.Muted, flags);
+        };
+        _tips.SetToolTip(tile, $"{name} · 胜率 {entry.WinRate:P1} · 选用率 {entry.PickRate:P1} · {entry.Games:N0} 场");
     }
 
     private void RenderOverview()
@@ -103,7 +80,7 @@ internal sealed partial class AramMetaView
             column.Controls.Add(Text(RarityNames[i]));
             foreach (var entry in Recommendations(RarityKeys[i]).Take(2))
             {
-                var tile = new Panel { Size = new Size(columnWidth - 16, 62), Margin = new Padding(0, 0, 0, 4) };
+                var tile = new Panel { Size = new Size(columnWidth - 16, 48), Margin = new Padding(0, 0, 0, 2) };
                 column.Controls.Add(tile);
                 var icons = new FlowLayoutPanel
                 {
@@ -117,13 +94,13 @@ internal sealed partial class AramMetaView
                 {
                     Text = RecommendationName(entry, true),
                     Location = new Point(44, 3),
-                    Size = new Size(columnWidth - 64, 22),
+                    Size = new Size(columnWidth - 64, 20),
                     AutoEllipsis = true,
                 };
                 var metric = new Label
                 {
                     Text = $"调整后胜率 {entry.WinRate:P1}",
-                    Location = new Point(44, 28),
+                    Location = new Point(44, 24),
                     AutoSize = true,
                     ForeColor = Theme.Win,
                 };
@@ -133,7 +110,7 @@ internal sealed partial class AramMetaView
                     TooltipText.Format(
                         name.Text,
                         FormMain.Globals.resLoading.GetAugmentById(entry.Ids[0])?.Description ?? entry.Description
-                    ) + $"\n选取率 {entry.PickRate:P1} · {entry.Games:N0} 场"
+                    ) + $"\n选用率 {entry.PickRate:P1} · {entry.Games:N0} 场"
                 );
             }
         }
@@ -156,10 +133,12 @@ internal sealed partial class AramMetaView
             host.Controls.Add(Text(_detailFailed ? "出装推荐暂不可用，可刷新重试。" : "正在加载出装与召唤师技能…"));
             return;
         }
+        var pair = Row(host);
+        // This host is a narrow top-down column when the row is made, so the row takes the page's width instead.
+        pair.MaximumSize = new Size(Math.Max(330, _detailBody!.Width - 24), 0);
         foreach (var (key, title) in new[] { ("items", "核心装备"), ("boots", "鞋子") })
         {
-            host.Controls.Add(Text(title));
-            CreateEquipmentChooser(host, key, Recommendations(key));
+            LabeledChooser(pair, title, key, Recommendations(key));
         }
         var more = new Button { Text = "查看后续装备 ›", AutoSize = true };
         ButtonStyles.Ghost(more);
@@ -173,6 +152,8 @@ internal sealed partial class AramMetaView
     {
         host.Controls.Add(Text("召唤师技能"));
         var columns = Row(host);
+        // On the overview the host is a narrow column when this row is made; the cards share the page's width.
+        columns.MaximumSize = new Size(Math.Max(330, _detailBody!.Width - 24), 0);
         foreach (var (title, entry) in AramMetaRecommendation.SpellHighlights(Recommendations("spells")))
         {
             var card = new FlowLayoutPanel
@@ -212,162 +193,13 @@ internal sealed partial class AramMetaView
                 );
             }
 
-            card.Controls.Add(Text($"胜率 {entry.WinRate:P1} · 使用率 {entry.PickRate:P1}", Theme.Win));
+            card.Controls.Add(Text($"胜率 {entry.WinRate:P1} · 选用率 {entry.PickRate:P1}", Theme.Win));
             _tips.SetToolTip(card, $"样本 {entry.Games:N0} 场");
         }
     }
 
-    private void RenderAugmentComparison()
-    {
-        var host = _detailBody!;
-        RenderRarityFilters(host);
-        int width = Math.Max(510, host.Width - 24);
-        bool wide = width >= 850;
-        var split = Row(host);
-        var list = new FlowLayoutPanel
-        {
-            Tag = "comparison-list",
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            Width = wide ? width - 285 : width,
-            MaximumSize = new Size(wide ? width - 285 : width, 0),
-        };
-        var information = new Label
-        {
-            Tag = "comparison-info",
-            Text = "点击强化查看完整介绍与统计依据",
-            AutoSize = true,
-            MaximumSize = new Size(wide ? 260 : width, 0),
-            MinimumSize = new Size(wide ? 260 : width, 80),
-            Padding = new Padding(12),
-            BackColor = Color.FromArgb(226, 241, 244),
-        };
-        split.Controls.AddRange(new Control[] { list, information });
-        RenderAugmentTools(host, list, information);
-        host.Controls.SetChildIndex(split, host.Controls.Count - 1);
-        PopulateAugments(list, information);
-    }
-
-    private void RenderRarityFilters(Control host)
-    {
-        var filters = Row(host);
-        for (int i = 0; i < RarityNames.Length; i++)
-        {
-            int rarity = i;
-            var button = new Button
-            {
-                Text = RarityNames[i],
-                Width = 100,
-                Height = 30,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = i == _rarity ? Theme.Accent : Color.White,
-                ForeColor = i == _rarity ? Color.White : Color.FromArgb(60, 82, 99),
-            };
-            filters.Controls.Add(button);
-            button.Click += (_, _) =>
-            {
-                _rarity = rarity;
-                RenderDetailBody();
-            };
-        }
-    }
-
-    private void RenderAugmentTools(Control host, FlowLayoutPanel list, Label information)
-    {
-        var tools = Row(host);
-        var search = new TextBox
-        {
-            Width = 180,
-            PlaceholderText = "搜索强化",
-            Text = _augmentSearch,
-        };
-        var sort = new ComboBox { Width = 150, DropDownStyle = ComboBoxStyle.DropDownList };
-        sort.Items.AddRange(new object[] { "来源推荐顺序", "调整后胜率", "选取率" });
-        sort.SelectedIndex = _augmentSort;
-        tools.Controls.AddRange(new Control[] { search, sort });
-        search.TextChanged += (_, _) =>
-        {
-            _augmentSearch = search.Text;
-            PopulateAugments(list, information);
-        };
-        sort.SelectedIndexChanged += (_, _) =>
-        {
-            _augmentSort = sort.SelectedIndex;
-            PopulateAugments(list, information);
-        };
-    }
-
-    private void PopulateAugments(FlowLayoutPanel list, Label information)
-    {
-        list.SuspendLayout();
-        try
-        {
-            foreach (Control child in list.Controls.Cast<Control>().ToArray())
-            {
-                child.Dispose();
-            }
-            AddStatsRow(list, null, "强化", "调整后胜率", "选取率", "样本量", true);
-            var entries = AramMetaRecommendation
-                .Sort(Recommendations(RarityKeys[_rarity]), _augmentSort)
-                .Where(r => RecommendationName(r, true).Contains(_augmentSearch, StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-            foreach (var entry in entries)
-            {
-                AddAugmentComparisonRow(list, information, entry);
-            }
-            if (entries.Length == 0)
-            {
-                list.Controls.Add(Text("没有匹配的强化"));
-            }
-        }
-        finally
-        {
-            list.ResumeLayout(true);
-        }
-    }
-
-    private void AddAugmentComparisonRow(FlowLayoutPanel list, Label information, AramMetaRecommendation entry)
-    {
-        var icons = new FlowLayoutPanel { Dock = DockStyle.Fill, Margin = Padding.Empty };
-        Icon(icons, null, RecommendationName(entry, true), _detailToken, 36, "augment", entry.Ids[0]);
-        var row = AddStatsRow(
-            list,
-            icons,
-            RecommendationName(entry, true),
-            $"{entry.WinRate:P1}",
-            $"{entry.PickRate:P1}",
-            entry.Games?.ToString("N0") ?? "—"
-        );
-        BindComparisonSelection(row, () => SelectAugment(list, row, information, entry));
-    }
-
-    private void SelectAugment(Control list, Control row, Label information, AramMetaRecommendation entry)
-    {
-        foreach (Control sibling in list.Controls)
-        {
-            sibling.BackColor = Theme.SurfaceSubtle;
-        }
-        row.BackColor = Color.FromArgb(218, 241, 243);
-        string description = FormMain.Globals.resLoading.GetAugmentById(entry.Ids[0])?.Description ?? entry.Description;
-        information.Text =
-            RecommendationName(entry, true)
-            + "\n\n"
-            + TooltipText.PlainText(description)
-            + $"\n\n调整后胜率 {entry.WinRate:P2}\n选取率 {entry.PickRate:P2}\n来源样本 {entry.Games:N0} 场\n\n来源推荐顺序不等于胜率排名，各项统计并不证明与某套出装存在联动。";
-    }
-
-    private static void BindComparisonSelection(Control control, Action select)
-    {
-        control.Cursor = Cursors.Hand;
-        control.Click += (_, _) => select();
-        foreach (Control child in control.Controls)
-        {
-            BindComparisonSelection(child, select);
-        }
-    }
-
+    // Labels sit above their selectors, the boots selector no longer repeats its own numbers underneath, and the
+    // single items follow as tiles.
     private void RenderBuildComparison()
     {
         var host = _detailBody!;
@@ -377,22 +209,44 @@ internal sealed partial class AramMetaView
             return;
         }
         var cores = Recommendations("items");
-        var selection = Row(host);
-        selection.Controls.Add(Text("装备组合"));
-        var core = CreateEquipmentChooser(selection, "items", cores);
+        var pair = Row(host);
+        var core = LabeledChooser(pair, "装备组合", "items", cores);
+        LabeledChooser(pair, "鞋子", "boots", Recommendations("boots"));
+        host.Controls.Add(Text("单件备选 · 已排除所选组合中的装备（不是固定购买顺序）"));
         var later = Row(host);
-        later.FlowDirection = FlowDirection.TopDown;
-        later.WrapContents = false;
         core.SelectedIndexChanged += (_, _) => RenderLaterEquipment(later, cores, core.SelectedIndex);
         RenderLaterEquipment(later, cores, core.SelectedIndex);
-        RenderBootsSelection(host);
-        host.Controls.SetChildIndex(later, host.Controls.Count - 1);
         RenderSpellHighlights(host);
+    }
+
+    // A selector under its own label. Two of them share a wrapping row, so they sit side by side on a wide page
+    // instead of stacking with half the page empty beside them.
+    private EquipmentComboBox LabeledChooser(
+        Control row,
+        string title,
+        string category,
+        AramMetaRecommendation[] options
+    )
+    {
+        var block = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Margin = new Padding(0, 0, 16, 4),
+        };
+        row.Controls.Add(block);
+        block.Controls.Add(Text(title));
+        return CreateEquipmentChooser(block, category, options);
     }
 
     private EquipmentComboBox CreateEquipmentChooser(Control host, string category, AramMetaRecommendation[] options)
     {
-        var chooser = new EquipmentComboBox(options.Select(r => r.ToOption()).ToArray(), _detailToken) { Width = 430 };
+        var chooser = new EquipmentComboBox(options.Select(r => r.ToOption()).ToArray(), _detailToken)
+        {
+            Width = 430,
+            Light = true,
+        };
         host.Controls.Add(chooser);
         chooser.SelectedIndex = Math.Clamp(
             _recommendationChoices.GetValueOrDefault($"{_detailHero}:{category}"),
@@ -421,62 +275,17 @@ internal sealed partial class AramMetaView
             _recommendationChoices[$"{_detailHero}:items"] = selectedIndex;
             var excluded = cores[selectedIndex].Ids.ToHashSet();
             var seen = new HashSet<int>();
-            host.Controls.Add(Text("单件备选 · 已排除所选组合中的装备（不是固定购买顺序）"));
             foreach (
                 var item in Recommendations("singleItems")
                     .Where(r => r.Ids.All(id => !excluded.Contains(id)) && seen.Add(r.Ids[0]))
             )
             {
-                RecommendationRow(host, item);
+                ItemTile(host, item);
             }
         }
         finally
         {
             host.ResumeLayout(true);
-        }
-    }
-
-    private void RenderBootsSelection(Control host)
-    {
-        host.Controls.Add(Text("鞋子"));
-        var options = Recommendations("boots");
-        var chooser = CreateEquipmentChooser(host, "boots", options);
-        var statistics = new Label { AutoSize = true, Margin = new Padding(8) };
-        host.Controls.Add(statistics);
-        void DescribeChoice()
-        {
-            if (options.Length == 0)
-            {
-                return;
-            }
-            var choice = options[chooser.SelectedIndex];
-            statistics.Text = $"胜率 {choice.WinRate:P1} · 选取率 {choice.PickRate:P1} · {choice.Games:N0} 场";
-        }
-        chooser.SelectedIndexChanged += (_, _) => DescribeChoice();
-        DescribeChoice();
-    }
-
-    private void ResizeComparison(Control root, int width)
-    {
-        foreach (Control child in root.Controls)
-        {
-            if (child.Tag is string listTag && listTag == "comparison-list")
-            {
-                int listWidth = width >= 850 ? width - 285 : width;
-                child.MaximumSize = new Size(listWidth, 0);
-                child.Width = listWidth;
-                foreach (var row in child.Controls.OfType<TableLayoutPanel>())
-                {
-                    row.Width = Math.Max(510, listWidth - 6);
-                }
-            }
-            else if (child.Tag is string infoTag && infoTag == "comparison-info")
-            {
-                int infoWidth = width >= 850 ? 260 : width;
-                child.MinimumSize = new Size(infoWidth, 80);
-                child.MaximumSize = new Size(infoWidth, 0);
-            }
-            ResizeComparison(child, width);
         }
     }
 }

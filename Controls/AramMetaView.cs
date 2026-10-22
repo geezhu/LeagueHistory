@@ -728,6 +728,7 @@ internal sealed partial class AramMetaView : UserControl
             _rankingBold?.Dispose();
             _heroHeadingFont?.Dispose();
             _sectionHeadingFont?.Dispose();
+            _summaryFigureFont?.Dispose();
             foreach (var image in _images.Values)
             {
                 image.Dispose();

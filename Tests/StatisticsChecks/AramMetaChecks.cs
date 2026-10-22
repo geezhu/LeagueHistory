@@ -676,13 +676,22 @@ internal static class AramMetaChecks
             1;
         Check((int)type.GetField("_augmentSort", flags)!.GetValue(view)! == 1, "Augment sorting remains available");
         SavePreview(form, "arammeta-detail", 1060, 800);
-        var comparison = body
-            .Controls.OfType<FlowLayoutPanel>()
-            .SelectMany(c => c.Controls.OfType<FlowLayoutPanel>())
-            .First(c => c.Tag is string tag && tag == "comparison-list");
-        var first = comparison.Controls.OfType<TableLayoutPanel>().Skip(1).First();
-        typeof(Control).GetMethod("OnClick", flags)!.Invoke(first, new object[] { EventArgs.Empty });
+        // The augments are a grid of cards; a click shows the description that a hover would.
+        FlowLayoutPanel Grid() =>
+            body.Controls.OfType<FlowLayoutPanel>().First(c => c.Tag is string tag && tag == "augment-grid");
+        int goldCards = Grid().Controls.OfType<Panel>().Count();
+        Check(goldCards > 0, "The augment tab lists the chosen rarity as cards");
+        typeof(Control)
+            .GetMethod("OnClick", flags)!
+            .Invoke(Grid().Controls.OfType<Panel>().First(), new object[] { EventArgs.Empty });
         SavePreview(form, "arammeta-comparison-selected", 1060, 800);
+        ((Button)body.Controls.OfType<FlowLayoutPanel>().First().Controls[3]).PerformClick();
+        Check(
+            (int)type.GetField("_rarity", flags)!.GetValue(view)! == 3
+                && Grid().Controls.OfType<Panel>().Count() >= goldCards,
+            "The all-rarities choice shows every rarity together"
+        );
+        SavePreview(form, "arammeta-comparison-all", 1060, 800);
         ((Button)tabs.Controls[0]).PerformClick();
         SavePreview(form, "arammeta-overview", 1060, 800);
         ((Button)tabs.Controls[2]).PerformClick();
