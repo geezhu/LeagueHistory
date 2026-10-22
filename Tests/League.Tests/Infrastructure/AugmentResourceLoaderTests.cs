@@ -19,9 +19,19 @@ public class AugmentResourceLoaderTests : IDisposable
 {
     private readonly HttpClient _client = new();
 
+    // The image tests cache to a folder of their own, never next to the test binaries.
+    private readonly string _cache = Path.Combine(
+        Path.GetTempPath(),
+        "league-augment-art-" + Guid.NewGuid().ToString("N")
+    );
+
     public void Dispose()
     {
         _client.Dispose();
+        if (Directory.Exists(_cache))
+        {
+            Directory.Delete(_cache, recursive: true);
+        }
         GC.SuppressFinalize(this);
     }
 
@@ -243,6 +253,118 @@ public class AugmentResourceLoaderTests : IDisposable
     public void LargeArtPath_NotASmallIcon_HasNoLargeArt(string? path)
     {
         Assert.Null(AugmentResourceLoader.LargeArtPath(path));
+    }
+
+    [Fact]
+    public void PublicArtUrl_AClientAsset_IsTheGamePathLowerCased()
+    {
+        Assert.Equal(
+            "https://cdn.invalid/latest/game/assets/ux/kiwi/augments/icons/takeemdowndowndown_large.png",
+            AugmentResourceLoader.PublicArtUrl(
+                "/lol-game-data/assets/ASSETS/UX/Kiwi/Augments/Icons/TakeEmDownDownDown_large.png",
+                "https://cdn.invalid/latest/"
+            )
+        );
+    }
+
+    [Theory]
+    [InlineData("/x/aug_large.png")]
+    [InlineData(null)]
+    public void PublicArtUrl_NotAClientAsset_HasNoPublicCopy(string? path)
+    {
+        Assert.Null(AugmentResourceLoader.PublicArtUrl(path, "https://cdn.invalid"));
+    }
+
+    [Fact]
+    public async Task GetInfoAsync_ClientWithoutTheLargeArt_ReadsItFromThePublicCopy()
+    {
+        var art = new Images(Png(256));
+        AugmentResourceLoader loader = await ArtLoader(art);
+
+        (System.Drawing.Image? image, _, _) = await loader.GetInfoAsync(3116);
+
+        Assert.Equal(new System.Drawing.Size(64, 64), image?.Size);
+    }
+
+    [Fact]
+    public async Task GetInfoAsync_NoLargeArtAnywhere_FallsBackToTheTintedIcon()
+    {
+        AugmentResourceLoader loader = await ArtLoader(new Images(null));
+
+        (System.Drawing.Image? image, _, _) = await loader.GetInfoAsync(3116);
+
+        // The small icon is 24 pixels; the art would have come back at 64.
+        Assert.Equal(new System.Drawing.Size(24, 24), image?.Size);
+    }
+
+    [Fact]
+    public async Task GetInfoAsync_ArtMissingEverywhere_IsNotAskedForAgain()
+    {
+        var art = new Images(null);
+        AugmentResourceLoader loader = await ArtLoader(art);
+        await loader.GetInfoAsync(3116);
+
+        await loader.GetInfoAsync(3116);
+
+        Assert.Equal(1, art.Requests);
+    }
+
+    private const string SmallIcon = "/lol-game-data/assets/ASSETS/UX/Kiwi/Augments/Icons/TakeEmDownDownDown_small.png";
+
+    // The client has the catalog and the small icon but not the large art, as it does for most augments.
+    private async Task<AugmentResourceLoader> ArtLoader(Images publicArt)
+    {
+        var client = new HttpClient(new Client()) { BaseAddress = new Uri("https://lcu.invalid") };
+        var loader = new AugmentResourceLoader(
+            client,
+            new ImageCacheService(client, Path.Combine(_cache, "client")),
+            new ImageCacheService(new HttpClient(publicArt), Path.Combine(_cache, "public")),
+            "https://cdn.invalid/latest"
+        );
+        await loader.LoadAsync();
+        return loader;
+    }
+
+    private static byte[] Png(int size)
+    {
+        using var bitmap = new System.Drawing.Bitmap(size, size);
+        using var stream = new MemoryStream();
+        bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+        return stream.ToArray();
+    }
+
+    private sealed class Client : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        {
+            string path = request.RequestUri!.AbsolutePath;
+            var response =
+                path.EndsWith("cherry-augments.json", StringComparison.Ordinal)
+                    ? new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(Json(Row(3116, traName: "将他们放倒倒倒", iconPath: SmallIcon))),
+                    }
+                : path.EndsWith("_small.png", StringComparison.Ordinal)
+                    ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Png(24)) }
+                : new HttpResponseMessage(HttpStatusCode.NotFound);
+            return Task.FromResult(response);
+        }
+    }
+
+    // The public copy: the art when there is some, a 404 when there is none, and a count of what was asked.
+    private sealed class Images(byte[]? art) : HttpMessageHandler
+    {
+        public int Requests { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        {
+            Requests++;
+            return Task.FromResult(
+                art == null
+                    ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                    : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(art) }
+            );
+        }
     }
 
     // ---- looking one up ----

@@ -7,15 +7,38 @@ namespace League.Infrastructure
 {
     public class AugmentResourceLoader
     {
+        // The client ships the large art for only a few dozen augments, so the rest is read from CommunityDragon's
+        // copy of the game files. That request goes through its own client: the LCU one carries the client's
+        // credentials, which must not reach another host.
+        private static readonly Lazy<HttpClient> PublicHttp = new(() =>
+        {
+            var client = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            // CommunityDragon refuses requests without a user agent.
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("LeagueHistory");
+            return client;
+        });
+
         private readonly HttpClient _client;
         private readonly ImageCacheService _imageCache;
+        private readonly ImageCacheService _publicArt;
+        private readonly string _publicHost;
+
+        // Augments with no art anywhere are remembered, so drawing their icon again does not ask twice more.
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _missingArt = new();
 
         private List<AugmentInfo> _augments = new();
 
-        public AugmentResourceLoader(HttpClient client, ImageCacheService imageCache)
+        public AugmentResourceLoader(
+            HttpClient client,
+            ImageCacheService imageCache,
+            ImageCacheService? publicArt = null,
+            string publicHost = "https://raw.communitydragon.org/latest"
+        )
         {
             _client = client;
             _imageCache = imageCache;
+            _publicArt = publicArt ?? new ImageCacheService(PublicHttp.Value);
+            _publicHost = publicHost.TrimEnd('/');
         }
 
         public async Task LoadAsync()
@@ -128,19 +151,28 @@ namespace League.Infrastructure
 
         // The game shows an augment as its full-colour art, transparent and without a frame, its rarity in its own
         // colours. The catalog only names the small icon, a white mask meant to be tinted, so the art is asked for at
-        // the same path with the large suffix; the tinted mask stays as the fallback. The art is 256 pixels and is
-        // drawn at 32 to 48, so it is reduced once here rather than kept at full size in every cache.
+        // the same path with the large suffix, from the client first and then from the public copy; the tinted mask
+        // stays as the fallback. The art is 256 pixels and is drawn at 32 to 48, so it is reduced once here rather
+        // than kept at full size in every cache.
         private async Task<Image?> LoadArtAsync(AugmentInfo augment)
         {
             string? path = LargeArtPath(augment.IconPath);
-            if (path == null)
+            if (path == null || _missingArt.ContainsKey(augment.Id))
             {
                 return null;
             }
 
-            using var art = await _imageCache.GetOrDownloadImageAsync(path, "augments-large", "", augment.Id);
+            string? publicUrl = PublicArtUrl(path, _publicHost);
+            using var art =
+                await _imageCache.GetOrDownloadImageAsync(path, "augments-large", "", augment.Id)
+                ?? (
+                    publicUrl == null
+                        ? null
+                        : await _publicArt.GetOrDownloadImageAsync(publicUrl, "augments-large", "", augment.Id)
+                );
             if (art == null)
             {
+                _missingArt[augment.Id] = true;
                 return null;
             }
 
@@ -151,6 +183,18 @@ namespace League.Infrastructure
             graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
             graphics.DrawImage(art, new Rectangle(0, 0, ArtSize, ArtSize));
             return reduced;
+        }
+
+        /// <summary>
+        /// Where CommunityDragon keeps a file the client serves under /lol-game-data/assets/: the game's own path,
+        /// lower-cased. Null for any other path.
+        /// </summary>
+        public static string? PublicArtUrl(string? clientPath, string host)
+        {
+            const string prefix = "/lol-game-data/assets/";
+            return clientPath?.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) == true
+                ? $"{host.TrimEnd('/')}/game/{clientPath[prefix.Length..].ToLowerInvariant()}"
+                : null;
         }
 
         /// <summary>The large art beside a small augment icon, or null when the path does not name a small icon.</summary>
