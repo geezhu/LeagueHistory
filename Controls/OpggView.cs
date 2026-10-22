@@ -628,18 +628,7 @@ internal sealed partial class OpggView : UserControl
     // page background is left under it. Measured afresh each time, since resizing rewraps every card.
     private static void LevelColumns(Control grid)
     {
-        var columns = grid.Controls.Cast<Control>().Where(column => column.Controls.Count > 0).ToArray();
-        // Every card is reset, not just the last: a resize while the guide was still filling in may have stretched a
-        // card that has since had others added under it.
-        foreach (var column in columns)
-        {
-            foreach (Control card in column.Controls)
-            {
-                card.MinimumSize = new Size(card.MinimumSize.Width, 0);
-            }
-            column.PerformLayout();
-        }
-        grid.PerformLayout();
+        var columns = NaturalColumns(grid).Where(column => column.Controls.Count > 0).ToArray();
         bool sideBySide = columns.Length == 2 && columns[0].Top == columns[1].Top;
         if (!sideBySide)
         {
@@ -652,6 +641,31 @@ internal sealed partial class OpggView : UserControl
             var last = column.Controls[column.Controls.Count - 1];
             last.MinimumSize = new Size(last.MinimumSize.Width, last.Height + bottom - column.Height);
         }
+    }
+
+    // The columns at their natural height. Every card is reset, not just the last: a resize while the guide was still
+    // filling in may have stretched a card that has since had others added under it.
+    private static Control[] NaturalColumns(Control grid)
+    {
+        var columns = grid.Controls.Cast<Control>().ToArray();
+        foreach (var column in columns)
+        {
+            foreach (Control card in column.Controls)
+            {
+                card.MinimumSize = new Size(card.MinimumSize.Width, 0);
+            }
+            column.PerformLayout();
+        }
+        grid.PerformLayout();
+        return columns;
+    }
+
+    // The cards that wrap to any width go wherever there is less, so the two columns end close together whatever the
+    // champion's data and leave little for LevelColumns to stretch.
+    private static Control ShorterColumn(Control left, Control right)
+    {
+        NaturalColumns(left.Parent!);
+        return right.Height < left.Height ? right : left;
     }
 
     private void ResizeSection(Control section)

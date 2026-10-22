@@ -39,8 +39,8 @@ internal sealed partial class OpggView
         _tiers.Visible = false;
         _content.Visible = true;
         await RenderChampionSummaryAsync(build, token);
-        // Left: the spells, then the build from the first purchase to the core items. Right: the runes, the skills and
-        // the items bought later. This split keeps the two columns close in height with real guides.
+        // Left: the spells and the first purchase. Right: the runes and the skills. The core and later items then go
+        // to whichever column is shorter, since their height varies most from one champion to the next.
         var (left, right) = Columns();
         if (build.Query.Mode != "arena")
         {
@@ -50,8 +50,14 @@ internal sealed partial class OpggView
         token.ThrowIfCancellationRequested();
         RenderSkills(build, right);
         await RenderStartingEquipmentAsync(build, left, token);
-        await RenderOptionsAsync(Section("核心装备组合", left), build.Data["core_items"], "item", 5, token);
-        await RenderLaterEquipmentAsync(build, right, token);
+        await RenderOptionsAsync(
+            Section("核心装备组合", ShorterColumn(left, right)),
+            build.Data["core_items"],
+            "item",
+            5,
+            token
+        );
+        await RenderLaterEquipmentAsync(build, ShorterColumn(left, right), token);
         LevelColumns(left.Parent!);
         await RenderMatchupsAsync(build, token);
         if (build.Query.Mode == "arena")
@@ -137,15 +143,61 @@ internal sealed partial class OpggView
     {
         var strip = Inline(Section("后续装备", host));
         foreach (
-            var id in (build.Data["last_items"] as JArray ?? new())
+            var option in (build.Data["last_items"] as JArray ?? new())
                 .OfType<JObject>()
                 .Take(16)
-                .Select(o => (int?)o["ids"]?.First ?? 0)
-                .Where(id => id > 0)
+                .Where(o => ((int?)o["ids"]?.First ?? 0) > 0)
         )
         {
-            await AddIconAsync(strip, id, "item", token);
+            token.ThrowIfCancellationRequested();
+            await AddLaterItemAsync(strip, option, token);
         }
+    }
+
+    // A later item used to be a bare icon; each now carries its win rate and pick rate, with the games on hover.
+    private async Task AddLaterItemAsync(Control strip, JObject option, CancellationToken token)
+    {
+        int id = (int)option["ids"]!.First!;
+        double? win = OpggBuild.Ratio(option["win"], option["play"]);
+        double? pick = (double?)option["pick_rate"];
+        var tile = new Panel { Size = new Size(124, IconSlot + 4), Margin = new Padding(0, 0, 8, 6) };
+        strip.Controls.Add(tile);
+        var icon = new FlowLayoutPanel
+        {
+            Bounds = new Rectangle(0, 2, IconSlot, IconSlot),
+            Margin = Padding.Empty,
+            WrapContents = false,
+        };
+        tile.Controls.Add(icon);
+        tile.Paint += (_, e) =>
+        {
+            var flags = TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter;
+            int half = tile.Height / 2;
+            var winColor =
+                win is not double rate ? Theme.Muted
+                : rate >= 0.5 ? Theme.Win
+                : Theme.Loss;
+            using var strong = new Font(tile.Font, FontStyle.Bold);
+            TextRenderer.DrawText(
+                e.Graphics,
+                $"胜率 {Percent(win)}",
+                strong,
+                new Rectangle(IconSlot + 4, 0, tile.Width - IconSlot - 4, half),
+                winColor,
+                flags
+            );
+            TextRenderer.DrawText(
+                e.Graphics,
+                $"选用 {Percent(pick)}",
+                tile.Font,
+                new Rectangle(IconSlot + 4, half, tile.Width - IconSlot - 4, half),
+                Theme.Muted,
+                flags
+            );
+        };
+        string games = option["play"] is { } play ? $"{(long)play:N0} 场" : "— 场";
+        _tips.SetToolTip(tile, $"胜率 {Percent(win)} · 选用率 {Percent(pick)} · {games}");
+        await AddIconAsync(icon, id, "item", token);
     }
 
     private async Task RenderArenaPartnersAsync(OpggBuild build, CancellationToken token)
