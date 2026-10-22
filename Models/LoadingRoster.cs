@@ -116,6 +116,8 @@ public sealed record LoadingRoster(string GameId, int Queue, string Mode, Loadin
     public LoadingRoster FromLive(LiveMatchSnapshot live, Func<LiveMatchPlayer, int> championId) =>
         this with
         {
+            // The live list replaces the session, so whatever it repeated is gone.
+            Conflicted = false,
             Players = live
                 .Players.Select(p =>
                 {

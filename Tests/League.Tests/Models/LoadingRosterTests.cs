@@ -278,6 +278,17 @@ public class LoadingRosterTests
     }
 
     [Fact]
+    public void FromLive_SessionWithLeftoverAccounts_IsNoLongerConflicted()
+    {
+        var conflicted = Roster() with { Conflicted = true };
+
+        var roster = conflicted.FromLive(Live(LivePlayer("live-1", "玩家甲#01", "ORDER")), _ => 7);
+
+        // The live game's own list has replaced the session that listed an account twice.
+        Assert.False(roster.Conflicted);
+    }
+
+    [Fact]
     public void FromLive_ChampionId_ComesFromTheInjectedMapping()
     {
         var livePlayer = LivePlayer("live-1", "玩家甲#01", "ORDER", true);
