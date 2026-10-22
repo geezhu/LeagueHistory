@@ -332,7 +332,7 @@ internal sealed class RecentActivityView : Control
                 w = (int)cell;
             DrawRole(g, i, new Rectangle(x + (w - 22) / 2, top + 3, 22, 22));
             double ratio = _classified > 0 ? _weights[i] / _classified : 0;
-            Text(_classified > 0 ? $"{ratio:P0}" : "—", new Rectangle(x, top + 29, w, 24));
+            DrawRoleShare(g, RoleNames[i], _classified > 0 ? $"{ratio:P0}" : "—", new Rectangle(x, top + 29, w, 24));
             _hits.Add(
                 (
                     new Rectangle(x, top, w, 56),
@@ -340,6 +340,30 @@ internal sealed class RecentActivityView : Control
                 )
             );
         }
+    }
+
+    // The class is named under its icon in a quieter colour than the share, so the row reads without hovering.
+    private void DrawRoleShare(Graphics g, string name, string share, Rectangle rect)
+    {
+        const int gap = 4;
+        var flags = TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding;
+        int nameWidth = TextRenderer.MeasureText(g, name, Font, Size.Empty, flags).Width;
+        int shareWidth = TextRenderer.MeasureText(g, share, Font, Size.Empty, flags).Width;
+        int left = rect.X + Math.Max(0, (rect.Width - nameWidth - gap - shareWidth) / 2);
+        TextRenderer.DrawText(g, name, Font, new Rectangle(left, rect.Y, nameWidth, rect.Height), Theme.Muted, flags);
+        TextRenderer.DrawText(
+            g,
+            share,
+            Font,
+            new Rectangle(
+                left + nameWidth + gap,
+                rect.Y,
+                Math.Max(1, rect.Right - left - nameWidth - gap),
+                rect.Height
+            ),
+            ForeColor,
+            flags | TextFormatFlags.EndEllipsis
+        );
     }
 
     private void DrawRole(Graphics g, int role, Rectangle rect)
