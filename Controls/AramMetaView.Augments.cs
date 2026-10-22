@@ -133,6 +133,10 @@ internal sealed partial class AramMetaView
             TooltipText.Format(name, description)
             + $"\n\n调整后胜率 {entry.WinRate:P2} · 选用率 {entry.PickRate:P2} · 来源样本 {entry.Games:N0} 场"
             + "\n来源推荐顺序不等于胜率排名，统计也不证明与某套出装存在联动。";
+        // A click keeps the description up on a timer; changing the rarity, search or sort rebuilds the grid within
+        // that time, and the timer then hid the tooltip from a disposed card and crashed. Hide it while the card's
+        // window still exists.
+        card.HandleDestroyed += (_, _) => _tips.Hide(card);
         // Hover shows the description; a click keeps it up for reading.
         foreach (Control target in new Control[] { card, icon })
         {
