@@ -125,12 +125,29 @@ namespace League.Infrastructure
         /// <param name="source">
         /// Makes the reader for the client's patch, or for the bundled version file's when the client does not say.
         /// </param>
-        public async Task LoadTextsAsync(Func<string?, AugmentTextData> source, CancellationToken token)
+        /// <param name="refresh">Downloads again even when the patch's texts are cached, for the settings' retry.</param>
+        /// <param name="status">Where the settings row and the augment tab read the progress; the shared one by default.</param>
+        public async Task LoadTextsAsync(
+            Func<string?, AugmentTextData> source,
+            CancellationToken token,
+            bool refresh = false,
+            AugmentTextStatus? status = null
+        )
         {
+            status ??= AugmentTextStatus.Shared;
+            string? patch = null;
             try
             {
-                string? patch = await ClientPatchAsync(token).ConfigureAwait(false);
-                var texts = await source(patch).LoadAsync(token).ConfigureAwait(false);
+                patch = await ClientPatchAsync(token).ConfigureAwait(false);
+                var data = source(patch);
+                patch = data.Patch;
+                // A cached patch loads at once; only a download is worth showing.
+                if (refresh || !data.IsCached)
+                {
+                    status.Downloading(data.Patch, 0);
+                }
+                var texts = await data.LoadAsync(token, refresh, share => status.Downloading(data.Patch, share))
+                    .ConfigureAwait(false);
                 foreach (var augment in _augments)
                 {
                     if (texts.TryGetValue(augment.Id, out var text) && text.Tooltip.Length > 0)
@@ -138,6 +155,7 @@ namespace League.Infrastructure
                         augment.Description = text.Tooltip;
                     }
                 }
+                status.Ready(data.Patch, texts.Count);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
@@ -147,6 +165,7 @@ namespace League.Infrastructure
             {
                 // Optional enrichment: without network or on a changed format the hand-written texts stay usable.
                 AppLog.Shared.Warn(LogCategory.Data, "海克斯说明加载失败", ex);
+                status.Failed(patch);
             }
         }
 

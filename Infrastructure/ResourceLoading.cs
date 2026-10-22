@@ -55,6 +55,10 @@ namespace League.Infrastructure
             //Debug.WriteLine("✅ 所有游戏资源加载完成");
         }
 
+        /// <summary>Downloads the game's augment descriptions again, for the retry in the data cache settings.</summary>
+        public Task ReloadAugmentTextsAsync() =>
+            Augments.LoadTextsAsync(patch => new AugmentTextData(patch: patch), CancellationToken.None, refresh: true);
+
         #region ChampionManager
         public ChampionManager ChampionManager
         {

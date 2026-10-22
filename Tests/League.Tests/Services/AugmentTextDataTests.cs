@@ -58,6 +58,59 @@ public class AugmentTextDataTests : IDisposable
     }
 
     [Fact]
+    public async Task LoadAsync_Refresh_DownloadsAgainDespiteTheCache()
+    {
+        await Data(new Files()).LoadAsync(CancellationToken.None);
+        var online = new Files();
+
+        await Data(online).LoadAsync(CancellationToken.None, refresh: true);
+
+        Assert.Equal(2, online.Requests);
+    }
+
+    [Fact]
+    public async Task LoadAsync_ADownload_ReportsProgressUpToOne()
+    {
+        var reported = new List<double>();
+
+        await Data(new Files()).LoadAsync(CancellationToken.None, progress: reported.Add);
+
+        Assert.Equal(1, reported[^1]);
+    }
+
+    [Fact]
+    public async Task LoadAsync_ADownloadWithoutALength_ReportsProgressBeforeTheEnd()
+    {
+        var reported = new List<double>();
+
+        await Data(new Files { Chunked = true }).LoadAsync(CancellationToken.None, progress: reported.Add);
+
+        Assert.Contains(reported, share => share > 0 && share < 1);
+    }
+
+    [Fact]
+    public async Task LoadAsync_ADownload_RemovesTheOlderPatchesCache()
+    {
+        Directory.CreateDirectory(_cache);
+        string older = Path.Combine(_cache, "16.20-r" + AugmentTextData.RulesVersion + ".json");
+        await File.WriteAllTextAsync(older, "[]");
+
+        await Data(new Files()).LoadAsync(CancellationToken.None);
+
+        Assert.False(File.Exists(older));
+    }
+
+    [Fact]
+    public async Task IsCached_AfterADownload_IsTrue()
+    {
+        var data = Data(new Files());
+
+        await data.LoadAsync(CancellationToken.None);
+
+        Assert.True(data.IsCached);
+    }
+
+    [Fact]
     public async Task LoadAsync_TheNetworkFails_Throws()
     {
         await Assert.ThrowsAsync<HttpRequestException>(() =>
@@ -75,23 +128,38 @@ public class AugmentTextDataTests : IDisposable
     {
         public bool Fail { get; init; }
 
+        // As CommunityDragon sends them: no length, and in this test large enough for the progress to move, by
+        // leading whitespace the JSON reader skips.
+        public bool Chunked { get; init; }
+
         public int Requests { get; private set; }
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken token
+        )
         {
             Requests++;
             if (Fail)
             {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+                return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
             }
 
             string name = request.RequestUri!.AbsolutePath.EndsWith("kiwi.bin.json", StringComparison.Ordinal)
                 ? "kiwi.bin.json"
                 : "lol.stringtable.json";
             string path = Path.Combine(AppContext.BaseDirectory, "TestData", "CommunityDragon", "Augments", name);
-            return Task.FromResult(
-                new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(File.OpenRead(path)) }
-            );
+            HttpContent content = Chunked
+                ? new ByteArrayContent([
+                    .. Enumerable.Repeat((byte)' ', 2_000_000),
+                    .. await File.ReadAllBytesAsync(path, token),
+                ])
+                : new StreamContent(File.OpenRead(path));
+            if (Chunked)
+            {
+                content.Headers.ContentLength = null;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
         }
     }
 }

@@ -23,6 +23,7 @@ internal sealed partial class AramMetaView
     {
         var host = _detailBody!;
         var filters = RenderRarityFilters(host);
+        RenderAugmentTextStatus(host);
         var grid = new FlowLayoutPanel
         {
             Tag = AugmentGridTag,
@@ -59,6 +60,60 @@ internal sealed partial class AramMetaView
             };
         }
         return filters;
+    }
+
+    // The game's descriptions take a while on a patch's first run; until then the cards show the bundled ones, and the
+    // line says so. It stays hidden once they are ready, and offers a retry when the download failed.
+    private static void RenderAugmentTextStatus(Control host)
+    {
+        var status = Services.AugmentTextStatus.Shared;
+        var line = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = false,
+            Margin = new Padding(0, 2, 0, 0),
+        };
+        var text = new Label
+        {
+            Name = "AugmentTextStatus",
+            AutoSize = true,
+            ForeColor = Theme.Muted,
+            Margin = new Padding(6, 4, 6, 0),
+        };
+        var retry = new LinkLabel
+        {
+            Text = "重试",
+            AutoSize = true,
+            LinkColor = Theme.Accent,
+            Margin = new Padding(0, 4, 6, 0),
+        };
+        line.Controls.AddRange(new Control[] { text, retry });
+        host.Controls.Add(line);
+        void Show()
+        {
+            var state = status.State;
+            text.Text = status.Describe();
+            retry.Visible = state == Services.AugmentTextState.Failed;
+            line.Visible = state is Services.AugmentTextState.Downloading or Services.AugmentTextState.Failed;
+        }
+        // Raised on the download's thread.
+        void Changed()
+        {
+            if (line.IsHandleCreated && !line.IsDisposed)
+            {
+                line.BeginInvoke(Show);
+            }
+        }
+        status.Changed += Changed;
+        line.Disposed += (_, _) => status.Changed -= Changed;
+        // A change before the handle exists cannot be invoked; the state is read again once it does.
+        line.HandleCreated += (_, _) => Show();
+        retry.LinkClicked += async (_, _) =>
+        {
+            retry.Visible = false;
+            await FormMain.Globals.resLoading.ReloadAugmentTextsAsync();
+        };
+        Show();
     }
 
     // Search and sort join the rarity buttons on one line instead of taking a line of their own.

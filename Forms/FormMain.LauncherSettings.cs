@@ -40,8 +40,71 @@ public partial class FormMain
         );
         mastery.Name = "ChampionMasteryCacheMinutes";
         Clients.ChampionMasteryService.Shared.CacheLifetime = TimeSpan.FromMinutes((int)mastery.Value);
+        AddAugmentTextStatus(layout);
         page.Controls.Add(layout);
         tabControl1.TabPages.Add(page);
+    }
+
+    // The game's augment descriptions follow the patch rather than a lifetime: they are read once per patch and kept
+    // until the client updates. The row says where they are and offers a fresh download.
+    private void AddAugmentTextStatus(FlowLayoutPanel layout)
+    {
+        var status = Services.AugmentTextStatus.Shared;
+        layout.Controls.Add(
+            new Label
+            {
+                Text = "海克斯说明 · CommunityDragon",
+                AutoSize = true,
+                Margin = new Padding(0, 18, 0, 10),
+            }
+        );
+        var row = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = false,
+            Margin = Padding.Empty,
+        };
+        var state = new Label
+        {
+            Name = "AugmentTextState",
+            AutoSize = true,
+            Margin = new Padding(0, 6, 12, 0),
+        };
+        var reload = new Button { Text = "重新下载", AutoSize = true };
+        ButtonStyles.Secondary(reload);
+        row.Controls.AddRange(new Control[] { state, reload });
+        layout.Controls.Add(row);
+        layout.Controls.Add(
+            new Label
+            {
+                Text =
+                    "游戏内的强化说明与数值，按游戏版本保存；客户端更新后自动重新下载，无需设置有效期。\n首次下载约 45MB，期间显示内置说明。说明有误时可重新下载。",
+                AutoSize = true,
+                Margin = new Padding(0, 10, 0, 0),
+            }
+        );
+        void Show()
+        {
+            state.Text = status.Describe();
+            reload.Enabled = status.State != Services.AugmentTextState.Downloading;
+        }
+        // Raised on the download's thread.
+        void Changed()
+        {
+            if (state.IsHandleCreated && !state.IsDisposed)
+            {
+                state.BeginInvoke(Show);
+            }
+        }
+        status.Changed += Changed;
+        state.Disposed += (_, _) => status.Changed -= Changed;
+        state.HandleCreated += (_, _) => Show();
+        reload.Click += async (_, _) =>
+        {
+            reload.Enabled = false;
+            await Globals.resLoading.ReloadAugmentTextsAsync();
+        };
+        Show();
     }
 
     private static NumericUpDown AddCacheLifetimeSetting(

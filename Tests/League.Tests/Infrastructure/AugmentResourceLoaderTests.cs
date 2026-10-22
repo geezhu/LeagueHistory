@@ -334,6 +334,45 @@ public class AugmentResourceLoaderTests : IDisposable
         Assert.Equal("手写", loader.GetById(3116)?.Description);
     }
 
+    [Fact]
+    public async Task LoadTextsAsync_TheTextsAreRead_ReportsReadyWithTheirCount()
+    {
+        AugmentResourceLoader loader = Loader(new Answer(HttpStatusCode.OK, Json(Row(3116))));
+        await loader.LoadAsync();
+        var status = new AugmentTextStatus();
+
+        await loader.LoadTextsAsync(_ => Texts(new TextFiles(fail: false)), CancellationToken.None, status: status);
+
+        Assert.Equal(AugmentTextState.Ready, status.State);
+        Assert.True(status.Count > 0);
+    }
+
+    [Fact]
+    public async Task LoadTextsAsync_TheTextsCannotBeRead_ReportsFailed()
+    {
+        AugmentResourceLoader loader = Loader(new Answer(HttpStatusCode.OK, Json(Row(3116))));
+        await loader.LoadAsync();
+        var status = new AugmentTextStatus();
+
+        await loader.LoadTextsAsync(_ => Texts(new TextFiles(fail: true)), CancellationToken.None, status: status);
+
+        Assert.Equal(AugmentTextState.Failed, status.State);
+    }
+
+    [Fact]
+    public async Task LoadTextsAsync_ADownload_ReportsDownloadingFirst()
+    {
+        AugmentResourceLoader loader = Loader(new Answer(HttpStatusCode.OK, Json(Row(3116))));
+        await loader.LoadAsync();
+        var status = new AugmentTextStatus();
+        var states = new List<AugmentTextState>();
+        status.Changed += () => states.Add(status.State);
+
+        await loader.LoadTextsAsync(_ => Texts(new TextFiles(fail: false)), CancellationToken.None, status: status);
+
+        Assert.Equal(AugmentTextState.Downloading, states[0]);
+    }
+
     [Theory]
     [InlineData("\"16.21.723.1234\"", "16.21")]
     [InlineData("not a version", null)]

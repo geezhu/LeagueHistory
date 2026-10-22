@@ -58,11 +58,26 @@ public sealed class AugmentTextData
         _host = host.TrimEnd('/');
     }
 
+    public string Patch => _patch;
+
+    /// <summary>Whether this patch's texts are already on disk, so loading them downloads nothing.</summary>
+    public bool IsCached => File.Exists(CachePath);
+
+    private string CachePath => Path.Combine(_folder, $"{_patch}-r{RulesVersion}.json");
+
     /// <summary>The texts by the augment's id, the same id the client's catalog uses.</summary>
-    public async Task<IReadOnlyDictionary<int, AugmentText>> LoadAsync(CancellationToken token)
+    /// <param name="refresh">Downloads again even when the patch's texts are cached.</param>
+    /// <param name="progress">
+    /// 0 to 1 over a download: the mode data is the first 30%, the string table the rest, each by bytes read.
+    /// </param>
+    public async Task<IReadOnlyDictionary<int, AugmentText>> LoadAsync(
+        CancellationToken token,
+        bool refresh = false,
+        Action<double>? progress = null
+    )
     {
-        string path = Path.Combine(_folder, $"{_patch}-r{RulesVersion}.json");
-        if (File.Exists(path))
+        string path = CachePath;
+        if (!refresh && File.Exists(path))
         {
             var cached = JsonConvert.DeserializeObject<List<AugmentText>>(
                 await File.ReadAllTextAsync(path, token).ConfigureAwait(false)
@@ -70,7 +85,13 @@ public sealed class AugmentTextData
             return (cached ?? []).ToDictionary(text => text.Id);
         }
 
-        var mode = await ReadJsonAsync($"{_host}/{_patch}/game/maps/modespecificdata/kiwi.bin.json", token)
+        progress?.Invoke(0);
+        var mode = await ReadJsonAsync(
+                $"{_host}/{_patch}/game/maps/modespecificdata/kiwi.bin.json",
+                ModeBytes,
+                Share(progress, 0, ModeShare),
+                token
+            )
             .ConfigureAwait(false);
         var augments = mode.Properties()
             .Select(property => property.Value)
@@ -83,24 +104,12 @@ public sealed class AugmentTextData
             .OfType<string>()
             .SelectMany(key => new[] { key.ToLowerInvariant(), HashedKey(key) })
             .ToHashSet(StringComparer.Ordinal);
-        Dictionary<string, string> strings;
-        using (
-            var response = await _http
-                .GetAsync(
-                    $"{_host}/{_patch}/game/zh_cn/data/menu/en_us/lol.stringtable.json",
-                    HttpCompletionOption.ResponseHeadersRead,
-                    token
-                )
-                .ConfigureAwait(false)
-        )
-        {
-            response.EnsureSuccessStatusCode();
-            await using var stream = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
-            await using var reader = new JsonTextReader(new StreamReader(stream));
-            strings = await SpellTextData
-                .ReadEntriesAsync(reader, key => wanted.Contains(key) || MayBeQuoted(key), token)
-                .ConfigureAwait(false);
-        }
+        var strings = await ReadStringsAsync(
+                key => wanted.Contains(key) || MayBeQuoted(key),
+                Share(progress, ModeShare, 1 - ModeShare),
+                token
+            )
+            .ConfigureAwait(false);
 
         var texts = augments
             .Select(augment => Text(augment, mode, strings))
@@ -112,8 +121,67 @@ public sealed class AugmentTextData
         string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         await File.WriteAllTextAsync(temporary, JsonConvert.SerializeObject(texts), token).ConfigureAwait(false);
         File.Move(temporary, path, overwrite: true);
+        RemoveOtherPatches(path);
+        progress?.Invoke(1);
         return texts.ToDictionary(text => text.Id);
     }
+
+    // The mode data is about a third of what is read, the string table the rest.
+    private const double ModeShare = 0.3;
+
+    // CommunityDragon sends both files chunked, without a length, so the progress is measured against their size on
+    // 16.21 instead; it stops short of the end until the read actually finishes.
+    private const long ModeBytes = 13_700_000;
+    private const long StringTableBytes = 32_700_000;
+
+    private static Action<double>? Share(Action<double>? progress, double start, double length) =>
+        progress == null ? null : part => progress(start + part * length);
+
+    // A patch's texts replace the last patch's; the older files are a few hundred kilobytes each and never read again.
+    private void RemoveOtherPatches(string current)
+    {
+        foreach (string file in Directory.EnumerateFiles(_folder, "*.json"))
+        {
+            if (!string.Equals(file, current, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    File.Delete(file);
+                }
+                catch (IOException ex)
+                {
+                    // Another instance may be reading it; it is removed with the next patch.
+                    AppLog.Shared.Warn(LogCategory.Data, "旧海克斯说明缓存删除失败", ex);
+                }
+            }
+        }
+    }
+
+    private async Task<Dictionary<string, string>> ReadStringsAsync(
+        Func<string, bool> keep,
+        Action<double>? progress,
+        CancellationToken token
+    )
+    {
+        using var response = await _http
+            .GetAsync(
+                $"{_host}/{_patch}/game/zh_cn/data/menu/en_us/lol.stringtable.json",
+                HttpCompletionOption.ResponseHeadersRead,
+                token
+            )
+            .ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        await using var stream = Counted(
+            await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false),
+            response.Content.Headers.ContentLength ?? StringTableBytes,
+            progress
+        );
+        await using var reader = new JsonTextReader(new StreamReader(stream));
+        return await SpellTextData.ReadEntriesAsync(reader, keep, token).ConfigureAwait(false);
+    }
+
+    private static Stream Counted(Stream stream, long length, Action<double>? progress) =>
+        progress == null || length <= 0 ? stream : new ProgressStream(stream, length, progress);
 
     /// <summary>The key a string table uses for a text whose name it does not keep: "{03b9fb7aea}".</summary>
     public static string HashedKey(string name)
@@ -160,14 +228,92 @@ public sealed class AugmentTextData
         return new AugmentText((int)augment["AugmentPlatformId"]!, name, summary, tooltip);
     }
 
-    private async Task<JObject> ReadJsonAsync(string url, CancellationToken token)
+    private async Task<JObject> ReadJsonAsync(
+        string url,
+        long expected,
+        Action<double>? progress,
+        CancellationToken token
+    )
     {
         using var response = await _http
             .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token)
             .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
-        await using var stream = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
+        await using var stream = Counted(
+            await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false),
+            response.Content.Headers.ContentLength ?? expected,
+            progress
+        );
         await using var reader = new JsonTextReader(new StreamReader(stream));
         return await JObject.LoadAsync(reader, token).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Counts what is read and reports the share of the expected length, in steps of at least 1%. An estimated length
+    /// may be off, so the share stays below 1; the caller reports the end.
+    /// </summary>
+    private sealed class ProgressStream(Stream inner, long length, Action<double> progress) : Stream
+    {
+        private const double MostBeforeTheEnd = 0.99;
+
+        private long _read;
+        private double _reported = -1;
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => length;
+
+        public override long Position
+        {
+            get => _read;
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => Count(inner.Read(buffer, offset, count));
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken token = default) =>
+            Count(await inner.ReadAsync(buffer, token).ConfigureAwait(false));
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken token) =>
+            ReadAsync(buffer.AsMemory(offset, count), token).AsTask();
+
+        private int Count(int read)
+        {
+            _read += read;
+            double share = Math.Min(MostBeforeTheEnd, (double)_read / length);
+            if (share - _reported >= 0.01)
+            {
+                _reported = share;
+                progress(share);
+            }
+            return read;
+        }
+
+        public override void Flush() { }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                inner.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
+        public override async ValueTask DisposeAsync()
+        {
+            await inner.DisposeAsync().ConfigureAwait(false);
+            await base.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }
