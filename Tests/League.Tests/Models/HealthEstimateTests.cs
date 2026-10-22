@@ -55,10 +55,11 @@ public class HealthEstimateTests
     // ---- negative resistance ----
 
     [Fact]
-    public void PhysicalEffective_MinusAHundredArmour_HalvesTheHealth()
+    public void PhysicalEffective_MinusAHundredArmour_TakesHalfAgainAsMuchDamage()
     {
-        // Traced: 1000 × 100 / (100 − (−100)) = 1000 × 100 / 200 = 500.
-        Assert.Equal(500, Estimate(1000, armor: -100).PhysicalEffective, 3);
+        // League's damage multiplier below zero is 2 − 100 / (100 − r): at −100 that is 1.5, so 1000 health falls
+        // to 1000 / 1.5 ≈ 666.67 - the same rule the live defence advice and the turret siege use.
+        Assert.Equal(1000 / 1.5, Estimate(1000, armor: -100).PhysicalEffective, 3);
     }
 
     [Fact]
@@ -73,17 +74,17 @@ public class HealthEstimateTests
     }
 
     [Fact]
-    public void PhysicalEffective_ApproachingMinusAHundredArmour_ShrinksTowardsNothing()
+    public void PhysicalEffective_VeryNegativeArmour_NeverFallsBelowHalfTheHealth()
     {
-        // Traced: the multiplier is 100 / (100 − r), which falls as r goes below zero. At −90 it is 100 / 190, so
-        // 1000 health is worth 1000 × 100 / 190 ≈ 526 - less than half. It tends to zero as r approaches −100.
-        Assert.Equal(1000 * 100 / 190d, Estimate(1000, armor: -90).PhysicalEffective, 3);
+        // The damage multiplier 2 − 100 / (100 − r) rises towards 2 and never reaches it, so however far armour
+        // falls, 1000 health stays worth more than 500. At −900 it is 2 − 0.1 = 1.9, giving 1000 / 1.9 ≈ 526.
+        Assert.Equal(1000 / 1.9, Estimate(1000, armor: -900).PhysicalEffective, 3);
     }
 
     [Fact]
     public void MagicEffective_NegativeResistance_FollowsTheSameRule()
     {
-        Assert.Equal(500, Estimate(1000, magicResist: -100).MagicEffective, 3);
+        Assert.Equal(1000 / 1.5, Estimate(1000, magicResist: -100).MagicEffective, 3);
     }
 
     // ---- zero health ----
@@ -163,7 +164,11 @@ public class HealthEstimateTests
         ItemStats items = new(Health: 550, Armor: 0, MagicResist: 0, AbilityHaste: 0);
         AugmentEffects augments = AugmentEffects.None with { HealthMultiplier = 1.1, GlassCannon = true };
 
-        Assert.Equal(2928.48 * 1.1 * AugmentEffects.GlassCannonShare, HealthEstimate.Estimate(Maokai, 17, items, augments).Health, 2);
+        Assert.Equal(
+            2928.48 * 1.1 * AugmentEffects.GlassCannonShare,
+            HealthEstimate.Estimate(Maokai, 17, items, augments).Health,
+            2
+        );
     }
 
     [Fact]

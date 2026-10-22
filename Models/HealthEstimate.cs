@@ -33,7 +33,8 @@ public sealed record HealthEstimate(double Health, double Armor, double MagicRes
         );
     }
 
-    // Negative resistances raise damage taken: 100 / (100 - resistance).
+    // Effective health is health over League's damage multiplier: 100 / (100 + r) for positive resistance and
+    // 2 - 100 / (100 - r) below zero, the rule LiveDefenseAdvice and TurretSiegeCalculator use.
     private static double Multiplier(double resistance) =>
-        resistance >= 0 ? 1 + resistance / 100 : 100 / (100 - resistance);
+        resistance >= 0 ? 1 + resistance / 100 : 1 / (2 - 100 / (100 - resistance));
 }
