@@ -40,9 +40,9 @@ internal static class AugmentIconRendererChecks
     {
         using var source = Solid(24, 24, Color.White);
 
-        Check(IsNear(Render(source, "ksilver"), 185, 202, 211), "A silver augment is tinted silver");
-        Check(IsNear(Render(source, "KGOLD"), 231, 201, 143), "A gold augment is tinted gold, whatever the case");
-        Check(IsNear(Render(source, " kprismatic "), 204, 153, 235), "A prismatic augment is tinted violet");
+        Check(IsNear(Render(source, "ksilver"), 112, 128, 144), "A silver augment is tinted silver");
+        Check(IsNear(Render(source, "KGOLD"), 190, 140, 50), "A gold augment is tinted gold, whatever the case");
+        Check(IsNear(Render(source, " kprismatic "), 156, 96, 214), "A prismatic augment is tinted violet");
 
         using var tinted = Render(source, "ksilver");
         Check(source.GetPixel(12, 12).ToArgb() == Color.White.ToArgb(), "The cached source image is never changed");

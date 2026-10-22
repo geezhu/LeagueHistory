@@ -5,16 +5,18 @@ namespace League.UIHelpers
 {
     internal static class AugmentIconRenderer
     {
-        // The client supplies monochrome masks; rarity determines the display tint.
+        // The client supplies monochrome masks; rarity determines the display tint. This is only the fallback for an
+        // augment without its full-colour art, so it follows the art: a transparent glyph without a dark plate or a
+        // frame, in rarity colours deep enough to read on the light pages as well as the dark windows.
         // Always return an independent image, leaving the cached source untouched.
         public static Bitmap Render(Image source, string? rarity)
         {
             string? tier = rarity?.Trim().ToLowerInvariant();
             Color? tint = tier switch
             {
-                "ksilver" => Color.FromArgb(185, 202, 211),
-                "kgold" => Color.FromArgb(231, 201, 143),
-                "kprismatic" => Color.FromArgb(204, 153, 235),
+                "ksilver" => Color.FromArgb(112, 128, 144),
+                "kgold" => Color.FromArgb(190, 140, 50),
+                "kprismatic" => Color.FromArgb(156, 96, 214),
                 _ => null,
             };
             if (!tint.HasValue)
@@ -26,7 +28,6 @@ namespace League.UIHelpers
             try
             {
                 using var graphics = Graphics.FromImage(result);
-                graphics.Clear(Color.FromArgb(15, 25, 34));
                 graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
                 graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
                 Color color = tint.Value;
@@ -47,32 +48,6 @@ namespace League.UIHelpers
                 // The source already includes glyph padding; do not shrink it again.
                 var bounds = new Rectangle(0, 0, source.Width, source.Height);
                 graphics.DrawImage(source, bounds, 0, 0, source.Width, source.Height, GraphicsUnit.Pixel, attributes);
-                // One logical pixel at the list's 24px display size.
-                float stroke = Math.Min(source.Width, source.Height) / 24f;
-                void Frame(Color frameColor, float inset)
-                {
-                    using var brush = new SolidBrush(frameColor);
-                    float width = result.Width - inset * 2,
-                        height = result.Height - inset * 2;
-                    if (width <= 0 || height <= 0)
-                    {
-                        return;
-                    }
-
-                    graphics.FillRectangle(brush, inset, inset, width, stroke);
-                    graphics.FillRectangle(brush, inset, result.Height - inset - stroke, width, stroke);
-                    graphics.FillRectangle(brush, inset, inset, stroke, height);
-                    graphics.FillRectangle(brush, result.Width - inset - stroke, inset, stroke, height);
-                }
-                if (tier == "kprismatic")
-                {
-                    Frame(Color.FromArgb(76, 46, 93), stroke);
-                    Frame(Color.FromArgb(193, 129, 220), 0);
-                }
-                else
-                {
-                    Frame(Color.FromArgb(150, color), 0);
-                }
                 return result;
             }
             catch
