@@ -12,6 +12,35 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
     private readonly Task _imageWork;
     private readonly string _kind;
 
+    private static readonly Color DarkBack = Color.FromArgb(16, 45, 57);
+    private static readonly Color DarkInk = Color.FromArgb(215, 225, 226);
+    private bool _light;
+
+    /// <summary>
+    /// The ARAM guide sits on the light theme while the champion-select assistant keeps the dark one. Light mode also
+    /// draws a choice's numbers in the guide's statistics cell instead of two lines of text.
+    /// </summary>
+    public bool Light
+    {
+        get => _light;
+        set
+        {
+            _light = value;
+            BackColor = value ? Theme.Surface : DarkBack;
+            ForeColor = value ? Theme.Ink : DarkInk;
+            ItemHeight = LogicalToDeviceUnits(value ? 44 : 34);
+            Invalidate();
+        }
+    }
+
+    protected override Color FrameColor => _light ? Theme.DividerStrong : base.FrameColor;
+
+    protected override Color FocusFrameColor => _light ? Theme.Accent : base.FocusFrameColor;
+
+    protected override Color ArrowColor => _light ? Theme.Muted : base.ArrowColor;
+
+    protected override Color DisabledArrowColor => _light ? Theme.Divider : base.DisabledArrowColor;
+
     public EquipmentComboBox(JObject[] options, CancellationToken token, string kind = "item")
     {
         _options = options;
@@ -25,8 +54,8 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
         MaxDropDownItems = 8;
         IntegralHeight = false;
         DropDownHeight = LogicalToDeviceUnits(280);
-        BackColor = Color.FromArgb(16, 45, 57);
-        ForeColor = Color.FromArgb(215, 225, 226);
+        BackColor = DarkBack;
+        ForeColor = DarkInk;
         Items.AddRange(
             options.Length > 0
                 ? options
@@ -95,7 +124,8 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
         bool selected = (e.State & DrawItemState.Selected) != 0;
-        using var background = new SolidBrush(selected ? Color.FromArgb(23, 82, 95) : BackColor);
+        var selectedBack = _light ? Theme.AccentSoft : Color.FromArgb(23, 82, 95);
+        using var background = new SolidBrush(selected ? selectedBack : BackColor);
         e.Graphics.FillRectangle(background, e.Bounds);
         if (e.Index < 0 || e.Index >= _options.Length)
         {
@@ -103,12 +133,18 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
             return;
         }
         var option = _options[e.Index];
-        int x = e.Bounds.Left + LogicalToDeviceUnits(4),
-            y = e.Bounds.Top + LogicalToDeviceUnits(4);
-        var ids = OpggItemSetService.Ids(option);
-        int iconSize = LogicalToDeviceUnits(26),
-            space = LogicalToDeviceUnits(29),
+        int x = DrawChoiceIcons(e, OpggItemSetService.Ids(option));
+        DrawChoiceRates(e, option, x);
+    }
+
+    // Draws the choice's icons from the left and returns where its numbers may start.
+    private int DrawChoiceIcons(DrawItemEventArgs e, int[] ids)
+    {
+        int iconSize = LogicalToDeviceUnits(_light ? 32 : 26),
+            space = LogicalToDeviceUnits(_light ? 36 : 29),
             maxIcons = Math.Max(1, (e.Bounds.Width - LogicalToDeviceUnits(65)) / space);
+        int x = e.Bounds.Left + LogicalToDeviceUnits(_light ? 6 : 4),
+            y = _light ? e.Bounds.Top + (e.Bounds.Height - iconSize) / 2 : e.Bounds.Top + LogicalToDeviceUnits(4);
         foreach (int id in ids.Take(maxIcons))
         {
             var rect = new Rectangle(x, y, iconSize, iconSize);
@@ -118,7 +154,7 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
             }
             else
             {
-                using var fallback = new SolidBrush(Color.FromArgb(38, 64, 75));
+                using var fallback = new SolidBrush(_light ? Theme.ControlFill : Color.FromArgb(38, 64, 75));
                 e.Graphics.FillRectangle(fallback, rect);
                 TextRenderer.DrawText(
                     e.Graphics,
@@ -141,8 +177,26 @@ internal sealed class EquipmentComboBox : DarkSelectionComboBox
                 ForeColor
             );
         }
+        return x;
+    }
+
+    private void DrawChoiceRates(DrawItemEventArgs e, JObject option, int x)
+    {
         double? win = OpggBuild.Ratio(option["win"], option["play"]),
             pick = (double?)option["pick_rate"];
+        if (_light && e.Bounds.Width > LogicalToDeviceUnits(300))
+        {
+            int cellWidth = LogicalToDeviceUnits(OpggStatCell.CellWidth),
+                cellHeight = LogicalToDeviceUnits(OpggStatCell.CellHeight);
+            var cell = new Rectangle(
+                Math.Max(x + LogicalToDeviceUnits(12), e.Bounds.Right - cellWidth - LogicalToDeviceUnits(8)),
+                e.Bounds.Top + (e.Bounds.Height - cellHeight) / 2,
+                cellWidth,
+                cellHeight
+            );
+            OpggStatCell.Draw(e.Graphics, cell, Font, win, (long?)option["play"], pick);
+            return;
+        }
         var text = new Rectangle(
             x + LogicalToDeviceUnits(4),
             e.Bounds.Top + 1,

@@ -27,6 +27,15 @@ internal class DarkSelectionComboBox : ComboBox
         }
     }
 
+    // The frame colours a selector on a light page overrides; the defaults are the dark assistant's.
+    protected virtual Color FrameColor => Color.FromArgb(42, 72, 83);
+
+    protected virtual Color FocusFrameColor => Color.FromArgb(0, 160, 174);
+
+    protected virtual Color ArrowColor => Color.FromArgb(147, 181, 190);
+
+    protected virtual Color DisabledArrowColor => Color.FromArgb(76, 103, 113);
+
     private void DrawFrame(Graphics graphics)
     {
         int arrowWidth = Math.Max(20, SystemInformation.VerticalScrollBarWidth);
@@ -36,10 +45,10 @@ internal class DarkSelectionComboBox : ComboBox
         );
         using var fill = new SolidBrush(BackColor);
         graphics.FillRectangle(fill, new Rectangle(Width - arrowWidth - 1, 1, arrowWidth, Height - 2));
-        var accent = Enabled && (Focused || DroppedDown) ? Color.FromArgb(0, 160, 174) : Color.FromArgb(42, 72, 83);
+        var accent = Enabled && (Focused || DroppedDown) ? FocusFrameColor : FrameColor;
         using var border = new Pen(accent);
         graphics.DrawRectangle(border, 0, 0, Width - 1, Height - 1);
-        using var arrow = new Pen(Enabled ? Color.FromArgb(147, 181, 190) : Color.FromArgb(76, 103, 113), 1.5f);
+        using var arrow = new Pen(Enabled ? ArrowColor : DisabledArrowColor, 1.5f);
         int x = Width - arrowWidth / 2 - 1,
             y = Height / 2,
             half = LogicalToDeviceUnits(4),

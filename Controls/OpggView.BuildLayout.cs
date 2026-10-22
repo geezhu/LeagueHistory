@@ -107,37 +107,13 @@ internal sealed partial class OpggView
         }
     }
 
-    // The guide's headline numbers: a small caption over a large figure, like the profile overview.
-    private Control SummaryMetric(string caption, string value, Color color)
-    {
-        var metric = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            Margin = new Padding(0, 6, 28, 0),
-        };
-        metric.Controls.Add(
-            new Label
-            {
-                Text = caption,
-                AutoSize = true,
-                ForeColor = Theme.Muted,
-                Margin = Padding.Empty,
-            }
+    private Control SummaryMetric(string caption, string value, Color color) =>
+        League.Controls.SummaryMetric.Create(
+            caption,
+            value,
+            color,
+            _summaryFigureFont ??= Theme.NumberFont(18, strong: true)
         );
-        metric.Controls.Add(
-            new Label
-            {
-                Text = value,
-                AutoSize = true,
-                ForeColor = color,
-                Font = _summaryFigureFont ??= Theme.NumberFont(18, strong: true),
-                Margin = new Padding(0, 2, 0, 0),
-            }
-        );
-        return metric;
-    }
 
     private async Task RenderLaterEquipmentAsync(OpggBuild build, Control host, CancellationToken token)
     {
