@@ -267,13 +267,8 @@ namespace League.Controls
             string date = DateTime.TryParse(MatchInfo.GameTime, out var played)
                 ? played.ToString("MM-dd")
                 : MatchInfo.GameTime;
-            Draw(
-                $"{date}  ·  {MatchInfo.Kills}/{MatchInfo.Deaths}/{MatchInfo.Assists}",
-                50,
-                31,
-                Width - 112,
-                Theme.Muted
-            );
+            // The compact row only finds the game; its score is one click away in the detail.
+            Draw(date, 50, 31, Width - 112, Theme.Muted);
             using var resultFont = new Font(Font.FontFamily, 12f, FontStyle.Bold);
             TextRenderer.DrawText(
                 g,
