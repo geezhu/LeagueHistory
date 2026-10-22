@@ -60,8 +60,8 @@ internal static class RoomViewChecks
             avatar.GetType().GetMethod("SetProfile")!.Invoke(avatar, new object?[] { null, 108 });
             Application.DoEvents();
             Check(
-                playerCard.ListViewControl.GetItemRect(0).Height >= 46,
-                "Redesigned player card has room for two-line match rows"
+                playerCard.ListViewControl.GetItemRect(0).Height is >= 30 and < 46,
+                "Redesigned player card fits each match on one line"
             );
             using var bitmap = new Bitmap(360, 480);
             playerCard.DrawToBitmap(bitmap, new Rectangle(0, 0, 360, 480));
