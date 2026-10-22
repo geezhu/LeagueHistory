@@ -124,9 +124,9 @@ namespace League.Controls
         // 初始化筛选器
         private void InitComboBoxes()
         {
-            comboPage.Items.AddRange(new object[] { 7, 8, 10, 20, 30, 50 });
-            comboPage.SelectedItem = 7; // 默认值
-            _pageSize = 7;
+            comboPage.Items.AddRange(new object[] { AutoPageSize, 7, 8, 10, 20, 30, 50 });
+            comboPage.SelectedItem = AutoPageSize; // 默认按右栏高度决定每页场数
+            _pageSize = DefaultPageSize;
 
             comboFilter.DisplayMember = "Text";
             comboFilter.ValueMember = "Value";
@@ -197,6 +197,10 @@ namespace League.Controls
             if (resetPage)
             {
                 _currentPage = 1;
+                if (IsAutoPageSize)
+                {
+                    _pageSize = FittingPageSize();
+                }
             }
 
             await UpdateMatchesDisplay();
@@ -852,7 +856,8 @@ namespace League.Controls
 
         private async Task OnPageSizeChanged()
         {
-            if (int.TryParse(comboPage.SelectedItem?.ToString(), out int newPageSize))
+            int newPageSize = IsAutoPageSize ? FittingPageSize() : 0;
+            if (newPageSize > 0 || int.TryParse(comboPage.SelectedItem?.ToString(), out newPageSize))
             {
                 if (_pageSize != newPageSize)
                 {
@@ -868,13 +873,12 @@ namespace League.Controls
             var item = comboFilter.SelectedItem as QueueFilterItem;
             _selectedQueueId = item?.Value;
 
-            int desiredPageSize = string.IsNullOrEmpty(_selectedQueueId) ? 7 : 7;
-
-            if (_pageSize != desiredPageSize)
+            // A new queue goes back to the default page size, which fits the history column.
+            if (!IsAutoPageSize)
             {
-                SafeSetSelectedItem(comboPage, desiredPageSize);
-                _pageSize = desiredPageSize;
+                SafeSetSelectedItem(comboPage, AutoPageSize);
             }
+            _pageSize = FittingPageSize();
 
             _currentPage = 1;
             await UpdateMatchesDisplay();

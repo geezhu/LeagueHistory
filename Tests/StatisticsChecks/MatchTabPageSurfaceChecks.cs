@@ -95,9 +95,12 @@ internal static class MatchTabPageSurfaceChecks
             );
 
             view.comboFilter.SelectedIndex = 1;
-            PumpUntil(() => view.CurrentFilter == "q_420" && Field<int>(view, "_pageSize") == 7);
+            PumpUntil(() => view.CurrentFilter == "q_420" && Equals(view.comboPage.SelectedItem, "自动"));
             Check(view.CurrentFilter == "q_420", "Choosing a queue filters the history");
-            Check(Field<int>(view, "_pageSize") == 7, "Choosing a queue restores the default page size");
+            Check(
+                Equals(view.comboPage.SelectedItem, "自动") && Field<int>(view, "_pageSize") >= 5,
+                "Choosing a queue restores the automatic page size"
+            );
 
             var outcome = Field<ComboBox>(view, "_outcomeFilter");
             Set(view, "_puuid", string.Empty);

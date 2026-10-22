@@ -395,6 +395,8 @@ public partial class MatchTabPageContent
         listHost.Controls.Add(flowLayoutPanelRight);
         _historySurface.Controls.Add(listHost);
         listHost.BringToFront();
+        _historyListHost = listHost;
+        _historyPaging = paging;
         void FitList()
         {
             if (_navigationClosing || flowLayoutPanelRight.IsDisposed)
@@ -403,14 +405,77 @@ public partial class MatchTabPageContent
             }
             flowLayoutPanelRight.Height = Math.Max(
                 80,
-                Math.Min(flowLayoutPanelRight.Controls.Count * 66 + 20, listHost.ClientSize.Height - paging.Height)
+                Math.Min(
+                    flowLayoutPanelRight.Controls.Count * MatchRowHeight + ListPadding,
+                    listHost.ClientSize.Height - paging.Height
+                )
             );
             ResizeMatchCards();
         }
-        listHost.SizeChanged += (_, _) => FitList();
+        // Dragging the window edge resizes many times a second; the page is fetched again only once it settles.
+        components ??= new System.ComponentModel.Container();
+        var refit = new System.Windows.Forms.Timer(components) { Interval = 400 };
+        refit.Tick += async (_, _) =>
+        {
+            refit.Stop();
+            await RefitPageSizeAsync();
+        };
+        listHost.SizeChanged += (_, _) =>
+        {
+            FitList();
+            if (IsAutoPageSize)
+            {
+                refit.Stop();
+                refit.Start();
+            }
+        };
         flowLayoutPanelRight.ControlAdded += (_, _) => FitList();
         flowLayoutPanelRight.ControlRemoved += (_, _) => FitList();
         FitList();
+    }
+
+    private const int MatchRowHeight = 66;
+    private const int ListPadding = 20;
+    private const int DefaultPageSize = 7;
+    private const int MinimumAutoPageSize = 5;
+    private const int MaximumAutoPageSize = 50;
+    private const string AutoPageSize = "自动";
+    private Control? _historyListHost;
+    private Control? _historyPaging;
+
+    private bool IsAutoPageSize => Equals(comboPage.SelectedItem, AutoPageSize);
+
+    // As many matches as the history column shows without scrolling, so a tall window is not left with a short list
+    // and an empty column under it. Before the column is laid out, the old fixed page size stands in.
+    private int FittingPageSize()
+    {
+        if (_historyListHost == null || _historyPaging == null)
+        {
+            return DefaultPageSize;
+        }
+
+        int rows = (_historyListHost.ClientSize.Height - _historyPaging.Height - ListPadding) / MatchRowHeight;
+        return rows < 1 ? DefaultPageSize : Math.Clamp(rows, MinimumAutoPageSize, MaximumAutoPageSize);
+    }
+
+    // A new size keeps the first match on screen where it was: the page is the one that now contains it.
+    private async Task RefitPageSizeAsync()
+    {
+        if (!IsAutoPageSize || _navigationClosing || string.IsNullOrEmpty(_puuid))
+        {
+            return;
+        }
+
+        int fit = FittingPageSize();
+        if (fit == _pageSize)
+        {
+            return;
+        }
+
+        int first = (_currentPage - 1) * _pageSize;
+        _pageSize = fit;
+        _currentPage = first / fit + 1;
+        await UpdateMatchesDisplay();
     }
 
     private Panel ConfigureRankGroup(GroupBox group, Label tier)
