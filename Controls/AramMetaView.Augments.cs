@@ -128,9 +128,13 @@ internal sealed partial class AramMetaView
         grid.Controls.Add(card);
         var icon = Icon(card, null, name, _detailToken, 40, "augment", entry.Ids[0]);
         icon.Location = new Point(8, 8);
-        string description = FormMain.Globals.resLoading.GetAugmentById(entry.Ids[0])?.Description ?? entry.Description;
-        string details =
-            TooltipText.Format(name, description)
+        // Read when shown, not when the card is made: the game's descriptions arrive in the background after start-up
+        // and replace the hand-written ones, and a card made before then would keep the old text.
+        string Details() =>
+            TooltipText.Format(
+                name,
+                FormMain.Globals.resLoading.GetAugmentById(entry.Ids[0])?.Description ?? entry.Description
+            )
             + $"\n\n调整后胜率 {entry.WinRate:P2} · 选用率 {entry.PickRate:P2} · 来源样本 {entry.Games:N0} 场"
             + "\n来源推荐顺序不等于胜率排名，统计也不证明与某套出装存在联动。";
         // A click keeps the description up on a timer; changing the rarity, search or sort rebuilds the grid within
@@ -140,9 +144,10 @@ internal sealed partial class AramMetaView
         // Hover shows the description; a click keeps it up for reading.
         foreach (Control target in new Control[] { card, icon })
         {
-            _tips.SetToolTip(target, details);
+            _tips.SetToolTip(target, Details());
+            target.MouseEnter += (_, _) => _tips.SetToolTip(target, Details());
             target.Cursor = Cursors.Hand;
-            target.Click += (_, _) => _tips.Show(details, card, 0, card.Height + 2, 15000);
+            target.Click += (_, _) => _tips.Show(Details(), card, 0, card.Height + 2, 15000);
         }
     }
 
