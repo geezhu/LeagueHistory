@@ -136,8 +136,7 @@ namespace League.Controls
 
             lblPlayerName.BorderStyle = BorderStyle.None;
 
-            lblSoloRank.Text = $"{soloRank}";
-            lblFlexRank.Text = $"{flexRank}";
+            ShowRanks(soloRank, flexRank);
             lblPrivacyStatus.Text = $"{isPublic}";
             picHero.Image = heroImage;
 
@@ -154,12 +153,15 @@ namespace League.Controls
                 // 使用克隆的 ListViewItem 防止重复引用
                 foreach (var item in recentGames)
                 {
-                    listViewGames.Items.Add((ListViewItem)item.Clone());
+                    var row = (ListViewItem)item.Clone();
+                    row.ToolTipText = HistoryToolTip(row);
+                    listViewGames.Items.Add(row);
                 }
             }
 
             listViewGames.EndUpdate();
             listViewGames.Refresh();
+            FitHistoryStatus();
 
             //Debug.WriteLine($"当前 listViewGames 中共有 {listViewGames.Items.Count} 个项");
         }

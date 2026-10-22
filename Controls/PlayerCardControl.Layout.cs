@@ -1,10 +1,16 @@
+using League.Models;
+
 namespace League.Controls;
 
 public partial class PlayerCardControl
 {
     public Panel SummaryPanel { get; private set; } = null!;
-    private Font _historyStrong = null!;
     private Font _historyFigure = null!;
+    private readonly Label _soloCaption = new() { Text = "单双" };
+    private readonly Label _flexCaption = new() { Text = "灵活" };
+    private const int HistoryRowHeight = 34;
+    private const int RankTop = 74;
+    private const int RankHeight = 26;
 
     private void ConfigureCardLayout()
     {
@@ -36,16 +42,23 @@ public partial class PlayerCardControl
         Disposed += (_, _) => SummaryPanel.Dispose();
         ConfigureSummaryIdentity();
         ConfigureRecentStatistics();
-        lblSoloRank.TextChanged += (_, _) => UpdateRanks();
-        lblFlexRank.TextChanged += (_, _) => UpdateRanks();
         SummaryPanel.Controls.AddRange(
-            new Control[] { picHero, lblPlayerName, lblPrivacyStatus, lblSoloRank, lblFlexRank }
+            new Control[]
+            {
+                picHero,
+                lblPlayerName,
+                lblPrivacyStatus,
+                _soloCaption,
+                lblSoloRank,
+                _flexCaption,
+                lblFlexRank,
+            }
         );
         SummaryPanel.Controls.Add(_summonerAvatar);
         SummaryPanel.Resize += (_, _) => ReflowSummaryPanel();
         ConfigureChampionBar();
         Controls.Add(SummaryPanel);
-        UpdateRanks();
+        ShowRanks("", "");
     }
 
     private void ConfigureSummaryIdentity()
@@ -66,10 +79,13 @@ public partial class PlayerCardControl
         lblPrivacyStatus.SetBounds(72, 40, 150, 20);
         lblPrivacyStatus.Visible = false;
         lblPrivacyStatus.ForeColor = Theme.Muted;
-        lblSoloRank.AutoSize = lblFlexRank.AutoSize = false;
-        lblSoloRank.SetBounds(10, 74, 110, 26);
-        lblFlexRank.SetBounds(125, 74, 110, 26);
-        lblSoloRank.AutoEllipsis = lblFlexRank.AutoEllipsis = true;
+        foreach (var label in new[] { _soloCaption, lblSoloRank, _flexCaption, lblFlexRank })
+        {
+            label.AutoSize = false;
+            label.AutoEllipsis = true;
+            label.TextAlign = ContentAlignment.MiddleLeft;
+        }
+        _soloCaption.ForeColor = _flexCaption.ForeColor = Theme.Muted;
     }
 
     private void ConfigureRecentStatistics()
@@ -82,29 +98,54 @@ public partial class PlayerCardControl
         _recentKda.ForeColor = Theme.Ink;
         _recentWinRate.ForeColor = Theme.Ink;
         SummaryPanel.Controls.AddRange(new Control[] { _recentKda, _recentWinRate });
-        lblSoloRank.TextChanged += (_, _) => tips.SetToolTip(lblSoloRank, "单双排：" + lblSoloRank.Text);
-        lblFlexRank.TextChanged += (_, _) => tips.SetToolTip(lblFlexRank, "灵活排位：" + lblFlexRank.Text);
     }
 
-    private void UpdateRanks()
+    // Each queue carries its own caption, so a player ranked only in flex no longer reads as a solo rank.
+    private void ShowRanks(string solo, string flex)
     {
-        bool Show(Label label) =>
-            !string.IsNullOrWhiteSpace(label.Text)
-            && !label.Text.Contains("未定级")
-            && !label.Text.Contains("未评级")
-            && !label.Text.Contains("未知");
-        lblSoloRank.Visible = Show(lblSoloRank);
-        lblFlexRank.Visible = Show(lblFlexRank);
-        SummaryPanel.Height = Show(lblSoloRank) || Show(lblFlexRank) ? 154 : 120;
+        lblSoloRank.Text = RankText.Compact(solo);
+        lblFlexRank.Text = RankText.Compact(flex);
+        foreach (var label in new[] { _soloCaption, lblSoloRank })
+        {
+            _statisticsTips?.SetToolTip(label, "单双排：" + solo);
+        }
+        foreach (var label in new[] { _flexCaption, lblFlexRank })
+        {
+            _statisticsTips?.SetToolTip(label, "灵活排位：" + flex);
+        }
+        _soloCaption.Visible = lblSoloRank.Visible = lblSoloRank.Text.Length > 0;
+        _flexCaption.Visible = lblFlexRank.Visible = lblFlexRank.Text.Length > 0;
+        SummaryPanel.Height = lblSoloRank.Visible || lblFlexRank.Visible ? 154 : 120;
+        ReflowRanks();
     }
 
     private void ReflowSummaryPanel()
     {
         lblPlayerName.Width = lblPrivacyStatus.Width = Math.Max(20, SummaryPanel.Width - 82);
         _recentKda.Width = _recentWinRate.Width = lblPlayerName.Width;
-        int half = Math.Max(20, (SummaryPanel.Width - 25) / 2);
-        lblSoloRank.Width = lblFlexRank.Width = half;
-        lblFlexRank.Left = half + 15;
+        ReflowRanks();
+    }
+
+    // The shown queues sit one after the other from the left, each as wide as its text, and the last one gives way
+    // with an ellipsis when the card is too narrow for both.
+    private void ReflowRanks()
+    {
+        const int gap = 8;
+        int left = 10,
+            right = SummaryPanel.Width - 8;
+        foreach (var (caption, value) in new[] { (_soloCaption, lblSoloRank), (_flexCaption, lblFlexRank) })
+        {
+            if (!value.Visible)
+            {
+                continue;
+            }
+
+            int captionWidth = TextRenderer.MeasureText(caption.Text, caption.Font).Width;
+            int width = TextRenderer.MeasureText(value.Text, value.Font).Width;
+            caption.SetBounds(left, RankTop, captionWidth, RankHeight);
+            value.SetBounds(caption.Right, RankTop, Math.Max(20, Math.Min(width, right - caption.Right)), RankHeight);
+            left = value.Right + gap;
+        }
     }
 
     private void ConfigureHistoryList()
@@ -116,15 +157,18 @@ public partial class PlayerCardControl
         listViewGames.Columns.Add(columnHeader1);
         listViewGames.OwnerDraw = true;
         listViewGames.HideSelection = false;
+        listViewGames.ShowItemToolTips = true;
         listViewGames.Cursor = Cursors.Hand;
         ConfigureHistoryNavigation();
         listViewGames.BackColor = Theme.Surface;
-        _historyStrong = new Font(Font, FontStyle.Bold);
-        Disposed += (_, _) => _historyStrong.Dispose();
         _historyFigure = Theme.NumberFont(Font.SizeInPoints + 1);
         Disposed += (_, _) => _historyFigure.Dispose();
-        var rowHeight = new ImageList(components) { ImageSize = new Size(1, 48), ColorDepth = ColorDepth.Depth32Bit };
-        using (var blank = new Bitmap(1, 48))
+        var rowHeight = new ImageList(components)
+        {
+            ImageSize = new Size(1, HistoryRowHeight),
+            ColorDepth = ColorDepth.Depth32Bit,
+        };
+        using (var blank = new Bitmap(1, HistoryRowHeight))
         {
             rowHeight.Images.Add(blank);
             _ = rowHeight.Handle;
@@ -200,10 +244,22 @@ public partial class PlayerCardControl
             win ? Theme.Win
             : loss ? Theme.Loss
             : Theme.Muted;
-        // Rows stay white so ten results in a column read as a calm list; the stripe and the result word carry the outcome.
         var rect = new Rectangle(e.Bounds.X, e.Bounds.Y, Math.Max(1, columnHeader1.Width - 1), e.Bounds.Height - 1);
         using var fill = new SolidBrush(e.Item.Selected ? Theme.AccentSoft : Theme.Surface);
         e.Graphics.FillRectangle(fill, e.Bounds);
+        if (win || loss)
+        {
+            // The outcome washes in from the stripe and fades out before the score, so a column of games reads as
+            // wins and losses at a glance while the mode and score stay on a light ground. Remakes stay plain.
+            var wash = new Rectangle(rect.X, rect.Y, Math.Max(1, rect.Width * 2 / 3), rect.Height);
+            using var gradient = new System.Drawing.Drawing2D.LinearGradientBrush(
+                wash,
+                Color.FromArgb(90, accent),
+                Color.FromArgb(0, accent),
+                System.Drawing.Drawing2D.LinearGradientMode.Horizontal
+            );
+            e.Graphics.FillRectangle(gradient, wash);
+        }
         using var divider = new SolidBrush(Theme.Divider);
         e.Graphics.FillRectangle(divider, rect.X, rect.Bottom, rect.Width, 1);
         using var stripe = new SolidBrush(accent);
@@ -227,51 +283,56 @@ public partial class PlayerCardControl
         }
         if (icon != null)
         {
-            e.Graphics.DrawImage(icon, rect.X + 7, rect.Y + (rect.Height - 32) / 2, 32, 32);
+            e.Graphics.DrawImage(icon, rect.X + 8, rect.Y + (rect.Height - 24) / 2, 24, 24);
         }
     }
 
+    // One game per line: icon, mode and score. The stripe already carries the result, so the row spends its width on
+    // the mode instead of repeating 胜利 or 失败; a remake names itself in place of the mode. The day is left to the
+    // tooltip: in a room the recent form matters, not when each game was played.
     private void DrawHistoryText(DrawListViewItemEventArgs e, Rectangle rect, Color accent)
     {
-        string Field(int index) => e.Item.SubItems.Count > index ? e.Item.SubItems[index].Text : "";
-        bool win = e.Item.ForeColor == Color.Green;
-        bool loss = e.Item.ForeColor == Color.Red;
-        string date = DateTime.TryParse(Field(3), out var parsed) ? parsed.ToString("MM-dd") : Field(3);
-        var flags = TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter;
+        const int textLeft = 38,
+            gap = 8;
+        // Measured and drawn with the same padding, or the measured score is a few pixels short and loses its tail.
+        var measure = TextFormatFlags.SingleLine | TextFormatFlags.NoPadding;
+        var flags = measure | TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter;
+        var row = new Rectangle(rect.X, rect.Y, rect.Width - 6, rect.Height);
+        // Sized for the widest score rather than this row's, so the scores line up down the card.
+        int scoreWidth = TextRenderer.MeasureText(e.Graphics, "10/10/10", _historyFigure, Size.Empty, measure).Width;
+        var score = new Rectangle(row.Right - scoreWidth, row.Y, scoreWidth, row.Height);
+        var mode = new Rectangle(row.X + textLeft, row.Y, Math.Max(1, score.Left - row.X - textLeft - gap), row.Height);
+        bool remake = e.Item.ForeColor == MatchResult.RemakeColor;
         TextRenderer.DrawText(
             e.Graphics,
-            Field(1),
+            remake ? "重开" : HistoryField(e.Item, 1),
             Font,
-            new Rectangle(rect.X + 44, rect.Y + 3, Math.Max(1, rect.Width - 128), 21),
-            Theme.Ink,
+            mode,
+            remake ? accent : Theme.Ink,
             flags
         );
         TextRenderer.DrawText(
             e.Graphics,
-            win ? "胜利"
-                : loss ? "失败"
-                : e.Item.ForeColor == League.Models.MatchResult.RemakeColor ? "重开"
-                : "—",
-            _historyStrong,
-            new Rectangle(rect.Right - 46, rect.Y + 3, 42, 21),
-            accent,
-            flags | TextFormatFlags.Right
-        );
-        TextRenderer.DrawText(
-            e.Graphics,
-            date,
-            Font,
-            new Rectangle(rect.X + 44, rect.Y + 24, Math.Max(1, rect.Width - 128), 20),
-            Theme.Muted,
-            flags
-        );
-        TextRenderer.DrawText(
-            e.Graphics,
-            Field(2),
+            HistoryField(e.Item, 2),
             _historyFigure,
-            new Rectangle(rect.Right - 126, rect.Y + 24, 122, 20),
+            score,
             Theme.Ink,
             flags | TextFormatFlags.Right
         );
+    }
+
+    private static string HistoryField(ListViewItem item, int index) =>
+        item.SubItems.Count > index ? item.SubItems[index].Text : "";
+
+    // The row leaves out the day and shortens the mode first, so the whole game is spelled out on hover.
+    private static string HistoryToolTip(ListViewItem item)
+    {
+        string result =
+            item.ForeColor == Color.Green ? "胜利"
+            : item.ForeColor == Color.Red ? "失败"
+            : item.ForeColor == MatchResult.RemakeColor ? "重开"
+            : "";
+        var parts = new[] { HistoryField(item, 1), result, HistoryField(item, 2), HistoryField(item, 3) };
+        return string.Join(" · ", parts.Where(part => part.Length > 0));
     }
 }

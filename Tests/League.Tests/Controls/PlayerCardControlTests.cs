@@ -21,6 +21,8 @@ public class PlayerCardControlTests
     private const int RankedHeaderHeight = 154;
     private const int UnrankedHeaderHeight = 120;
     private const int TwoLineRowHeight = 46;
+    private const int SingleLineRowHeight = 30;
+    private const int StatusStripHeight = 32;
 
     [Fact]
     public void SetPlayerInfo_PlayerName_ShowsTheShortName()
@@ -49,9 +51,14 @@ public class PlayerCardControlTests
     }
 
     [Theory]
-    [InlineData("华贵铂金 II", "璀璨钻石 II")]
-    [InlineData("", "")]
-    public void SetPlayerInfo_RankText_ShowsBothQueuesInTheHeader(string solo, string flex)
+    [InlineData("华贵铂金 II(56)", "璀璨钻石 II(3)", "铂金 II·56", "钻石 II·3")]
+    [InlineData("", "", "", "")]
+    public void SetPlayerInfo_RankText_ShowsBothQueuesInShortForm(
+        string solo,
+        string flex,
+        string shownSolo,
+        string shownFlex
+    )
     {
         UiHost.Run(host =>
         {
@@ -59,8 +66,37 @@ public class PlayerCardControlTests
 
             card.SetPlayerInfo("玩家#1234", solo, flex, null!, "公开", Rows(1), Color.Black);
 
-            Assert.Equal(solo, card.lblSoloRank.Text);
-            Assert.Equal(flex, card.lblFlexRank.Text);
+            Assert.Equal(shownSolo, card.lblSoloRank.Text);
+            Assert.Equal(shownFlex, card.lblFlexRank.Text);
+        });
+    }
+
+    [Fact]
+    public void SetPlayerInfo_OnlyFlexRanked_CaptionsTheRankAsFlex()
+    {
+        UiHost.Run(host =>
+        {
+            var card = Card(host);
+
+            card.SetPlayerInfo("玩家#1234", "未定级", "璀璨钻石 II(3)", null!, "公开", Rows(1), Color.Black);
+
+            Assert.Equal(["灵活"], VisibleLabels(card).Intersect(["单双", "灵活"]));
+        });
+    }
+
+    [Fact]
+    public void SetPlayerInfo_OnlyFlexRanked_StartsTheRankAtTheLeft()
+    {
+        UiHost.Run(host =>
+        {
+            var card = Card(host);
+
+            card.SetPlayerInfo("玩家#1234", "未定级", "璀璨钻石 II(3)", null!, "公开", Rows(1), Color.Black);
+
+            Assert.True(
+                card.lblFlexRank.Right < card.SummaryPanel.Width / 2,
+                "With the solo queue unranked, the flex rank moves into the first slot instead of floating right."
+            );
         });
     }
 
@@ -271,17 +307,27 @@ public class PlayerCardControlTests
     }
 
     [Fact]
-    public void SetPlayerInfo_RecentGames_LeavesRoomForTwoLineRows()
+    public void SetPlayerInfo_RecentGames_FitsEachGameOnOneLine()
     {
         UiHost.Run(host =>
         {
             var card = Card(host);
             card.SetPlayerInfo("玩家#1234", "华贵铂金 II", "璀璨钻石 II", null!, "公开", Rows(5), Color.Black);
 
-            Assert.True(
-                card.ListViewControl.GetItemRect(0).Height >= TwoLineRowHeight,
-                "A match row carries the mode on one line and the score and day on the next."
-            );
+            Assert.InRange(card.ListViewControl.GetItemRect(0).Height, SingleLineRowHeight, TwoLineRowHeight - 1);
+        });
+    }
+
+    [Fact]
+    public void SetPlayerInfo_RecentGame_SpellsOutTheWholeGameOnHover()
+    {
+        UiHost.Run(host =>
+        {
+            var card = Card(host);
+
+            card.SetPlayerInfo("玩家#1234", "", "", null!, "公开", Rows(1), Color.Black);
+
+            Assert.Equal("海克斯大乱斗 · 胜利 · 22/10/24 · 2026-09-01", card.ListViewControl.Items[0].ToolTipText);
         });
     }
 
@@ -385,6 +431,54 @@ public class PlayerCardControlTests
                 card.Controls.GetChildIndex(strip) > card.Controls.GetChildIndex(historyHost),
                 "Docking the strip after the fill host is what reserves its row."
             );
+        });
+    }
+
+    [Fact]
+    public void SetHistoryLoadStatus_NoGames_FillsTheHistoryAreaBelowTheSummary()
+    {
+        UiHost.Run(host =>
+        {
+            var card = Card(host);
+            card.SetPlayerInfo("战绩读取失败", "", "", null!, "", [], Color.Black);
+
+            card.SetHistoryLoadStatus("读取超时", false, true, () => { });
+            card.PerformLayout();
+            var strip = RetryButton(card).Parent!;
+
+            Assert.Equal(card.SummaryPanel.Bottom, strip.Top);
+            Assert.Equal(card.ClientSize.Height - card.Padding.Bottom, strip.Bottom);
+        });
+    }
+
+    [Fact]
+    public void SetHistoryLoadStatus_NoGames_CentresTheRetryButton()
+    {
+        UiHost.Run(host =>
+        {
+            var card = Card(host);
+            card.SetPlayerInfo("战绩读取失败", "", "", null!, "", [], Color.Black);
+
+            card.SetHistoryLoadStatus("读取超时", false, true, () => { });
+            card.PerformLayout();
+            var retry = RetryButton(card);
+
+            Assert.InRange(retry.Left + (retry.Width / 2) - (retry.Parent!.ClientSize.Width / 2), -1, 1);
+        });
+    }
+
+    [Fact]
+    public void SetPlayerInfo_GamesArrive_ShrinksTheStatusBackToAStrip()
+    {
+        UiHost.Run(host =>
+        {
+            var card = Card(host);
+            card.SetPlayerInfo("玩家#1234", "", "", null!, "公开", [], Color.Black);
+            card.SetHistoryLoadStatus("读取超时", false, true, () => { });
+
+            card.SetPlayerInfo("玩家#1234", "", "", null!, "公开", Rows(5), Color.Black);
+
+            Assert.Equal(StatusStripHeight, RetryButton(card).Parent!.Height);
         });
     }
 
@@ -503,6 +597,9 @@ public class PlayerCardControlTests
 
     private static IEnumerable<string> Labels(Control card) =>
         Descendants(card).OfType<Label>().Select(label => label.Text);
+
+    private static IEnumerable<string> VisibleLabels(Control card) =>
+        Descendants(card).OfType<Label>().Where(label => label.Visible).Select(label => label.Text);
 
     private static IEnumerable<Control> Descendants(Control parent) =>
         parent.Controls.Cast<Control>().SelectMany(child => new[] { child }.Concat(Descendants(child)));
