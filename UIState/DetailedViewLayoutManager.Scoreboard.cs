@@ -158,13 +158,14 @@ namespace League.UIState
             return label;
         }
 
-        private void ScoreboardIcon(Panel row, Image? image, string? hint, int x, int y, int size)
+        // Augment art is light on transparency, so like the match list it sits on a dark plate to stay legible.
+        private void ScoreboardIcon(Panel row, Image? image, string? hint, int x, int y, int size, bool dark = false)
         {
             var picture = new PictureBox
             {
                 Location = new Point(x, y),
                 Size = new Size(size, size),
-                BackColor = Color.FromArgb(239, 243, 248),
+                BackColor = dark ? Color.FromArgb(40, 49, 63) : Color.FromArgb(239, 243, 248),
                 SizeMode = PictureBoxSizeMode.Zoom,
                 Image = image == null ? null : new Bitmap(image),
             };
@@ -275,7 +276,8 @@ namespace League.UIState
                         augments[i]?.name + "\n" + augments[i]?.longDesc,
                         436 + i * 24,
                         11,
-                        22
+                        22,
+                        dark: true
                     );
                 }
             }
