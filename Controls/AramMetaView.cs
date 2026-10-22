@@ -725,6 +725,7 @@ internal sealed partial class AramMetaView : UserControl
             var pending = PendingWork();
             _cleanupWork = Task.Run(() => CleanupResourcesAsync(pending), CancellationToken.None);
             _tips.Dispose();
+            _pinnedAugment.Dispose();
             _rankingBold?.Dispose();
             _heroHeadingFont?.Dispose();
             _sectionHeadingFont?.Dispose();

@@ -14,6 +14,11 @@ internal sealed partial class AramMetaView
     private const int AugmentCardMinimumWidth = 200;
     private const int AugmentCardGap = 8;
 
+    // A clicked card's description stays up in a tooltip of its own. Shown by hand through the hover tooltip, it held
+    // that tooltip on the one card, so no other card's hover or click could show anything.
+    private readonly ToolTip _pinnedAugment = new();
+    private Control? _pinnedCard;
+
     private void RenderAugmentComparison()
     {
         var host = _detailBody!;
@@ -140,15 +145,46 @@ internal sealed partial class AramMetaView
         // A click keeps the description up on a timer; changing the rarity, search or sort rebuilds the grid within
         // that time, and the timer then hid the tooltip from a disposed card and crashed. Hide it while the card's
         // window still exists.
-        card.HandleDestroyed += (_, _) => _tips.Hide(card);
-        // Hover shows the description; a click keeps it up for reading.
+        card.HandleDestroyed += (_, _) =>
+        {
+            _tips.Hide(card);
+            if (_pinnedCard == card)
+            {
+                UnpinAugment();
+            }
+        };
+        // Hover shows the description; a click keeps it up for reading until another card is pointed at or clicked.
         foreach (Control target in new Control[] { card, icon })
         {
             _tips.SetToolTip(target, Details());
-            target.MouseEnter += (_, _) => _tips.SetToolTip(target, Details());
+            target.MouseEnter += (_, _) =>
+            {
+                if (_pinnedCard != card)
+                {
+                    UnpinAugment();
+                }
+                _tips.SetToolTip(target, Details());
+            };
             target.Cursor = Cursors.Hand;
-            target.Click += (_, _) => _tips.Show(Details(), card, 0, card.Height + 2, 15000);
+            target.Click += (_, _) => PinAugment(card, Details());
         }
+    }
+
+    private void PinAugment(Control card, string details)
+    {
+        UnpinAugment();
+        _tips.Hide(card);
+        _pinnedCard = card;
+        _pinnedAugment.Show(details, card, 0, card.Height + 2, 15000);
+    }
+
+    private void UnpinAugment()
+    {
+        if (_pinnedCard is { IsDisposed: false, IsHandleCreated: true } previous)
+        {
+            _pinnedAugment.Hide(previous);
+        }
+        _pinnedCard = null;
     }
 
     // Every card carries its gap as a right margin, the last one in a row included, so a row of n cards needs
