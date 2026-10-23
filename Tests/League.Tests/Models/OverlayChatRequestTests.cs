@@ -372,26 +372,39 @@ public class OverlayChatRequestTests
         Assert.Null(OverlayChatRequest.Parse(value, "s", Seats((3, 78)), 1000));
     }
 
-    public static TheoryData<JToken> MalformedAugmentLists =>
+    /// <summary>
+    /// The augment value written as JSON rather than as a <c>JToken</c>. The runner has to serialize a theory's
+    /// arguments to display and filter them, and a <c>JToken</c> cannot be serialized: one such row makes the test host
+    /// report a catastrophic failure, which is what used to abort the coverage run.
+    /// </summary>
+    public static TheoryData<string> MalformedAugmentLists =>
         new()
         {
-            new JArray(),
-            new JArray(1001, 1001),
-            new JArray(1001, 0),
-            new JArray(1001, -5),
-            new JArray(1001, "1002"),
-            new JArray(1001, 1.5),
-            new JArray(1001, 3_000_000_000L),
-            new JArray(Enumerable.Range(1001, OverlayChatRequest.MaxAugments + 1)),
+            "[]",
+            "[1001,1001]",
+            "[1001,0]",
+            "[1001,-5]",
+            "[1001,\"1002\"]",
+            "[1001,1.5]",
+            "[1001,3000000000]",
             "1001",
-            JValue.CreateNull(),
+            "null",
         };
 
     [Theory]
     [MemberData(nameof(MalformedAugmentLists))]
-    public void Parse_AnAugmentListThatIsEmptyRepeatedOrMalformed_IsRefused(JToken augments)
+    public void Parse_AnAugmentListThatIsEmptyRepeatedOrMalformed_IsRefused(string augments)
     {
-        Assert.Null(OverlayChatRequest.Parse(AugmentRequest(augments), "s", Seats((3, 77)), 1000));
+        Assert.Null(OverlayChatRequest.Parse(AugmentRequest(JToken.Parse(augments)), "s", Seats((3, 77)), 1000));
+    }
+
+    [Fact]
+    public void Parse_AnAugmentListOneTooLong_IsRefused()
+    {
+        // Built here rather than in the data, because the length comes from the model rather than from a literal.
+        JArray tooMany = new(Enumerable.Range(1001, OverlayChatRequest.MaxAugments + 1));
+
+        Assert.Null(OverlayChatRequest.Parse(AugmentRequest(tooMany), "s", Seats((3, 77)), 1000));
     }
 
     [Fact]
