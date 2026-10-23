@@ -4,9 +4,10 @@ namespace League.Controls;
 
 public partial class PlayerCardControl
 {
+    private const int ChampionBarHeight = 42;
     private readonly Panel _championBar = new()
     {
-        Height = 42,
+        Height = ChampionBarHeight,
         Dock = DockStyle.Bottom,
         BackColor = Theme.Canvas,
     };

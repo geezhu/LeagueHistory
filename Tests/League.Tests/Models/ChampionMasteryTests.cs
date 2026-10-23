@@ -52,6 +52,40 @@ public class ChampionMasteryTests
         string message = ""
     ) => new(1, level, points, lastPlay, available, stale, fetchedAt, message);
 
+    // ---- the team card's top champions ----
+
+    [Fact]
+    public void Top_SeveralRecords_ListsTheMostPointsFirst()
+    {
+        var page = Page(records: [Record(1, points: 500), Record(2, points: 90000), Record(3, points: 12000)]);
+
+        var top = page.Top(8).Select(m => m.ChampionId);
+
+        Assert.Equal([2, 3, 1], top);
+    }
+
+    [Fact]
+    public void Top_MoreRecordsThanAsked_KeepsTheCount()
+    {
+        var page = Page(records: [Record(1), Record(2), Record(3)]);
+
+        Assert.Equal(2, page.Top(2).Count);
+    }
+
+    [Fact]
+    public void Top_ARecordWithoutAChampion_IsLeftOut()
+    {
+        var page = Page(records: [new JObject { ["championPoints"] = 99999 }, Record(7)]);
+
+        Assert.Equal([7], page.Top(8).Select(m => m.ChampionId));
+    }
+
+    [Fact]
+    public void Top_APageThatDidNotLoad_IsEmpty()
+    {
+        Assert.Empty(new ChampionMasteryPage(null, null).Top(8));
+    }
+
     // ---- reading a page ----
 
     [Fact]

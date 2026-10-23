@@ -55,6 +55,7 @@ public partial class PlayerCardControl
             }
         );
         SummaryPanel.Controls.Add(_summonerAvatar);
+        SummaryPanel.Controls.Add(_masteryStrip);
         SummaryPanel.Resize += (_, _) => ReflowSummaryPanel();
         ConfigureChampionBar();
         Controls.Add(SummaryPanel);
@@ -115,14 +116,27 @@ public partial class PlayerCardControl
         }
         _soloCaption.Visible = lblSoloRank.Visible = lblSoloRank.Text.Length > 0;
         _flexCaption.Visible = lblFlexRank.Visible = lblFlexRank.Text.Length > 0;
-        SummaryPanel.Height = lblSoloRank.Visible || lblFlexRank.Visible ? 154 : 120;
+        ReflowSummaryHeight();
         ReflowRanks();
+    }
+
+    // Identity on top, then the ranks and the mastery row when they have something to show, then the champion bar.
+    private void ReflowSummaryHeight()
+    {
+        bool ranks = lblSoloRank.Visible || lblFlexRank.Visible;
+        int masteryTop = ranks ? RankTop + RankHeight + 4 : RankTop + 2;
+        _masteryStrip.SetBounds(10, masteryTop, Math.Max(20, SummaryPanel.Width - 20), _masteryStrip.Height);
+        SummaryPanel.Height =
+            _masteryStrip.Visible ? _masteryStrip.Bottom + 10 + ChampionBarHeight
+            : ranks ? 154
+            : 120;
     }
 
     private void ReflowSummaryPanel()
     {
         lblPlayerName.Width = lblPrivacyStatus.Width = Math.Max(20, SummaryPanel.Width - 82);
         _recentKda.Width = _recentWinRate.Width = lblPlayerName.Width;
+        _masteryStrip.Width = Math.Max(20, SummaryPanel.Width - 20);
         ReflowRanks();
     }
 

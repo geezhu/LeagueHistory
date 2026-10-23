@@ -24,6 +24,25 @@ public sealed record ChampionMasteryPage(
             Message
         );
     }
+
+    /// <summary>The champions with the most points, most first; empty when the page has no data.</summary>
+    public IReadOnlyList<PlayerChampionMastery> Top(int count) =>
+        Data?.OfType<JObject>()
+            .Select(r => new PlayerChampionMastery(
+                (int?)r["championId"] ?? 0,
+                (int?)r["championLevel"],
+                (long?)r["championPoints"],
+                (long?)r["lastPlayTime"],
+                true,
+                Stale,
+                FetchedAt,
+                Message
+            ))
+            .Where(m => m.ChampionId > 0)
+            .OrderByDescending(m => m.Points ?? 0)
+            .Take(count)
+            .ToArray()
+        ?? [];
 }
 
 /// <summary>Account achievement, separate from a champion's mode statistics.</summary>
