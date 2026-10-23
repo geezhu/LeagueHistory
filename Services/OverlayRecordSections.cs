@@ -18,24 +18,11 @@ public static class OverlayRecordSections
 
     private const int MaxGames = 20;
 
-    // The thresholds of MatchQueryProcessor.GenerateBehaviorSummary, upstream code that keeps them private.
-    // RecordChecks feeds that method behaviors that produce every tag and compares the names with this list.
-    public static readonly IReadOnlyDictionary<string, string> TagRules = new Dictionary<string, string>
-    {
-        ["爱投降"] = "以投降结束的对局 ≥ 38%",
-        ["容易投降"] = "以投降结束的对局 ≥ 25%",
-        ["爱发问号"] = "每场平均问号（敌人消失）≥ 3 次",
-        ["爱发提醒"] = "每场平均视野提醒 ≥ 2.5 次",
-        ["爱发撤退"] = "每场平均撤退 ≥ 3.5 次",
-        ["爱发危险"] = "每场平均危险 ≥ 2.5 次",
-        ["玻璃心"] = "四种信号每场合计 ≥ 13 次，或撤退 ≥ 4 次",
-        ["心态容易崩"] = "四种信号每场合计 ≥ 9 次",
-        ["爱抱怨"] = "撤退 ≥ 4.5 次且四种信号合计 ≥ 11 次",
-    };
-
-    // Severity follows upstream's README ratings: very high is "bad", high "warn", medium "info".
-    private static readonly HashSet<string> SevereTags = ["爱投降", "玻璃心", "爱抱怨"];
-    private static readonly HashSet<string> NotableTags = ["容易投降", "爱发问号", "爱发撤退", "心态容易崩"];
+    /// <summary>Each tag's rule as the record page explains it, from BehaviorTags.</summary>
+    public static readonly IReadOnlyDictionary<string, string> TagRules = BehaviorTags.Rules.ToDictionary(
+        rule => rule.Name,
+        rule => rule.Description
+    );
 
     public static JArray Build(
         LoadingPlayer player,
@@ -166,14 +153,17 @@ public static class OverlayRecordSections
                     tag,
                     "",
                     "",
-                    SevereTags.Contains(tag) ? "bad"
-                        : NotableTags.Contains(tag) ? "warn"
-                        : "info",
+                    BehaviorTags.Find(tag)?.Severity switch
+                    {
+                        BehaviorTagSeverity.Bad => "bad",
+                        BehaviorTagSeverity.Warn => "warn",
+                        _ => "info",
+                    },
                     TagRules.GetValueOrDefault(tag, "规则未说明")
                 )
             )
             .ToList();
-        double total = b.AvgMissingPings + b.AvgVisionPings + b.AvgGetBackPings + b.AvgDangerPings;
+        double total = BehaviorTags.Total(b);
         var section = Section(Tab, "行为特征", Chips, chips);
         section["tip"] =
             $"按主窗口查询的最近 {info.RecentMatches.Count} 场估算，仅供参考。\n投降率统计以投降结束的对局，不区分是哪一方投降；信号为每场平均次数。";
@@ -182,37 +172,43 @@ public static class OverlayRecordSections
                 "投降率",
                 Percent(b.SurrenderRate),
                 $"短局 {b.ShortGameCount} 场",
-                Level(b.SurrenderRate, 25, 38),
-                "以投降结束的对局占比（不区分哪一方投降）。≥ 25% 容易投降，≥ 38% 爱投降。\n短局：18 分钟内结束的对局。"
+                Level(b.SurrenderRate, BehaviorTags.EasySurrenderRate, BehaviorTags.LovesSurrenderRate),
+                $"以投降结束的对局占比（不区分哪一方投降）。≥ {BehaviorTags.EasySurrenderRate}% 容易投降，≥ {BehaviorTags.LovesSurrenderRate}% 爱投降。\n短局：18 分钟内结束的对局。"
             ),
             Tile(
                 "问号",
                 $"{b.AvgMissingPings:0.0}",
                 "次 / 场",
-                Level(b.AvgMissingPings, 3),
-                "问号（敌人消失）≥ 3 次为爱发问号。"
+                Level(b.AvgMissingPings, BehaviorTags.MissingPings, BehaviorTags.ImpatientMissing),
+                $"问号（敌人消失）≥ {BehaviorTags.MissingPings} 次为爱发问号，≥ {BehaviorTags.ImpatientMissing} 次计为急性子。"
             ),
             Tile(
                 "撤退",
                 $"{b.AvgGetBackPings:0.0}",
                 "次 / 场",
-                Level(b.AvgGetBackPings, 3.5, 4),
-                "≥ 3.5 次为爱发撤退，≥ 4 次计为玻璃心。"
+                Level(b.AvgGetBackPings, BehaviorTags.GetBackPings, BehaviorTags.FragileGetBack),
+                $"≥ {BehaviorTags.GetBackPings} 次为爱发撤退，≥ {BehaviorTags.FragileGetBack} 次计为玻璃心。"
             ),
-            Tile("危险", $"{b.AvgDangerPings:0.0}", "次 / 场", Level(b.AvgDangerPings, 2.5), "≥ 2.5 次为爱发危险。"),
+            Tile(
+                "危险",
+                $"{b.AvgDangerPings:0.0}",
+                "次 / 场",
+                Level(b.AvgDangerPings, BehaviorTags.DangerPings),
+                $"≥ {BehaviorTags.DangerPings} 次为爱发危险。"
+            ),
             Tile(
                 "提醒",
                 $"{b.AvgVisionPings:0.0}",
                 "次 / 场",
-                b.AvgVisionPings >= 2.5 ? "info" : "",
-                "视野提醒 ≥ 2.5 次为爱发提醒，属于视野意识较强。"
+                b.AvgVisionPings >= BehaviorTags.VisionPings ? "info" : "",
+                $"视野提醒 ≥ {BehaviorTags.VisionPings} 次为爱发提醒，属于视野意识较强。"
             ),
             Tile(
                 "信号合计",
                 $"{total:0.0}",
                 "次 / 场",
-                Level(total, 9, 13),
-                "四种信号合计：≥ 9 次心态容易崩，≥ 13 次玻璃心。"
+                Level(total, BehaviorTags.UnsteadyTotal, BehaviorTags.FragileTotal),
+                $"四种信号合计：≥ {BehaviorTags.UnsteadyTotal} 次心态容易崩，≥ {BehaviorTags.FragileTotal} 次玻璃心，≥ {BehaviorTags.PressureTotal} 次压力怪。"
             )
         );
         return section;

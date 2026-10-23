@@ -22,14 +22,8 @@ namespace League.Tests.Services;
 /// skipped here. What cannot be repeated without reflection is the assertion around it: the line
 /// <c>OverlayRecordChatMessage.Line</c> writes from the same cached history, its 180-character truncation and its
 /// refusal to send before any history is loaded. Those belong to <c>OverlayRecordChatMessage</c>, not to
-/// <c>ChatMessageBuilder</c>; this class pins this class's side of that contract, the double brackets.
-///
-/// The two sides disagree on the brackets, and it is worth naming why: this class writes
-/// <c>特征 [[玻璃心、爱发问号]]</c> (the summary carries its own pair), while <c>Line</c> writes one pair,
-/// <c>特征 [玻璃心、爱发问号]</c>. Nothing in the application collapses one into the other - <c>Line</c> takes the
-/// tags apart with <c>OverlayRecordSections.Tags</c> (<c>.Trim('[', ']', ' ')</c>) and writes them back out inside a
-/// single pair of its own. The old check's <c>overlay.Replace("[[", "[")</c> is what used to make the two look like a
-/// collapse. Both sides are pinned in <c>OverlayRecordChatMessageTests</c>.
+/// <c>ChatMessageBuilder</c>. Since upstream b1d561c the summary carries no brackets of its own, so both write one
+/// pair and the same line; <c>OverlayRecordChatMessageTests</c> compares them.
 /// </summary>
 public class ChatMessageBuilderTests
 {
@@ -114,54 +108,54 @@ public class ChatMessageBuilderTests
     }
 
     [Fact]
-    public void BuildMyTeamSummary_PingAverages_AddsTheOnesItWasGiven()
+    public void BuildMyTeamSummary_PingCounts_AddsTheOnesItWasGiven()
     {
         var player = Info(7, "玩家甲");
         player.WinHistory = [true, true, false, true];
         player.Behavior = new PlayerBehavior
         {
             BehaviorSummary = "稳健",
-            AvgMissingPings = 2.5,
-            AvgVisionPings = 1.5,
+            TotalMissingPings = 10,
+            TotalVisionPings = 6,
         };
         var builder = Builder(hideSelf: true, Known(player));
 
         string summary = builder.BuildMyTeamSummary(new JArray(Row(7, "puuid-a")));
 
-        Assert.Equal("玩家甲 近4场 胜率 [75%] | 发问号 2.5 | 发提醒 1.5 特征 [稳健]", summary);
+        Assert.Equal("玩家甲 近4场 胜率 [75%] | 发问号 10次 | 发提醒 6次 特征 [稳健]", summary);
     }
 
     [Fact]
-    public void BuildMyTeamSummary_EveryPingAverage_ListsThemInOrder()
+    public void BuildMyTeamSummary_EveryPingCount_ListsThemInOrder()
     {
         var player = Info(7, "玩家甲");
         player.WinHistory = [true, true, false, true];
         player.Behavior = new PlayerBehavior
         {
             BehaviorSummary = "稳健",
-            AvgMissingPings = 2.5,
-            AvgVisionPings = 1.5,
-            AvgGetBackPings = 3.5,
-            AvgDangerPings = 4.5,
+            TotalMissingPings = 10,
+            TotalVisionPings = 6,
+            TotalGetBackPings = 14,
+            TotalDangerPings = 18,
         };
         var builder = Builder(hideSelf: true, Known(player));
 
         string summary = builder.BuildMyTeamSummary(new JArray(Row(7, "puuid-a")));
 
         Assert.Equal(
-            "玩家甲 近4场 胜率 [75%] | 发问号 2.5 | 发提醒 1.5 | 发撤退 3.5 | 发危险 4.5 特征 [稳健]",
+            "玩家甲 近4场 胜率 [75%] | 发问号 10次 | 发提醒 6次 | 发撤退 14次 | 发危险 18次 特征 [稳健]",
             summary
         );
     }
 
     [Theory]
-    [InlineData(0.0)]
-    [InlineData(-1.0)]
-    public void BuildMyTeamSummary_PingAverageNotAboveZero_LeavesItOut(double pings)
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void BuildMyTeamSummary_PingCountNotAboveZero_LeavesItOut(int pings)
     {
         var player = Info(7, "玩家甲");
         player.WinHistory = [true, true, false, true];
-        player.Behavior = new PlayerBehavior { BehaviorSummary = "稳健", AvgMissingPings = pings };
+        player.Behavior = new PlayerBehavior { BehaviorSummary = "稳健", TotalMissingPings = pings };
         var builder = Builder(hideSelf: true, Known(player));
 
         string summary = builder.BuildMyTeamSummary(new JArray(Row(7, "puuid-a")));
@@ -208,24 +202,23 @@ public class ChatMessageBuilderTests
         Assert.Equal("玩家甲 近4场 胜率 [75%]", summary);
     }
 
-    // MatchQueryProcessor.GenerateBehaviorSummary brackets its tags itself ("[玻璃心、爱发问号]"), so the line ends
-    // up with two pairs. The Game Bar's own record message collapses them to one; this is the pair written here.
+    // BehaviorTags.Summary writes the tags without brackets; the line adds the one pair.
     [Fact]
-    public void BuildMyTeamSummary_BracketedBehaviorSummary_KeepsBothBrackets()
+    public void BuildMyTeamSummary_SeveralTags_WritesOneBracketPair()
     {
         var player = Info(7, "玩家甲");
         player.WinHistory = [true, true, false, false, true];
         player.Behavior = new PlayerBehavior
         {
-            BehaviorSummary = "[玻璃心、爱发问号]",
-            AvgMissingPings = 3.2,
-            AvgGetBackPings = 4.1,
+            BehaviorSummary = "玻璃心、爱发问号",
+            TotalMissingPings = 16,
+            TotalGetBackPings = 21,
         };
         var builder = Builder(hideSelf: true, Known(player));
 
         string summary = builder.BuildMyTeamSummary(new JArray(Row(7, "puuid-a")));
 
-        Assert.Equal("玩家甲 近5场 胜率 [60%] | 发问号 3.2 | 发撤退 4.1 特征 [[玻璃心、爱发问号]]", summary);
+        Assert.Equal("玩家甲 近5场 胜率 [60%] | 发问号 16次 | 发撤退 21次 特征 [玻璃心、爱发问号]", summary);
     }
 
     [Theory]
@@ -430,9 +423,9 @@ public class ChatMessageBuilderTests
         enemy.WinHistory = [true, true, false, false, true];
         enemy.Behavior = new PlayerBehavior
         {
-            BehaviorSummary = "[玻璃心、爱发问号]",
-            AvgMissingPings = 3.2,
-            AvgGetBackPings = 4.1,
+            BehaviorSummary = "玻璃心、爱发问号",
+            TotalMissingPings = 16,
+            TotalGetBackPings = 21,
         };
         var builder = Builder(hideSelf: true, Known(mine, enemy));
 
@@ -443,7 +436,7 @@ public class ChatMessageBuilderTests
                 Environment.NewLine,
                 "玩家甲 近2场 胜率 [50%]",
                 "",
-                "玩家乙 近5场 胜率 [60%] | 发问号 3.2 | 发撤退 4.1 特征 [[玻璃心、爱发问号]]"
+                "玩家乙 近5场 胜率 [60%] | 发问号 16次 | 发撤退 21次 特征 [玻璃心、爱发问号]"
             ),
             summary
         );

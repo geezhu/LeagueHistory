@@ -151,81 +151,20 @@ namespace League.Services
             string gameText = $"近{gameCount}场";
             string baseStr = $"{displayName} {gameText} 胜率 [{winRate:F0}%]";
 
+            // 没有特征只发胜率；有特征时附上各信号总次数
             if (string.IsNullOrEmpty(behavior))
             {
                 return baseStr;
             }
 
-            var details = new List<string>();
-            var b = info.Behavior;
-            if (b?.AvgMissingPings > 0)
-            {
-                details.Add($"发问号 {b.AvgMissingPings:F1}");
-            }
-
-            if (b?.AvgVisionPings > 0)
-            {
-                details.Add($"发提醒 {b.AvgVisionPings:F1}");
-            }
-
-            if (b?.AvgGetBackPings > 0)
-            {
-                details.Add($"发撤退 {b.AvgGetBackPings:F1}");
-            }
-
-            if (b?.AvgDangerPings > 0)
-            {
-                details.Add($"发危险 {b.AvgDangerPings:F1}");
-            }
-
+            var details = info.Behavior!.SignalCounts();
             string detailStr = details.Count > 0 ? $" | {string.Join(" | ", details)}" : "";
             return baseStr + detailStr + $" 特征 [{behavior}]";
         }
 
-        private string BuildDetailedLine(PlayerMatchInfo info, bool useChampionName, JToken? rawPlayerData)
-        {
-            string displayName = GetDisplayName(info, rawPlayerData, useChampionName);
-            int gameCount = info.WinHistory?.Count ?? 0;
-            if (gameCount == 0)
-            {
-                return $"{displayName} 暂无战绩";
-            }
-
-            double winRate = CalculateWinRate(info, gameCount);
-            string behavior = info.Behavior?.BehaviorSummary ?? "";
-            string gameText = $"近{gameCount}场";
-            string baseStr = $"{displayName} {gameText} 胜率 [{winRate:F0}%]";
-
-            if (string.IsNullOrEmpty(behavior))
-            {
-                return baseStr;
-            }
-
-            var details = new List<string>();
-            var b = info.Behavior;
-            if (b?.AvgMissingPings > 0)
-            {
-                details.Add($"发问号 {b.AvgMissingPings:F1}");
-            }
-
-            if (b?.AvgVisionPings > 0)
-            {
-                details.Add($"发提醒 {b.AvgVisionPings:F1}");
-            }
-
-            if (b?.AvgGetBackPings > 0)
-            {
-                details.Add($"发撤退 {b.AvgGetBackPings:F1}");
-            }
-
-            if (b?.AvgDangerPings > 0)
-            {
-                details.Add($"发危险 {b.AvgDangerPings:F1}");
-            }
-
-            string detailStr = details.Count > 0 ? $" | {string.Join(" | ", details)}" : "";
-            return baseStr + detailStr + $" 特征 [{behavior}]";
-        }
+        // 游戏内全队消息与选人消息同一格式。
+        private string BuildDetailedLine(PlayerMatchInfo info, bool useChampionName, JToken? rawPlayerData) =>
+            BuildSimpleLine(info, useChampionName, rawPlayerData);
 
         private double CalculateWinRate(PlayerMatchInfo info, int gamesToUse)
         {

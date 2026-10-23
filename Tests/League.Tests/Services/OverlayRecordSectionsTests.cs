@@ -19,21 +19,23 @@ public class OverlayRecordSectionsTests
     }
 
     [Fact]
-    public void TagRules_TheUpstreamTable_ExplainsNineTags()
+    public void TagRules_TheUpstreamTable_ExplainsElevenTags()
     {
-        Assert.Equal(9, OverlayRecordSections.TagRules.Count);
+        Assert.Equal(11, OverlayRecordSections.TagRules.Count);
     }
 
     [Theory]
-    [InlineData("爱投降", "以投降结束的对局 ≥ 38%")]
-    [InlineData("容易投降", "以投降结束的对局 ≥ 25%")]
-    [InlineData("爱发问号", "每场平均问号（敌人消失）≥ 3 次")]
-    [InlineData("爱发提醒", "每场平均视野提醒 ≥ 2.5 次")]
-    [InlineData("爱发撤退", "每场平均撤退 ≥ 3.5 次")]
-    [InlineData("爱发危险", "每场平均危险 ≥ 2.5 次")]
-    [InlineData("玻璃心", "四种信号每场合计 ≥ 13 次，或撤退 ≥ 4 次")]
-    [InlineData("心态容易崩", "四种信号每场合计 ≥ 9 次")]
-    [InlineData("爱抱怨", "撤退 ≥ 4.5 次且四种信号合计 ≥ 11 次")]
+    [InlineData("爱投降", "以投降结束的对局 ≥ 35%")]
+    [InlineData("容易投降", "以投降结束的对局 ≥ 22%")]
+    [InlineData("爱发问号", "每场平均问号（敌人消失）≥ 2.6 次")]
+    [InlineData("爱发提醒", "每场平均视野提醒 ≥ 2.2 次")]
+    [InlineData("爱发撤退", "每场平均撤退 ≥ 3 次")]
+    [InlineData("爱发危险", "每场平均危险 ≥ 2.2 次")]
+    [InlineData("心态容易崩", "四种信号每场合计 ≥ 8 次")]
+    [InlineData("玻璃心", "四种信号每场合计 ≥ 10.5 次，或撤退 ≥ 3.8 次")]
+    [InlineData("爱抱怨", "撤退 ≥ 4.2 次且四种信号合计 ≥ 10 次")]
+    [InlineData("压力怪", "四种信号每场合计 ≥ 12.5 次")]
+    [InlineData("急性子", "四种信号每场合计 ≥ 14.5 次，或问号 ≥ 4.2 次，或撤退 ≥ 4.8 次")]
     public void TagRules_EveryTagTheUpstreamSummaryWrites_CarriesItsThreshold(string tag, string rule)
     {
         Assert.Equal(rule, OverlayRecordSections.TagRules[tag]);
@@ -308,14 +310,16 @@ public class OverlayRecordSectionsTests
 
     [Theory]
     [InlineData("爱投降", "bad")]
-    [InlineData("容易投降", "warn")]
+    [InlineData("容易投降", "info")]
     [InlineData("爱发问号", "warn")]
     [InlineData("爱发提醒", "info")]
     [InlineData("爱发撤退", "warn")]
     [InlineData("爱发危险", "info")]
-    [InlineData("玻璃心", "bad")]
     [InlineData("心态容易崩", "warn")]
+    [InlineData("玻璃心", "bad")]
     [InlineData("爱抱怨", "bad")]
+    [InlineData("压力怪", "bad")]
+    [InlineData("急性子", "bad")]
     public void Build_OneBehaviourTag_MarksTheChipWithItsSeverity(string tag, string tone)
     {
         JArray sections = Build(History(Games("win"), summary: "[" + tag + "]"));
@@ -324,15 +328,17 @@ public class OverlayRecordSectionsTests
     }
 
     [Theory]
-    [InlineData("爱投降", "以投降结束的对局 ≥ 38%")]
-    [InlineData("容易投降", "以投降结束的对局 ≥ 25%")]
-    [InlineData("爱发问号", "每场平均问号（敌人消失）≥ 3 次")]
-    [InlineData("爱发提醒", "每场平均视野提醒 ≥ 2.5 次")]
-    [InlineData("爱发撤退", "每场平均撤退 ≥ 3.5 次")]
-    [InlineData("爱发危险", "每场平均危险 ≥ 2.5 次")]
-    [InlineData("玻璃心", "四种信号每场合计 ≥ 13 次，或撤退 ≥ 4 次")]
-    [InlineData("心态容易崩", "四种信号每场合计 ≥ 9 次")]
-    [InlineData("爱抱怨", "撤退 ≥ 4.5 次且四种信号合计 ≥ 11 次")]
+    [InlineData("爱投降", "以投降结束的对局 ≥ 35%")]
+    [InlineData("容易投降", "以投降结束的对局 ≥ 22%")]
+    [InlineData("爱发问号", "每场平均问号（敌人消失）≥ 2.6 次")]
+    [InlineData("爱发提醒", "每场平均视野提醒 ≥ 2.2 次")]
+    [InlineData("爱发撤退", "每场平均撤退 ≥ 3 次")]
+    [InlineData("爱发危险", "每场平均危险 ≥ 2.2 次")]
+    [InlineData("心态容易崩", "四种信号每场合计 ≥ 8 次")]
+    [InlineData("玻璃心", "四种信号每场合计 ≥ 10.5 次，或撤退 ≥ 3.8 次")]
+    [InlineData("爱抱怨", "撤退 ≥ 4.2 次且四种信号合计 ≥ 10 次")]
+    [InlineData("压力怪", "四种信号每场合计 ≥ 12.5 次")]
+    [InlineData("急性子", "四种信号每场合计 ≥ 14.5 次，或问号 ≥ 4.2 次，或撤退 ≥ 4.8 次")]
     public void Build_OneBehaviourTag_ExplainsTheRuleUnderTheChip(string tag, string rule)
     {
         JArray sections = Build(History(Games("win"), summary: "[" + tag + "]"));
@@ -385,18 +391,19 @@ public class OverlayRecordSectionsTests
     }
 
     [Theory]
-    [InlineData("投降率", 24, "")]
-    [InlineData("投降率", 25, "warn")]
-    [InlineData("投降率", 38, "bad")]
-    [InlineData("问号", 2.9, "")]
-    [InlineData("问号", 3, "warn")]
-    [InlineData("撤退", 3.4, "")]
-    [InlineData("撤退", 3.5, "warn")]
-    [InlineData("撤退", 4, "bad")]
-    [InlineData("危险", 2.4, "")]
-    [InlineData("危险", 2.5, "warn")]
-    [InlineData("提醒", 2.4, "")]
-    [InlineData("提醒", 2.5, "info")]
+    [InlineData("投降率", 21, "")]
+    [InlineData("投降率", 22, "warn")]
+    [InlineData("投降率", 35, "bad")]
+    [InlineData("问号", 2.5, "")]
+    [InlineData("问号", 2.6, "warn")]
+    [InlineData("问号", 4.2, "bad")]
+    [InlineData("撤退", 2.9, "")]
+    [InlineData("撤退", 3, "warn")]
+    [InlineData("撤退", 3.8, "bad")]
+    [InlineData("危险", 2.1, "")]
+    [InlineData("危险", 2.2, "warn")]
+    [InlineData("提醒", 2.1, "")]
+    [InlineData("提醒", 2.2, "info")]
     public void Build_OneSignal_TakesTheToneOfItsThreshold(string title, double value, string tone)
     {
         JArray sections = Build(History(Games("win"), behavior: Behavior(title, value)));
@@ -442,19 +449,19 @@ public class OverlayRecordSectionsTests
         JArray sections = Build(History(Games("win")));
 
         Assert.Equal(
-            "以投降结束的对局占比（不区分哪一方投降）。≥ 25% 容易投降，≥ 38% 爱投降。\n短局：18 分钟内结束的对局。",
+            "以投降结束的对局占比（不区分哪一方投降）。≥ 22% 容易投降，≥ 35% 爱投降。\n短局：18 分钟内结束的对局。",
             (string?)SignalTile(sections, "投降率")["description"]
         );
         Assert.Equal(
-            "四种信号合计：≥ 9 次心态容易崩，≥ 13 次玻璃心。",
+            "四种信号合计：≥ 8 次心态容易崩，≥ 10.5 次玻璃心，≥ 12.5 次压力怪。",
             (string?)SignalTile(sections, "信号合计")["description"]
         );
     }
 
     [Theory]
-    [InlineData(2, "8.0", "")]
-    [InlineData(2.25, "9.0", "warn")]
-    [InlineData(3.25, "13.0", "bad")]
+    [InlineData(1.9, "7.6", "")]
+    [InlineData(2, "8.0", "warn")]
+    [InlineData(2.625, "10.5", "bad")]
     public void Build_TheCombinedSignals_TakeTheToneOfTheTotal(double each, string total, string tone)
     {
         JArray sections = Build(History(Games("win"), behavior: Pings(each)));

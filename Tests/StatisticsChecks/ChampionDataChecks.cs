@@ -79,12 +79,12 @@ internal static class ChampionDataChecks
         player.Behavior = new PlayerBehavior
         {
             BehaviorSummary = "稳健",
-            AvgMissingPings = 2.5,
-            AvgVisionPings = 1.5,
+            TotalMissingPings = 10,
+            TotalVisionPings = 6,
         };
         Check(
-            builder.BuildMyTeamSummary(team) == "玩家甲 近4场 胜率 [75%] | 发问号 2.5 | 发提醒 1.5 特征 [稳健]",
-            "The summary adds the ping averages it was given"
+            builder.BuildMyTeamSummary(team) == "玩家甲 近4场 胜率 [75%] | 发问号 10次 | 发提醒 6次 特征 [稳健]",
+            "The summary adds the ping counts it was given"
         );
 
         player.WinHistory = [];

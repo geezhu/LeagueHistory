@@ -315,72 +315,18 @@ namespace League.Parsers
             var b = info.Behavior;
 
             b.SurrenderRate = Math.Round(surrenderCount * 100.0 / count, 1);
-            // 使用 double 除法
+            // 平均值判定标签，总次数用于发送
             b.AvgMissingPings = totalMissing / (double)count;
             b.AvgVisionPings = totalVision / (double)count;
             b.AvgGetBackPings = totalGetBack / (double)count;
             b.AvgDangerPings = totalDanger / (double)count;
+            b.TotalMissingPings = totalMissing;
+            b.TotalVisionPings = totalVision;
+            b.TotalGetBackPings = totalGetBack;
+            b.TotalDangerPings = totalDanger;
 
             b.ShortGameCount = shortCount;
-
-            string currentQueueId = Globals.CurrGameMod ?? "";
-            b.BehaviorSummary = GenerateBehaviorSummary(b, currentQueueId);
-        }
-
-        private string GenerateBehaviorSummary(PlayerBehavior b, string queueIdStr = "")
-        {
-            var tags = new List<string>();
-
-            // 投降
-            if (b.SurrenderRate >= 38)
-            {
-                tags.Add("爱投降");
-            }
-            else if (b.SurrenderRate >= 25)
-            {
-                tags.Add("容易投降");
-            }
-
-            // 单个信号
-            if (b.AvgMissingPings >= 3.0)
-            {
-                tags.Add("爱发问号");
-            }
-
-            if (b.AvgVisionPings >= 2.5)
-            {
-                tags.Add("爱发提醒");
-            }
-
-            if (b.AvgGetBackPings >= 3.5)
-            {
-                tags.Add("爱发撤退");
-            }
-
-            if (b.AvgDangerPings >= 2.5)
-            {
-                tags.Add("爱发危险");
-            }
-
-            // 综合性格（优先级最高）
-            double totalPressure = b.AvgMissingPings + b.AvgVisionPings + b.AvgGetBackPings + b.AvgDangerPings;
-
-            if (totalPressure >= 13 || b.AvgGetBackPings >= 4)
-            {
-                tags.Add("玻璃心");
-            }
-            else if (totalPressure >= 9)
-            {
-                tags.Add("心态容易崩");
-            }
-
-            if (b.AvgGetBackPings >= 4.5 && totalPressure >= 11)
-            {
-                tags.Add("爱抱怨");
-            }
-
-            var uniqueTags = tags.Distinct().ToList();
-            return uniqueTags.Count > 0 ? $"[{string.Join("、", uniqueTags)}]" : "";
+            b.BehaviorSummary = BehaviorTags.Summary(b);
         }
 
         /// <summary>

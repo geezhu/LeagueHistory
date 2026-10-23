@@ -58,28 +58,7 @@ public static class OverlayRecordChatMessage
             return line;
         }
 
-        var b = info.Behavior;
-        var signals = new List<string>();
-        if (b.AvgMissingPings > 0)
-        {
-            signals.Add($"发问号 {b.AvgMissingPings:F1}");
-        }
-
-        if (b.AvgVisionPings > 0)
-        {
-            signals.Add($"发提醒 {b.AvgVisionPings:F1}");
-        }
-
-        if (b.AvgGetBackPings > 0)
-        {
-            signals.Add($"发撤退 {b.AvgGetBackPings:F1}");
-        }
-
-        if (b.AvgDangerPings > 0)
-        {
-            signals.Add($"发危险 {b.AvgDangerPings:F1}");
-        }
-
+        var signals = info.Behavior.SignalCounts();
         return line
             + (signals.Count > 0 ? " | " + string.Join(" | ", signals) : "")
             + $" 特征 [{string.Join("、", tags)}]";

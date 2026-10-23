@@ -25,7 +25,7 @@ internal static class OverlayRecordChecks
     {
         var roster = Roster();
         var self = Info("self-puuid", 1, [true], "");
-        var ally = Info("ally-puuid", 2, [true, true, false, false, true], "[玻璃心、爱发问号]", remakeAt: 2);
+        var ally = Info("ally-puuid", 2, [true, true, false, false, true], "玻璃心、爱发问号", remakeAt: 2);
         var enemy = Info("enemy-puuid", 3, [false, true], "");
         PlayerMatchInfo[] cached = [self, ally, enemy];
         Matching(roster, cached);
@@ -128,11 +128,9 @@ internal static class OverlayRecordChecks
         );
     }
 
-    // Upstream keeps its thresholds private; every tag it can produce must have a rule text, and no rule may be stale.
+    // Every tag BehaviorTags can produce must have a rule text, and no rule may be unreachable.
     private static void TagRules()
     {
-        var processor = RuntimeHelpers.GetUninitializedObject(typeof(MatchQueryProcessor));
-        var generate = typeof(MatchQueryProcessor).GetMethod("GenerateBehaviorSummary", Private)!;
         PlayerBehavior[] behaviors =
         [
             new()
@@ -153,9 +151,7 @@ internal static class OverlayRecordChecks
             },
         ];
         var produced = behaviors
-            .SelectMany(b =>
-                OverlayRecordSections.Tags(new() { BehaviorSummary = (string)generate.Invoke(processor, [b, ""])! })
-            )
+            .SelectMany(b => OverlayRecordSections.Tags(new() { BehaviorSummary = BehaviorTags.Summary(b) }))
             .ToHashSet();
         Check(
             produced.SetEquals(OverlayRecordSections.TagRules.Keys),
@@ -170,11 +166,7 @@ internal static class OverlayRecordChecks
         var builder = (ChatMessageBuilder)RuntimeHelpers.GetUninitializedObject(typeof(ChatMessageBuilder));
         string upstream = (string)
             typeof(ChatMessageBuilder).GetMethod("BuildSimpleLine", Private)!.Invoke(builder, [ally, false, null])!;
-        // Upstream wraps the already bracketed summary in a second pair of brackets.
-        Check(
-            lines.Count == 4 && lines[1] == upstream.Replace("[[", "[").Replace("]]", "]"),
-            "Each player gets the F9/F11 line: " + lines[1]
-        );
+        Check(lines.Count == 4 && lines[1] == upstream, "Each player gets the F9/F11 line: " + lines[1]);
         Check(lines[2] == "阿狸 暂无战绩" && lines[0].StartsWith("自己 近1场"), "Hidden players use the hero name");
         var hidden = OverlayRecordChatMessage.Build(roster, request, cached, Hero, true, true);
         Check(

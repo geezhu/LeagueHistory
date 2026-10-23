@@ -44,7 +44,7 @@ public class OverlayRecordChatMessageTests
             History([true], puuid: "self-puuid", gameName: "自己", summonerId: 1),
             History(
                 [true, true, false, false, true],
-                Behavior("[玻璃心、爱发问号]", missing: 3.2, getBack: 4.1),
+                Behavior("玻璃心、爱发问号", missing: 16, getBack: 21),
                 "ally-puuid",
                 "队友",
                 2
@@ -116,7 +116,7 @@ public class OverlayRecordChatMessageTests
     [Fact]
     public void Line_ABehaviourTag_IsWrittenUnderTheFeatureHeading()
     {
-        string line = OverlayRecordChatMessage.Line("自己", History([true, false], Behavior("[玻璃心]")));
+        string line = OverlayRecordChatMessage.Line("自己", History([true, false], Behavior("玻璃心")));
 
         Assert.Equal("自己 近2场 胜率 [50%] 特征 [玻璃心]", line);
     }
@@ -126,48 +126,44 @@ public class OverlayRecordChatMessageTests
     {
         string line = OverlayRecordChatMessage.Line(
             "自己",
-            History([true, false], Behavior("[玻璃心、爱发问号、爱抱怨]"))
+            History([true, false], Behavior("玻璃心、爱发问号、爱抱怨"))
         );
 
         Assert.Equal("自己 近2场 胜率 [50%] 特征 [玻璃心、爱发问号、爱抱怨]", line);
     }
 
-    // The writeup upstream hands over is "[a、b]"; the record message reads its brackets off and writes one pair back.
-    // The F9/F11 line keeps the summary as it found it, so the same history ends up with two pairs there.
+    // The summary carries no brackets of its own since upstream b1d561c, so the F9/F11 line and this one agree.
     [Fact]
-    public void Line_ABracketedBehaviourSummary_CarriesTheOneBracketPairTheTeamSummaryFoldsAway()
+    public void Line_ATaggedHistory_ReadsLikeTheTeamSummary()
     {
         PlayerMatchInfo info = History(
             [true, true, false, false, true],
-            Behavior("[玻璃心、爱发问号]", missing: 3.2, getBack: 4.1)
+            Behavior("玻璃心、爱发问号", missing: 16, getBack: 21)
         );
 
         string teamSummary = TeamSummary(info);
         string line = OverlayRecordChatMessage.Line("队友", info);
 
-        Assert.Contains("特征 [[玻璃心、爱发问号]]", teamSummary);
-        Assert.DoesNotContain("[[", line);
-        Assert.Equal(teamSummary.Replace("[[", "[").Replace("]]", "]"), line);
-        Assert.Equal("队友 近5场 胜率 [60%] | 发问号 3.2 | 发撤退 4.1 特征 [玻璃心、爱发问号]", line);
+        Assert.Equal(teamSummary, line);
     }
 
     [Theory]
-    [InlineData(3.2, 0, 0, 0, "自己 近2场 胜率 [50%] | 发问号 3.2 特征 [稳健]")]
-    [InlineData(0, 2.5, 0, 0, "自己 近2场 胜率 [50%] | 发提醒 2.5 特征 [稳健]")]
-    [InlineData(0, 0, 4.1, 0, "自己 近2场 胜率 [50%] | 发撤退 4.1 特征 [稳健]")]
-    [InlineData(0, 0, 0, 2.5, "自己 近2场 胜率 [50%] | 发危险 2.5 特征 [稳健]")]
+    [InlineData(16, 0, 0, 0, "自己 近2场 胜率 [50%] | 发问号 16次 特征 [稳健]")]
+    [InlineData(0, 12, 0, 0, "自己 近2场 胜率 [50%] | 发提醒 12次 特征 [稳健]")]
+    [InlineData(0, 0, 21, 0, "自己 近2场 胜率 [50%] | 发撤退 21次 特征 [稳健]")]
+    [InlineData(0, 0, 0, 12, "自己 近2场 胜率 [50%] | 发危险 12次 特征 [稳健]")]
     [InlineData(
-        3.2,
-        2.5,
-        4.1,
-        2.5,
-        "自己 近2场 胜率 [50%] | 发问号 3.2 | 发提醒 2.5 | 发撤退 4.1 | 发危险 2.5 特征 [稳健]"
+        16,
+        12,
+        21,
+        12,
+        "自己 近2场 胜率 [50%] | 发问号 16次 | 发提醒 12次 | 发撤退 21次 | 发危险 12次 特征 [稳健]"
     )]
-    public void Line_PingAveragesAboveZero_AreListedInOrder(
-        double missing,
-        double vision,
-        double getBack,
-        double danger,
+    public void Line_PingCountsAboveZero_AreListedInOrder(
+        int missing,
+        int vision,
+        int getBack,
+        int danger,
         string expected
     )
     {
@@ -181,7 +177,7 @@ public class OverlayRecordChatMessageTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public void Line_PingAveragesNotAboveZero_AreLeftOffTheLine(double each)
+    public void Line_PingCountsNotAboveZero_AreLeftOffTheLine(int each)
     {
         var behavior = Behavior("稳健", each, each, each, each);
 
@@ -190,11 +186,11 @@ public class OverlayRecordChatMessageTests
         Assert.Equal("自己 近2场 胜率 [50%] 特征 [稳健]", line);
     }
 
-    // The tag list gates the whole suffix: a behavior the summary left unbracketed takes its ping averages with it.
+    // The tag list gates the whole suffix: a player without tags sends the win rate alone.
     [Fact]
-    public void Line_PingAveragesWithoutABehaviourTag_AreLeftOffTheLine()
+    public void Line_PingCountsWithoutABehaviourTag_AreLeftOffTheLine()
     {
-        var behavior = Behavior("", missing: 3.2, vision: 2.5, getBack: 4.1, danger: 2.5);
+        var behavior = Behavior("", missing: 16, vision: 12, getBack: 21, danger: 12);
 
         string line = OverlayRecordChatMessage.Line("自己", History([true, false], behavior));
 
@@ -209,7 +205,7 @@ public class OverlayRecordChatMessageTests
         Assert.Equal(
             [
                 "自己 近1场 胜率 [100%]",
-                "队友 近5场 胜率 [60%] | 发问号 3.2 | 发撤退 4.1 特征 [玻璃心、爱发问号]",
+                "队友 近5场 胜率 [60%] | 发问号 16次 | 发撤退 21次 特征 [玻璃心、爱发问号]",
                 "英雄103 暂无战绩",
                 "稍后 暂无战绩",
             ],
@@ -333,21 +329,21 @@ public class OverlayRecordChatMessageTests
         return builder.BuildMyTeamSummary(team);
     }
 
-    /// <summary>One behavior record; only the ping averages given a value are above the threshold the line checks.</summary>
+    /// <summary>One behavior record with the tags it was summarised to and the ping counts the line sends.</summary>
     private static PlayerBehavior Behavior(
         string summary,
-        double missing = 0,
-        double vision = 0,
-        double getBack = 0,
-        double danger = 0
+        int missing = 0,
+        int vision = 0,
+        int getBack = 0,
+        int danger = 0
     ) =>
         new()
         {
             BehaviorSummary = summary,
-            AvgMissingPings = missing,
-            AvgVisionPings = vision,
-            AvgGetBackPings = getBack,
-            AvgDangerPings = danger,
+            TotalMissingPings = missing,
+            TotalVisionPings = vision,
+            TotalGetBackPings = getBack,
+            TotalDangerPings = danger,
         };
 
     /// <summary>One seat's cached history: the results newest first and the behavior the summary was generated for.</summary>
