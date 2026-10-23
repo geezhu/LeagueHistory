@@ -49,6 +49,17 @@
 		</Content>
 	</ItemGroup>
 
+	<!-- The component GameBar/Build.ps1 last built, beside League.exe where Settings looks for the bundled version;
+	     without it a development build keeps offering whatever package was copied there by hand. Release packages
+	     build and add a fresh one in Scripts/Publish-Release.ps1, so publishing never takes this copy. -->
+	<ItemGroup Condition="Exists('bin/GameBar/LeagueHistory.GameBar.msix')">
+		<Content Include="bin/GameBar/LeagueHistory.GameBar.msix">
+			<Link>GameBar/LeagueHistory.GameBar.msix</Link>
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>Never</CopyToPublishDirectory>
+		</Content>
+	</ItemGroup>
+
 	<!-- 资源文件配置（保持不变） -->
 	<ItemGroup>
 		<Compile Update="Properties\Resources.Designer.cs">

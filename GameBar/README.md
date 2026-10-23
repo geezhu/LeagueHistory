@@ -42,7 +42,7 @@
 
 SDK 固定为 Microsoft.Gaming.XboxGameBar 7.3.2607010，首次构建从 NuGet 下载；原生 DLL、元数据和 SDK 自带资源随组件打包。注册项从同版本元数据生成，防止 SDK 接口变化后使用过期 GUID。应用图标复用项目 favicon。
 
-安装脚本仅在电脑原本已启用开发模式时注册当前用户的组件，不自动开启开发模式、不导入证书。构建产物在 `bin/GameBar`，注册后必须保留 `Package` 目录。不带证书参数时生成的 MSIX 未签名，只用于开发。
+安装脚本仅在电脑原本已启用开发模式时注册当前用户的组件，不自动开启开发模式、不导入证书。构建产物在 `bin/GameBar`，注册后必须保留 `Package` 目录。之后 `dotnet build League.csproj` 会把 `bin/GameBar/LeagueHistory.GameBar.msix` 复制到 League.exe 旁的 `GameBar/`，设置页据此判断附带版本、提示更新；所以升组件版本后先运行 `Build.ps1`，再编译主程序。发布包不取这份，由发布脚本另行编译。不带证书参数时生成的 MSIX 未签名，只用于开发。
 
 ## 发布
 
