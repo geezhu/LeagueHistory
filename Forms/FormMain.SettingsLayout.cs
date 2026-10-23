@@ -357,6 +357,18 @@ public partial class FormMain
             check.Text = name;
         }
 
+        var classic = PreselectSwitch(
+            "chkClassic",
+            "经典峡谷",
+            _appConfig?.EnablePreliminaryInClassic ?? false,
+            enabled => _appConfig!.EnablePreliminaryInClassic = enabled
+        );
+        var bot = PreselectSwitch(
+            "chkBot",
+            "人机",
+            _appConfig?.EnablePreliminaryInBot ?? false,
+            enabled => _appConfig!.EnablePreliminaryInBot = enabled
+        );
         labChampionSkinBrowser.Text = "浏览英雄与默认皮肤 ›";
         chkAutoSkinSelect.Text = "";
         chkAutoSkinSelect.AccessibleName = "选人时自动切换默认皮肤";
@@ -364,11 +376,32 @@ public partial class FormMain
             general,
             "英雄预选",
             new SettingRow("预选英雄", "分路信息来自英雄联盟攻略中心", lkbPreliminary),
-            new SettingRow("按模式启用", null, chkNormal, chkRanked, chkAram, chkNexus, chkUrf, chkPickUrf),
+            new SettingRow("峡谷模式", "经典峡谷含经典人机", chkNormal, chkRanked, classic, bot),
+            new SettingRow("娱乐模式", null, chkAram, chkNexus, chkUrf, chkPickUrf),
             new SettingRow("默认皮肤", "为每个已拥有的英雄设置默认皮肤", labChampionSkinBrowser),
             new SettingRow("选人时自动切换默认皮肤", "仅限已拥有的皮肤", chkAutoSkinSelect)
         );
         groupBox1.Dispose();
+    }
+
+    // Modes upstream added after the designer's six; each saves its own setting as it changes.
+    private CheckBox PreselectSwitch(string name, string text, bool enabled, Action<bool> save)
+    {
+        var check = new CheckBox
+        {
+            Name = name,
+            Text = text,
+            Checked = enabled,
+        };
+        check.CheckedChanged += (_, _) =>
+        {
+            if (_appConfig != null)
+            {
+                save(check.Checked);
+                SaveAppConfig();
+            }
+        };
+        return check;
     }
 
     private void ConfigureClientMaintenanceSettings(FlowLayoutPanel general)

@@ -54,6 +54,8 @@ namespace League.Models
         public bool EnablePreliminaryInNexusBlitz { get; set; } = false; // 海克斯大乱斗（2400）
         public bool EnablePreliminaryInUrf { get; set; } = false; // 无限乱斗（900，随机）
         public bool EnablePreliminaryInPickUrf { get; set; } = false; // 无限火力（1900，自选）
+        public bool EnablePreliminaryInClassic { get; set; } = false; // 经典峡谷（4310）与经典人机（4320）
+        public bool EnablePreliminaryInBot { get; set; } = false; // 普通人机（830/840/850/870/880/890）
 
         /// <summary>
         /// 发送信息模式：1 = 自动发送战绩，2 = 发送自定义文本

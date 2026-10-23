@@ -193,6 +193,12 @@ namespace League.Clients
         }
 
         /// <summary>
+        /// 当前进行中的选人会话；经典峡谷使用旧版选人接口
+        /// </summary>
+        public Task<(JObject? Session, string Api)> GetPickSessionAsync() =>
+            _championSelectService.GetPickSessionAsync();
+
+        /// <summary>
         /// 自动预选英雄（根据优先级列表）
         /// </summary>
         public async Task<bool> AutoDeclareIntentAsync(List<PreliminaryHero> preSelectedHeroes)

@@ -11,6 +11,12 @@ namespace League.Clients
     /// </summary>
     public class ChampionSelectService
     {
+        private const string ModernApi = "/lol-champ-select/v1";
+        private const string LegacyApi = "/lol-champ-select-legacy/v1";
+
+        // Classic Rift lists every champion again at id + 60000 (Jade_Shaco is 60035), and its session uses those ids.
+        private const int ClassicChampionOffset = 60000;
+
         private readonly LcuClient _client;
         private readonly GameflowService _gameflowService;
 
@@ -20,8 +26,49 @@ namespace League.Clients
             _gameflowService = gameflowService ?? throw new ArgumentNullException(nameof(gameflowService));
         }
 
+        /// <summary>Classic Rift (4310) and its co-op queue (4320).</summary>
+        public static bool IsClassicQueue(int queueId) => queueId is 4310 or 4320;
+
         /// <summary>
-        /// 自动预选英雄（根据优先级列表）
+        /// The champion select the client is running and the API that writes to it. Classic Rift runs on the legacy
+        /// champion select (upstream 21ed806): the modern session says so, carries a classic queue, or is missing.
+        /// </summary>
+        public async Task<(JObject? Session, string Api)> GetPickSessionAsync()
+        {
+            var modern = await _gameflowService.GetChampSelectSessionAsync();
+            bool hasModern = modern is { HasValues: true };
+            bool legacy =
+                !hasModern
+                || modern!["isLegacyChampSelect"]?.Value<bool>() == true
+                || IsClassicQueue(modern["queueId"]?.Value<int>() ?? 0);
+            if (legacy && await GetLegacySessionAsync() is { } legacySession)
+            {
+                return (legacySession, LegacyApi);
+            }
+
+            return (hasModern ? modern : null, ModernApi);
+        }
+
+        private async Task<JObject?> GetLegacySessionAsync()
+        {
+            try
+            {
+                using var response = await _client.GetAsync(LegacyApi + "/session");
+                return response.IsSuccessStatusCode ? JObject.Parse(await response.Content.ReadAsStringAsync()) : null;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or Newtonsoft.Json.JsonException)
+            {
+                // Without the legacy session the modern one is still tried.
+                AppLog.Shared.Warn(LogCategory.Automation, "[自动预选] 读取经典选人会话失败", ex);
+                return null;
+            }
+        }
+
+        private static int ToSessionChampionId(int championId, int queueId) =>
+            IsClassicQueue(queueId) && championId > 0 ? championId + ClassicChampionOffset : championId;
+
+        /// <summary>
+        /// 自动预选英雄（根据优先级列表）；客户端确实换上后才返回 true
         /// </summary>
         public async Task<bool> AutoDeclareIntentAsync(List<PreliminaryHero> preSelectedHeroes)
         {
@@ -35,8 +82,8 @@ namespace League.Clients
 
             try
             {
-                var session = await _gameflowService.GetChampSelectSessionAsync();
-                if (session == null || session["actions"] == null)
+                var (session, api) = await GetPickSessionAsync();
+                if (session?["actions"] == null)
                 {
                     return false;
                 }
@@ -53,11 +100,12 @@ namespace League.Clients
                     return false;
                 }
 
-                // 获取已禁和已选英雄
+                // 已禁和已选是会话里的 ID，预选列表是现代 ID，比较前先换算
+                int queueId = session["queueId"]?.Value<int>() ?? 0;
                 var bannedChampIds = GetBannedAndSelectedChampions(session);
-
-                // 找第一个可用英雄
-                var availableHero = preSelectedHeroes.FirstOrDefault(h => !bannedChampIds.Contains(h.ChampionId));
+                var availableHero = preSelectedHeroes.FirstOrDefault(h =>
+                    !bannedChampIds.Contains(ToSessionChampionId(h.ChampionId, queueId))
+                );
 
                 if (availableHero == null)
                 {
@@ -65,36 +113,56 @@ namespace League.Clients
                     return false;
                 }
 
-                // 检查是否已经 hover 了这个英雄
-                var currentHoverId = myPickAction["championId"]?.Value<int>() ?? 0;
-                if (currentHoverId == availableHero.ChampionId)
+                int sessionChampionId = ToSessionChampionId(availableHero.ChampionId, queueId);
+                if ((myPickAction["championId"]?.Value<int>() ?? 0) == sessionChampionId)
                 {
-                    return false; // 已经预选，无需重复
+                    return true; // 已经预选
                 }
 
-                // 执行预选
-                var patchBody = new JObject { ["championId"] = availableHero.ChampionId };
+                var patchBody = new JObject { ["championId"] = sessionChampionId };
                 var jsonContent = new StringContent(patchBody.ToString(), Encoding.UTF8, "application/json");
-
-                var response = await _client.PatchAsync(
-                    $"/lol-champ-select/v1/session/actions/{actionId}",
-                    jsonContent
-                );
-
-                if (response.IsSuccessStatusCode)
+                var response = await _client.PatchAsync($"{api}/session/actions/{actionId}", jsonContent);
+                if (!response.IsSuccessStatusCode)
                 {
-                    LogPickState($"自动预选：已预选 {availableHero.ChampionName}（{availableHero.ChampionId}）");
-                    return true;
+                    LogPickState($"自动预选：客户端返回 {(int)response.StatusCode}");
+                    return false;
                 }
 
-                LogPickState($"自动预选：客户端返回 {(int)response.StatusCode}");
-                return false;
+                // 经典选人有时接受请求却没有换上；回读会话确认，未换上就让调用方继续轮询
+                await Task.Delay(150);
+                var (after, _) = await GetPickSessionAsync();
+                if (!HasPicked(after, actionId, sessionChampionId))
+                {
+                    LogPickState($"自动预选：客户端接受了 {availableHero.ChampionName} 但会话未变化，稍后重试");
+                    return false;
+                }
+
+                LogPickState($"自动预选：已预选 {availableHero.ChampionName}（{availableHero.ChampionId}）");
+                return true;
             }
             catch (Exception ex)
             {
                 AppLog.Shared.Warn(LogCategory.Automation, "[自动预选] 执行异常", ex);
                 return false;
             }
+        }
+
+        // The pick shows on the action, or on the local player as an intent or a locked champion.
+        private static bool HasPicked(JObject? session, int actionId, int championId)
+        {
+            if (session == null)
+            {
+                return false;
+            }
+
+            var action = (session["actions"] as JArray)
+                ?.SelectMany(group => group as JArray ?? new JArray())
+                .FirstOrDefault(a => a["id"]?.Value<int>() == actionId);
+            long localCell = session["localPlayerCellId"]?.Value<long>() ?? -1;
+            var self = (session["myTeam"] as JArray)?.FirstOrDefault(p => p["cellId"]?.Value<long>() == localCell);
+            return action?["championId"]?.Value<int>() == championId
+                || self?["championPickIntent"]?.Value<int>() == championId
+                || self?["championId"]?.Value<int>() == championId;
         }
 
         // The pick loop polls every second; only a changed outcome is logged.
@@ -106,7 +174,7 @@ namespace League.Clients
         {
             var actions = session["actions"] as JArray;
             return actions
-                .SelectMany(a => a as JArray)
+                ?.SelectMany(a => a as JArray ?? new JArray())
                 .FirstOrDefault(a =>
                     a["actorCellId"]?.Value<long>() == session["localPlayerCellId"]?.Value<long>()
                     && a["type"]?.ToString() == "pick"

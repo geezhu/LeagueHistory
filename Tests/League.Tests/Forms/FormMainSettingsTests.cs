@@ -74,6 +74,36 @@ public class FormMainSettingsTests : IDisposable
     }
 
     [Fact]
+    public void ClassicSwitch_Checked_EnablesAutoPickForClassicRift()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+            var classic = Find<CheckBox>(main, "chkClassic");
+            classic.Checked = false;
+
+            classic.Checked = true;
+
+            Assert.True(main.GetAppConfig().EnablePreliminaryInClassic);
+        });
+    }
+
+    [Fact]
+    public void BotSwitch_Checked_EnablesAutoPickForCoopVsAi()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+            var bot = Find<CheckBox>(main, "chkBot");
+            bot.Checked = false;
+
+            bot.Checked = true;
+
+            Assert.True(main.GetAppConfig().EnablePreliminaryInBot);
+        });
+    }
+
+    [Fact]
     public void SendMode_CustomChosen_ClearsTheMatchMode()
     {
         UiHost.Run(_ =>

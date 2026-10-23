@@ -236,14 +236,24 @@ internal static class LcuClientServiceChecks
             "Heroes that are banned or already picked are skipped"
         );
 
-        var (hovered, _) = Picker(Hovered);
-        Check(!await hovered.AutoDeclareIntentAsync([Hero(42, 1)]), "A hero already hovered is not declared again");
+        var (hovered, hoveredRecorder) = Picker(Hovered);
+        Check(
+            await hovered.AutoDeclareIntentAsync([Hero(42, 1)])
+                && !hoveredRecorder.Paths.Contains("/lol-champ-select/v1/session/actions/3"),
+            "A hero already hovered counts as declared and is not patched again"
+        );
 
-        var (free, freeRecorder) = Picker(MyTurn);
+        var (free, freeRecorder) = Picker(MyTurn, afterPick: Hovered);
         Check(await free.AutoDeclareIntentAsync([Hero(42, 1), Hero(43, 2)]), "The first available hero is declared");
         Check(
-            freeRecorder.Paths.Last() == "/lol-champ-select/v1/session/actions/3",
+            freeRecorder.Paths.Contains("/lol-champ-select/v1/session/actions/3"),
             "The declaration patches our own action"
+        );
+
+        var (ignored, _) = Picker(MyTurn);
+        Check(
+            !await ignored.AutoDeclareIntentAsync([Hero(42, 1)]),
+            "A declaration the session does not show is not reported as done"
         );
 
         var (refused, _) = Picker(MyTurn, HttpStatusCode.InternalServerError);
@@ -323,18 +333,24 @@ internal static class LcuClientServiceChecks
         """;
 
     /// <summary>The champion select session answers the session endpoint; every other call returns <paramref name="status"/>.</summary>
+    // The session reads back as afterPick once a declaration was patched, the way the client shows the hover.
     private static (ChampionSelectService Service, Recorder Recorder) Picker(
         string? session,
-        HttpStatusCode status = HttpStatusCode.OK
+        HttpStatusCode status = HttpStatusCode.OK,
+        string? afterPick = null
     )
     {
+        bool patched = false;
         var recorder = new Recorder(request =>
-            request.RequestUri!.AbsolutePath == "/lol-champ-select/v1/session"
-                ? session == null
+        {
+            patched |= request.Method == HttpMethod.Patch;
+            string? current = patched && afterPick != null ? afterPick : session;
+            return request.RequestUri!.AbsolutePath == "/lol-champ-select/v1/session"
+                ? current == null
                     ? Json("{}", HttpStatusCode.NotFound)
-                    : Json(session)
-                : Json("{}", status)
-        );
+                    : Json(current)
+                : Json("{}", status);
+        });
         var client = Client(recorder);
         return (new ChampionSelectService(client, new GameflowService(client)), recorder);
     }

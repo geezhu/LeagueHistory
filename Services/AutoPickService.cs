@@ -56,21 +56,24 @@ namespace League.Services
                                 break;
                             }
 
-                            // 我方队伍卡片显示
-                            await _cardDisplayService.ShowMyTeamCards(token);
-
-                            // 自动预选抢英雄
-                            await TryAutoPreliminaryAsync(token);
+                            // 先预选：卡片要查战绩，放在前面会推迟进入选人后的第一次预选（上游 21ed806）
+                            bool pickPending = await TryAutoPreliminaryAsync(token);
 
                             // 自动配置皮肤
                             await TryAutoSkinAsync(token);
+
+                            // 我方队伍卡片显示
+                            await _cardDisplayService.ShowMyTeamCards(token);
 
                             var session = await Globals.lcuClient.GetChampSelectSession(token);
                             int queueId = session?["queueId"]?.Value<int>() ?? 0;
                             AppLog.Shared.State(LogCategory.Game, "game-queue", $"选人队列 {queueId}");
 
-                            // 乱斗类轮询更快，其它模式 1 秒
-                            int delay = (queueId == 450 || queueId == 2400 || queueId == 900) ? 500 : 1000;
+                            // 预选未成功时 200 毫秒再试；乱斗类 500 毫秒，其它模式 1 秒
+                            int delay =
+                                pickPending ? 200
+                                : PreliminaryLists.IsBenchQueue(queueId) ? 500
+                                : 1000;
                             await Task.Delay(delay, token);
                         }
                         catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -108,55 +111,43 @@ namespace League.Services
         }
 
         /// <summary>
-        /// 自动预选功能核心方法，新增根据勾选的模式进行过滤
+        /// 自动预选功能核心方法，新增根据勾选的模式进行过滤；返回本局是否还在等待预选成功
         /// </summary>
-        private async Task TryAutoPreliminaryAsync(CancellationToken cancellationToken)
+        private async Task<bool> TryAutoPreliminaryAsync(CancellationToken cancellationToken)
         {
             var preConfig = _form.GetAppConfig()?.Preliminary;
             if (preConfig == null || !preConfig.EnableAutoPreliminary)
             {
                 LogPickState("自动预选：未开启");
-                return;
+                return false;
             }
 
             var lists = await _form.GetPreliminaryConfigAsync();
             if (!PreliminaryLists.AnyHeroes(lists))
             {
                 LogPickState("自动预选：预选列表为空");
-                return;
+                return false;
             }
 
-            var session = await Globals.lcuClient.GetChampSelectSession(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var (session, _) = await Globals.lcuClient.GetPickSessionAsync();
             if (session == null)
             {
-                return;
+                return false;
             }
 
             int queueId = session["queueId"]?.Value<int>() ?? 0;
-
-            // 根据 queueId 和用户配置决定是否执行
-            bool shouldExecute = queueId switch
-            {
-                400 or 430 => _form.GetAppConfig().EnablePreliminaryInNormal, // 匹配
-                420 or 440 => _form.GetAppConfig().EnablePreliminaryInRanked, // 排位
-                450 => _form.GetAppConfig().EnablePreliminaryInAram, // 大乱斗
-                2400 => _form.GetAppConfig().EnablePreliminaryInNexusBlitz, // 海克斯
-                900 => _form.GetAppConfig().EnablePreliminaryInUrf, // 无限乱斗（随机）
-                1900 => _form.GetAppConfig().EnablePreliminaryInPickUrf, // 无限火力（自选）
-                _ => false,
-            };
-
-            if (!shouldExecute)
+            if (!IsEnabledFor(_form.GetAppConfig(), queueId))
             {
                 LogPickState($"自动预选：队列 {queueId} 未启用或不支持");
-                return;
+                return false;
             }
 
             var (listKey, preList) = PreliminaryLists.Resolve(lists, queueId, AssignedPosition(session));
             if (preList.Count == 0)
             {
                 LogPickState($"自动预选：「{PreliminaryLists.NameOf(listKey)}」列表为空");
-                return;
+                return false;
             }
 
             // 有板凳席的乱斗类模式：大乱斗、海克斯、无限乱斗 → 抢英雄
@@ -166,22 +157,34 @@ namespace League.Services
                     $"自动预选：队列 {queueId} 按「{PreliminaryLists.NameOf(listKey)}」列表从板凳席换优先英雄"
                 );
                 await Globals.lcuClient.AutoSwapToHighestPriorityAsync(preList);
-                return;
+                return false;
             }
 
-            // 普通自选模式：匹配、排位、无限火力 → 只预选一次
+            // 普通自选模式：匹配、排位、经典峡谷、人机、无限火力 → 只预选一次
             if (_hasAutoPreliminated)
             {
-                return;
+                return false;
             }
 
             LogPickState($"自动预选：队列 {queueId} 使用「{PreliminaryLists.NameOf(listKey)}」列表");
-            bool success = await Globals.lcuClient.AutoDeclareIntentAsync(preList);
-            if (success)
-            {
-                _hasAutoPreliminated = true;
-            }
+            _hasAutoPreliminated = await Globals.lcuClient.AutoDeclareIntentAsync(preList);
+            return !_hasAutoPreliminated;
         }
+
+        /// <summary>The modes the settings switch auto pick on for, by queue.</summary>
+        public static bool IsEnabledFor(Models.LeagueConfig config, int queueId) =>
+            queueId switch
+            {
+                400 or 430 => config.EnablePreliminaryInNormal, // 匹配
+                420 or 440 => config.EnablePreliminaryInRanked, // 排位
+                450 => config.EnablePreliminaryInAram, // 大乱斗
+                2400 => config.EnablePreliminaryInNexusBlitz, // 海克斯
+                900 => config.EnablePreliminaryInUrf, // 无限乱斗（随机）
+                1900 => config.EnablePreliminaryInPickUrf, // 无限火力（自选）
+                4310 or 4320 => config.EnablePreliminaryInClassic, // 经典峡谷、经典人机
+                830 or 840 or 850 or 870 or 880 or 890 => config.EnablePreliminaryInBot, // 普通人机
+                _ => false,
+            };
 
         // The local player's assigned lane (top, jungle, middle, bottom, utility); empty in blind pick.
         private static string? AssignedPosition(JObject session)
