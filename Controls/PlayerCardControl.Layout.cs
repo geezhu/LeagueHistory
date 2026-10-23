@@ -121,16 +121,19 @@ public partial class PlayerCardControl
     }
 
     // Identity on top, then the ranks and the mastery row when they have something to show, then the champion bar.
+    // Decided from the content, not from Visible: a card filled before its window is shown reads every child as hidden.
     private void ReflowSummaryHeight()
     {
-        bool ranks = lblSoloRank.Visible || lblFlexRank.Visible;
+        bool ranks = HasRank(lblSoloRank) || HasRank(lblFlexRank);
         int masteryTop = ranks ? RankTop + RankHeight + 4 : RankTop + 2;
         _masteryStrip.SetBounds(10, masteryTop, Math.Max(20, SummaryPanel.Width - 20), _masteryStrip.Height);
         SummaryPanel.Height =
-            _masteryStrip.Visible ? _masteryStrip.Bottom + 10 + ChampionBarHeight
+            _masteryStrip.Count > 0 ? _masteryStrip.Bottom + 10 + ChampionBarHeight
             : ranks ? 154
             : 120;
     }
+
+    private static bool HasRank(Label rank) => rank.Text.Length > 0;
 
     private void ReflowSummaryPanel()
     {
@@ -149,7 +152,7 @@ public partial class PlayerCardControl
             right = SummaryPanel.Width - 8;
         foreach (var (caption, value) in new[] { (_soloCaption, lblSoloRank), (_flexCaption, lblFlexRank) })
         {
-            if (!value.Visible)
+            if (!HasRank(value))
             {
                 continue;
             }

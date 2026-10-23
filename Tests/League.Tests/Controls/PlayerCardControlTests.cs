@@ -169,6 +169,34 @@ public class PlayerCardControlTests
         });
     }
 
+    // Rooms fill cards before they are shown; a hidden parent makes every child read as hidden.
+    [Fact]
+    public void SetPlayerInfo_ACardNotShownYet_StillReservesTheRankRow()
+    {
+        UiHost.Run(host =>
+        {
+            var card = HiddenCard(host);
+
+            card.SetPlayerInfo("玩家#1234", "华贵铂金 II", "璀璨钻石 II", null!, "公开", Rows(1), Color.Black);
+
+            Assert.Equal(RankedHeaderHeight, card.SummaryPanel.Height);
+        });
+    }
+
+    [Fact]
+    public void ShowMasteries_ACardNotShownYet_StillMakesRoomForTheRow()
+    {
+        UiHost.Run(host =>
+        {
+            var card = HiddenCard(host);
+            card.SetPlayerInfo("玩家#1234", "华贵铂金 II", "", null!, "公开", Rows(1), Color.Black);
+
+            card.ShowMasteries([Mastery(103)]);
+
+            Assert.True(card.SummaryPanel.Height > RankedHeaderHeight, $"{card.SummaryPanel.Height}");
+        });
+    }
+
     [Fact]
     public void ShowMasteries_ANewRow_DisposesTheIconsItReplaces()
     {
@@ -625,6 +653,15 @@ public class PlayerCardControlTests
         var card = new PlayerCardControl { Location = new Point(left, 0), Size = new Size(CardWidth, CardHeight) };
         host.Controls.Add(card);
         host.PerformLayout();
+        return card;
+    }
+
+    private static PlayerCardControl HiddenCard(Form host)
+    {
+        var hidden = new Panel { Visible = false, Size = new Size(CardWidth, CardHeight) };
+        host.Controls.Add(hidden);
+        var card = new PlayerCardControl { Size = new Size(CardWidth, CardHeight) };
+        hidden.Controls.Add(card);
         return card;
     }
 
