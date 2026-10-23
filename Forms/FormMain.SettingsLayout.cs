@@ -210,13 +210,6 @@ public partial class FormMain
             AccessibleName = "启用对局速览",
             Checked = _appConfig?.EnableLoadingOverlay ?? true,
         };
-        var overlayAuto = new CheckBox
-        {
-            Name = "AutoShowLoadingOverlay",
-            AccessibleName = "进入加载界面后自动展示",
-            Checked = _appConfig?.AutoShowLoadingOverlay ?? true,
-            Enabled = overlay.Checked,
-        };
         var overlayPreview = new Button
         {
             Name = "PreviewLoadingOverlay",
@@ -236,7 +229,6 @@ public partial class FormMain
         TrackGameBarSettingsStatus(gameBarStatus);
         var enableRow = new SettingRow("启用对局速览", "在加载界面和游戏中查看十位玩家的段位、战绩和英雄推荐", overlay);
         var backendRow = new SettingRow("显示方式", null, overlayBackend);
-        var autoRow = new SettingRow("进入加载界面后自动展示", null, overlayAuto);
         var previewRow = new SettingRow("测试显示", "不需要进入对局，检查桌面窗口是否正常", overlayPreview);
         var gameBarPackage = new Controls.GameBarPackageSettings();
         var waveOpacityRow = CreateWaveOpacityRow();
@@ -249,7 +241,6 @@ public partial class FormMain
             }
 
             _appConfig.EnableLoadingOverlay = overlay.Checked;
-            _appConfig.AutoShowLoadingOverlay = overlayAuto.Checked;
             _appConfig.LoadingOverlayBackend = overlayBackend.SelectedIndex == 1 ? "GameBar" : "Desktop";
             SaveAppConfig();
             _loadingOverlay?.RefreshDisplaySettings();
@@ -258,27 +249,17 @@ public partial class FormMain
         // Options under a disabled overlay are hidden rather than greyed out.
         void ShowEnabledOptions()
         {
-            overlayBackend.Enabled = overlayAuto.Enabled = overlayPreview.Enabled = overlay.Checked;
-            backendRow.Visible = autoRow.Visible = overlay.Checked;
+            overlayBackend.Enabled = overlayPreview.Enabled = overlay.Checked;
+            backendRow.Visible = overlay.Checked;
             previewRow.Visible = overlay.Checked && overlayBackend.SelectedIndex == 0;
             gameBarPackage.Row.Visible = waveOpacityRow.Visible = overlay.Checked && overlayBackend.SelectedIndex == 1;
         }
         overlay.CheckedChanged += (_, _) => SaveOverlay();
         overlay.CheckedChanged += (_, _) => ShowEnabledOptions();
-        overlayAuto.CheckedChanged += (_, _) => SaveOverlay();
         overlayBackend.SelectedIndexChanged += (_, _) => SaveOverlay();
         overlayBackend.SelectedIndexChanged += (_, _) => ShowEnabledOptions();
         ShowEnabledOptions();
-        SettingsCard(
-            general,
-            "显示设置",
-            enableRow,
-            backendRow,
-            gameBarPackage.Row,
-            waveOpacityRow,
-            autoRow,
-            previewRow
-        );
+        SettingsCard(general, "显示设置", enableRow, backendRow, gameBarPackage.Row, waveOpacityRow, previewRow);
     }
 
     // The mini wave widget reads the value from the next snapshot, so a change shows without reopening it.
@@ -324,8 +305,12 @@ public partial class FormMain
         Label gameBarStatus
     )
     {
-        var gameBarHelp = new Label { Text = "按 Win＋G 打开「League 对局速览」，点图钉固定在游戏上方。" };
-        var desktopHelp = new Label { Text = "适用于窗口 / 无边框模式，独占全屏时不弹出。" };
+        var gameBarHelp = new Label
+        {
+            Text =
+                "按 Win＋G 打开「League 对局速览」，点图钉固定在游戏上方。固定后每局进入加载界面会自动展开；未固定时只在 Win＋G 中显示。",
+        };
+        var desktopHelp = new Label { Text = "进入加载界面时自动弹出，适用于窗口 / 无边框模式，独占全屏时不弹出。" };
         backendRow.AddNote(desktopHelp);
         backendRow.AddNote(gameBarHelp);
         backendRow.AddNote(gameBarStatus);

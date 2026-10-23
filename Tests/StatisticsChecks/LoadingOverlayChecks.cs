@@ -30,40 +30,40 @@ internal static class LoadingOverlayChecks
                 $"{{\"LoadingOverlayHotkey\":\"{oldKey}\"}}"
             )!;
             Check(
-                defaults.AutoShowLoadingOverlay && JObject.FromObject(defaults)["LoadingOverlayHotkey"] == null,
+                JObject.FromObject(defaults)["LoadingOverlayHotkey"] == null,
                 "Legacy overlay bindings are ignored without selecting another key"
             );
         }
-        var chosen = new LeagueConfig { AutoShowLoadingOverlay = false };
-        var saved = Newtonsoft.Json.JsonConvert.DeserializeObject<LeagueConfig>(
-            Newtonsoft.Json.JsonConvert.SerializeObject(chosen)
+        var legacy = Newtonsoft.Json.JsonConvert.DeserializeObject<LeagueConfig>(
+            """{"AutoShowLoadingOverlay":false,"EnableLoadingOverlay":true}"""
         )!;
-        Check(!saved.AutoShowLoadingOverlay, "Automatic display preference survives settings reload");
+        Check(
+            legacy.EnableLoadingOverlay && JObject.FromObject(legacy)["AutoShowLoadingOverlay"] == null,
+            "A saved automatic-display switch from an older version is read and dropped"
+        );
     }
 
     private static void DisplayRequests()
     {
         var display = new LoadingOverlayDisplayState();
-        display.ObservePhase("ChampSelect", true);
+        display.ObservePhase("ChampSelect");
         Check(!display.Requested, "Champion select does not open loading overlay");
-        display.ObservePhase("GameStart", true);
+        display.ObservePhase("GameStart");
         Check(display.Requested, "Automatic display starts before roster or statistics exist");
-        display.ObservePhase("InProgress", true);
+        display.ObservePhase("InProgress");
         Check(display.Requested, "Loading to game transition retains display request");
         display.Dismiss();
-        display.ObservePhase("InProgress", true);
+        display.ObservePhase("InProgress");
         Check(!display.Requested && display.Suppressed, "Manual dismiss persists for the current match");
         display.Request();
         Check(display.Requested, "Explicit display request can reopen after manual dismiss");
-        display.ObservePhase("EndOfGame", true);
+        display.ObservePhase("EndOfGame");
         Check(!display.Requested, "Game end clears automatic display");
-        display.ObservePhase("GameStart", true);
+        display.ObservePhase("GameStart");
         Check(display.Requested, "Next match auto-displays again");
         display.Reset();
-        display.ObservePhase("InProgress", false);
-        Check(!display.Requested, "Automatic display can be disabled");
         display.RequestPreview();
-        display.ObservePhase("Lobby", true);
+        display.ObservePhase("Lobby");
         Check(display.Preview && display.Requested, "Desktop preview works outside a match");
         display.Reset();
         Check(!display.Requested && !display.Preview, "Feature shutdown also hides preview");

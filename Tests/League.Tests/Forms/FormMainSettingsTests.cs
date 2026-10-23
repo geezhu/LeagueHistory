@@ -252,14 +252,27 @@ public class FormMainSettingsTests : IDisposable
     }
 
     [Fact]
-    public void Load_DefaultConfig_ShowsTheOverlayAutomaticallyAndOffersThePreview()
+    public void Load_DefaultConfig_OffersThePreview()
     {
         UiHost.Run(_ =>
         {
             using var main = Main();
 
-            Assert.True(Find<CheckBox>(main, "AutoShowLoadingOverlay").Checked);
             Assert.True(Find<Button>(main, "PreviewLoadingOverlay").Enabled);
+        });
+    }
+
+    [Fact]
+    public void Load_OverlayPage_HasNoAutomaticDisplaySwitch()
+    {
+        // Turning it off hid the desktop window for good and only kept a pinned Game Bar widget minimised.
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+
+            var switches = Descendants(main).Where(control => control.Name == "AutoShowLoadingOverlay");
+
+            Assert.Empty(switches);
         });
     }
 

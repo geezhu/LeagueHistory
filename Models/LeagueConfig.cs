@@ -6,7 +6,6 @@ namespace League.Models
     {
         public bool EnableChampionSelectAssistant { get; set; } = true;
         public bool EnableLoadingOverlay { get; set; } = true;
-        public bool AutoShowLoadingOverlay { get; set; } = true;
         public string LoadingOverlayBackend { get; set; } = "Desktop";
 
         /// <summary>

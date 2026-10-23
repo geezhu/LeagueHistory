@@ -24,7 +24,7 @@ public class LoadingOverlayDisplayStateTests
     {
         LoadingOverlayDisplayState state = new();
 
-        state.ObservePhase(phase, automatic: true);
+        state.ObservePhase(phase);
 
         Assert.True(state.Requested, $"{phase} is a phase the overlay belongs in.");
     }
@@ -37,31 +37,20 @@ public class LoadingOverlayDisplayStateTests
     public void ObservePhase_APhaseThatIsNotDisplayable_StopsAsking(string phase)
     {
         LoadingOverlayDisplayState state = new();
-        state.ObservePhase(Displayable, automatic: true);
+        state.ObservePhase(Displayable);
 
-        state.ObservePhase(phase, automatic: true);
+        state.ObservePhase(phase);
 
         Assert.False(state.Requested, $"{phase} is not a phase the overlay belongs in.");
     }
 
-    // ---- automatic versus manual ----
-
-    [Fact]
-    public void ObservePhase_ADisplayablePhaseWithoutTheAutomaticFlag_DoesNotAsk()
-    {
-        // The overlay is opened on purpose, not merely because the game reached a phase.
-        LoadingOverlayDisplayState state = new();
-
-        state.ObservePhase(Displayable, automatic: false);
-
-        Assert.False(state.Requested);
-    }
+    // ---- manual requests ----
 
     [Fact]
     public void Request_AsksForTheOverlayAndClearsTheDismissal()
     {
         LoadingOverlayDisplayState state = new();
-        state.ObservePhase(Displayable, automatic: true);
+        state.ObservePhase(Displayable);
         state.Dismiss();
 
         state.Request();
@@ -76,7 +65,7 @@ public class LoadingOverlayDisplayStateTests
     public void Dismiss_StopsAskingAndRecordsWhy()
     {
         LoadingOverlayDisplayState state = new();
-        state.ObservePhase(Displayable, automatic: true);
+        state.ObservePhase(Displayable);
 
         state.Dismiss();
 
@@ -89,11 +78,11 @@ public class LoadingOverlayDisplayStateTests
     {
         // The game keeps reporting its phase while the player is playing, and each report must respect the dismissal.
         LoadingOverlayDisplayState state = new();
-        state.ObservePhase(Displayable, automatic: true);
+        state.ObservePhase(Displayable);
         state.Dismiss();
 
-        state.ObservePhase(Displayable, automatic: true);
-        state.ObservePhase(Displayable, automatic: true);
+        state.ObservePhase(Displayable);
+        state.ObservePhase(Displayable);
 
         Assert.False(state.Requested);
     }
@@ -103,11 +92,11 @@ public class LoadingOverlayDisplayStateTests
     {
         // Leaving a displayable phase and coming back is a new game, so the dismissal only lasted the one it was made in.
         LoadingOverlayDisplayState state = new();
-        state.ObservePhase(Displayable, automatic: true);
+        state.ObservePhase(Displayable);
         state.Dismiss();
 
-        state.ObservePhase(NotDisplayable, automatic: true);
-        state.ObservePhase(Displayable, automatic: true);
+        state.ObservePhase(NotDisplayable);
+        state.ObservePhase(Displayable);
 
         Assert.True(state.Requested);
         Assert.False(state.Suppressed);
@@ -118,10 +107,10 @@ public class LoadingOverlayDisplayStateTests
     {
         // Staying inside displayable phases is the same game; only leaving them starts a new one.
         LoadingOverlayDisplayState state = new();
-        state.ObservePhase(Displayable, automatic: true);
+        state.ObservePhase(Displayable);
         state.Dismiss();
 
-        state.ObservePhase("InProgress", automatic: true);
+        state.ObservePhase("InProgress");
 
         Assert.False(state.Requested);
     }
@@ -146,7 +135,7 @@ public class LoadingOverlayDisplayStateTests
         LoadingOverlayDisplayState state = new();
         state.RequestPreview();
 
-        state.ObservePhase(NotDisplayable, automatic: true);
+        state.ObservePhase(NotDisplayable);
 
         Assert.True(state.Requested);
         Assert.True(state.Preview);
@@ -159,7 +148,7 @@ public class LoadingOverlayDisplayStateTests
         LoadingOverlayDisplayState state = new();
         state.RequestPreview();
 
-        state.ObservePhase(Displayable, automatic: true);
+        state.ObservePhase(Displayable);
 
         Assert.True(state.Requested);
         Assert.False(state.Preview);
@@ -170,13 +159,13 @@ public class LoadingOverlayDisplayStateTests
     {
         // The asymmetry is deliberate: previewing is a look at the overlay, not a decision to bring it back.
         LoadingOverlayDisplayState first = new();
-        first.ObservePhase(Displayable, automatic: true);
+        first.ObservePhase(Displayable);
         first.Dismiss();
         first.RequestPreview();
         Assert.True(first.Suppressed);
 
         LoadingOverlayDisplayState second = new();
-        second.ObservePhase(Displayable, automatic: true);
+        second.ObservePhase(Displayable);
         second.Dismiss();
         second.Request();
         Assert.False(second.Suppressed);
@@ -211,7 +200,7 @@ public class LoadingOverlayDisplayStateTests
     public void Reset_ClearsEverything()
     {
         LoadingOverlayDisplayState state = new();
-        state.ObservePhase(Displayable, automatic: true);
+        state.ObservePhase(Displayable);
         state.Dismiss();
         state.RequestPreview();
 
@@ -227,11 +216,11 @@ public class LoadingOverlayDisplayStateTests
     {
         // After a reset the next displayable phase counts as a new game, so an automatic report asks again.
         LoadingOverlayDisplayState state = new();
-        state.ObservePhase(Displayable, automatic: true);
+        state.ObservePhase(Displayable);
         state.Dismiss();
         state.Reset();
 
-        state.ObservePhase(Displayable, automatic: true);
+        state.ObservePhase(Displayable);
 
         Assert.True(state.Requested);
         Assert.False(state.Suppressed);

@@ -130,9 +130,9 @@ internal static class SettingsChecks
             throw new Exception("Game Bar management instructions remain available");
         }
 
-        if (!All(tabs).OfType<CheckBox>().Single(c => c.Name == "AutoShowLoadingOverlay").Checked)
+        if (All(tabs).Any(c => c.Name == "AutoShowLoadingOverlay"))
         {
-            throw new Exception("Automatic loading overlay defaults on");
+            throw new Exception("The loading overlay always displays automatically; there is no switch for it");
         }
 
         var preview = All(tabs).OfType<Button>().Single(c => c.Name == "PreviewLoadingOverlay");

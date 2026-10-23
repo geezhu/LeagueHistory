@@ -8,7 +8,7 @@ public sealed class LoadingOverlayDisplayState
     public bool Suppressed { get; private set; }
     private bool _active;
 
-    public void ObservePhase(string phase, bool automatic)
+    public void ObservePhase(string phase)
     {
         bool active = LoadingRoster.CanDisplay(phase);
         if (!active)
@@ -28,7 +28,7 @@ public sealed class LoadingOverlayDisplayState
         }
 
         _active = true;
-        if (automatic && !Suppressed)
+        if (!Suppressed)
         {
             Requested = true;
             Preview = false;

@@ -128,7 +128,7 @@ internal sealed partial class LoadingOverlayManager : IDisposable
 
     private void ObserveDisplayPhase()
     {
-        _display.ObservePhase(_phase, _owner.GetAppConfig()?.AutoShowLoadingOverlay ?? true);
+        _display.ObservePhase(_phase);
         if (_display.Preview)
         {
             return;
