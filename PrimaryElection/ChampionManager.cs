@@ -47,7 +47,7 @@ namespace League.PrimaryElection
                     return;
                 }
 
-                //Debug.WriteLine("[ChampionManager] 开始加载英雄数据...");
+                Debug.WriteLine("[ChampionManager] 开始加载英雄数据...");
 
                 // 读取本地版本文件（如 Assets/ddragon_version.txt）
                 string localVersion = ReadLocalVersion();
@@ -71,7 +71,7 @@ namespace League.PrimaryElection
                 ChampionsLoaded?.Invoke(this, EventArgs.Empty);
                 ValidatePositionMapping();
 
-                //Debug.WriteLine($"[ChampionManager] 英雄数据加载完成，共 {_allChampions.Count} 个英雄");
+                Debug.WriteLine($"[ChampionManager] 英雄数据加载完成，共 {_allChampions.Count} 个英雄");
             }
             catch (Exception ex)
             {
@@ -90,7 +90,7 @@ namespace League.PrimaryElection
                 if (File.Exists(_versionFilePath))
                 {
                     string version = File.ReadAllText(_versionFilePath).Trim();
-                    //Debug.WriteLine($"[ChampionManager] 本地版本文件读取: {version}");
+                    Debug.WriteLine($"[ChampionManager] 本地版本文件读取: {version}");
                     return version;
                 }
             }
@@ -106,7 +106,7 @@ namespace League.PrimaryElection
         /// </summary>
         private void ValidatePositionMapping()
         {
-            //Debug.WriteLine("[ChampionManager] 验证英雄位置映射...");
+            Debug.WriteLine("[ChampionManager] 验证英雄位置映射...");
 
             int mappedCount = 0;
             int unmappedCount = 0;
@@ -233,7 +233,7 @@ namespace League.PrimaryElection
                 }
 
                 _allChampions = cachedData.Champions;
-                //Debug.WriteLine($"[ChampionManager] 从缓存加载了 {_allChampions.Count} 个英雄（版本 {localVersion}）");
+                Debug.WriteLine($"[ChampionManager] 从缓存加载了 {_allChampions.Count} 个英雄（版本 {localVersion}）");
 
                 return true;
             }

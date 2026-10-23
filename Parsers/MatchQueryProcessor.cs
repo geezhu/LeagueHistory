@@ -55,7 +55,7 @@ namespace League.Parsers
             // 在此处初始化 Factory
             _factory = new PlayerInfoFactory(_playerCardManager);
 
-            //Debug.WriteLine("[MatchQueryProcessor] PlayerCardManager 已注入，Factory 初始化完成");
+            Debug.WriteLine("[MatchQueryProcessor] PlayerCardManager 已注入，Factory 初始化完成");
         }
 
         public async Task<PlayerMatchInfo> SafeFetchPlayerMatchInfoAsync(JToken playerData, int retryTimes = 2)
@@ -315,18 +315,11 @@ namespace League.Parsers
             var b = info.Behavior;
 
             b.SurrenderRate = Math.Round(surrenderCount * 100.0 / count, 1);
-
-            // 平均值（判定标签用）
+            // 使用 double 除法
             b.AvgMissingPings = totalMissing / (double)count;
             b.AvgVisionPings = totalVision / (double)count;
             b.AvgGetBackPings = totalGetBack / (double)count;
             b.AvgDangerPings = totalDanger / (double)count;
-
-            // 总次数（有特征时才显示）
-            b.TotalMissingPings = totalMissing;
-            b.TotalVisionPings = totalVision;
-            b.TotalGetBackPings = totalGetBack;
-            b.TotalDangerPings = totalDanger;
 
             b.ShortGameCount = shortCount;
 
@@ -369,7 +362,8 @@ namespace League.Parsers
                 tags.Add("爱发危险");
             }
 
-            double total = b.AvgMissingPings + b.AvgVisionPings + b.AvgGetBackPings + b.AvgDangerPings;
+            // 综合性格（优先级最高）
+            double totalPressure = b.AvgMissingPings + b.AvgVisionPings + b.AvgGetBackPings + b.AvgDangerPings;
 
             if (totalPressure >= 13 || b.AvgGetBackPings >= 4)
             {
@@ -385,15 +379,8 @@ namespace League.Parsers
                 tags.Add("爱抱怨");
             }
 
-            if (total >= 12.5)
-                tags.Add("压力怪");
-
-            if (total >= 14.5 || b.AvgMissingPings >= 4.2 || b.AvgGetBackPings >= 4.8)
-                tags.Add("急性子");
-
             var uniqueTags = tags.Distinct().ToList();
-            // 不带 []，外面消息自己加
-            return uniqueTags.Count > 0 ? string.Join("、", uniqueTags) : "";
+            return uniqueTags.Count > 0 ? $"[{string.Join("、", uniqueTags)}]" : "";
         }
 
         /// <summary>

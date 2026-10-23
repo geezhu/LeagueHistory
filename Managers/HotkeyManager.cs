@@ -58,32 +58,35 @@ namespace League.Managers
             {
                 string phase = await GetGameflowPhaseSafe();
 
-                if (_champSelect.Matches(key, isCtrlDown))
+                if (key == Keys.F7 && isCtrlDown)
                 {
                     if (phase == "ChampSelect")
                     {
-                        Debug.WriteLine("[HotkeyManager] 选人热键已触发");
+                        Debug.WriteLine("[HotkeyManager] Ctrl+F7 已触发 (选人阶段)");
                         OnChampSelectF7?.Invoke();
                     }
                     else
                     {
-                        Debug.WriteLine($"[HotkeyManager] 选人热键已忽略 (当前阶段: {phase})");
+                        Debug.WriteLine($"[HotkeyManager] Ctrl+F7 已忽略 (当前阶段: {phase})");
                     }
-                    return;
                 }
-
-                if (phase == "InProgress")
+                else if (phase == "InProgress")
                 {
                     if (key == Keys.F9)
                     {
-                        Debug.WriteLine("[HotkeyManager] 我方热键 → 发送我方队伍");
+                        Debug.WriteLine("[HotkeyManager] F9 已触发 → 发送我方队伍");
                         OnMyTeamHotkey?.Invoke();
                     }
-                    else if (_fullTeam.Matches(key, isCtrlDown))
+                    else if (key == Keys.F11)
                     {
-                        Debug.WriteLine("[HotkeyManager] 全队热键 → 发送全队信息");
+                        Debug.WriteLine("[HotkeyManager] F11 已触发 → 发送全队信息");
                         OnFullTeamHotkey?.Invoke();
                     }
+                }
+                else
+                {
+                    // 可注释掉这行，减少非游戏阶段的日志
+                    // Debug.WriteLine($"[HotkeyManager] 热键 {key} 已忽略 (当前阶段: {phase})");
                 }
             }
             catch (Exception ex)
@@ -117,60 +120,6 @@ namespace League.Managers
             OnMyTeamHotkey = null;
             OnFullTeamHotkey = null;
             OnChampSelectF7 = null;
-        }
-
-        private readonly struct HotkeySpec
-        {
-            public Keys Key { get; }
-            public bool RequireCtrl { get; }
-
-            public HotkeySpec(Keys key, bool requireCtrl)
-            {
-                Key = key;
-                RequireCtrl = requireCtrl;
-            }
-
-            public bool Matches(Keys key, bool isCtrlDown)
-            {
-                if (key != Key) return false;
-                // 要求 Ctrl 时必须按下；不要求时不能按着 Ctrl（避免和 Ctrl+Fx 冲突）
-                return RequireCtrl ? isCtrlDown : !isCtrlDown;
-            }
-
-            public override string ToString() =>
-                RequireCtrl ? $"Ctrl+{Key}" : Key.ToString();
-
-            public static HotkeySpec Parse(string? text, string fallback = "F9")
-            {
-                if (string.IsNullOrWhiteSpace(text))
-                    text = fallback;
-
-                text = text.Trim();
-                bool ctrl = false;
-                string keyPart = text;
-
-                if (text.Contains('+'))
-                {
-                    var parts = text.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    foreach (var p in parts)
-                    {
-                        if (p.Equals("Ctrl", StringComparison.OrdinalIgnoreCase) ||
-                            p.Equals("Control", StringComparison.OrdinalIgnoreCase))
-                        {
-                            ctrl = true;
-                        }
-                        else
-                        {
-                            keyPart = p;
-                        }
-                    }
-                }
-
-                if (Enum.TryParse<Keys>(keyPart, ignoreCase: true, out var key) && key != Keys.None)
-                    return new HotkeySpec(key, ctrl);
-
-                return Parse(fallback, "F9");
-            }
         }
     }
 }

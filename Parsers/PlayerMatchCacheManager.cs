@@ -25,7 +25,7 @@ namespace League.Parsers
         public void ClearCache()
         {
             _playerMatchCache.Clear();
-            //Debug.WriteLine("[缓存清理] PlayerMatchCache 已清空");
+            Debug.WriteLine("[缓存清理] PlayerMatchCache 已清空");
         }
     }
 }

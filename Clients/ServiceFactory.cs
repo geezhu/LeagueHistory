@@ -39,10 +39,5 @@
         {
             return new ChatService(client);
         }
-
-        public ChampionMasteryService CreateChampionMasteryService(LcuClient client)
-        {
-            return new ChampionMasteryService(client);
-        }
     }
 }

@@ -199,7 +199,7 @@ namespace League.Controls
 
             _tabPageContents[newTab] = tabContent;
 
-            //Debug.WriteLine($"[CreateNewTab] 成功创建: {fullName} | PUUID: {puuid}");
+            Debug.WriteLine($"[CreateNewTab] 成功创建: {fullName} | PUUID: {puuid}");
         }
 
         /// <summary>

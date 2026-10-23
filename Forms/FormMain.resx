@@ -117,24 +117,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="label8.Text" xml:space="preserve">
-    <value>**发送战绩示例输出如下，想要了解更详细请查看代码仓库说明**：
-
-1. 干净玩家（无任何特征）  
-   `张三 近20场 胜率 [52%]`
-
-2. 轻微负面  
-   `李四 近20场 胜率 [45%] | 发问号 48次 | 发撤退 55次 特征 [爱发问号、爱发撤退]`
-
-3. 典型玻璃心  
-   `王五 近20场 胜率 [38%] | 发问号 62次 | 发撤退 81次 | 发危险 35次 特征 [爱发问号、爱发撤退、玻璃心]`
-
-4. 重度压力型（压力怪 + 急性子）  
-   `赵六 近20场 胜率 [41%] | 发问号 95次 | 发撤退 108次 | 发危险 42次 特征 [爱发问号、爱发撤退、玻璃心、压力怪、急性子]`
-
-5. 爱投降 + 心态崩  
-   `钱七 近20场 胜率 [33%] | 发撤退 68次 特征 [爱投降、爱发撤退、心态容易崩]`</value>
-  </data>
   <metadata name="$this.TrayHeight" type="System.Int32, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
     <value>86</value>
   </metadata>

@@ -52,7 +52,7 @@ namespace League.Infrastructure
             // The game's augment descriptions come from tens of megabytes on the first run of a patch; nothing waits.
             _ = Augments.LoadTextsAsync(patch => new AugmentTextData(patch: patch), CancellationToken.None);
 
-            //Debug.WriteLine("✅ 所有游戏资源加载完成");
+            Debug.WriteLine("✅ 所有游戏资源加载完成");
         }
 
         /// <summary>Downloads the game's augment descriptions again, for the retry in the data cache settings.</summary>

@@ -147,19 +147,15 @@ namespace League.Services
             }
 
             double winRate = CalculateWinRate(info, gameCount);
+            string behavior = info.Behavior?.BehaviorSummary ?? "";
             string gameText = $"近{gameCount}场";
             string baseStr = $"{displayName} {gameText} 胜率 [{winRate:F0}%]";
 
-            var b = info.Behavior;
-            string behavior = b?.BehaviorSummary ?? "";
-
-            // 没有特征 → 只显示胜率
             if (string.IsNullOrEmpty(behavior))
             {
                 return baseStr;
             }
 
-            // 有特征 → 显示次数 + 特征
             var details = new List<string>();
             var b = info.Behavior;
             if (b?.AvgMissingPings > 0)
@@ -196,19 +192,15 @@ namespace League.Services
             }
 
             double winRate = CalculateWinRate(info, gameCount);
+            string behavior = info.Behavior?.BehaviorSummary ?? "";
             string gameText = $"近{gameCount}场";
             string baseStr = $"{displayName} {gameText} 胜率 [{winRate:F0}%]";
 
-            var b = info.Behavior;
-            string behavior = b?.BehaviorSummary ?? "";
-
-            // 没有特征 → 只显示胜率
             if (string.IsNullOrEmpty(behavior))
             {
                 return baseStr;
             }
 
-            // 有特征 → 显示次数 + 特征
             var details = new List<string>();
             var b = info.Behavior;
             if (b?.AvgMissingPings > 0)

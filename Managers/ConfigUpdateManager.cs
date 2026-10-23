@@ -430,7 +430,7 @@ exit";
                     dummy.CreateControl();
                     using (var g = dummy.CreateGraphics()) { }
                 }
-                //Debug.WriteLine("UI 预热完成（控件实例化）");
+                Debug.WriteLine("UI 预热完成（控件实例化）");
             }
             catch (Exception ex)
             {
@@ -453,7 +453,7 @@ exit";
                     // 预热资源加载器
                     await PreWarmResourceLoader();
 
-                    //Debug.WriteLine("后台预热完成（异步方法 + 资源）");
+                    Debug.WriteLine("后台预热完成（异步方法 + 资源）");
                 }
                 catch (Exception ex)
                 {

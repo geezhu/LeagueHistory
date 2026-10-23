@@ -505,10 +505,6 @@ namespace League.Controls
             base.OnMouseClick(e);
             if (_replayRect.Contains(e.Location))
             {
-                // 已过期则不再响应点击
-                if (MatchInfo?.IsReplayExpired == true)
-                    return;
-
                 ReplayClicked?.Invoke(MatchInfo);
             }
             else if (_detailsRect.Contains(e.Location))
@@ -583,24 +579,6 @@ namespace League.Controls
             }
             input = input.Replace("<br>", "\n").Replace("<br/>", "\n");
             return Regex.Replace(input, "<.*?>", "").Trim();
-        }
-
-        /// <summary>
-        /// 设置回放链接状态（如：回放已过期）
-        /// </summary>
-        public void SetReplayStatus(MatchInfo matchInfo, string status)
-        {
-            if (matchInfo == null) return;
-
-            // 与当前面板绑定的是同一场时才更新
-            if (_matchInfo != null && _matchInfo.GameId == matchInfo.GameId)
-            {
-                if (status == "回放已过期" || status == "回放已失效")
-                {
-                    _matchInfo.IsReplayExpired = true;
-                }
-                Invalidate();
-            }
         }
     }
 }

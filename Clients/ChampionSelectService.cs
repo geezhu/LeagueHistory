@@ -21,31 +21,7 @@ namespace League.Clients
         }
 
         /// <summary>
-        /// 经典模式 queue（峡谷 / 人机）：选人会话里的英雄 ID = 现代英雄 ID + 60000
-        /// </summary>
-        private static bool IsClassicQueue(int queueId) => queueId is 4310 or 4320;
-
-        /// <summary>
-        /// 现代英雄 ID → 当前选人会话使用的 ID
-        /// </summary>
-        private static int ToSessionChampionId(int modernChampionId, int queueId)
-        {
-            if (modernChampionId <= 0) return modernChampionId;
-            return IsClassicQueue(queueId) ? modernChampionId + 60000 : modernChampionId;
-        }
-
-        /// <summary>
-        /// 会话里的英雄 ID → 现代英雄 ID（回读校验用）
-        /// </summary>
-        private static int FromSessionChampionId(int sessionChampionId, int queueId)
-        {
-            if (IsClassicQueue(queueId) && sessionChampionId >= 60000)
-                return sessionChampionId - 60000;
-            return sessionChampionId;
-        }
-
-        /// <summary>
-        /// 自动预选英雄（兼容现代模式 + 经典峡谷/人机 ID 偏移）
+        /// 自动预选英雄（根据优先级列表）
         /// </summary>
         public async Task<bool> AutoDeclareIntentAsync(List<PreliminaryHero> preSelectedHeroes)
         {
@@ -59,7 +35,7 @@ namespace League.Clients
 
             try
             {
-                var (session, apiPrefix) = await ResolveChampSelectSessionAsync();
+                var session = await _gameflowService.GetChampSelectSessionAsync();
                 if (session == null || session["actions"] == null)
                 {
                     return false;
@@ -77,13 +53,12 @@ namespace League.Clients
                     return false;
                 }
 
-                // session 里已禁/已选是「会话 ID」（经典为 600xx）
-                var bannedSessionIds = GetBannedAndSelectedChampions(session);
+                // 获取已禁和已选英雄
+                var bannedChampIds = GetBannedAndSelectedChampions(session);
 
                 // 找第一个可用英雄
                 var availableHero = preSelectedHeroes.FirstOrDefault(h => !bannedChampIds.Contains(h.ChampionId));
 
-                var availableHero = preSelectedHeroes.FirstOrDefault(h => !IsUnavailable(h.ChampionId));
                 if (availableHero == null)
                 {
                     LogPickState("自动预选：预选英雄都已被禁用或被选走");
@@ -167,83 +142,6 @@ namespace League.Clients
                 }
             }
             return availableChampIds;
-        }
-
-        /// <summary>
-        /// 解析选人 session：经典模式优先 legacy
-        /// </summary>
-        private async Task<(JObject? session, string apiPrefix)> ResolveChampSelectSessionAsync()
-        {
-            // 1) 经典模式：implementation-active == true 时优先 legacy
-            try
-            {
-                var activeResp = await _client.GetAsync("/lol-champ-select-legacy/v1/implementation-active");
-                if (activeResp.IsSuccessStatusCode)
-                {
-                    var text = (await activeResp.Content.ReadAsStringAsync()).Trim().Trim('"').ToLowerInvariant();
-                    if (text == "true")
-                    {
-                        var legacySession = await GetSessionByPrefixAsync("/lol-champ-select-legacy/v1");
-                        if (legacySession != null)
-                            return (legacySession, "/lol-champ-select-legacy/v1");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[自动预选] 探测 legacy active 失败: {ex.Message}");
-            }
-
-            // 2) 现代 session
-            var modern = await _gameflowService.GetChampSelectSessionAsync();
-            if (modern != null && modern.HasValues)
-            {
-                // session 自带 isLegacyChampSelect 时，仍优先用 legacy 写
-                if (modern["isLegacyChampSelect"]?.Value<bool>() == true)
-                {
-                    var legacySession = await GetSessionByPrefixAsync("/lol-champ-select-legacy/v1");
-                    if (legacySession != null)
-                        return (legacySession, "/lol-champ-select-legacy/v1");
-                }
-
-                // queueId 是经典峡谷/人机时，也优先 legacy
-                int q = modern["queueId"]?.Value<int>() ?? 0;
-                if (q is 4310 or 4320)
-                {
-                    var legacySession = await GetSessionByPrefixAsync("/lol-champ-select-legacy/v1");
-                    if (legacySession != null)
-                        return (legacySession, "/lol-champ-select-legacy/v1");
-                }
-
-                return (modern, "/lol-champ-select/v1");
-            }
-
-            // 3) 最后再试 legacy session
-            var fallback = await GetSessionByPrefixAsync("/lol-champ-select-legacy/v1");
-            if (fallback != null)
-                return (fallback, "/lol-champ-select-legacy/v1");
-
-            return (null, "/lol-champ-select/v1");
-        }
-
-        private async Task<JObject?> GetSessionByPrefixAsync(string apiPrefix)
-        {
-            try
-            {
-                var resp = await _client.GetAsync($"{apiPrefix}/session");
-                if (!resp.IsSuccessStatusCode)
-                    return null;
-
-                var json = await resp.Content.ReadAsStringAsync();
-                if (string.IsNullOrWhiteSpace(json) || json == "null")
-                    return null;
-
-                return JObject.Parse(json);
-            }
-            catch
-            {
-                return null;
-            }
         }
 
         /// <summary>

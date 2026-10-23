@@ -68,6 +68,7 @@ namespace League.Clients
                 DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact,
             };
 
+            // 设置认证头
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
                 "Basic",
                 Convert.ToBase64String(Encoding.ASCII.GetBytes("riot:" + token))

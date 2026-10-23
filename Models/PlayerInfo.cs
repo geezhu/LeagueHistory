@@ -31,18 +31,9 @@
         public string IsPublic { get; set; } //是否公开
 
         public bool IsInParty { get; set; } // 是否近期经常组队
-        /// <summary>
-        /// 召唤师等级
-        /// </summary>
-        public int SummonerLevel { get; set; }
 
         // 新增两个属性
         public string GroupKey { get; set; }
         public Color NameColor { get; set; } = Color.Black;
-
-        /// <summary>
-        /// 熟练度最高的英雄（Top 5~8）
-        /// </summary>
-        public List<ChampionMasteryInfo> TopMasteries { get; set; } = new();
     }
 }
