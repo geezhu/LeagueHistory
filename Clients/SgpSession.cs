@@ -18,15 +18,36 @@ namespace League.Clients
         private string _entitlementsToken;
         private string _puuid;
         private string _summonerId;
-        private string _sgpUrl;
 
-        // Public service address only; used to separate local caches across platforms.
-        public string DataScope => _sgpUrl ?? "";
+        // Read by concurrent queries; one of them may replace a refused table host with the client's own.
+        private volatile string _sgpUrl;
+
+        // The client's player platform edge while SgpServers' host is in use and differs from it; taken once, by the
+        // first query the table's host refuses.
+        private string _clientHistoryUrl;
+
+        // Public service addresses only; used to separate local caches across platforms. Fixed at initialisation, so
+        // switching to the client's host does not move the caches. Several Riot regions share one history host
+        // (Japan and Korea both use apne1), so theirs also names the region.
+        private string _dataScope = "";
+
+        public string DataScope => _sgpUrl == null ? "" : _dataScope;
 
         private string _leagueSessionToken;
 
         // 全局复用一个 SGP HttpClient（线程安全）
         private static readonly HttpClient _sharedSgpClient = CreateSharedSgpClient();
+
+        private readonly HttpClient _sgpClient;
+
+        public SgpSession()
+            : this(null) { }
+
+        /// <param name="sgpClient">Sends the history requests; the shared client unless a test answers them.</param>
+        public SgpSession(HttpClient sgpClient)
+        {
+            _sgpClient = sgpClient ?? _sharedSgpClient;
+        }
 
         // 国服 SGP 对并发敏感：最多同时 2 个请求
         private static readonly SemaphoreSlim _sgpLimiter = new(2, 2);
@@ -123,7 +144,101 @@ namespace League.Clients
             return !string.IsNullOrEmpty(_accessToken);
         }
 
+        /// <summary>
+        /// Tencent clients name their history service in the platform configuration. On Riot's servers that entry is
+        /// the player-preferences service, which refuses history requests with 403; there the history host comes
+        /// from SgpServers by the client's region, else from the client settings' player platform edge, the host the
+        /// client itself uses for its login queue. The configured entry is the last resort.
+        /// </summary>
         public async Task<string> LoadSgpEndpointAsync()
+        {
+            _clientHistoryUrl = null;
+            _dataScope = "";
+            string configured = await LoadConfiguredEndpointAsync();
+            if (IsTencentHost(configured))
+            {
+                _dataScope = configured;
+                return configured;
+            }
+
+            string region = await LoadRegionAsync();
+            var (platformEdge, leagueEdge) = await LoadPlatformEdgeAsync();
+            string tableHost = SgpServers.MatchHistoryHost(region);
+            string chosen = tableHost ?? platformEdge ?? configured;
+            if (chosen == null)
+            {
+                return null;
+            }
+
+            if (
+                tableHost != null
+                && platformEdge != null
+                && !string.Equals(tableHost, platformEdge, StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                _clientHistoryUrl = platformEdge;
+            }
+
+            string regionScope = leagueEdge ?? (tableHost != null ? region : null);
+            _dataScope = regionScope == null ? chosen : chosen + "|" + regionScope;
+            return chosen;
+        }
+
+        private static bool IsTencentHost(string url) =>
+            Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            && uri.Host.EndsWith(".lol.qq.com", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>The client's region in SgpServers' spelling, such as JP; empty when the client does not answer.</summary>
+        private async Task<string> LoadRegionAsync()
+        {
+            try
+            {
+                using HttpResponseMessage resp = await _lcuClient.GetAsync("riotclient/region-locale");
+                if (!resp.IsSuccessStatusCode)
+                {
+                    return "";
+                }
+
+                JObject obj = JObject.Parse(await resp.Content.ReadAsStringAsync());
+                return SgpServers.RegionId(obj["region"]?.ToString() ?? "");
+            }
+            catch (Exception ex) when (ex is HttpRequestException or Newtonsoft.Json.JsonException)
+            {
+                // Without a region the table is skipped and the client's own platform edge is used.
+                AppLog.Shared.Warn(LogCategory.Sgp, "[SGP] 读取大区失败", ex);
+                return "";
+            }
+        }
+
+        private async Task<(string PlatformEdge, string LeagueEdge)> LoadPlatformEdgeAsync()
+        {
+            try
+            {
+                using HttpResponseMessage resp = await _lcuClient.GetAsync(
+                    "lol-client-config/v3/client-config/lol.client_settings"
+                );
+                if (!resp.IsSuccessStatusCode)
+                {
+                    return (null, null);
+                }
+
+                JObject settings = JObject.Parse(await resp.Content.ReadAsStringAsync());
+                string platformEdge = settings["player_platform_edge"]?["url"]?.ToString();
+                string leagueEdge = settings["league_edge"]?["url"]?.ToString();
+                return (
+                    string.IsNullOrEmpty(platformEdge) ? null : platformEdge.TrimEnd('/'),
+                    string.IsNullOrEmpty(leagueEdge) ? null : leagueEdge.TrimEnd('/')
+                );
+            }
+            catch (Exception ex) when (ex is HttpRequestException or Newtonsoft.Json.JsonException)
+            {
+                // The table, or else the configured address, is still tried.
+                AppLog.Shared.Warn(LogCategory.Sgp, "[SGP] 读取客户端平台地址失败", ex);
+                return (null, null);
+            }
+        }
+
+        private async Task<string> LoadConfiguredEndpointAsync()
         {
             try
             {
@@ -189,7 +304,8 @@ namespace League.Clients
                 }
             }
 
-            string fullUrl = BuildMatchHistoryUrl(puuid, startIndex, count, tag);
+            string host = _sgpUrl;
+            string fullUrl = BuildMatchHistoryUrl(host, puuid, startIndex, count, tag);
             string failure = "";
             for (int attempt = 1; attempt <= 3; attempt++)
             {
@@ -207,6 +323,15 @@ namespace League.Clients
                     return null;
                 }
 
+                if (outcome == SgpAttempt.Refused && SwitchToClientHost(host))
+                {
+                    // The table's host is gone; the new one gets the attempt back.
+                    host = _sgpUrl;
+                    fullUrl = BuildMatchHistoryUrl(host, puuid, startIndex, count, tag);
+                    attempt--;
+                    continue;
+                }
+
                 if (attempt < 3)
                 {
                     await LoadEntitlementsTokenAsync(cancellationToken);
@@ -222,14 +347,39 @@ namespace League.Clients
         private static void LogFetchState(string message) =>
             Services.AppLog.Shared.State(Services.LogCategory.Sgp, "sgp-fetch", message);
 
+        /// <summary>
+        /// Replaces a refused SgpServers host with the client's player platform edge; true when the query should go
+        /// to a newer host, also when a concurrent query has already switched.
+        /// </summary>
+        private bool SwitchToClientHost(string refused)
+        {
+            if (!string.Equals(_sgpUrl, refused, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            string next = Interlocked.Exchange(ref _clientHistoryUrl, null);
+            if (next == null)
+            {
+                return false;
+            }
+
+            _sgpUrl = next;
+            LogInitState($"地址表中的战绩服务 {refused} 拒绝请求，改用客户端配置的地址：{next}");
+            return true;
+        }
+
         private enum SgpAttempt
         {
             Succeeded,
             Retry,
+
+            // 401, 403 or 404 with a valid token: this host does not serve the player's history.
+            Refused,
             TokenRefreshFailed,
         }
 
-        private string BuildMatchHistoryUrl(string puuid, int startIndex, int count, string tag)
+        private static string BuildMatchHistoryUrl(string host, string puuid, int startIndex, int count, string tag)
         {
             string path = $"/match-history-query/v1/products/lol/player/{puuid}/SUMMARY";
             var queries = new List<string> { $"startIndex={startIndex}", $"count={count}" };
@@ -238,7 +388,7 @@ namespace League.Clients
                 queries.Add($"tag={tag}");
             }
 
-            return _sgpUrl.TrimEnd('/') + path + "?" + string.Join("&", queries);
+            return host.TrimEnd('/') + path + "?" + string.Join("&", queries);
         }
 
         /// <summary>
@@ -263,7 +413,7 @@ namespace League.Clients
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 cts.CancelAfter(TimeSpan.FromSeconds(RequestTimeoutSeconds));
                 var watch = Stopwatch.StartNew();
-                using HttpResponseMessage response = await _sharedSgpClient.SendAsync(request, cts.Token);
+                using HttpResponseMessage response = await _sgpClient.SendAsync(request, cts.Token);
                 watch.Stop();
 
                 Debug.WriteLine($"SGP 查询状态: {response.StatusCode} 耗时: {watch.ElapsedMilliseconds}ms");
@@ -291,6 +441,17 @@ namespace League.Clients
                     Debug.WriteLine("刷新 Token 失败");
                     return (SgpAttempt.TokenRefreshFailed, null, failure);
                 }
+
+                if (
+                    response.StatusCode
+                    is HttpStatusCode.Unauthorized
+                        or HttpStatusCode.Forbidden
+                        or HttpStatusCode.NotFound
+                )
+                {
+                    return (SgpAttempt.Refused, null, failure);
+                }
+
                 // 5xx / 503 等服务器错误：继续重试，最后仍失败则返回 null
                 return (SgpAttempt.Retry, null, failure);
             }

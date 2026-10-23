@@ -43,8 +43,10 @@ internal static class SgpSessionChecks
                 "/lol-login/v1/session",
                 "/entitlements/v1/token",
                 "/lol-platform-config/v1/namespaces",
+                "/riotclient/region-locale",
+                "/lol-client-config/v3/client-config/lol.client_settings",
             ]),
-            "Initialisation asks for the session, then the token, then the namespaces"
+            "Initialisation asks for the session, the token, the namespaces, the region, then the client settings"
         );
 
         var noSession = new Routes(_ => (HttpStatusCode.NotFound, "{}"));

@@ -9,17 +9,15 @@ namespace League.Tests.Clients;
 
 /// <summary>
 /// The SGP history session's handshake with the client: the login session, the access token and the service address,
-/// including the fallback that reads the address out of the purchase widget. Every answer comes from a stub handler,
-/// so no request leaves the process; only handshake responses are served, so the shared SGP transport is never
-/// reached and no history is queried. The expectations come from the checks in
-/// Tests/StatisticsChecks/SgpSessionChecks.cs, which this class replaces.
+/// including the fallback that reads the address out of the purchase widget, the region table for Riot's servers and
+/// the client's player platform edge. Every answer comes from a stub handler, so no request leaves the process; the
+/// queries that need the history service get a stub through the session's client parameter. The handshake
+/// expectations come from the checks in Tests/StatisticsChecks/SgpSessionChecks.cs, which this class replaces.
 /// <para>
 /// One case of the old check is not migrated: a query against a client that has an address but no usable token,
 /// which the old check builds by writing the private <c>_sgpUrl</c> field with reflection. No public call can leave
 /// that state behind, because <c>InitSgpAsync</c> sets the address only after the token was accepted and it never
-/// clears the token. A query that gets past the address guard cannot be tested either — it runs on the static shared
-/// SGP client, which has no injection seam, so the URL, the retries and the success path would need the real
-/// service; the old check does not cover them. The entitlements token is written but read nowhere in the application
+/// clears the token. The entitlements token is written but read nowhere in the application
 /// (requests carry <c>_accessToken</c>), so only the cancellation of that member is observable, and that expectation
 /// comes from Tests/StatisticsChecks/RoomPlayerChecks.cs. This class joins the process-wide state collection because
 /// it resets one key of <c>AppLog.Shared</c> before reading the two messages the handshake writes.
@@ -28,6 +26,7 @@ namespace League.Tests.Clients;
 [Collection(EnvironmentCollection.Name)]
 public class SgpSessionTests
 {
+    // History requests in these tests go to SgpRoutes through SgpSession's client seam, never to a real host.
     private const string Session = """{"puuid":"p-1","summonerId":"s-1","idToken":"id-token"}""";
     private const string Tokens = """{"accessToken":"access","token":"entitlement"}""";
     private const string Endpoints = """{"PlayerPreferences":{"ServiceEndpoint":"https://sgp.example.com/"}}""";
@@ -51,15 +50,40 @@ public class SgpSessionTests
             { "session-without-an-id-token", ["/lol-login/v1/session"] },
             { "token-refused", ["/lol-login/v1/session", "/entitlements/v1/token"] },
             { "token-without-an-access-token", ["/lol-login/v1/session", "/entitlements/v1/token"] },
-            {
-                "no-address-at-all",
-                ["/lol-login/v1/session", "/entitlements/v1/token", "/lol-platform-config/v1/namespaces"]
-            },
-            {
-                "malformed-namespaces",
-                ["/lol-login/v1/session", "/entitlements/v1/token", "/lol-platform-config/v1/namespaces"]
-            },
+            { "no-address-at-all", [.. Handshaken, .. RiotSteps] },
+            { "malformed-namespaces", [.. Handshaken, .. RiotSteps] },
         };
+
+    // Every step up to the platform configuration, which a complete handshake always reaches.
+    private static readonly string[] Handshaken =
+    [
+        "/lol-login/v1/session",
+        "/entitlements/v1/token",
+        "/lol-platform-config/v1/namespaces",
+    ];
+
+    private const string RegionPath = "/riotclient/region-locale";
+    private const string ClientSettingsPath = "/lol-client-config/v3/client-config/lol.client_settings";
+
+    // What a client that is not on a Tencent address is asked next: its region, then its own settings.
+    private static readonly string[] RiotSteps = [RegionPath, ClientSettingsPath];
+
+    private const string NorthEastAsia = "https://apne1-red.pp.sgp.pvp.net";
+
+    // A platform edge that differs from the table's host, as after Riot moved a region's history.
+    private const string MovedSettings = """{"player_platform_edge":{"url":"https://moved.example.com"}}""";
+
+    // What the two kinds of client configure: Tencent names its history service, Riot its preferences service.
+    private const string TencentService =
+        """{"PlayerPreferences":{"ServiceEndpoint":"https://cq100-sgp.lol.qq.com:21019"}}""";
+    private const string PreferencesService =
+        """{"PlayerPreferences":{"ServiceEndpoint":"https://player-preferences-usw2.pp.sgp.pvp.net"}}""";
+
+    // A Japanese client's settings, as read from a live one: history on the platform edge, the region on the league edge.
+    private const string JapaneseSettings = """
+        {"player_platform_edge":{"url":"https://apne1-red.pp.sgp.pvp.net"},
+         "league_edge":{"url":"https://jp-red.lol.sgp.pvp.net"}}
+        """;
 
     [Fact]
     public void DataScope_NewSession_IsEmpty()
@@ -94,7 +118,7 @@ public class SgpSessionTests
     }
 
     [Fact]
-    public async Task InitSgpAsync_AnAnsweredHandshake_AsksForTheSessionTheTokenThenTheNamespaces()
+    public async Task InitSgpAsync_AnAnsweredHandshake_AsksForTheSessionTheTokenTheNamespacesThenTheSettings()
     {
         var routes = new Routes(Replies());
         using var lcu = Lcu(routes);
@@ -102,10 +126,170 @@ public class SgpSessionTests
 
         await session.InitSgpAsync(lcu);
 
-        Assert.Equal(
-            ["/lol-login/v1/session", "/entitlements/v1/token", "/lol-platform-config/v1/namespaces"],
-            routes.Paths
+        Assert.Equal([.. Handshaken, .. RiotSteps], routes.Paths);
+    }
+
+    [Fact]
+    public async Task InitSgpAsync_RegionInTheTable_UsesTheTableHost()
+    {
+        using var lcu = Lcu(
+            new Routes(Replies(namespaces: PreferencesService, region: Region("JP"), settings: MovedSettings))
         );
+        var session = new SgpSession();
+
+        await session.InitSgpAsync(lcu);
+
+        Assert.StartsWith(NorthEastAsia + "|", session.DataScope);
+    }
+
+    [Fact]
+    public async Task InitSgpAsync_RegionInTheTableWithoutSettings_ScopesTheSharedHostByRegion()
+    {
+        using var lcu = Lcu(new Routes(Replies(namespaces: PreferencesService, region: Region("KR"))));
+        var session = new SgpSession();
+
+        await session.InitSgpAsync(lcu);
+
+        Assert.Equal(NorthEastAsia + "|KR", session.DataScope);
+    }
+
+    [Fact]
+    public async Task InitSgpAsync_RegionOutsideTheTable_UsesThePlatformEdge()
+    {
+        using var lcu = Lcu(
+            new Routes(Replies(namespaces: PreferencesService, region: Region("EUN1"), settings: MovedSettings))
+        );
+        var session = new SgpSession();
+
+        await session.InitSgpAsync(lcu);
+
+        Assert.Equal("https://moved.example.com", session.DataScope);
+    }
+
+    [Fact]
+    public async Task SgpFetchLatestMatches_TableHostRefuses_SwitchesToThePlatformEdge()
+    {
+        var sgp = new SgpRoutes(host => host == "moved.example.com" ? HttpStatusCode.OK : HttpStatusCode.Forbidden);
+        using var history = new HttpClient(sgp);
+        using var lcu = Lcu(
+            new Routes(Replies(namespaces: PreferencesService, region: Region("JP"), settings: MovedSettings))
+        );
+        var session = new SgpSession(history);
+        await session.InitSgpAsync(lcu);
+
+        JArray? games = await session.SgpFetchLatestMatches("p-1");
+
+        Assert.NotNull(games);
+        Assert.Equal(["apne1-red.pp.sgp.pvp.net", "moved.example.com"], sgp.Hosts);
+    }
+
+    [Fact]
+    public async Task SgpFetchLatestMatches_TableHostRefuses_LogsTheSwitch()
+    {
+        AppLog.Shared.ResetStates(InitState);
+        var sgp = new SgpRoutes(host => host == "moved.example.com" ? HttpStatusCode.OK : HttpStatusCode.Forbidden);
+        using var history = new HttpClient(sgp);
+        using var lcu = Lcu(
+            new Routes(Replies(namespaces: PreferencesService, region: Region("JP"), settings: MovedSettings))
+        );
+        var session = new SgpSession(history);
+        await session.InitSgpAsync(lcu);
+
+        await session.SgpFetchLatestMatches("p-1");
+
+        Assert.Contains("改用客户端配置的地址：https://moved.example.com", await SharedLogAsync());
+    }
+
+    [Fact]
+    public async Task SgpFetchLatestMatches_TableHostAnswers_StaysOnTheTableHost()
+    {
+        var sgp = new SgpRoutes(_ => HttpStatusCode.OK);
+        using var history = new HttpClient(sgp);
+        using var lcu = Lcu(
+            new Routes(Replies(namespaces: PreferencesService, region: Region("JP"), settings: MovedSettings))
+        );
+        var session = new SgpSession(history);
+        await session.InitSgpAsync(lcu);
+
+        await session.SgpFetchLatestMatches("p-1");
+
+        Assert.Equal(["apne1-red.pp.sgp.pvp.net"], sgp.Hosts);
+    }
+
+    [Fact]
+    public async Task SgpFetchLatestMatches_SwitchedToThePlatformEdge_KeepsTheCacheScope()
+    {
+        var sgp = new SgpRoutes(host => host == "moved.example.com" ? HttpStatusCode.OK : HttpStatusCode.Forbidden);
+        using var history = new HttpClient(sgp);
+        using var lcu = Lcu(
+            new Routes(Replies(namespaces: PreferencesService, region: Region("JP"), settings: MovedSettings))
+        );
+        var session = new SgpSession(history);
+        await session.InitSgpAsync(lcu);
+        string before = session.DataScope;
+
+        await session.SgpFetchLatestMatches("p-1");
+
+        Assert.Equal(before, session.DataScope);
+    }
+
+    [Fact]
+    public async Task InitSgpAsync_TencentAddress_DoesNotAskForTheClientSettings()
+    {
+        var routes = new Routes(Replies(namespaces: TencentService, settings: JapaneseSettings));
+        using var lcu = Lcu(routes);
+        var session = new SgpSession();
+
+        await session.InitSgpAsync(lcu);
+
+        Assert.Equal(Handshaken, routes.Paths);
+    }
+
+    [Fact]
+    public async Task InitSgpAsync_TencentAddress_KeepsTheConfiguredAddress()
+    {
+        using var lcu = Lcu(new Routes(Replies(namespaces: TencentService, settings: JapaneseSettings)));
+        var session = new SgpSession();
+
+        await session.InitSgpAsync(lcu);
+
+        Assert.Equal("https://cq100-sgp.lol.qq.com:21019", session.DataScope);
+    }
+
+    [Fact]
+    public async Task InitSgpAsync_JapaneseClient_UsesThePlatformEdgeInsteadOfThePreferencesService()
+    {
+        using var lcu = Lcu(new Routes(Replies(namespaces: PreferencesService, settings: JapaneseSettings)));
+        var session = new SgpSession();
+
+        bool ready = await session.InitSgpAsync(lcu);
+
+        Assert.True(ready, "A Japanese client initialises on its platform edge");
+        Assert.Equal("https://apne1-red.pp.sgp.pvp.net|https://jp-red.lol.sgp.pvp.net", session.DataScope);
+    }
+
+    [Fact]
+    public async Task InitSgpAsync_JapaneseClient_LogsThePlatformEdge()
+    {
+        AppLog.Shared.ResetStates(InitState);
+        using var lcu = Lcu(new Routes(Replies(namespaces: PreferencesService, settings: JapaneseSettings)));
+        var session = new SgpSession();
+
+        await session.InitSgpAsync(lcu);
+
+        Assert.Contains("战绩服务已就绪：https://apne1-red.pp.sgp.pvp.net", await SharedLogAsync());
+    }
+
+    [Fact]
+    public async Task InitSgpAsync_MalformedClientSettings_KeepsTheConfiguredAddress()
+    {
+        using var lcu = Lcu(new Routes(Replies(settings: "not json")));
+        var session = new SgpSession();
+
+        bool ready = await session.InitSgpAsync(lcu);
+
+        Assert.True(ready, "Unreadable client settings leave the configured address");
+        Assert.Equal("https://sgp.example.com", session.DataScope);
     }
 
     [Theory]
@@ -200,10 +384,13 @@ public class SgpSessionTests
     }
 
     /// <summary>The client answering the handshake; a step that refuses answers with a status and an empty document.</summary>
+    /// <remarks>Without settings the client answers 404 for them, as one that has no platform edge.</remarks>
     private static Func<string, (HttpStatusCode Status, string Body)> Replies(
         string session = Session,
         string token = Tokens,
         string namespaces = Endpoints,
+        string? settings = null,
+        string? region = null,
         HttpStatusCode sessionStatus = HttpStatusCode.OK,
         HttpStatusCode tokenStatus = HttpStatusCode.OK
     ) =>
@@ -212,8 +399,14 @@ public class SgpSessionTests
             {
                 "/lol-login/v1/session" => (sessionStatus, session),
                 "/entitlements/v1/token" => (tokenStatus, token),
+                ClientSettingsPath => settings == null
+                    ? (HttpStatusCode.NotFound, "{}")
+                    : (HttpStatusCode.OK, settings),
+                RegionPath => region == null ? (HttpStatusCode.NotFound, "{}") : (HttpStatusCode.OK, region),
                 _ => (HttpStatusCode.OK, namespaces),
             };
+
+    private static string Region(string region) => $$"""{"locale":"en_US","region":"{{region}}"}""";
 
     private static Func<string, (HttpStatusCode Status, string Body)> Handshake(string step) =>
         step switch
@@ -237,6 +430,24 @@ public class SgpSessionTests
     {
         await AppLog.Shared.FlushAsync();
         return await File.ReadAllTextAsync(AppLog.Shared.CurrentPath);
+    }
+
+    /// <summary>The history service: answers each request by its host with an empty history or a bare status.</summary>
+    private sealed class SgpRoutes(Func<string, HttpStatusCode> status) : HttpMessageHandler
+    {
+        public List<string> Hosts { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        {
+            string host = request.RequestUri!.Host;
+            Hosts.Add(host);
+            return Task.FromResult(
+                new HttpResponseMessage(status(host))
+                {
+                    Content = new StringContent("""{"games":[]}""", Encoding.UTF8, "application/json"),
+                }
+            );
+        }
     }
 
     /// <summary>The client side of the handshake, answering from one function and remembering the paths asked for.</summary>
