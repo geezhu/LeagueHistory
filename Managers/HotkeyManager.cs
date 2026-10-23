@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using League.Models;
 using League.Services;
 using static League.FormMain;
 
@@ -7,23 +8,58 @@ namespace League.Managers
     public class HotkeyManager : IDisposable
     {
         private readonly FormMain _mainForm;
-        private readonly GameHotkeyWindow _hotkeyWindow;
+        private GameHotkeyWindow? _hotkeyWindow;
+        private IReadOnlyDictionary<Keys, GameHotkeyAction> _actions = new Dictionary<Keys, GameHotkeyAction>();
         private bool _disposed;
 
         public event Action? OnMyTeamHotkey;
         public event Action? OnFullTeamHotkey;
         public event Action? OnChampSelectF7;
 
+        /// <summary>Nothing is registered until <see cref="ApplyConfig"/> names the shortcuts.</summary>
         public HotkeyManager(FormMain mainForm)
         {
             _mainForm = mainForm ?? throw new ArgumentNullException(nameof(mainForm));
-            _hotkeyWindow = new GameHotkeyWindow(QueueHotkey);
             Services.ChatSendDiagnostics.Shared.Report(
                 "permission",
                 Services.GameInputService.HasInputPermission()
                     ? "管理员权限已就绪。快捷键使用 Windows 事件接收，无键盘钩子或按键轮询。发送前请关闭聊天输入框。"
                     : "当前没有管理员权限，请以管理员身份重新启动程序。"
             );
+        }
+
+        /// <summary>
+        /// Registers the configured shortcuts, replacing the previous ones; unchanged shortcuts are left registered.
+        /// </summary>
+        public void ApplyConfig(LeagueConfig? config)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            // A hand-edited config can bind one key twice; the first action keeps it.
+            var actions = new Dictionary<Keys, GameHotkeyAction>();
+            foreach (var (action, keys) in GameHotkeys.From(config))
+            {
+                if (!actions.TryAdd(keys, action))
+                {
+                    ChatSendDiagnostics.Shared.Report(
+                        "hotkey-duplicate",
+                        $"{GameHotkeys.Format(keys)} 同时设给了两个动作，只保留第一个，请在设置中修改。"
+                    );
+                }
+            }
+
+            if (_hotkeyWindow != null && actions.Keys.ToHashSet().SetEquals(_actions.Keys))
+            {
+                _actions = actions;
+                return;
+            }
+
+            _hotkeyWindow?.Dispose();
+            _actions = actions;
+            _hotkeyWindow = new GameHotkeyWindow(QueueHotkey, actions.Keys.ToArray());
         }
 
         private void QueueHotkey(Keys shortcut)
@@ -40,9 +76,9 @@ namespace League.Managers
                     (Action)(
                         async () =>
                         {
-                            if (!_disposed)
+                            if (!_disposed && _actions.TryGetValue(shortcut, out var action))
                             {
-                                await HandleHotkeyAsync(shortcut & Keys.KeyCode, (shortcut & Keys.Control) != 0);
+                                await HandleHotkeyAsync(action, GameHotkeys.Format(shortcut));
                             }
                         }
                     )
@@ -52,41 +88,36 @@ namespace League.Managers
             catch (InvalidOperationException) { }
         }
 
-        private async Task HandleHotkeyAsync(Keys key, bool isCtrlDown)
+        private async Task HandleHotkeyAsync(GameHotkeyAction action, string label)
         {
             try
             {
                 string phase = await GetGameflowPhaseSafe();
 
-                if (key == Keys.F7 && isCtrlDown)
+                if (action == GameHotkeyAction.ChampSelect)
                 {
                     if (phase == "ChampSelect")
                     {
-                        Debug.WriteLine("[HotkeyManager] Ctrl+F7 已触发 (选人阶段)");
+                        Debug.WriteLine($"[HotkeyManager] {label} 已触发 (选人阶段)");
                         OnChampSelectF7?.Invoke();
                     }
                     else
                     {
-                        Debug.WriteLine($"[HotkeyManager] Ctrl+F7 已忽略 (当前阶段: {phase})");
+                        Debug.WriteLine($"[HotkeyManager] {label} 已忽略 (当前阶段: {phase})");
                     }
                 }
                 else if (phase == "InProgress")
                 {
-                    if (key == Keys.F9)
+                    if (action == GameHotkeyAction.MyTeam)
                     {
-                        Debug.WriteLine("[HotkeyManager] F9 已触发 → 发送我方队伍");
+                        Debug.WriteLine($"[HotkeyManager] {label} 已触发 → 发送我方队伍");
                         OnMyTeamHotkey?.Invoke();
                     }
-                    else if (key == Keys.F11)
+                    else
                     {
-                        Debug.WriteLine("[HotkeyManager] F11 已触发 → 发送全队信息");
+                        Debug.WriteLine($"[HotkeyManager] {label} 已触发 → 发送全队信息");
                         OnFullTeamHotkey?.Invoke();
                     }
-                }
-                else
-                {
-                    // 可注释掉这行，减少非游戏阶段的日志
-                    // Debug.WriteLine($"[HotkeyManager] 热键 {key} 已忽略 (当前阶段: {phase})");
                 }
             }
             catch (Exception ex)
@@ -116,7 +147,7 @@ namespace League.Managers
             }
 
             _disposed = true;
-            _hotkeyWindow.Dispose();
+            _hotkeyWindow?.Dispose();
             OnMyTeamHotkey = null;
             OnFullTeamHotkey = null;
             OnChampSelectF7 = null;

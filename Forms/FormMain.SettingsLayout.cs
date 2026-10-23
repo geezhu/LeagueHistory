@@ -1,4 +1,5 @@
 using League.Controls;
+using League.Models;
 
 namespace League;
 
@@ -458,13 +459,19 @@ public partial class FormMain
         label2.Text = "⚠ 游戏内快捷键需要以管理员身份运行本程序，否则游戏不会响应。";
         label3.Text =
             "自定义内容每行一条，使用相同快捷键发送。游戏内发送前请关闭聊天输入框和游戏菜单，按快捷键后松开 Ctrl。";
+        var hotkeyStatus = new Label
+        {
+            Name = "HotkeyStatus",
+            Text = "点击快捷键后按下新的组合即可修改；Backspace 恢复默认。需要 F1–F24，或带 Ctrl / Alt 的组合。",
+        };
         SettingsCard(
             messages,
             "发送内容",
             label2,
             rbModeMatch,
             rbModeCustom,
-            CreateShortcutTable(),
+            CreateShortcutTable(hotkeyStatus),
+            hotkeyStatus,
             label3,
             txtCustomContent
         );
@@ -485,37 +492,49 @@ public partial class FormMain
         ConfigureMessageDiagnostics(messages);
     }
 
-    private TableLayoutPanel CreateShortcutTable()
+    private static readonly (GameHotkeyAction Action, string Scene, string Content)[] ShortcutRows =
+    [
+        (GameHotkeyAction.ChampSelect, "选人界面", "我方战绩"),
+        (GameHotkeyAction.MyTeam, "游戏内", "我方战绩"),
+        (GameHotkeyAction.FullTeam, "游戏内", "双方战绩"),
+    ];
+
+    private TableLayoutPanel CreateShortcutTable(Label status)
     {
-        var rows = new (string Key, string Scene, string Content)[]
-        {
-            ("快捷键", "场景", "发送内容"),
-            ("Ctrl + F7", "选人界面", "我方战绩"),
-            ("F9", "游戏内", "我方战绩"),
-            ("F11", "游戏内", "双方战绩"),
-        };
         var table = new TableLayoutPanel
         {
             Name = "ShortcutTable",
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 3,
-            RowCount = rows.Length,
+            RowCount = ShortcutRows.Length + 1,
             BackColor = Theme.Surface,
         };
         var keyFont = new Font(tabControl1.Font, FontStyle.Bold);
         table.Disposed += (_, _) => keyFont.Dispose();
-        for (int row = 0; row < rows.Length; row++)
+        string[] header = { "快捷键", "场景", "发送内容" };
+        for (int column = 0; column < header.Length; column++)
         {
-            string[] cells = { rows[row].Key, rows[row].Scene, rows[row].Content };
-            for (int column = 0; column < cells.Length; column++)
+            table.Controls.Add(ShortcutCell(header[column], header: true), column, 0);
+        }
+
+        var current = GameHotkeys.From(_appConfig);
+        for (int row = 0; row < ShortcutRows.Length; row++)
+        {
+            var (action, scene, content) = ShortcutRows[row];
+            var box = new HotkeyBox
             {
-                table.Controls.Add(
-                    ShortcutCell(cells[column], header: row == 0, key: row > 0 && column == 0, keyFont),
-                    column,
-                    row
-                );
-            }
+                Name = "Hotkey" + action,
+                Text = GameHotkeys.Format(current[action]),
+                Font = keyFont,
+                BackColor = Theme.ControlFill,
+                Margin = new Padding(0, 4, 28, 4),
+            };
+            box.Chosen += keys => ChooseHotkey(action, keys, box, status);
+            box.ResetRequested += () => ChooseHotkey(action, GameHotkeys.Defaults[action], box, status);
+            table.Controls.Add(box, 0, row + 1);
+            table.Controls.Add(ShortcutCell(scene, header: false), 1, row + 1);
+            table.Controls.Add(ShortcutCell(content, header: false), 2, row + 1);
         }
 
         // Thin rules under each row instead of a full grid.
@@ -532,25 +551,44 @@ public partial class FormMain
         return table;
     }
 
-    private static Label ShortcutCell(string text, bool header, bool key, Font keyFont)
-    {
-        var cell = new Label
+    private static Label ShortcutCell(string text, bool header) =>
+        new()
         {
             Text = text,
             AutoSize = true,
             Margin = new Padding(0, 6, 28, 6),
             ForeColor = header ? Theme.Muted : Theme.Ink,
         };
-        if (key)
+
+    // A rejected combination leaves the shortcut as it was and says why under the table.
+    private void ChooseHotkey(GameHotkeyAction action, Keys keys, HotkeyBox box, Label status)
+    {
+        if (_appConfig == null)
         {
-            // Key names read as key caps.
-            cell.Font = keyFont;
-            cell.BackColor = Theme.ControlFill;
-            cell.Padding = new Padding(6, 2, 6, 2);
-            cell.Margin = new Padding(0, 4, 28, 4);
+            return;
         }
 
-        return cell;
+        string name = GameHotkeys.Format(keys);
+        if (!GameHotkeys.IsAllowed(keys))
+        {
+            status.Text =
+                $"{name} 不能用作快捷键：需要 F1–F24，或带 Ctrl / Alt 的组合，单独的字母会让所有程序都打不出这个字。";
+            return;
+        }
+
+        var current = GameHotkeys.From(_appConfig);
+        var taken = ShortcutRows.FirstOrDefault(row => row.Action != action && current[row.Action] == keys);
+        if (taken != default)
+        {
+            status.Text = $"{name} 已用于「{taken.Scene} · {taken.Content}」，请换一个。";
+            return;
+        }
+
+        GameHotkeys.Store(_appConfig, action, keys);
+        SaveAppConfig();
+        _hotkeyManager?.ApplyConfig(_appConfig);
+        box.Text = name;
+        status.Text = $"已改为 {name}，立即生效。";
     }
 
     private void ConfigureMessageDiagnostics(FlowLayoutPanel messages)

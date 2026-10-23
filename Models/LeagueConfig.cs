@@ -58,6 +58,21 @@ namespace League.Models
         public bool EnablePreliminaryInBot { get; set; } = false; // 普通人机（830/840/850/870/880/890）
 
         /// <summary>
+        /// 快捷键：选人阶段发送，默认 Ctrl+F7（格式见 GameHotkeys）
+        /// </summary>
+        public string HotkeyChampSelect { get; set; } = "Ctrl+F7";
+
+        /// <summary>
+        /// 快捷键：游戏内发送我方，默认 F9
+        /// </summary>
+        public string HotkeyMyTeam { get; set; } = "F9";
+
+        /// <summary>
+        /// 快捷键：游戏内发送双方，默认 F11
+        /// </summary>
+        public string HotkeyFullTeam { get; set; } = "F11";
+
+        /// <summary>
         /// 发送信息模式：1 = 自动发送战绩，2 = 发送自定义文本
         /// </summary>
         public int SendMode { get; set; } = 1;

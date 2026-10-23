@@ -142,6 +142,85 @@ public class FormMainShortcutsTests : IDisposable
         });
     }
 
+    [Fact]
+    public void Load_TheShortcutTable_ShowsTheConfiguredShortcuts()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+            OpenShortcutTable(main);
+
+            Assert.Equal("Ctrl+F7", Find<TextBox>(main, "HotkeyChampSelect").Text);
+            Assert.Equal("F11", Find<TextBox>(main, "HotkeyFullTeam").Text);
+        });
+    }
+
+    [Fact]
+    public void HotkeyBox_AFunctionKeyPressed_SavesItForThatAction()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+            OpenShortcutTable(main);
+            var box = Find<TextBox>(main, "HotkeyMyTeam");
+
+            WindowMessages.Key(box, Keys.F10);
+
+            Assert.Equal("F10", main.GetAppConfig().HotkeyMyTeam);
+            Assert.Equal("F10", box.Text);
+        });
+    }
+
+    [Fact]
+    public void HotkeyBox_ABareLetterPressed_KeepsTheShortcutAndSaysWhy()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+            OpenShortcutTable(main);
+            var box = Find<TextBox>(main, "HotkeyMyTeam");
+            string before = main.GetAppConfig().HotkeyMyTeam;
+
+            WindowMessages.Key(box, Keys.A);
+
+            Assert.Equal(before, main.GetAppConfig().HotkeyMyTeam);
+            Assert.StartsWith("A 不能用作快捷键", Find<Label>(main, "HotkeyStatus").Text);
+        });
+    }
+
+    [Fact]
+    public void HotkeyBox_AnotherActionsShortcutPressed_KeepsTheShortcutAndNamesTheOtherAction()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+            OpenShortcutTable(main);
+            var box = Find<TextBox>(main, "HotkeyMyTeam");
+            main.GetAppConfig().HotkeyFullTeam = "F11";
+
+            WindowMessages.Key(box, Keys.F11);
+
+            Assert.NotEqual("F11", main.GetAppConfig().HotkeyMyTeam);
+            Assert.Equal("F11 已用于「游戏内 · 双方战绩」，请换一个。", Find<Label>(main, "HotkeyStatus").Text);
+        });
+    }
+
+    [Fact]
+    public void HotkeyBox_BackspacePressed_RestoresTheDefault()
+    {
+        UiHost.Run(_ =>
+        {
+            using var main = Main();
+            OpenShortcutTable(main);
+            var box = Find<TextBox>(main, "HotkeyMyTeam");
+            WindowMessages.Key(box, Keys.F10);
+
+            WindowMessages.Key(box, Keys.Back);
+
+            Assert.Equal("F9", main.GetAppConfig().HotkeyMyTeam);
+        });
+    }
+
     /// <summary>A store that keeps the plan in memory, so no Windows task is read or written.</summary>
     private sealed class NoShutdownTask : IShutdownTaskStore
     {

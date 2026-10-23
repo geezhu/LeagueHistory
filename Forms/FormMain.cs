@@ -159,6 +159,7 @@ namespace League
 
                 // 读取配置
                 _appConfig = _configUpdateManager!.LoadConfig();
+                _hotkeyManager?.ApplyConfig(_appConfig);
                 ConfigureAramMetaSettings();
                 ConfigureSettingsLayout();
                 if (_options.StartBackgroundServices)
