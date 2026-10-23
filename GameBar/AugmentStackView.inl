@@ -514,6 +514,16 @@ Button AugmentAddButton(hstring const &player, bool timed)
     scroll.Content(list);
     panel.Children().Append(scroll);
     flyout.Content(panel);
+    // The list outlives a close without a pick (the page redraws only on change), so each opening starts fresh.
+    flyout.Opening(
+        [search, scroll, filter](auto &&, auto &&)
+        {
+            search.Text(L"");
+            filter->query.clear();
+            filter->tag = L"";
+            filter->Apply();
+            scroll.ChangeView(nullptr, 0.0, nullptr, true);
+        });
     flyout.Opened(
         [this, search](auto &&, auto &&)
         {

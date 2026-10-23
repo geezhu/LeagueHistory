@@ -242,12 +242,16 @@ void OpenDetails(int index)
     detailRequestedAt = Now();
     detailArtwork.Source(nullptr);
     detailSource.Text(L"正在读取英雄详情…");
-    if ((detailQueue == 2400 || detailQueue == 3270) && detailTab == L"runes")
+    bool mayhem = detailQueue == 2400 || detailQueue == 3270;
+    if (mayhem && detailTab == L"runes")
         detailTab = L"augments";
-    else if (detailQueue != 2400 && detailQueue != 3270 && detailTab == L"augments")
+    else if (!mayhem && detailTab == L"augments")
         detailTab = L"skills";
-    // A layout fixture keeps the tab it was asked to capture.
-    if (HasLivePanel())
+    // In Mayhem the augment pick matters more than the live page, so it opens first; a layout fixture keeps the
+    // tab it was asked to capture.
+    if (!fixturePreview && mayhem)
+        detailTab = L"augments";
+    else if (HasLivePanel())
     {
         if (!fixturePreview)
             detailTab = L"live";
