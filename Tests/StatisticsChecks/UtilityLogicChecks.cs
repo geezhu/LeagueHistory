@@ -218,10 +218,10 @@ internal static class UtilityLogicChecks
         var getModeName = gameMod.GetMethod("GetModeName", BindingFlags.Public | BindingFlags.Static)!;
         string Native(int? queue, string? mode) => (string)getModeName.Invoke(null, [queue, mode])!;
 
-        Check(Native(440, null) == "灵活组排", "The queue id is mapped first");
-        Check(Native(440, "ARAM") == "灵活组排", "The queue id wins over the game mode");
-        Check(Native(null, "ARAM") == "极地大乱斗", "The game mode is matched in upper case");
-        Check(Native(null, "aram") == "极地大乱斗", "A lower-case game mode still matches");
+        Check(Native(440, null) == "灵活排位", "The queue id is mapped first");
+        Check(Native(440, "ARAM") == "灵活排位", "The queue id wins over the game mode");
+        Check(Native(null, "ARAM") == "大乱斗", "The game mode is matched in upper case");
+        Check(Native(null, "aram") == "大乱斗", "A lower-case game mode still matches");
         Check(Native(99999, "CLASSIC") == "召唤师峡谷", "An unmapped queue falls back to the game mode");
         Check(Native(null, null) == "未知()", "Nothing known reports no queue at all");
     }
