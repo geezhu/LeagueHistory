@@ -67,18 +67,13 @@ public sealed class ProfileLevelAvatar : PictureBox
             g.DrawArc(progress, ring, 120, (float)(_progress.Value * 300));
         }
 
-        var portrait = new RectangleF(size * .15f, size * .15f, size * .7f, size * .7f);
-        using var clip = new GraphicsPath();
-        clip.AddEllipse(portrait);
-        var state = g.Save();
-        g.SetClip(clip);
+        var portrait = Rectangle.Round(new RectangleF(size * .15f, size * .15f, size * .7f, size * .7f));
         // The caller owns the avatar image; drawing only borrows PictureBox.Image.
         if (Image != null)
         {
-            g.DrawImage(Image, portrait);
+            RoundImage.Draw(g, Image, portrait);
         }
 
-        g.Restore(state);
         using var font = new Font(Font.FontFamily, 9f, FontStyle.Bold);
         using var ink = new SolidBrush(Color.FromArgb(0, 143, 161));
         using var format = new StringFormat

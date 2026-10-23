@@ -89,23 +89,27 @@ public partial class PlayerCardControl
             using var ring = new Pen(Theme.Accent, 3);
             g.DrawEllipse(ring, circle);
             circle.Inflate(-4, -4);
-            using var clip = new GraphicsPath();
-            clip.AddEllipse(circle);
-            var state = g.Save();
-            g.SetClip(clip);
             if (_image != null)
             {
-                g.DrawImage(_image, circle);
+                RoundImage.Draw(g, _image, circle);
             }
             else
             {
-                using var background = new SolidBrush(Color.FromArgb(216, 227, 237));
-                using var silhouette = new SolidBrush(Color.FromArgb(117, 140, 160));
-                g.FillEllipse(background, circle);
-                g.FillEllipse(silhouette, Width / 2 - 7, 16, 14, 14);
-                g.FillEllipse(silhouette, Width / 2 - 15, 32, 30, 27);
+                // The silhouette's shoulders run past the circle; the round fill trims them with a smooth edge.
+                RoundImage.Draw(
+                    g,
+                    circle,
+                    canvas =>
+                    {
+                        using var background = new SolidBrush(Color.FromArgb(216, 227, 237));
+                        using var silhouette = new SolidBrush(Color.FromArgb(117, 140, 160));
+                        canvas.TranslateTransform(-circle.X, -circle.Y);
+                        canvas.FillRectangle(background, circle);
+                        canvas.FillEllipse(silhouette, Width / 2 - 7, 16, 14, 14);
+                        canvas.FillEllipse(silhouette, Width / 2 - 15, 32, 30, 27);
+                    }
+                );
             }
-            g.Restore(state);
             if (_level > 0)
             {
                 TextRenderer.DrawText(

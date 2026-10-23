@@ -310,20 +310,15 @@ internal sealed class OpggRankingsView : UserControl
 
     private void DrawHero(Graphics g, int id, Rectangle rect)
     {
-        using var path = new GraphicsPath();
-        path.AddEllipse(rect);
-        var state = g.Save();
-        g.SetClip(path);
         if (_icons.TryGetValue(id, out var icon) && icon != null)
         {
-            g.DrawImage(icon, rect);
+            RoundImage.Draw(g, icon, rect);
         }
         else
         {
             using var brush = new SolidBrush(Color.FromArgb(219, 229, 241));
             g.FillEllipse(brush, rect);
         }
-        g.Restore(state);
         if (!_closing && !_icons.ContainsKey(id) && _pending.Add(id))
         {
             _ = LoadIconAsync(id);

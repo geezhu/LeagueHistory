@@ -213,12 +213,7 @@ internal sealed class OpggRuneTree : Control
             {
                 using var attributes = new ImageAttributes();
                 attributes.SetColorMatrix(new ColorMatrix { Matrix33 = node.Selected ? 1f : 0.15f });
-                using var path = new GraphicsPath();
-                path.AddEllipse(rect);
-                var state = e.Graphics.Save();
-                e.Graphics.SetClip(path);
-                e.Graphics.DrawImage(image, rect, 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, attributes);
-                e.Graphics.Restore(state);
+                RoundImage.Draw(e.Graphics, image, rect, attributes);
             }
             else
             {

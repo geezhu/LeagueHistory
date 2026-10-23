@@ -187,12 +187,7 @@ internal sealed class MatchComparisonChart : ScrollableControl
         var portrait = new Rectangle(16 + AutoScrollPosition.X, y + 18, 34, 34);
         if (_images[index] is Image image)
         {
-            var state = graphics.Save();
-            using var path = new GraphicsPath();
-            path.AddEllipse(portrait);
-            graphics.SetClip(path);
-            graphics.DrawImage(image, portrait);
-            graphics.Restore(state);
+            RoundImage.Draw(graphics, image, portrait);
         }
         else
         {

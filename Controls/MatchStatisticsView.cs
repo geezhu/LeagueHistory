@@ -204,12 +204,7 @@ public sealed class MatchStatisticsView : UserControl
         var box = new Rectangle(e.CellBounds.Left + (e.CellBounds.Width - 34) / 2, e.CellBounds.Top + 7, 34, 34);
         if (_headers.TryGetValue(e.ColumnIndex, out var image))
         {
-            var state = e.Graphics.Save();
-            using var clip = new System.Drawing.Drawing2D.GraphicsPath();
-            clip.AddEllipse(box);
-            e.Graphics.SetClip(clip);
-            e.Graphics.DrawImage(image, box);
-            e.Graphics.Restore(state);
+            RoundImage.Draw(e.Graphics, image, box);
         }
         using var pen = new Pen((int?)_players[e.ColumnIndex - 1]["teamId"] == 100 ? Theme.BlueTeam : Theme.RedTeam, 2);
         e.Graphics.DrawEllipse(pen, box);
