@@ -17,4 +17,7 @@ public sealed class FormMainOptions
 
     /// <summary>Where the daily shutdown plan is read and written; <c>null</c> uses Windows Task Scheduler.</summary>
     public IShutdownTaskStore? ShutdownTasks { get; init; }
+
+    /// <summary>What the 准备情况 page detects and how it restarts elevated; <c>null</c> uses this computer.</summary>
+    public SetupEnvironment? Setup { get; init; }
 }

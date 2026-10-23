@@ -219,6 +219,8 @@ internal static class SettingsChecks
         using var preview = new Form { ClientSize = new Size(1050, 800) };
         preview.Controls.Add(tabs);
         preview.Show();
+        // The settings open on 准备情况; the general page's cards, and the shutdown read, start when it is shown.
+        Select(tabs, "功能辅助");
         Application.DoEvents();
         Save(preview, "settings-general");
         var shutdown = All(tabs).Single(c => c.Name == "ShutdownPlanSummary");

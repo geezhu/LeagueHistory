@@ -90,8 +90,8 @@ public class FormMainSettingsTests : IDisposable
     }
 
     [Theory]
-    [InlineData(1, "对局速览")]
-    [InlineData(2, "消息发送")]
+    [InlineData(2, "对局速览")]
+    [InlineData(3, "消息发送")]
     public void Navigation_RowClicked_OpensThatSettingsPage(int row, string page)
     {
         UiHost.Run(_ =>
@@ -116,7 +116,7 @@ public class FormMainSettingsTests : IDisposable
 
             var pages = Find<TabControl>(main, "tabControl1").TabPages.Cast<TabPage>().Select(page => page.Text);
 
-            Assert.Equal(["功能辅助", "对局速览", "消息发送", "客户端目录", "数据缓存"], pages);
+            Assert.Equal(["准备情况", "功能辅助", "对局速览", "消息发送", "客户端目录", "数据缓存"], pages);
         });
     }
 
@@ -353,7 +353,7 @@ public class FormMainSettingsTests : IDisposable
             using var main = Main();
             Open(main, "对局速览");
             var navigation = Descendants(main).OfType<SettingsNavigation>().Single();
-            var bounds = navigation.RowBounds(0);
+            var bounds = navigation.RowBounds(1);
             int layouts = 0;
             PageFlow(main, "功能辅助").Layout += (_, _) => layouts++;
 
@@ -420,6 +420,7 @@ public class FormMainSettingsTests : IDisposable
                 StartBackgroundServices = false,
                 StartGameIntegration = false,
                 ShutdownTasks = new NoShutdownTask(),
+                Setup = PinnedSetup.Create(),
             }
         )
         {

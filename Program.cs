@@ -33,6 +33,7 @@
                 Environment.ExitCode = Services.GameBarSetupCommand.Run();
                 return;
             }
+            Services.SetupEnvironment.WaitForPreviousInstance(args);
             Services.LogRetention.CleanInBackground();
             Services.AppLog.Shared.Info(Services.LogCategory.App, "程序启动");
             Application.Run(new FormMain());

@@ -50,6 +50,7 @@ public class FormMainShortcutsTests : IDisposable
                 StartBackgroundServices = false,
                 StartGameIntegration = false,
                 ShutdownTasks = new NoShutdownTask(),
+                Setup = PinnedSetup.Create(),
             }
         )
         {

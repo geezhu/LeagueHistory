@@ -24,6 +24,11 @@ namespace League.Models
         public string VoiceMicrophoneId { get; set; } = string.Empty;
 
         /// <summary>
+        /// 首次启动时已自动打开过「准备情况」页；之后只在设置里查看
+        /// </summary>
+        public bool SetupChecklistShown { get; set; } = false;
+
+        /// <summary>
         /// 游戏结束后自动退出并返回客户端
         /// </summary>
         public bool AutoExitGameAfterEnd { get; set; } = false;

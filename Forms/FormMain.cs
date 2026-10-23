@@ -182,6 +182,7 @@ namespace League
 
                 // After the window is shown, so the question is not hidden behind the splash of an empty form.
                 BeginInvoke(ShowCrashPromptIfNeeded);
+                ShowSetupChecklistOnFirstRun();
                 StartHangMonitor();
             }
             catch (Exception ex)

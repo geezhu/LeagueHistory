@@ -16,6 +16,7 @@ public partial class FormMain
         ConfigureOverlayPage();
         ConfigureMessageSettings();
         MoveAdditionalSettings();
+        ConfigureSetupChecklist();
     }
 
     private void ConfigureSettingsTabs()
