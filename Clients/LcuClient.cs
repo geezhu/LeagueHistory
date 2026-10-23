@@ -79,6 +79,15 @@ namespace League.Clients
         }
 
         /// <summary>
+        /// 使用已设置好地址和认证的 HttpClient，例如测试里的桩传输
+        /// </summary>
+        public LcuClient(HttpClient httpClient)
+        {
+            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _baseUrl = httpClient.BaseAddress?.ToString() ?? "";
+        }
+
+        /// <summary>
         /// 发送通用HTTP请求
         /// </summary>
         public async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request)

@@ -169,7 +169,10 @@ internal static class LcuClientServiceChecks
     private static async Task ReplayChecks()
     {
         var ready = new Recorder(_ => Json("""{"state":"watch","downloadProgress":100}"""));
-        Check(await new ReplayService(Client(ready)).DownloadReplayAsync(5), "A finished replay needs no download");
+        Check(
+            await new ReplayService(Client(ready)).DownloadReplayAsync(5) == ReplayDownloadResult.AlreadyExists,
+            "A finished replay needs no download"
+        );
         Check(
             ready.Paths.Single() == "/lol-replays/v1/metadata/5",
             "A finished replay is decided from its metadata alone"
@@ -180,7 +183,10 @@ internal static class LcuClientServiceChecks
                 ? Json("{}", HttpStatusCode.NotFound)
                 : Json("{}", HttpStatusCode.InternalServerError)
         );
-        Check(!await new ReplayService(Client(refused)).DownloadReplayAsync(5), "A refused download reports failure");
+        Check(
+            await new ReplayService(Client(refused)).DownloadReplayAsync(5) == ReplayDownloadResult.RequestError,
+            "A refused download reports failure"
+        );
         Check(
             refused.Paths.Count == 2 && refused.Paths[1] == "/lol-replays/v1/rofls/5/download",
             "A missing replay is downloaded once"

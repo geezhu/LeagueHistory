@@ -177,9 +177,9 @@ namespace League.Clients
         }
 
         /// <summary>
-        /// 下载游戏回放
+        /// 下载游戏回放，返回结束原因
         /// </summary>
-        public async Task<bool> DownloadReplayAsync(long gameId, string contextData = "match-history")
+        public async Task<ReplayDownloadResult> DownloadReplayAsync(long gameId, string contextData = "match-history")
         {
             return await _replayService.DownloadReplayAsync(gameId, contextData);
         }

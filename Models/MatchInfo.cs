@@ -117,6 +117,11 @@ namespace League.Models
 
         public bool IsReplayDownloaded { get; set; } = false;
 
+        /// <summary>
+        /// 回放已因版本更新失效，无法再下载
+        /// </summary>
+        public bool IsReplayExpired { get; set; } = false;
+
         public MatchInfo()
         {
             PrimaryRunes = (from _ in Enumerable.Range(0, 4) select new RuneInfo()).ToArray();

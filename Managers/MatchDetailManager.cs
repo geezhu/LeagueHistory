@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using League.Clients;
 using League.Controls;
 using League.Models;
 using League.UIState;
@@ -33,6 +34,13 @@ namespace League.Managers
                     return;
                 }
 
+                // The card no longer offers an expired replay; the detail view's button can still ask for it.
+                if (matchInfo.IsReplayExpired)
+                {
+                    ShowReplayExpiredMessage();
+                    return;
+                }
+
                 if (!matchInfo.IsReplayDownloaded)
                 {
                     await DownloadAndPlayReplay(matchInfo, matchPanel);
@@ -54,28 +62,43 @@ namespace League.Managers
         private async Task DownloadAndPlayReplay(MatchInfo matchInfo, MatchListPanel matchPanel)
         {
             var result = MessageBox.Show(
-                $"点击确定将自动下载回放文件并开始播放比赛！\n比赛ID: {matchInfo.GameId}\n模式: {matchInfo.Mode}",
+                "确定下载并观看这场回放吗？\n\n"
+                    + $"比赛ID：{matchInfo.GameId}\n"
+                    + $"模式：{matchInfo.Mode}\n\n"
+                    + "注意：确定后会立即下载并播放，且只有当前版本的比赛可以下载，版本更新后旧回放会失效。",
                 "查看回放",
                 MessageBoxButtons.OKCancel,
                 MessageBoxIcon.Question
             );
 
-            if (result == DialogResult.OK)
+            if (result != DialogResult.OK)
             {
-                if (await Globals.lcuClient.DownloadReplayAsync(matchInfo.GameId))
-                {
+                return;
+            }
+
+            switch (await Globals.lcuClient.DownloadReplayAsync(matchInfo.GameId))
+            {
+                case ReplayDownloadResult.Success:
+                case ReplayDownloadResult.AlreadyExists:
                     matchInfo.IsReplayDownloaded = true;
                     matchPanel.Invalidate();
-
                     if (!await Globals.lcuClient.PlayReplayAsync(matchInfo.GameId))
                     {
                         ShowReplayPlayError();
                     }
-                }
-                else
-                {
-                    ShowDownloadReplayError();
-                }
+
+                    break;
+                case ReplayDownloadResult.Incompatible:
+                    matchInfo.IsReplayExpired = true;
+                    matchPanel.Invalidate();
+                    ShowReplayExpiredMessage();
+                    break;
+                case ReplayDownloadResult.Timeout:
+                    ShowDownloadReplayError("等待下载超时，客户端可能仍在下载，请稍后再试。");
+                    break;
+                default:
+                    ShowDownloadReplayError("请检查是否为最近比赛或支持回放的模式。");
+                    break;
             }
         }
 
@@ -130,13 +153,21 @@ namespace League.Managers
         /// <summary>
         /// 显示回放下载错误
         /// </summary>
-        private void ShowDownloadReplayError()
+        private void ShowDownloadReplayError(string reason)
+        {
+            MessageBox.Show("下载失败，" + reason, "下载失败", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+        }
+
+        /// <summary>
+        /// 显示回放已过期
+        /// </summary>
+        private void ShowReplayExpiredMessage()
         {
             MessageBox.Show(
-                "下载失败，请检查是否为最近比赛或支持回放的模式。",
-                "下载失败",
+                "该场回放已因版本更新失效，无法下载观看。",
+                "回放已过期",
                 MessageBoxButtons.OK,
-                MessageBoxIcon.Exclamation
+                MessageBoxIcon.Information
             );
         }
         #endregion

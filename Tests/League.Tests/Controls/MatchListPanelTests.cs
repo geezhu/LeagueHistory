@@ -39,6 +39,42 @@ public class MatchListPanelTests
     }
 
     [Fact]
+    public void Click_ReplayLinkOfAnExpiredReplay_AsksForNothing()
+    {
+        var match = Match();
+        match.IsReplayExpired = true;
+
+        UiHost.Run(host =>
+        {
+            using var card = Card(host, match);
+            MatchInfo? replayed = null;
+            card.ReplayClicked += info => replayed = info;
+            Repaint(card);
+
+            WindowMessages.Click(card, ReplayCentre);
+
+            Assert.Null(replayed);
+        });
+    }
+
+    [Fact]
+    public void Move_OverTheReplayLinkOfAnExpiredReplay_KeepsTheOrdinaryCursor()
+    {
+        var match = Match();
+        match.IsReplayExpired = true;
+
+        UiHost.Run(host =>
+        {
+            using var card = Card(host, match);
+            Repaint(card);
+
+            WindowMessages.Move(card, ReplayCentre);
+
+            Assert.Equal(Cursors.Default, card.Cursor);
+        });
+    }
+
+    [Fact]
     public void Click_DetailsLink_OpensTheDetailsOfThatGame()
     {
         var match = Match();

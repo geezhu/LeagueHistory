@@ -393,7 +393,16 @@ namespace League.Controls
             _detailsRect = ScreenRect(488, 72, 88, 26);
             _replayRect = ScreenRect(582, 72, 90, 26);
             canvas.Text("查看详情 →", canvas.Normal, Accent, 488, 73, 90);
-            canvas.Text(MatchInfo.IsReplayDownloaded ? "播放回放" : "下载回放", canvas.Normal, Accent, 582, 73, 90);
+            canvas.Text(
+                MatchInfo.IsReplayExpired ? "回放已过期"
+                    : MatchInfo.IsReplayDownloaded ? "播放回放"
+                    : "下载回放",
+                canvas.Normal,
+                MatchInfo.IsReplayExpired ? Muted : Accent,
+                582,
+                73,
+                90
+            );
             return augments;
         }
 
@@ -505,7 +514,11 @@ namespace League.Controls
             base.OnMouseClick(e);
             if (_replayRect.Contains(e.Location))
             {
-                ReplayClicked?.Invoke(MatchInfo);
+                // An expired replay is greyed out and no longer opens anything.
+                if (MatchInfo?.IsReplayExpired != true)
+                {
+                    ReplayClicked?.Invoke(MatchInfo);
+                }
             }
             else if (_detailsRect.Contains(e.Location))
             {
@@ -546,12 +559,16 @@ namespace League.Controls
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
-            string? text =
-                _replayRect.Contains(e.Location) ? "查看本场比赛的回放"
-                : _detailsRect.Contains(e.Location) ? "查看本场比赛的详细数据"
-                : _imageHints.FirstOrDefault(h => h.Bounds.Contains(e.Location)).Text;
+            bool replayExpired = MatchInfo?.IsReplayExpired == true;
+            string? text = _replayRect.Contains(e.Location)
+                ? replayExpired
+                    ? "该场回放已因版本更新失效，无法下载观看"
+                    : "查看本场比赛的回放"
+                : _detailsRect.Contains(e.Location)
+                    ? "查看本场比赛的详细数据"
+                    : _imageHints.FirstOrDefault(h => h.Bounds.Contains(e.Location)).Text;
             Cursor =
-                _replayRect.Contains(e.Location)
+                _replayRect.Contains(e.Location) && !replayExpired
                 || _detailsRect.Contains(e.Location)
                 || _playerRegions.Any(p => p.Item1.Contains(e.Location))
                     ? Cursors.Hand
