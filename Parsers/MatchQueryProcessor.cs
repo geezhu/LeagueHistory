@@ -43,19 +43,19 @@ namespace League.Parsers
             // 在此处初始化 Factory
             _factory = new PlayerInfoFactory(_playerCardManager);
 
-            Debug.WriteLine("[MatchQueryProcessor] PlayerCardManager 已注入，Factory 初始化完成");
+            //Debug.WriteLine("[MatchQueryProcessor] PlayerCardManager 已注入，Factory 初始化完成");
         }
 
         public void SetFilterMode(bool filterByGameMode)
         {
             _filterByGameMode = filterByGameMode;
-            Debug.WriteLine($"[MatchQueryProcessor] 筛选模式设置为: {filterByGameMode}");
+            //Debug.WriteLine($"[MatchQueryProcessor] 筛选模式设置为: {filterByGameMode}");
         }
 
         public void SetMatchHistoryCount(int count)
         {
             _matchHistoryCount = count is 10 or 20 or 30 or 50 ? count : 20;
-            Debug.WriteLine($"[MatchQueryProcessor] 战绩场数设置为: {_matchHistoryCount}");
+            //Debug.WriteLine($"[MatchQueryProcessor] 战绩场数设置为: {_matchHistoryCount}");
         }
 
         public async Task<PlayerMatchInfo> SafeFetchPlayerMatchInfoAsync(JToken playerData, int retryTimes = 2)

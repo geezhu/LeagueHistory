@@ -18,7 +18,7 @@ namespace League.Services
             {
                 if (delaySeconds > 0)
                 {
-                    Debug.WriteLine($"[自动接受] 等待 {delaySeconds} 秒后接受...");
+                    //Debug.WriteLine($"[自动接受] 等待 {delaySeconds} 秒后接受...");
                     await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
                 }
 
@@ -29,7 +29,7 @@ namespace League.Services
                     if (success)
                     {
                         _hasAcceptedReadyCheck = true;
-                        Debug.WriteLine($"[自动接受] ✅ 第 {i + 1} 次尝试成功（延迟 {delaySeconds}s）");
+                        //Debug.WriteLine($"[自动接受] ✅ 第 {i + 1} 次尝试成功（延迟 {delaySeconds}s）");
                         return;
                     }
                     await Task.Delay(300);

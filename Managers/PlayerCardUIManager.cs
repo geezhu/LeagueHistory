@@ -43,7 +43,7 @@ namespace League.Managers
                     {
                         if (existingCard.CurrentChampionId != championId)
                         {
-                            Debug.WriteLine($"[仅换英雄] Row={row} Col={col} summonerId={summonerId} 更新头像");
+                            //Debug.WriteLine($"[仅换英雄] Row={row} Col={col} summonerId={summonerId} 更新头像");
                             var newAvatar = await Globals.resLoading.GetChampionIconAsync(championId);
                             FormUiStateManager.SafeInvoke(existingCard, () =>
                             {

@@ -863,7 +863,7 @@ namespace League.Controls
         // 修改 Cleanup 方法，增加深度清理
         public void Cleanup()
         {
-            Debug.WriteLine($"[深度清理] MatchTabPageContent 开始清理，PUUID: {_puuid}");
+            //Debug.WriteLine($"[深度清理] MatchTabPageContent 开始清理，PUUID: {_puuid}");
 
             // 1. 取消所有异步操作
             _updateCts?.Cancel();
@@ -952,7 +952,7 @@ namespace League.Controls
             GC.Collect(0, GCCollectionMode.Forced);
             GC.WaitForPendingFinalizers();
 
-            Debug.WriteLine($"[深度清理] MatchTabPageContent 清理完成");
+            //Debug.WriteLine($"[深度清理] MatchTabPageContent 清理完成");
         }
 
         // 🔥 新增：深度清理JArray

@@ -85,11 +85,11 @@ namespace League.Services
                         if ((teamOne != null && teamOne.Count > 0) || (teamTwo != null && teamTwo.Count > 0))
                         {
                             if (i > 1)
-                                Debug.WriteLine($"[GameSession] 第 {i} 次重试成功");
+                                //Debug.WriteLine($"[GameSession] 第 {i} 次重试成功");
                             return sessionData;
                         }
                     }
-                    Debug.WriteLine($"[GameSession] 第 {i}/{maxAttempts} 次为空或不完整");
+                    //Debug.WriteLine($"[GameSession] 第 {i}/{maxAttempts} 次为空或不完整");
                 }
                 catch (Exception ex)
                 {
@@ -106,7 +106,7 @@ namespace League.Services
         {
             if (!await _bothLoadLock.WaitAsync(0))
             {
-                Debug.WriteLine("[ShowBothTeams] 已有加载在进行，跳过重复调用");
+                //Debug.WriteLine("[ShowBothTeams] 已有加载在进行，跳过重复调用");
                 return;
             }
 
@@ -154,7 +154,7 @@ namespace League.Services
                 int myRow = isInTeamOne ? 0 : 1;
                 int enemyRow = isInTeamOne ? 1 : 0;
 
-                Debug.WriteLine($"[ShowBothTeams] 我方 row={myRow} count={myTeam.Count} | 敌方 row={enemyRow} count={enemyTeam.Count}");
+                //Debug.WriteLine($"[ShowBothTeams] 我方 row={myRow} count={myTeam.Count} | 敌方 row={enemyRow} count={enemyTeam.Count}");
 
                 await _cardManager.CreateBasicCardsOnly(myTeam, isMyTeam: true, row: myRow);
                 await _cardManager.FillPlayerMatchInfoAsync(myTeam, isMyTeam: true, row: myRow, forceFill: true);
@@ -215,7 +215,7 @@ namespace League.Services
             _lastChampSelectSnapshotString = heroSnapshot;
             _form.lastChampSelectSnapshotString = heroSnapshot;
 
-            Debug.WriteLine($"[TeamCardDisplay] 我方更新 | 结构变化:{structureChanged} | 英雄变化:{heroChanged}");
+            //Debug.WriteLine($"[TeamCardDisplay] 我方更新 | 结构变化:{structureChanged} | 英雄变化:{heroChanged}");
 
             if (structureChanged)
             {
@@ -236,7 +236,7 @@ namespace League.Services
         {
             if (!await _enemyLoadLock.WaitAsync(0))
             {
-                Debug.WriteLine("[ShowEnemyTeamCards] 已有加载在进行，跳过重复调用");
+                //Debug.WriteLine("[ShowEnemyTeamCards] 已有加载在进行，跳过重复调用");
                 return;
             }
 
@@ -265,7 +265,7 @@ namespace League.Services
                 if (selections != null && selections.Count >= 1)
                 {
                     (teamOne, teamTwo) = _cardManager.EnsureAllPlayersPresent(teamOne, teamTwo, selections);
-                    Debug.WriteLine($"[EnsurePlayers] 补全后 → Team1:{teamOne?.Count ?? 0} | Team2:{teamTwo?.Count ?? 0}");
+                    //Debug.WriteLine($"[EnsurePlayers] 补全后 → Team1:{teamOne?.Count ?? 0} | Team2:{teamTwo?.Count ?? 0}");
                 }
 
                 if (teamOne == null || teamTwo == null)

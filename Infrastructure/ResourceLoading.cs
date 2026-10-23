@@ -49,7 +49,7 @@ namespace League.Infrastructure
                 Augments.LoadAsync()
             );
 
-            Debug.WriteLine("✅ 所有游戏资源加载完成");
+            //Debug.WriteLine("✅ 所有游戏资源加载完成");
         }
 
         #region ChampionManager

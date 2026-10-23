@@ -153,7 +153,7 @@ namespace League.Controls
                 if (string.Equals(page.Tag as string, puuid, StringComparison.OrdinalIgnoreCase))
                 {
                     MainTabControl.SelectedTab = page;
-                    Debug.WriteLine($"[Tab 已存在] 切换到: {puuid}");
+                    //Debug.WriteLine($"[Tab 已存在] 切换到: {puuid}");
 
                     if (_tabPageContents.TryGetValue(page, out var existingContent))
                     {
@@ -233,7 +233,7 @@ namespace League.Controls
 
             _tabPageContents[newTab] = tabContent;
 
-            Debug.WriteLine($"[CreateNewTab] 成功创建: {fullName} | PUUID: {puuid}");
+            //Debug.WriteLine($"[CreateNewTab] 成功创建: {fullName} | PUUID: {puuid}");
         }
     }
 }

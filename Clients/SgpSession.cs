@@ -186,7 +186,7 @@ namespace League.Clients
                     }
 
                     string errorContent = await response.Content.ReadAsStringAsync();
-                    Debug.WriteLine($"请求失败: {response.StatusCode} - {errorContent}");
+                    //Debug.WriteLine($"请求失败: {response.StatusCode} - {errorContent}");
 
                     // 401/403 再刷新 token
                     if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)

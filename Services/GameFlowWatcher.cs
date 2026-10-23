@@ -48,7 +48,7 @@ namespace League.Services
         public async void StartGameflowWatcher()
         {
             if (!_uiManager.LcuReady) return;
-            Debug.WriteLine("[GameFlowWatcher] StartGameflowWatcher 就绪（事件已由 LcuManager 驱动）");
+            //Debug.WriteLine("[GameFlowWatcher] StartGameflowWatcher 就绪（事件已由 LcuManager 驱动）");
         }
 
         public void StopGameflowWatcher()
@@ -61,7 +61,7 @@ namespace League.Services
         {
             if (!_uiManager.LcuReady)
             {
-                Debug.WriteLine("[GameFlowWatcher] 收到 Disconnected，但 LcuReady=false，忽略");
+                //Debug.WriteLine("[GameFlowWatcher] 收到 Disconnected，但 LcuReady=false，忽略");
                 return;
             }
 
@@ -86,7 +86,7 @@ namespace League.Services
         {
             if (!_uiManager.LcuReady)
             {
-                Debug.WriteLine($"[Phase Changed] 忽略（LcuReady=false）: {previousPhase ?? "null"} → {phase}");
+                //Debug.WriteLine($"[Phase Changed] 忽略（LcuReady=false）: {previousPhase ?? "null"} → {phase}");
                 return;
             }
 
@@ -106,7 +106,7 @@ namespace League.Services
 
             try
             {
-                Debug.WriteLine($"[Phase Changed] {previousPhase ?? "null"} → {phase} | 时间: {DateTime.Now:HH:mm:ss.fff}");
+                //Debug.WriteLine($"[Phase Changed] {previousPhase ?? "null"} → {phase} | 时间: {DateTime.Now:HH:mm:ss.fff}");
 
                 switch (phase)
                 {

@@ -237,6 +237,47 @@ namespace League.Clients
         }
 
         // ==================== 凭证（国服：命令行 + 缓存，无 lockfile）====================
+        //private Task<bool> TryGetCredentialsAsync()
+        //{
+        //    try
+        //    {
+        //        var ux = Process.GetProcessesByName("LeagueClientUx").FirstOrDefault();
+        //        if (ux != null)
+        //        {
+        //            string cmd = GetCommandLine(ux);
+        //            if (!string.IsNullOrEmpty(cmd))
+        //            {
+        //                string port = Clean(ExtractArgument(cmd, "--app-port="));
+        //                string token = Clean(ExtractArgument(cmd, "--remoting-auth-token="));
+        //                if (!string.IsNullOrEmpty(port) && !string.IsNullOrEmpty(token))
+        //                {
+        //                    _port = port;
+        //                    _token = token;
+        //                    SaveCache(_port, _token);
+        //                    Debug.WriteLine($"[LcuManager] 凭证←Ux Port={_port}");
+        //                    return Task.FromResult(true);
+        //                }
+        //            }
+        //        }
+
+        //        // UX 不在（含进游戏关客户端）：用缓存继续尝试 LCU
+        //        if (LoadCache(out string cp, out string ct))
+        //        {
+        //            _port = cp;
+        //            _token = ct;
+        //            Debug.WriteLine($"[LcuManager] 凭证←缓存 Port={_port}");
+        //            return Task.FromResult(true);
+        //        }
+
+        //        return Task.FromResult(false);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        Debug.WriteLine($"[LcuManager] 取凭证异常: {ex.Message}");
+        //        return Task.FromResult(false);
+        //    }
+        //}
+
         private Task<bool> TryGetCredentialsAsync()
         {
             try
@@ -253,8 +294,8 @@ namespace League.Clients
                         {
                             _port = port;
                             _token = token;
-                            SaveCache(_port, _token);
-                            Debug.WriteLine($"[LcuManager] 凭证←Ux Port={_port}");
+                            // 不再在这里写缓存，等真正 Connected 再写
+                            Debug.WriteLine($"[LcuManager] 凭证←Ux Port={_port}，Token={_token}");
                             return Task.FromResult(true);
                         }
                     }

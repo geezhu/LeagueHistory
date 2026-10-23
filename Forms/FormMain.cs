@@ -108,7 +108,7 @@ namespace League
         public void SaveAppConfig()
         {
             LeagueConfigManager.Save(_appConfig);
-            Debug.WriteLine("[配置] 主窗体保存配置完成");
+            //Debug.WriteLine("[配置] 主窗体保存配置完成");
         }
 
         #region 窗体事件
@@ -324,7 +324,7 @@ namespace League
                         sgpOk = await Globals.sgpClient.InitSgpAsync(Globals.lcuClient.Client);
                     }
 
-                    Debug.WriteLine($"[就绪检查] 第 {i}/{maxAttempts} 次 → summoner={summonerOk}, sgp={sgpOk}");
+                    //Debug.WriteLine($"[就绪检查] 第 {i}/{maxAttempts} 次 → summoner={summonerOk}, sgp={sgpOk}");
 
                     if (summonerOk && sgpOk)
                         return true;
@@ -422,7 +422,7 @@ namespace League
                 {
                     Debug.WriteLine("[英雄预加载] 开始加载所有英雄数据...");
                     await _championManager.InitializeAsync(forceRefresh: false);
-                    Debug.WriteLine($"[英雄预加载] 成功！共加载 {_championManager.AllChampions.Count} 个英雄");
+                    //Debug.WriteLine($"[英雄预加载] 成功！共加载 {_championManager.AllChampions.Count} 个英雄");
                 }
                 catch (Exception ex)
                 {
@@ -443,7 +443,7 @@ namespace League
             }
 
             // 等召唤师 + SGP 就绪后再拉战绩，减少空白首屏
-            Debug.WriteLine("[LCU] 等待会话与 SGP 就绪...");
+            //Debug.WriteLine("[LCU] 等待会话与 SGP 就绪...");
             bool ready = await WaitForSessionAndSgpReadyAsync(maxAttempts: 20, delayMs: 800);
             if (!ready)
             {
@@ -503,7 +503,7 @@ namespace League
         /// </summary>
         public async Task InitializeDefaultTab()
         {
-            Debug.WriteLine($"[InitializeDefaultTab] 开始，ForceMatchRefresh={RefreshState.ForceMatchRefresh}");
+            //Debug.WriteLine($"[InitializeDefaultTab] 开始，ForceMatchRefresh={RefreshState.ForceMatchRefresh}");
 
             var summoner = await Globals.lcuClient.GetCurrentSummoner();
             string? puuid = summoner?["puuid"]?.ToString();
@@ -518,12 +518,12 @@ namespace League
 
             _chatMessageBuilder?.SetMyPuuid(Globals.CurrentPuuid);
 
-            Debug.WriteLine($"[InitializeDefaultTab] 当前玩家 PUUID: {Globals.CurrentPuuid}");
+            //Debug.WriteLine($"[InitializeDefaultTab] 当前玩家 PUUID: {Globals.CurrentPuuid}");
 
             var rankedStats = await GetRankedStatsAsync(puuid);
             string privacyStatus = GetPrivacyStatus(summoner);
 
-            Debug.WriteLine($"[InitializeDefaultTab] 调用 CreateNewTab，ForceMatchRefresh={RefreshState.ForceMatchRefresh}");
+            //Debug.WriteLine($"[InitializeDefaultTab] 调用 CreateNewTab，ForceMatchRefresh={RefreshState.ForceMatchRefresh}");
 
             _matchTabContent?.CreateNewTab(
                 summoner["summonerId"]?.ToString() ?? "",
@@ -656,7 +656,7 @@ namespace League
             if (refreshFlag)
             {
                 MatchCache.ClearPlayer(puuid);
-                Debug.WriteLine($"[LoadFullMatchData] 强制刷新，已清除玩家缓存: {puuid}");
+                //Debug.WriteLine($"[LoadFullMatchData] 强制刷新，已清除玩家缓存: {puuid}");
             }
             else
             {

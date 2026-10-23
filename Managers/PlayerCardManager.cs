@@ -68,7 +68,7 @@ namespace League.Managers
                 DateTime lastFill = isMyTeam ? _lastFillMyTeamTime : _lastFillEnemyTeamTime;
                 if ((DateTime.Now - lastFill).TotalMilliseconds < FillThrottleMs)
                 {
-                    Debug.WriteLine($"[Fill] 节流跳过 isMyTeam={isMyTeam}（距上次 {(DateTime.Now - lastFill).TotalMilliseconds:F0}ms）");
+                    //Debug.WriteLine($"[Fill] 节流跳过 isMyTeam={isMyTeam}（距上次 {(DateTime.Now - lastFill).TotalMilliseconds:F0}ms）");
                     return;
                 }
                 if (isMyTeam) _lastFillMyTeamTime = DateTime.Now;
@@ -249,7 +249,7 @@ namespace League.Managers
             while ((teamOne == null || teamTwo == null || teamOne.Count != 5 || teamTwo.Count != 5) && retryCount <= MaxRetry)
             {
                 if (retryCount > 0)
-                    Debug.WriteLine($"[Validate] 第 {retryCount} 次重试获取队伍数据...");
+                    //Debug.WriteLine($"[Validate] 第 {retryCount} 次重试获取队伍数据...");
 
                 Debug.WriteLine("[Validate] 队伍数据不完整，尝试重新获取最新数据...");
                 (teamOne, teamTwo) = await TryGetLatestFullTeamsAsync();
@@ -274,7 +274,7 @@ namespace League.Managers
 
                 if (cardsNeedFix.Count == 0)
                 {
-                    Debug.WriteLine("[Validate] 无需补全，所有卡片正常");
+                    //Debug.WriteLine("[Validate] 无需补全，所有卡片正常");
                     return;
                 }
 
