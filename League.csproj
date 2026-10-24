@@ -16,6 +16,7 @@
 	<ItemGroup>
 	  <Content Include="favicon.ico" />
 	  <EmbeddedResource Include="Assets\WeGame\honor16.png" LogicalName="League.WeGame.honor16.png" />
+	  <EmbeddedResource Include="Assets\WeGame\team-*.png" LogicalName="League.WeGame.%(Filename)%(Extension)" />
 	  <EmbeddedResource Include="Assets\Ranked\*.png" />
 	  <EmbeddedResource Include="Scripts\ShutdownAfterLoL.ps1" LogicalName="League.ScheduledShutdown.ps1" />
 	  <EmbeddedResource Include="Assets\Maps\*.png" />

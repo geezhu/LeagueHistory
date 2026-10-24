@@ -12,4 +12,12 @@ Used mappings (cell): assists `0`, damage taken `2`, champion damage `3`, triple
 
 The client maps server-provided battle tags to icons; it does not document how all those tags are awarded. This application explicitly labels non-kill badges as match-wide maxima calculated from complete participant fields, including ties. No MVP/SVP, AFK, or proprietary rating is inferred. No double-kill or most-kills badge is shown. Only the highest multi-kill badge is displayed, matching the client's display behavior.
 
+## Team summary icons
+
+`team-*.png` are the masks of `.icon-data1` to `.icon-data7`, embedded as data URIs in the same stylesheet (`life-history-Cc_2l0VS.css`). The battle detail script (https://wegame.gtimg.com/g.26-r.c2d3c/helper/lol/assets/battle-detail-base-f92d45d5.js) puts `icon-data1` to `icon-data6` before the team's kills, gold, turrets, inhibitors, Barons and dragons; `icon-data7` is taken as the Rift Herald from its artwork alone. Only the alpha carries the shape: WeGame tints them with its text colour, and the application with its own icon grey. Each is twice its displayed size (24 x 21 shown at 12 x 10) and is halved when drawn.
+
+Files: kills `team-kda` (1), gold `team-gold` (2), turrets `team-tower` (3), inhibitors `team-inhibitor` (4), Baron `team-baron` (5), dragons `team-dragon` (6), Rift Herald `team-riftHerald` (7).
+
+## First blood
+
 No verified first-blood icon was found in this set. First blood uses a locally drawn flat blood-drop symbol of the same 10 px size, explicitly separate from the WeGame sprite mappings.
