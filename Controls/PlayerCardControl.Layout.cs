@@ -55,7 +55,6 @@ public partial class PlayerCardControl
             }
         );
         SummaryPanel.Controls.Add(_summonerAvatar);
-        SummaryPanel.Controls.Add(_masteryStrip);
         SummaryPanel.Resize += (_, _) => ReflowSummaryPanel();
         ConfigureChampionBar();
         Controls.Add(SummaryPanel);
@@ -120,17 +119,12 @@ public partial class PlayerCardControl
         ReflowRanks();
     }
 
-    // Identity on top, then the ranks and the mastery row when they have something to show, then the champion bar.
+    // Identity on top, then the ranks when there is one to show, then the champion bar.
     // Decided from the content, not from Visible: a card filled before its window is shown reads every child as hidden.
     private void ReflowSummaryHeight()
     {
         bool ranks = HasRank(lblSoloRank) || HasRank(lblFlexRank);
-        int masteryTop = ranks ? RankTop + RankHeight + 4 : RankTop + 2;
-        _masteryStrip.SetBounds(10, masteryTop, Math.Max(20, SummaryPanel.Width - 20), _masteryStrip.Height);
-        SummaryPanel.Height =
-            _masteryStrip.Count > 0 ? _masteryStrip.Bottom + 10 + ChampionBarHeight
-            : ranks ? 154
-            : 120;
+        SummaryPanel.Height = ranks ? 154 : 120;
     }
 
     private static bool HasRank(Label rank) => rank.Text.Length > 0;
@@ -139,7 +133,6 @@ public partial class PlayerCardControl
     {
         lblPlayerName.Width = lblPrivacyStatus.Width = Math.Max(20, SummaryPanel.Width - 82);
         _recentKda.Width = _recentWinRate.Width = lblPlayerName.Width;
-        _masteryStrip.Width = Math.Max(20, SummaryPanel.Width - 20);
         ReflowRanks();
     }
 

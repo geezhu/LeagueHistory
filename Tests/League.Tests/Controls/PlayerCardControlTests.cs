@@ -136,39 +136,6 @@ public class PlayerCardControlTests
         });
     }
 
-    [Fact]
-    public void ShowMasteries_SomeChampions_ShowsThemAndMakesRoomBelowTheRanks()
-    {
-        UiHost.Run(host =>
-        {
-            var card = Card(host);
-            card.SetPlayerInfo("玩家#1234", "华贵铂金 II", "", null!, "公开", Rows(1), Color.Black);
-
-            card.ShowMasteries([Mastery(103), Mastery(7), Mastery(64)]);
-
-            Assert.Equal(3, card.MasteryCountShown);
-            Assert.True(
-                card.SummaryPanel.Height > RankedHeaderHeight,
-                $"The mastery row needs its own space: {card.SummaryPanel.Height}"
-            );
-        });
-    }
-
-    [Fact]
-    public void ShowMasteries_NoChampions_KeepsTheRankedHeaderHeight()
-    {
-        UiHost.Run(host =>
-        {
-            var card = Card(host);
-            card.SetPlayerInfo("玩家#1234", "华贵铂金 II", "", null!, "公开", Rows(1), Color.Black);
-            card.ShowMasteries([Mastery(103)]);
-
-            card.ShowMasteries([]);
-
-            Assert.Equal(RankedHeaderHeight, card.SummaryPanel.Height);
-        });
-    }
-
     // Rooms fill cards before they are shown; a hidden parent makes every child read as hidden.
     [Fact]
     public void SetPlayerInfo_ACardNotShownYet_StillReservesTheRankRow()
@@ -180,35 +147,6 @@ public class PlayerCardControlTests
             card.SetPlayerInfo("玩家#1234", "华贵铂金 II", "璀璨钻石 II", null!, "公开", Rows(1), Color.Black);
 
             Assert.Equal(RankedHeaderHeight, card.SummaryPanel.Height);
-        });
-    }
-
-    [Fact]
-    public void ShowMasteries_ACardNotShownYet_StillMakesRoomForTheRow()
-    {
-        UiHost.Run(host =>
-        {
-            var card = HiddenCard(host);
-            card.SetPlayerInfo("玩家#1234", "华贵铂金 II", "", null!, "公开", Rows(1), Color.Black);
-
-            card.ShowMasteries([Mastery(103)]);
-
-            Assert.True(card.SummaryPanel.Height > RankedHeaderHeight, $"{card.SummaryPanel.Height}");
-        });
-    }
-
-    [Fact]
-    public void ShowMasteries_ANewRow_DisposesTheIconsItReplaces()
-    {
-        UiHost.Run(host =>
-        {
-            var card = Card(host);
-            var first = Mastery(103);
-            card.ShowMasteries([first]);
-
-            card.ShowMasteries([Mastery(7)]);
-
-            Assert.Throws<ArgumentException>(() => first.Icon!.Width);
         });
     }
 
@@ -666,8 +604,6 @@ public class PlayerCardControlTests
     }
 
     /// <summary>One champion of the mastery row, with an icon of its own for the card to take over.</summary>
-    private static MasteryIcon Mastery(int championId) => new(championId, $"英雄 {championId}", new Bitmap(22, 22));
-
     private static (PlayerCardControl First, PlayerCardControl Second) TwoCards(Form host) =>
         (Card(host), Card(host, CardWidth + 10));
 

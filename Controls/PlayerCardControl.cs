@@ -91,7 +91,6 @@ namespace League.Controls
             CurrentSummonerId = summonerId;
             CurrentChampionId = championId;
             CurrentPuuId = puuid ?? "";
-            LoadMasteryForPlayer();
 
             // 保存完整名称
             _fullPlayerName = string.IsNullOrWhiteSpace(fullName) ? playerName : fullName;
