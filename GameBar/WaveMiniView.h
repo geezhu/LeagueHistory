@@ -35,6 +35,8 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
     int renderedLanes = -1;
     hstring session;
     bool busy = false, stopped = false, collapsed = false, enabled = false, active = false;
+    // The last fit was refused or failed and is retried while Game Bar is open.
+    bool fitPending = false;
     // The main program accepts confirmed voice text; the voice row shows only then and during a game.
     bool supportsVoice = false, voiceShown = false;
     // Preview captures read a fixture with a frozen clock; nothing is sent to the game.
@@ -127,7 +129,10 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
                                                          [weak]
                                                          {
                                                              if (auto view = weak.lock(); view && !view->stopped)
+                                                             {
                                                                  view->voice->DisplayModeChanged();
+                                                                 view->RetryFit();
+                                                             }
                                                          });
                 });
             widget.RequestedOpacityChanged(
@@ -151,6 +156,7 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
                     self->Read();
                     self->Update(false);
                     self->voice->Tick();
+                    self->RetryFit();
                 }
             });
         timer.Start();
@@ -217,14 +223,25 @@ struct WaveMiniView : std::enable_shared_from_this<WaveMiniView>
         Size size{static_cast<float>(width), static_cast<float>(height)};
         try
         {
-            if (!co_await widget.TryResizeWindowAsync(size))
+            bool resized = co_await widget.TryResizeWindowAsync(size);
+            // A pinned widget is refused while Game Bar is closed, which is when the voice row appears in a game;
+            // the collapsed one-line window would then hide it. The fit is retried once Game Bar is open.
+            if (!resized && !fitPending)
                 Trace(L"wave-mini-resize-refused");
+            fitPending = !resized;
         }
         catch (hresult_error const &e)
         {
             // Game Bar may refuse while it is closing the widget; the player can still resize by hand.
             Trace(L"wave-mini-resize-error " + e.message());
+            fitPending = true;
         }
+    }
+    // Retries a refused fit while Game Bar is open, where resizing is allowed.
+    void RetryFit()
+    {
+        if (fitPending && widget && widget.GameBarDisplayMode() == XboxGameBarDisplayMode::Foreground)
+            FitWindow();
     }
     fire_and_forget Read()
     {

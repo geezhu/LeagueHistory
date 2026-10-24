@@ -311,9 +311,13 @@ public class VoicePcmBufferTests
 
     [Theory]
     [InlineData(16384, 0.5f)]
-    [InlineData(33, 0.01611328125f)]
-    [InlineData(7, 0.00341796875f)]
-    public void Finish_QuietRecording_IsAmplifiedByAtMostSixteenTimes(short amplitude, float expectedPeak)
+    [InlineData(1024, 0.5f)]
+    [InlineData(33, 0.0322265625f)]
+    [InlineData(7, 0.0068359375f)]
+    public void Finish_QuietRecording_IsAmplifiedTowardsHalfScaleByAtMostThirtyTwoTimes(
+        short amplitude,
+        float expectedPeak
+    )
     {
         byte[] pcm = Tone(VoicePcmBuffer.SampleRate / 2, amplitude);
         Assert.Equal(VoicePcmBuffer.SampleRate, pcm.Length);

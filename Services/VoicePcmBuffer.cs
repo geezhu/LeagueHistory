@@ -4,6 +4,8 @@ public sealed class VoicePcmBuffer
 {
     public const int SampleRate = 16000;
     public const int MaxSamples = SampleRate * 20;
+    private const float TargetPeak = .5f;
+    private const float MaxGain = 32;
     private readonly List<float> _samples = new(MaxSamples);
     private int _firstVoice = -1;
     private int _lastVoice;
@@ -72,8 +74,10 @@ public sealed class VoicePcmBuffer
         int first = Math.Max(0, _firstVoice - SampleRate / 4);
         int last = Math.Min(_samples.Count, _lastVoice + SampleRate / 3);
         var result = _samples.GetRange(first, last - first).ToArray();
-        // Bounded gain makes quiet microphones usable without changing the system's input volume.
-        float gain = _peak > 0 ? Math.Min(16, .2f / _peak) : 1;
+        // Bounded gain makes quiet microphones usable without changing the system's input volume. Recordings peaking
+        // at .003 to .016 of full scale were common, and sixteen times left them too quiet for the model to keep
+        // every syllable.
+        float gain = _peak > 0 ? Math.Min(MaxGain, TargetPeak / _peak) : 1;
         if (gain > 1)
         {
             for (int i = 0; i < result.Length; i++)

@@ -122,8 +122,32 @@ public sealed class SenseVoiceSession : IDesktopVoiceSession
         Emit(source, new("", false, Stage: "decoding"));
         await preparation.ConfigureAwait(false);
         source.Token.ThrowIfCancellationRequested();
-        string text = await _transcriber.TranscribeAsync(samples, source.Token).ConfigureAwait(false);
-        source.Token.ThrowIfCancellationRequested();
+        // Phrase by phrase: given a recording with pauses, the model often keeps only one of the phrases.
+        var phrases = VoiceSegments.Split(samples);
+        var parts = new List<string>(phrases.Count);
+        foreach (var (start, length) in phrases)
+        {
+            float[] phrase = phrases.Count == 1 ? samples : samples.AsSpan(start, length).ToArray();
+            try
+            {
+                parts.Add(await _transcriber.TranscribeAsync(phrase, source.Token).ConfigureAwait(false));
+            }
+            finally
+            {
+                // The copies are cleared like the recording itself is in cleanup.
+                if (!ReferenceEquals(phrase, samples))
+                {
+                    Array.Clear(phrase);
+                }
+            }
+            source.Token.ThrowIfCancellationRequested();
+        }
+        string text = VoiceSegments.Join(parts);
+        // Lengths only, never the words: enough to tell a cut recording from a lost phrase.
+        ChatSendDiagnostics.Shared.Report(
+            "voice-decode",
+            $"录音 {samples.Length / (double)VoicePcmBuffer.SampleRate:F1} 秒 · 分 {phrases.Count} 段识别 · 识别出 {text.Length} 字。"
+        );
         if (State == VoiceCaptureState.Disposed)
         {
             return new(true);
