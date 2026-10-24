@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace League.Caching
 {
@@ -65,6 +66,13 @@ namespace League.Caching
                 }
                 return page;
             }
+        }
+
+        /// <summary>对局 ID。SGP 的对局包在 json 里；没有 gameId 的就用整段文本区分，不至于把不同的对局当成同一场。</summary>
+        public static string GameId(JToken game)
+        {
+            JToken? id = game["json"]?["gameId"] ?? game["gameId"];
+            return id?.ToString() ?? game.ToString(Formatting.None);
         }
 
         public static void ClearAll()

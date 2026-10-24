@@ -8,6 +8,8 @@ namespace League.Tests.Controls;
 /// <summary>
 /// The history page while a page loads. The history request is answered by a task the test completes, so the page
 /// is caught mid-load: the sweeping bar shows, and an empty list says it is loading rather than looking broken.
+///
+/// Coming back to the history tab asks for the newest page again; the list is redrawn only when its top game changed.
 /// </summary>
 [Trait("Category", "UI")]
 public class MatchTabPageContentTests
@@ -77,6 +79,85 @@ public class MatchTabPageContentTests
             await WaitForAsync(() => Descendants(view).OfType<MatchListPanel>().Count() == 3);
 
             Assert.False(Bar(view).Visible);
+        });
+    }
+
+    /// <summary>How often the page asked for a refresh and parsed a row.</summary>
+    private sealed class Calls
+    {
+        public int Refreshed { get; set; }
+
+        public int Parsed { get; set; }
+    }
+
+    /// <summary>A page showing games 1 to 3, whose refresh answers with the given games.</summary>
+    private static async Task<(MatchTabPageContent View, Calls Calls)> ShowingThreeAsync(Form host, JArray newest)
+    {
+        var calls = new Calls();
+        var view = new MatchTabPageContent { Dock = DockStyle.Fill };
+        host.Controls.Add(view);
+        view.LoadDataRequested += (_, _, _, _) => Task.FromResult(Records(3));
+        view.RefreshDataRequested += (_, _, _, _) =>
+        {
+            calls.Refreshed++;
+            return Task.FromResult(newest);
+        };
+        view.ParsePanelRequested += (_, _, index) =>
+        {
+            calls.Parsed++;
+            return Task.FromResult<Panel>(new MatchListPanel(new MatchInfo { Index = index, ResultText = "胜利" }));
+        };
+        view.Initialize("puuid");
+        await WaitForAsync(() => Descendants(view).OfType<MatchListPanel>().Count() == 3);
+        return (view, calls);
+    }
+
+    private static JArray WithNewGameOnTop() => [new JObject { ["gameId"] = 99 }, .. Records(3)];
+
+    [Fact]
+    public void RefreshNewestAsync_ANewGameOnTop_RedrawsTheList()
+    {
+        UiHost.Run(async host =>
+        {
+            var (view, _) = await ShowingThreeAsync(host, WithNewGameOnTop());
+
+            await view.RefreshNewestAsync();
+
+            await WaitForAsync(() => Descendants(view).OfType<MatchListPanel>().Count() == 4);
+        });
+    }
+
+    [Fact]
+    public void RefreshNewestAsync_TheSameGameOnTop_KeepsTheList()
+    {
+        UiHost.Run(async host =>
+        {
+            var (view, calls) = await ShowingThreeAsync(host, Records(3));
+
+            await view.RefreshNewestAsync();
+
+            Assert.Equal(1, calls.Refreshed);
+            Assert.Equal(3, calls.Parsed);
+        });
+    }
+
+    [Fact]
+    public void RefreshNewestAsync_WhileThePageStillLoads_AsksNothing()
+    {
+        // The page being loaded is already the newest one.
+        UiHost.Run(async host =>
+        {
+            var (view, _) = Loading(host);
+            int refreshed = 0;
+            view.RefreshDataRequested += (_, _, _, _) =>
+            {
+                refreshed++;
+                return Task.FromResult(WithNewGameOnTop());
+            };
+
+            await view.RefreshNewestAsync();
+
+            Assert.Equal(0, refreshed);
         });
     }
 }

@@ -804,6 +804,10 @@ namespace League
         private void imageTabControl1_SelectedIndexChanged(object sender, EventArgs e)
         {
             _uiManager!.HandleTabSelectionChanged(imageTabControl1.SelectedIndex, _tab1Poller);
+            if (imageTabControl1.SelectedTab == tabPage1 && _matchTabContent != null)
+            {
+                _ = _matchTabContent.RefreshSelectedNewestAsync();
+            }
         }
 
         /// <summary>

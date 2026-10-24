@@ -51,6 +51,18 @@ namespace League.Controls
         #endregion
 
         /// <summary>
+        /// 回到「查看历史」时，给当前显示的玩家补上新对局。
+        /// </summary>
+        public Task RefreshSelectedNewestAsync()
+        {
+            if (MainTabControl.SelectedTab is TabPage page && _tabPageContents.TryGetValue(page, out var content))
+            {
+                return content.RefreshNewestAsync();
+            }
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
         /// 正常关闭单个 Tab（保护自己）
         /// </summary>
         public void CloseTab(TabPage tab)
@@ -288,6 +300,9 @@ namespace League.Controls
             var tabContent = new MatchTabPageContent();
             tabContent.LoadDataRequested += async (p, beg, end, q) =>
                 await ((FormMain)this.ParentForm).LoadFullMatchDataAsync(p, beg, end, q);
+
+            tabContent.RefreshDataRequested += async (p, beg, end, q) =>
+                await ((FormMain)this.ParentForm).LoadFullMatchDataAsync(p, beg, end, q, forceRefresh: true);
 
             tabContent.ParsePanelRequested += async (match, puuidParam, index) =>
                 await ((FormMain)this.ParentForm).ParseGameToPanelAsync(match, summonerId, gameName, tagLine, index);

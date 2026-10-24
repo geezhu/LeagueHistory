@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics;
+using League.Caching;
 using League.Models;
 using League.Services;
 using League.States;
@@ -17,11 +18,17 @@ namespace League.Controls
 
         // 数据加载事件
         public event Func<string, int, int, string, Task<JArray>> LoadDataRequested;
+
+        // 同 LoadDataRequested，但先用服务器最新一段对齐缓存头部。
+        public event Func<string, int, int, string, Task<JArray>> RefreshDataRequested;
         public event Func<JObject, string, int, Task<Panel>> ParsePanelRequested;
 
         private SemaphoreSlim _loadSemaphore = new SemaphoreSlim(1, 1);
         private SemaphoreSlim _updateLock = new SemaphoreSlim(1, 1);
         private CancellationTokenSource _updateCts;
+
+        // 列表最上面那场的对局 ID，用来判断回到战绩页时有没有新对局。
+        private string _shownNewestId;
 
         // 保存当前JArray引用，用于释放
         private JArray _currentMatches;
@@ -350,8 +357,54 @@ namespace League.Controls
             DisableNextPage();
         }
 
+        /// <summary>
+        /// 回到战绩页时补上新对局：只在第一页、没有胜负筛选、没有别的加载时请求最新一页；最上面那场变了才重画。
+        /// </summary>
+        public async Task RefreshNewestAsync()
+        {
+            if (
+                _currentPage != 1
+                || _selectedWin.HasValue
+                || _isRefreshing
+                || RefreshDataRequested == null
+                || string.IsNullOrEmpty(_puuid)
+                || DateTime.Now - _lastRefreshTime < _minimumRefreshInterval
+            )
+            {
+                return;
+            }
+            // 正在加载的那一页本身就是最新的，不插队。
+            if (!await _loadSemaphore.WaitAsync(0, CancellationToken.None))
+            {
+                return;
+            }
+
+            try
+            {
+                _lastRefreshTime = DateTime.Now;
+                JArray matches = await RefreshDataRequested(_puuid, 0, _pageSize, _selectedQueueId);
+                if (matches == null || matches.Count == 0 || MatchCache.GameId(matches[0]) == _shownNewestId)
+                {
+                    return;
+                }
+
+                await UpdateMatchList(matches);
+                SafeSetEnabled(btnNext, matches.Count >= _pageSize);
+            }
+            catch (Exception ex)
+            {
+                // 后台补新对局，失败时保留当前列表，下次回到战绩页再试。
+                AppLog.Shared.Warn(LogCategory.Data, "回到战绩页刷新新对局失败", ex);
+            }
+            finally
+            {
+                _loadSemaphore.Release();
+            }
+        }
+
         private async Task UpdateMatchList(JArray matches)
         {
+            _shownNewestId = matches.Count > 0 ? MatchCache.GameId(matches[0]) : null;
             // 等的是上一次列表更新退出，新的取消源要在拿到锁之后才创建，所以这里不能用旧的取消源。
             await _updateLock.WaitAsync(CancellationToken.None);
             try
@@ -1123,6 +1176,7 @@ namespace League.Controls
 
             // 8. 清理事件引用
             LoadDataRequested = null;
+            RefreshDataRequested = null;
             ParsePanelRequested = null;
 
             // 9. 清理下拉框事件

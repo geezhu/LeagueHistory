@@ -135,11 +135,6 @@ namespace League.Caching
             Complete = false;
         }
 
-        // SGP 的对局包在 json 里；没有 gameId 的就用整段文本区分，不至于把不同的对局当成同一场。
-        private static string GameId(JToken game)
-        {
-            JToken? id = game["json"]?["gameId"] ?? game["gameId"];
-            return id?.ToString() ?? game.ToString(Formatting.None);
-        }
+        private static string GameId(JToken game) => MatchCache.GameId(game);
     }
 }
