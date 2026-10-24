@@ -32,7 +32,7 @@ namespace League.UIHelpers
                 return icon;
             }
 
-            // Cells of WeGame's current honor16 sprite, 26 px apart; each icon is 10 x 10.
+            // Cells of WeGame's current honor16 sprite, 26 px apart; each icon is 10 x 10, except the leaver's 11 x 12.
             int cell = key switch
             {
                 "assists" => 0,
@@ -43,20 +43,21 @@ namespace League.UIHelpers
                 "triple" => 5,
                 "quadra" => 6,
                 "penta" => 7,
+                "leaver" => 8,
                 "gold" => 9,
                 "towers" => 10,
                 "cs" => 11,
                 _ => throw new ArgumentOutOfRangeException(nameof(key)),
             };
+            var size = key == "leaver" ? new Size(11, 12) : new Size(IconSize, IconSize);
             // Drawn 1:1 in the middle of the badge slot: scaling a 10 px icon only blurs it, and the margin keeps
             // the compact layout's 14 px step from covering the next icon.
-            int offset = (SlotSize - IconSize) / 2;
             lock (Sprite)
             {
                 graphics.DrawImage(
                     Sprite.Value,
-                    new Rectangle(offset, offset, IconSize, IconSize),
-                    new Rectangle(cell * CellStep, 0, IconSize, IconSize),
+                    new Rectangle((SlotSize - size.Width) / 2, (SlotSize - size.Height) / 2, size.Width, size.Height),
+                    new Rectangle(new Point(cell * CellStep, 0), size),
                     GraphicsUnit.Pixel
                 );
             }
@@ -98,6 +99,12 @@ namespace League.UIHelpers
         public static List<(string Key, string Hint)> Select(JObject player, List<JObject> all)
         {
             var result = new List<(string Key, string Hint)>();
+            // The server's own verdict, carried in the SGP record; the client's match history has no such field, and
+            // then nothing is shown rather than a guess. Listed first: it says the most about the game.
+            if (player["wasAfk"]?.Type == JTokenType.Boolean && player["wasAfk"]!.Value<bool>())
+            {
+                result.Add(("leaver", "逃跑：服务器判定这名玩家挂机或中途离开"));
+            }
             // WeGame's public script displays only the highest multi-kill badge.
             foreach (
                 var (field, key, name) in new[]

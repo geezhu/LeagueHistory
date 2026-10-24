@@ -266,6 +266,37 @@ public class ScoreboardLayoutTests
     }
 
     [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public void PrepareAsync_APlayerTheServerMarkedAfk_GetsTheLeaverMark(bool afk, bool marked)
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            match.AllParticipants[0]["wasAfk"] = afk;
+            var detail = View(host, match);
+
+            await detail.PrepareAsync();
+
+            Assert.Equal(marked, Row(detail, "甲").Controls["Honor_leaver"] != null);
+        });
+    }
+
+    [Fact]
+    public void PrepareAsync_ARecordWithoutTheAfkField_ShowsNoLeaverMark()
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            var detail = View(host, match);
+
+            await detail.PrepareAsync();
+
+            Assert.Empty(Descendants(detail).Where(control => control.Name == "Honor_leaver"));
+        });
+    }
+
+    [Theory]
     [InlineData(8, true)]
     [InlineData(7, false)]
     public void PrepareAsync_AKillingSpreeOfEight_IsGodlike(int spree, bool godlike)
