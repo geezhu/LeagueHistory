@@ -1,6 +1,5 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics;
-using League.Caching;
 using League.Models;
 using League.Services;
 using League.States;
@@ -678,10 +677,6 @@ namespace League.Controls
             _outcomePager = null;
             // 重置页面状态
             _currentPage = 1;
-
-            // ★ 额外保险：强制刷新时清除该玩家所有分页缓存
-            MatchCache.ClearPlayer(puuid);
-            Debug.WriteLine($"[ForceRefreshDataInternal] 已清除玩家缓存: {puuid}");
 
             // 清理缓存
             if (_currentMatches != null)

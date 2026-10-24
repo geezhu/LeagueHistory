@@ -686,32 +686,20 @@ namespace League
         {
             bool refreshFlag = forceRefresh ?? RefreshState.ForceMatchRefresh;
 
-            // ★ 强制刷新时，先清除该玩家全部缓存，防止新旧分页数据错位
-            if (refreshFlag)
-            {
-                MatchCache.ClearPlayer(puuid);
-                Debug.WriteLine($"[LoadFullMatchData] 强制刷新，已清除玩家缓存: {puuid}");
-            }
-            else
-            {
-                // 非强制刷新时优先读缓存
-                var cached = MatchCache.Get(puuid, queueId, begIndex, pageSize);
-                if (cached != null)
-                {
-                    return cached;
-                }
-            }
-
-            // 发起网络请求
-            var allGames = await Globals.sgpClient.SgpFetchLatestMatches(puuid, begIndex, pageSize, queueId);
-
-            // 写入缓存,null 表示失败，不要写入缓存；空数组可以写入（表示“这页确实没数据”）
-            MatchCache.Add(puuid, queueId, begIndex, pageSize, allGames);
+            // 强制刷新只取最新一段对齐缓存头部；翻到没取过的页只取缺的尾部。null 表示服务器异常。
+            JArray? games = await MatchCache.GetPageAsync(
+                puuid,
+                queueId,
+                begIndex,
+                pageSize,
+                refreshFlag,
+                (start, count) => Globals.sgpClient.SgpFetchLatestMatches(puuid, start, count, queueId)
+            );
 
             // 重置强制刷新状态（只生效一次）
             RefreshState.ForceMatchRefresh = false;
 
-            return allGames;
+            return games;
         }
 
         /// <summary>
