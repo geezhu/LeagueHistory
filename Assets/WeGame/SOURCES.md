@@ -8,9 +8,11 @@ Taken on 2026-10-23 from the WeGame desktop client's League of Legends helper, w
 
 It replaces an older 16 x 16 web sprite (https://cdn.tgp.qq.com/lol/images/common/honor16.c34f6b6f98d22e92120b566617344ed1.png) with the same artwork, which carried a translucent black outline meant for dark pages and turned grey on a white one. Public access does not imply an open-source asset license. Artwork remains owned by its respective rights holders.
 
-Used mappings (cell): assists `0`, damage taken `2`, champion damage `3`, triple kill `5`, quadra kill `6`, penta kill `7`, gold `9`, turrets `10`, minions `11`. The icons are drawn 1:1, centred in a 16 x 16 badge slot.
+Used mappings (cell): assists `0`, godlike `1`, damage taken `2`, champion damage `3`, most kills `4` (a single bloodied sword), triple kill `5`, quadra kill `6`, penta kill `7`, gold `9`, turrets `10`, minions `11`. The icons are drawn 1:1, centred in a 16 x 16 badge slot.
 
-The client maps server-provided battle tags to icons; it does not document how all those tags are awarded. This application explicitly labels non-kill badges as match-wide maxima calculated from complete participant fields, including ties. No AFK mark is inferred; MVP and SVP are, from the estimated score only (below). No double-kill or most-kills badge is shown. Only the highest multi-kill badge is displayed, matching the client's display behavior.
+WeGame's battle detail script (https://wegame.gtimg.com/g.26-r.c2d3c/helper/lol/v2/assets/life-battle-api.752a0712.js) maps its honours to these cells: `isLargestChampionsKilled` → kill (杀人最多不服来辩), `isLargestAssists` → attack, `isLargestGoldEarned` → money, `isLeaver` → leave, `isTripleKills` / `isQuadraKills` / `isPentaKills` → kill3 / kill4 / kill5, `isGodlike` → god (连杀超过8个，超神), `isLargestAllMinionsKilled` → soldier, `isLargestTurretsKilled` → pull, `isLargestTotalDamageTaken` → hurt, `isLargestTotalDamageDealt` and `isLargestTotalDamageDealtToChampions` → hurt2. Checked against the 112 sampled games: the most-kills mark went to the game's highest kills, ties included, for all 1070 players, and 超神 to every player whose largest killing spree was 8 or more and to none below.
+
+The client maps server-provided battle tags to icons; it does not document how all those tags are awarded. This application explicitly labels non-kill badges as match-wide maxima calculated from complete participant fields, including ties. No AFK mark is inferred; MVP and SVP are, from the estimated score only (below). No double-kill badge is shown. Only the highest multi-kill badge is displayed, matching the client's display behavior.
 
 ## Team summary icons
 

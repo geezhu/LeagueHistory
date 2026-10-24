@@ -36,8 +36,10 @@ namespace League.UIHelpers
             int cell = key switch
             {
                 "assists" => 0,
+                "godlike" => 1,
                 "taken" => 2,
                 "damage" => 3,
+                "kills" => 4,
                 "triple" => 5,
                 "quadra" => 6,
                 "penta" => 7,
@@ -61,6 +63,7 @@ namespace League.UIHelpers
             return icon;
         }
 
+        private const int GodlikeSpree = 8;
         private const int SlotSize = 16;
         private const int IconSize = 10;
         private const int CellStep = 26;
@@ -112,9 +115,17 @@ namespace League.UIHelpers
                     break;
                 }
             }
+            // WeGame's 超神 is a killing spree of eight or more: every sampled player at 8 had it, none at 7.
+            int spree = player["largestKillingSpree"]?.Value<int>() ?? 0;
+            if (spree >= GodlikeSpree)
+            {
+                result.Add(("godlike", $"超神 · 最高连杀 {spree}"));
+            }
+            // In WeGame's order: kills first, then assists and gold; the others follow.
             foreach (
                 var (field, key, name) in new[]
                 {
+                    ("kills", "kills", "击杀"),
                     ("assists", "assists", "助攻"),
                     ("goldEarned", "gold", "经济"),
                     ("totalDamageDealtToChampions", "damage", "对英雄伤害"),

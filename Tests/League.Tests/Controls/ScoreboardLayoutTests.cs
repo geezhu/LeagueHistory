@@ -250,6 +250,39 @@ public class ScoreboardLayoutTests
     }
 
     [Fact]
+    public void PrepareAsync_TheGamesMostKills_GetsTheMostKillsMark()
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            var detail = View(host, match);
+
+            await detail.PrepareAsync();
+
+            // 乙 has nine kills, the most of the four.
+            Assert.NotNull(Row(detail, "乙").Controls["Honor_kills"]);
+            Assert.Null(Row(detail, "甲").Controls["Honor_kills"]);
+        });
+    }
+
+    [Theory]
+    [InlineData(8, true)]
+    [InlineData(7, false)]
+    public void PrepareAsync_AKillingSpreeOfEight_IsGodlike(int spree, bool godlike)
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            match.AllParticipants[0]["largestKillingSpree"] = spree;
+            var detail = View(host, match);
+
+            await detail.PrepareAsync();
+
+            Assert.Equal(godlike, Row(detail, "甲").Controls["Honor_godlike"] != null);
+        });
+    }
+
+    [Fact]
     public void PrepareAsync_MayhemGameOfOneWinningSide_MarksASingleMvp()
     {
         UiHost.Run(async host =>
