@@ -250,6 +250,21 @@ public class ScoreboardLayoutTests
     }
 
     [Fact]
+    public void PrepareAsync_MayhemGameOfOneWinningSide_MarksASingleMvp()
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            match.QueueId = "q_2400";
+            var detail = View(host, match);
+
+            await detail.PrepareAsync();
+
+            Assert.Single(Descendants(detail), control => control.Name == "MatchHonour");
+        });
+    }
+
+    [Fact]
     public void PrepareAsync_WideMayhemBoard_PutsTheScoreRightOfTheMetrics()
     {
         UiHost.Run(async host =>

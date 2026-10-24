@@ -95,6 +95,45 @@ public sealed class AramMayhemScoreEstimator
 
     public bool Supports(int queueId) => _queues.Contains(queueId);
 
+    /// <summary>
+    /// WeGame names the best score of the winning team MVP and the best of the losing team SVP (every one of 111 and
+    /// 108 sampled games). With the estimates in their place the pick matches WeGame's in about 86% of games.
+    /// </summary>
+    public static MatchHonour Honour(IReadOnlyList<JObject> participants, IReadOnlyList<double> estimates, int index)
+    {
+        if (participants[index]["win"]?.Type != JTokenType.Boolean)
+        {
+            return MatchHonour.None;
+        }
+
+        bool win = participants[index]["win"]!.Value<bool>();
+        // Ties go to the first listed player, so a team never shows two.
+        int best = Enumerable
+            .Range(0, participants.Count)
+            .Where(i =>
+                participants[i]["win"]?.Type == JTokenType.Boolean && participants[i]["win"]!.Value<bool>() == win
+            )
+            .OrderByDescending(i => estimates[i])
+            .First();
+        return best != index ? MatchHonour.None
+            : win ? MatchHonour.Mvp
+            : MatchHonour.Svp;
+    }
+
+    /// <summary>The honour of the match's own player (its CurrPuuid), or none outside ARAM: Mayhem.</summary>
+    public MatchHonour OwnHonour(MatchInfo match)
+    {
+        if (match.AllParticipants == null || Estimate(match) is not double[] estimates)
+        {
+            return MatchHonour.None;
+        }
+
+        int index = match.AllParticipants.FindIndex(p => (string?)p["puuid"] == match.CurrPuuid);
+        return index < 0 || string.IsNullOrEmpty(match.CurrPuuid)
+            ? MatchHonour.None
+            : Honour(match.AllParticipants, estimates, index);
+    }
+
     /// <summary>The estimates for a match record, in the order of its participants; its queue reads "q_2400".</summary>
     public double[]? Estimate(MatchInfo match) =>
         match.AllParticipants != null && int.TryParse(match.QueueId?.Replace("q_", ""), out int queue)

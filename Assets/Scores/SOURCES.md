@@ -35,6 +35,10 @@ Tried and left out because they added nothing once these terms were in: number o
 
 WeGame's scores themselves are close to normal: mean 9.5, standard deviation 2.0, slightly compressed at both ends.
 
+## MVP and SVP
+
+WeGame's battle details carry `battleHonour.isMvp` and `isSvp`. In every sampled game with them (111 and 108; the other five were custom games WeGame had cached with a single player) MVP went to the best score of the winning team and SVP to the best of the losing team. Picking them from the estimate, on games left out of the fit, matches WeGame's MVP in 86% of games and its SVP in 87%; the actual one is in the estimate's top two of the team in 97%. Ties go to the first listed player.
+
 ## Limits
 
 - Fitted only on ARAM: Mayhem; other modes are not estimated.

@@ -1,3 +1,4 @@
+using League.Models;
 using League.Services;
 using Newtonsoft.Json.Linq;
 
@@ -44,6 +45,21 @@ public class AramMayhemScoreEstimatorTests
             ["kills"] = 0,
             ["deaths"] = deaths,
             ["goldEarned"] = gold,
+            ["totalDamageTaken"] = 0,
+            ["totalDamageDealtToChampions"] = 0,
+            ["timeCCingOthers"] = 0,
+        };
+
+    private static JObject Player(bool? win, string puuid = "") =>
+        new()
+        {
+            ["teamId"] = win == false ? 200 : 100,
+            ["championId"] = 1,
+            ["puuid"] = puuid,
+            ["win"] = win is bool w ? w : JValue.CreateNull(),
+            ["kills"] = 0,
+            ["deaths"] = 0,
+            ["goldEarned"] = 0,
             ["totalDamageTaken"] = 0,
             ["totalDamageDealtToChampions"] = 0,
             ["timeCCingOthers"] = 0,
@@ -136,6 +152,66 @@ public class AramMayhemScoreEstimatorTests
         var estimates = Model(intercept: 5, offsets: """{"1": 2.5}""").Estimate(players, 2400);
 
         Assert.Equal(Rounded([7.5, 5.0]), Rounded(estimates!));
+    }
+
+    [Theory]
+    [InlineData(1, MatchHonour.Mvp)]
+    [InlineData(0, MatchHonour.None)]
+    [InlineData(3, MatchHonour.Svp)]
+    [InlineData(2, MatchHonour.None)]
+    public void Honour_TheBestOfEachTeam_IsMvpForTheWinnersAndSvpForTheLosers(int index, MatchHonour expected)
+    {
+        var players = new List<JObject> { Player(true), Player(true), Player(false), Player(false) };
+        double[] estimates = [9.0, 12.0, 8.0, 10.0];
+
+        Assert.Equal(expected, AramMayhemScoreEstimator.Honour(players, estimates, index));
+    }
+
+    [Theory]
+    [InlineData(0, MatchHonour.Mvp)]
+    [InlineData(1, MatchHonour.None)]
+    public void Honour_TiedBestScores_GoToTheFirstListed(int index, MatchHonour expected)
+    {
+        var players = new List<JObject> { Player(true), Player(true) };
+
+        Assert.Equal(expected, AramMayhemScoreEstimator.Honour(players, [11.0, 11.0], index));
+    }
+
+    [Fact]
+    public void Honour_APlayerWithoutAResult_IsNone()
+    {
+        var players = new List<JObject> { Player(null) };
+
+        Assert.Equal(MatchHonour.None, AramMayhemScoreEstimator.Honour(players, [11.0], 0));
+    }
+
+    [Theory]
+    [InlineData("winner", MatchHonour.Mvp)]
+    [InlineData("loser", MatchHonour.Svp)]
+    [InlineData("someone else", MatchHonour.None)]
+    public void OwnHonour_AMayhemGame_IsTheHonourOfTheCurrentPlayer(string puuid, MatchHonour expected)
+    {
+        using var match = new MatchInfo
+        {
+            QueueId = "q_2400",
+            CurrPuuid = puuid,
+            AllParticipants = [Player(true, "winner"), Player(false, "loser")],
+        };
+
+        Assert.Equal(expected, AramMayhemScoreEstimator.Shared.OwnHonour(match));
+    }
+
+    [Fact]
+    public void OwnHonour_ASummonersRiftGame_IsNone()
+    {
+        using var match = new MatchInfo
+        {
+            QueueId = "q_420",
+            CurrPuuid = "winner",
+            AllParticipants = [Player(true, "winner"), Player(false, "loser")],
+        };
+
+        Assert.Equal(MatchHonour.None, AramMayhemScoreEstimator.Shared.OwnHonour(match));
     }
 
     [Fact]

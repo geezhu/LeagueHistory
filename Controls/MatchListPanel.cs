@@ -2,6 +2,7 @@
 using System.Text.RegularExpressions;
 using League.Models;
 using League.Services;
+using League.UIHelpers;
 
 namespace League.Controls
 {
@@ -28,7 +29,39 @@ namespace League.Controls
             set
             {
                 _matchInfo = value;
+                _honour = null;
                 Invalidate();
+            }
+        }
+
+        private MatchHonour? _honour;
+
+        // Worked out once per match: the estimate compares all ten players, and the row repaints often.
+        private MatchHonour Honour =>
+            _honour ??= _matchInfo == null ? MatchHonour.None : AramMayhemScoreEstimator.Shared.OwnHonour(_matchInfo);
+
+        /// <summary>WeGame's MVP or SVP mark in the bottom right corner of the champion icon, where WeGame puts it.</summary>
+        private void PaintHonour(Graphics g, int iconX, int iconY, int iconSize, bool hint)
+        {
+            if (WeGameHonorIcons.Badge(Honour) is not Bitmap badge)
+            {
+                return;
+            }
+
+            var bounds = new Rectangle(
+                iconX + iconSize - badge.Width,
+                iconY + iconSize - badge.Height,
+                badge.Width,
+                badge.Height
+            );
+            g.DrawImage(badge, bounds);
+            if (hint)
+            {
+                // Ahead of the icon's own hint, which covers the same spot.
+                _imageHints.Insert(
+                    0,
+                    (ScreenRect(bounds.X, bounds.Y, bounds.Width, bounds.Height), WeGameHonorIcons.BadgeHint(Honour))
+                );
             }
         }
 
@@ -245,6 +278,7 @@ namespace League.Controls
             {
                 g.DrawImage(MatchInfo.HeroIcon, new Rectangle(6, 11, 40, 40));
             }
+            PaintHonour(g, 6, 11, 40, hint: false);
 
             void Draw(string text, int x, int y, int width, Color ink) =>
                 TextRenderer.DrawText(
@@ -323,6 +357,7 @@ namespace League.Controls
             canvas.Text(MatchInfo.DurationText, canvas.Small, Muted, 16, 47, 65);
             canvas.Text($"#{MatchInfo.Index:00}", canvas.Small, Muted, 16, 78, 58);
             canvas.Icon(MatchInfo.HeroIcon, 88, 18, 52, MatchInfo.ChampionName);
+            PaintHonour(canvas.Graphics, 88, 18, 52, hint: true);
             canvas.Text(MatchInfo.ChampionName, canvas.Strong, Ink, 150, 16, 120);
             canvas.Text(MatchInfo.Mode, canvas.Normal, Muted, 150, 43, 120);
             canvas.Text(MatchInfo.GameTime, canvas.Small, Muted, 88, 80, 184);

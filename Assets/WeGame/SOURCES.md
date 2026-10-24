@@ -10,13 +10,17 @@ It replaces an older 16 x 16 web sprite (https://cdn.tgp.qq.com/lol/images/commo
 
 Used mappings (cell): assists `0`, damage taken `2`, champion damage `3`, triple kill `5`, quadra kill `6`, penta kill `7`, gold `9`, turrets `10`, minions `11`. The icons are drawn 1:1, centred in a 16 x 16 badge slot.
 
-The client maps server-provided battle tags to icons; it does not document how all those tags are awarded. This application explicitly labels non-kill badges as match-wide maxima calculated from complete participant fields, including ties. No MVP/SVP, AFK, or proprietary rating is inferred. No double-kill or most-kills badge is shown. Only the highest multi-kill badge is displayed, matching the client's display behavior.
+The client maps server-provided battle tags to icons; it does not document how all those tags are awarded. This application explicitly labels non-kill badges as match-wide maxima calculated from complete participant fields, including ties. No AFK mark is inferred; MVP and SVP are, from the estimated score only (below). No double-kill or most-kills badge is shown. Only the highest multi-kill badge is displayed, matching the client's display behavior.
 
 ## Team summary icons
 
 `team-*.png` are the masks of `.icon-data1` to `.icon-data7`, embedded as data URIs in the same stylesheet (`life-history-Cc_2l0VS.css`). The battle detail script (https://wegame.gtimg.com/g.26-r.c2d3c/helper/lol/assets/battle-detail-base-f92d45d5.js) puts `icon-data1` to `icon-data6` before the team's kills, gold, turrets, inhibitors, Barons and dragons; `icon-data7` is taken as the Rift Herald from its artwork alone. Only the alpha carries the shape: WeGame tints them with its text colour, and the application with its own icon grey. Each is twice its displayed size (24 x 21 shown at 12 x 10) and is halved when drawn.
 
 Files: kills `team-kda` (1), gold `team-gold` (2), turrets `team-tower` (3), inhibitors `team-inhibitor` (4), Baron `team-baron` (5), dragons `team-dragon` (6), Rift Herald `team-riftHerald` (7).
+
+## MVP and SVP
+
+`badge-mvp.png` and `badge-svp.png` are `.icon-mvp` and `.icon-svp` (28 x 12), embedded as data URIs in https://wegame.gtimg.com/g.26-r.c2d3c/helper/lol/assets/common-CZvmXLBN.css; the player item script draws them over the champion icon from `battleHonour.isMvp` / `isSvp`. In the 112 sampled games WeGame gave MVP to the best score of the winning team and SVP to the best of the losing team every time. The application applies that rule to its estimated ARAM: Mayhem score (Assets/Scores/SOURCES.md), so the marks are its own estimate: they match WeGame's in about 86% of games, and the right player is among the estimate's top two of the team in 97%. Other modes have no estimate and show neither mark.
 
 ## First blood
 

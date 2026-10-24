@@ -1,4 +1,5 @@
 using League.Controls;
+using League.Models;
 using Newtonsoft.Json.Linq;
 
 namespace League.UIHelpers
@@ -63,6 +64,33 @@ namespace League.UIHelpers
         private const int SlotSize = 16;
         private const int IconSize = 10;
         private const int CellStep = 26;
+
+        private static readonly Lazy<Bitmap> MvpBadge = new(() => LoadBadge("mvp"));
+        private static readonly Lazy<Bitmap> SvpBadge = new(() => LoadBadge("svp"));
+
+        /// <summary>
+        /// WeGame's 28 x 12 MVP or SVP mark, shared for the process: callers draw it or copy it, never dispose it.
+        /// </summary>
+        public static Bitmap? Badge(MatchHonour honour) =>
+            honour switch
+            {
+                MatchHonour.Mvp => MvpBadge.Value,
+                MatchHonour.Svp => SvpBadge.Value,
+                _ => null,
+            };
+
+        public static string BadgeHint(MatchHonour honour) =>
+            (honour == MatchHonour.Mvp ? "MVP：胜方估算评分最高" : "SVP：败方估算评分最高")
+            + "\n按 WeGame 的规则用估算评分选出，约 86% 的对局与 WeGame 一致。";
+
+        private static Bitmap LoadBadge(string name)
+        {
+            using var stream = typeof(WeGameHonorIcons).Assembly.GetManifestResourceStream(
+                $"League.WeGame.badge-{name}.png"
+            )!;
+            using var image = Image.FromStream(stream);
+            return new Bitmap(image);
+        }
 
         public static List<(string Key, string Hint)> Select(JObject player, List<JObject> all)
         {

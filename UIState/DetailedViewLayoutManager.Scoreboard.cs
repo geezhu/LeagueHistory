@@ -178,6 +178,31 @@ namespace League.UIState
                 $"估算评分 {estimate:0.0} · 全场第 {rank} 名\n"
                     + "按 WeGame 海克斯大乱斗评分拟合的估算，不是 WeGame 的数据；平均相差约 0.7 分。"
             );
+            AddScoreboardHonour(row, Services.AramMayhemScoreEstimator.Honour(match.AllParticipants, estimates, index));
+        }
+
+        // WeGame's MVP or SVP mark in the bottom right corner of the 34 px champion icon at (12, 5), where WeGame puts it.
+        private void AddScoreboardHonour(Panel row, MatchHonour honour)
+        {
+            if (League.UIHelpers.WeGameHonorIcons.Badge(honour) is not Bitmap badge)
+            {
+                return;
+            }
+
+            var picture = new PictureBox
+            {
+                Name = "MatchHonour",
+                Location = new Point(12 + 34 - badge.Width, 5 + 34 - badge.Height),
+                Size = badge.Size,
+                // A copy: the scoreboard disposes the images of its picture boxes, and the badge is shared.
+                Image = new Bitmap(badge),
+                SizeMode = PictureBoxSizeMode.Normal,
+                BackColor = Color.Transparent,
+            };
+            row.Controls.Add(picture);
+            // Added after the icon, so it is raised to show over it.
+            picture.BringToFront();
+            _toolTip.SetToolTip(picture, League.UIHelpers.WeGameHonorIcons.BadgeHint(honour));
         }
 
         private static readonly Color ScoreboardInk = Theme.Ink;
