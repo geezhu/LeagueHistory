@@ -705,17 +705,14 @@ public class MatchParserSgpTests : IDisposable
     }
 
     [Fact]
-    public void ParseGameToPanelFromSgpAsync_EveryPlayer_GetsAnAugmentEntry()
+    public void ParseGameToPanelFromSgpAsync_TheList_LoadsOnlyTheOwnPlayersAugments()
     {
+        // The row shows only its own augments; the detail view loads the other players' before drawing them.
         UiHost.Run(async _ =>
         {
             MatchInfo info = await RowOfAsync(SquadGame());
 
-            Assert.Equal(
-                new[] { "ally-puuid", "enemy-puuid-1", "enemy-puuid-2", SelfPuuid, "spectator-puuid" },
-                info.AllPlayersAugments.Keys.OrderBy(puuid => puuid, StringComparer.Ordinal)
-            );
-            Assert.Empty(info.AllPlayersAugments["ally-puuid"]);
+            Assert.Equal([SelfPuuid], info.AllPlayersAugments.Keys);
         });
     }
 

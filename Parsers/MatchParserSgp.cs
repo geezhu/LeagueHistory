@@ -90,7 +90,12 @@ namespace League.Parsers
                 return null;
             }
             long gameId = ((long?)gameJson["gameId"]).GetValueOrDefault();
-            if (ExtractBasicMatchData(gameJson, selfParticipant, participants) is not { } basic)
+            // Without the player's puuid the row cannot be told apart from the others' (the scores, the detail's own
+            // row), so it is left out as a placeholder.
+            if (
+                ExtractBasicMatchData(gameJson, selfParticipant, participants) is not { } basic
+                || string.IsNullOrEmpty(basic.currPuuid)
+            )
             {
                 return null;
             }
@@ -105,11 +110,15 @@ namespace League.Parsers
             var (_, damageTakenText) = ExtractDamageTakenData(selfParticipant, participants);
             var resources = await LoadEssentialResourcesSimple(selfParticipant);
 
-            // 修改：加载所有玩家的海克斯符文
-            var allPlayersAugments = await LoadAllPlayersAugmentsAsync(allParticipants);
-            var selfAugments = allPlayersAugments.ContainsKey(basic.currPuuid)
-                ? allPlayersAugments[basic.currPuuid]
-                : Array.Empty<RuneInfo>();
+            // The list row shows only the player's own augments. The other nine players' (up to 54 more icons per game,
+            // each rendered with its rarity frame) are left to the detail view, which loads every row's missing
+            // augments before drawing it (DetailedViewLayoutManager.RetryMissingAugmentsAsync).
+            var selfAugments = await LoadAugmentsAsync(ExtractAugments(selfParticipant));
+            var allPlayersAugments = new Dictionary<string, RuneInfo[]>();
+            if (!string.IsNullOrEmpty(basic.currPuuid))
+            {
+                allPlayersAugments[basic.currPuuid] = selfAugments;
+            }
 
             MatchInfo matchInfo = CreateMatchInfo(
                 index,
@@ -150,39 +159,6 @@ namespace League.Parsers
             matchInfo.SpellDescriptions[1] = resources.spellDesc2;
             await LoadTeamMembers(matchInfo, allParticipants, summonerId, gameName, tagLine);
             return matchInfo;
-        }
-
-        //添加一个方法来加载所有玩家的海克斯符文
-        private async Task<Dictionary<string, RuneInfo[]>> LoadAllPlayersAugmentsAsync(List<JObject> allParticipants)
-        {
-            var allAugments = new Dictionary<string, RuneInfo[]>();
-
-            // 使用信号量限制并发数
-            var semaphore = new SemaphoreSlim(5);
-            var tasks = allParticipants.Select(async participant =>
-            {
-                await semaphore.WaitAsync();
-                try
-                {
-                    string puuid = participant["puuid"]?.ToString();
-                    if (!string.IsNullOrEmpty(puuid))
-                    {
-                        int[] augmentIds = ExtractAugments(participant);
-                        var augments = await LoadAugmentsAsync(augmentIds);
-                        lock (allAugments)
-                        {
-                            allAugments[puuid] = augments;
-                        }
-                    }
-                }
-                finally
-                {
-                    semaphore.Release();
-                }
-            });
-
-            await Task.WhenAll(tasks);
-            return allAugments;
         }
 
         // 修改海克斯符文加载方法，确保正确处理空值
@@ -867,10 +843,12 @@ namespace League.Parsers
             List<PlayerInfo> blueTeam = new List<PlayerInfo>();
             List<PlayerInfo> redTeam = new List<PlayerInfo>();
 
-            foreach (JObject participant in participants)
+            // The ten icons are looked up together rather than one after another; the results keep the roster order.
+            var players = await Task.WhenAll(
+                participants.Select(participant => CreatePlayerInfo(participant, summonerId, selfGameName, selfTagLine))
+            );
+            foreach (PlayerInfo player in players)
             {
-                // 传入summonerId到CreatePlayerInfo
-                PlayerInfo player = await CreatePlayerInfo(participant, summonerId, selfGameName, selfTagLine);
                 if (player != null)
                 {
                     if (player.TeamId == 100)

@@ -386,13 +386,22 @@ public partial class MatchTabPageContent
         };
     }
 
+    // A page can take a few seconds (the history request, then every game's icons), so a sweeping bar above the list
+    // shows the window is working. Its strip keeps its height while hidden, so the list does not jump.
+    private readonly LoadingBar _historyLoading = new() { Dock = DockStyle.Fill, Visible = false };
+    private const int HistoryLoadingHeight = 4;
+
     private void ConfigureHistoryListHost(Control paging)
     {
         var listHost = new Panel { Dock = DockStyle.Fill };
         paging.Dock = DockStyle.Top;
         flowLayoutPanelRight.Dock = DockStyle.Top;
+        var loadingStrip = new Panel { Dock = DockStyle.Top, Height = HistoryLoadingHeight };
+        loadingStrip.Controls.Add(_historyLoading);
         listHost.Controls.Add(paging);
         listHost.Controls.Add(flowLayoutPanelRight);
+        // Last in the collection docks first, so the strip sits above the list.
+        listHost.Controls.Add(loadingStrip);
         _historySurface.Controls.Add(listHost);
         listHost.BringToFront();
         _historyListHost = listHost;
@@ -407,7 +416,7 @@ public partial class MatchTabPageContent
                 80,
                 Math.Min(
                     flowLayoutPanelRight.Controls.Count * MatchRowHeight + ListPadding,
-                    listHost.ClientSize.Height - paging.Height
+                    listHost.ClientSize.Height - paging.Height - HistoryLoadingHeight
                 )
             );
             ResizeMatchCards();

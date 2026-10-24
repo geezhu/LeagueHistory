@@ -900,6 +900,16 @@ namespace League.Controls
                 SafeSetEnabled(btnPrev, false);
                 SafeSetEnabled(btnNext, false);
             }
+
+            SafeInvoke(() =>
+            {
+                _historyLoading.Visible = isLoading;
+                // A page already on screen stays while the next one loads; an empty list says what it is waiting for.
+                if (isLoading && !flowLayoutPanelRight.Controls.OfType<MatchListPanel>().Any())
+                {
+                    ShowStatusMessage($"正在加载第 {_currentPage} 页战绩…", Theme.Muted);
+                }
+            });
         }
 
         private void ShowErrorMessage(string message)
@@ -917,11 +927,14 @@ namespace League.Controls
         /// <summary>
         /// 统一状态提示（支持多行换行）
         /// </summary>
-        private void ShowStatusMessage(string message, bool isError)
+        private void ShowStatusMessage(string message, bool isError) =>
+            ShowStatusMessage(message, isError ? Color.Red : Color.DarkOrange);
+
+        private void ShowStatusMessage(string message, Color color)
         {
             if (flowLayoutPanelRight.InvokeRequired)
             {
-                flowLayoutPanelRight.Invoke((Action)(() => ShowStatusMessage(message, isError)));
+                flowLayoutPanelRight.Invoke((Action)(() => ShowStatusMessage(message, color)));
                 return;
             }
 
@@ -942,14 +955,14 @@ namespace League.Controls
                     // ★ 不要 Dock，FlowLayoutPanel 里 Dock 容易导致不显示
                     Margin = new Padding(10, 40, 10, 10),
                     BackColor = Color.White,
-                    ForeColor = isError ? Color.Red : Color.DarkOrange,
+                    ForeColor = color,
                     Padding = new Padding(12),
                     Font = new Font("Microsoft YaHei UI", 10f),
                 };
 
                 flowLayoutPanelRight.Controls.Add(label);
 
-                Debug.WriteLine($"[状态提示] {(isError ? "错误" : "空数据")}: {message}");
+                Debug.WriteLine($"[状态提示] {message}");
             }
             finally
             {
