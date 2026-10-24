@@ -1,3 +1,6 @@
+using League.Services;
+using League.UIState;
+
 namespace League.Controls;
 
 public partial class MatchDetailView
@@ -7,6 +10,21 @@ public partial class MatchDetailView
     private readonly Dictionary<Panel, bool> _secondaryMetrics = new();
     private bool _reflowing;
     private bool _buildingScoreboard;
+    private bool? _hasScoreColumn;
+
+    /// <summary>ARAM: Mayhem boards add the estimated score column right of the metrics.</summary>
+    private bool HasScoreColumn => _hasScoreColumn ??= AramMayhemScoreEstimator.Shared.Estimate(_match) != null;
+
+    // A compact board needs every pixel for its three metrics, so the score column narrows there.
+    private int ScoreReserve(bool compact) =>
+        !HasScoreColumn ? 0
+        : compact ? DetailedViewLayoutManager.CompactScoreColumnReserve
+        : DetailedViewLayoutManager.ScoreColumnReserve;
+
+    /// <summary>The width that fits every column; narrower boards page their metrics in threes.</summary>
+    private int WideBoardWidth => 1120 + ScoreReserve(compact: false);
+
+    private static bool IsScoreColumn(Control control) => control.Name is "ScoreEstimate" or "ScoreHeader";
 
     private void ReflowScoreboard()
     {
@@ -20,7 +38,7 @@ public partial class MatchDetailView
         try
         {
             int width = Math.Max(800, _scoreboard.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 28);
-            bool compact = width < 1120;
+            bool compact = width < WideBoardWidth;
             int sectionY = 8;
             foreach (var section in _scoreboard.Controls.OfType<Panel>().Where(p => p.Name != "MatchHighlights"))
             {
@@ -61,7 +79,8 @@ public partial class MatchDetailView
             section.Controls.Add(pageButton);
         }
         pageButton.Visible = compact;
-        pageButton.SetBounds(width - 30, 32, 28, 28);
+        // Left of the score column, which stays put while the metrics page.
+        pageButton.SetBounds(width - 30 - ScoreReserve(compact), 32, 28, 28);
         UpdateMetricPageText(pageButton, secondary);
     }
 
@@ -80,6 +99,19 @@ public partial class MatchDetailView
             _ => -1,
         };
 
+    /// <summary>
+    /// Where a compact page puts its first, second or third metric within the space left of the page button. KDA
+    /// ("15 / 7 / 50") is the widest figure on either page, so the first column takes two fifths.
+    /// </summary>
+    private static (int Left, int Width) MetricSlot(int index, int available)
+    {
+        int first = available * 2 / 5;
+        int other = (available - first) / 2;
+        return index == 0 ? (520, first) : (520 + first + (index - 1) * other, other);
+    }
+
+    private int MetricSpace(int width) => width - 550 - ScoreReserve(compact: true);
+
     private static bool MetricVisible(int x, bool compact, bool secondary) =>
         !compact || (secondary ? x >= 880 : x < 880);
 
@@ -95,7 +127,7 @@ public partial class MatchDetailView
 
     private void ReflowScoreboardHeaders(Panel section, int width, bool compact, bool secondary)
     {
-        int metricWidth = (width - 550) / 3;
+        int available = MetricSpace(width);
         foreach (var header in section.Controls.OfType<Button>())
         {
             if (header.Name == "MetricPage")
@@ -109,6 +141,12 @@ public partial class MatchDetailView
             }
 
             var bounds = RestoreScoreboardBounds(header);
+            if (IsScoreColumn(header))
+            {
+                header.Visible = true;
+                PlaceScoreColumn(header, width, compact, bounds);
+                continue;
+            }
             header.Visible = !compact || bounds.X < 592 || MetricVisible(bounds.X, compact, secondary);
             if (!compact)
             {
@@ -116,7 +154,8 @@ public partial class MatchDetailView
             }
             if (bounds.X >= 592)
             {
-                header.SetBounds(520 + MetricIndex(bounds.X) * metricWidth, bounds.Y, metricWidth, bounds.Height);
+                var (left, slot) = MetricSlot(MetricIndex(bounds.X), available);
+                header.SetBounds(left, bounds.Y, slot, bounds.Height);
             }
             else if (bounds.X >= 242)
             {
@@ -142,7 +181,7 @@ public partial class MatchDetailView
     private void ReflowScoreboardRows(Panel section, int width, bool compact, bool secondary)
     {
         int rowY = 64;
-        int metricWidth = (width - 550) / 3;
+        int available = MetricSpace(width);
         foreach (var row in section.Controls.OfType<Panel>().OrderBy(r => r.Top))
         {
             row.SetBounds(0, rowY, width, 44);
@@ -155,9 +194,13 @@ public partial class MatchDetailView
                 }
                 cell.Text = text;
                 cell.Visible = true;
-                if (compact)
+                if (IsScoreColumn(cell))
                 {
-                    ReflowCompactScoreboardCell(row, cell, bounds, metricWidth, secondary);
+                    PlaceScoreColumn(cell, width, compact, bounds);
+                }
+                else if (compact)
+                {
+                    ReflowCompactScoreboardCell(row, cell, bounds, available, secondary);
                 }
             }
             rowY += row.Height;
@@ -165,11 +208,21 @@ public partial class MatchDetailView
         section.Height = rowY;
     }
 
+    // A wide board keeps the column where it was built; a compact one pins its narrower form to the right edge.
+    private void PlaceScoreColumn(Control control, int width, bool compact, Rectangle bounds)
+    {
+        if (compact)
+        {
+            int reserve = ScoreReserve(compact: true);
+            control.SetBounds(width - reserve + 2, bounds.Y, reserve - 4, bounds.Height);
+        }
+    }
+
     private static void ReflowCompactScoreboardCell(
         Panel row,
         Control cell,
         Rectangle bounds,
-        int metricWidth,
+        int available,
         bool secondary
     )
     {
@@ -192,8 +245,9 @@ public partial class MatchDetailView
         else if (bounds.X >= 592)
         {
             cell.Visible = MetricVisible(bounds.X, true, secondary);
-            cell.Left = 520 + MetricIndex(bounds.X) * metricWidth;
-            cell.Width = Math.Min(bounds.Width, metricWidth - 4);
+            var (left, slot) = MetricSlot(MetricIndex(bounds.X), available);
+            cell.Left = left;
+            cell.Width = Math.Min(bounds.Width, slot - 4);
         }
         if (bounds.Width == 3 && bounds.X == 0)
         {
@@ -226,7 +280,7 @@ public partial class MatchDetailView
                     .Concat(rows.SelectMany(row => row.Controls.Cast<Control>()))
             )
             {
-                if (!_originalBounds.TryGetValue(control, out var bounds) || bounds.X < 592)
+                if (!_originalBounds.TryGetValue(control, out var bounds) || bounds.X < 592 || IsScoreColumn(control))
                 {
                     continue;
                 }

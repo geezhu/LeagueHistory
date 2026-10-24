@@ -1,0 +1,115 @@
+{
+  "queueId": 2400,
+  "participants": [
+    {
+      "teamId": 100,
+      "championId": 112,
+      "kills": 19,
+      "deaths": 9,
+      "goldEarned": 27551,
+      "totalDamageTaken": 30688,
+      "totalDamageDealtToChampions": 82177,
+      "timeCCingOthers": 66,
+      "expectedEstimate": 12.4746
+    },
+    {
+      "teamId": 200,
+      "championId": 62,
+      "kills": 27,
+      "deaths": 13,
+      "goldEarned": 20895,
+      "totalDamageTaken": 53909,
+      "totalDamageDealtToChampions": 49877,
+      "timeCCingOthers": 22,
+      "expectedEstimate": 9.3255
+    },
+    {
+      "teamId": 100,
+      "championId": 77,
+      "kills": 13,
+      "deaths": 18,
+      "goldEarned": 19233,
+      "totalDamageTaken": 42006,
+      "totalDamageDealtToChampions": 53195,
+      "timeCCingOthers": 48,
+      "expectedEstimate": 6.763
+    },
+    {
+      "teamId": 200,
+      "championId": 63,
+      "kills": 18,
+      "deaths": 16,
+      "goldEarned": 20699,
+      "totalDamageTaken": 42506,
+      "totalDamageDealtToChampions": 89554,
+      "timeCCingOthers": 33,
+      "expectedEstimate": 8.2626
+    },
+    {
+      "teamId": 200,
+      "championId": 27,
+      "kills": 7,
+      "deaths": 13,
+      "goldEarned": 17527,
+      "totalDamageTaken": 91998,
+      "totalDamageDealtToChampions": 22374,
+      "timeCCingOthers": 55,
+      "expectedEstimate": 7.2156
+    },
+    {
+      "teamId": 100,
+      "championId": 53,
+      "kills": 0,
+      "deaths": 15,
+      "goldEarned": 16492,
+      "totalDamageTaken": 126608,
+      "totalDamageDealtToChampions": 22422,
+      "timeCCingOthers": 93,
+      "expectedEstimate": 8.0346
+    },
+    {
+      "teamId": 100,
+      "championId": 133,
+      "kills": 11,
+      "deaths": 14,
+      "goldEarned": 19999,
+      "totalDamageTaken": 56787,
+      "totalDamageDealtToChampions": 51670,
+      "timeCCingOthers": 36,
+      "expectedEstimate": 7.7483
+    },
+    {
+      "teamId": 100,
+      "championId": 234,
+      "kills": 18,
+      "deaths": 16,
+      "goldEarned": 21130,
+      "totalDamageTaken": 50370,
+      "totalDamageDealtToChampions": 32770,
+      "timeCCingOthers": 13,
+      "expectedEstimate": 7.2857
+    },
+    {
+      "teamId": 200,
+      "championId": 246,
+      "kills": 10,
+      "deaths": 9,
+      "goldEarned": 17605,
+      "totalDamageTaken": 29322,
+      "totalDamageDealtToChampions": 41250,
+      "timeCCingOthers": 24,
+      "expectedEstimate": 8.4243
+    },
+    {
+      "teamId": 200,
+      "championId": 81,
+      "kills": 10,
+      "deaths": 10,
+      "goldEarned": 18821,
+      "totalDamageTaken": 41161,
+      "totalDamageDealtToChampions": 71570,
+      "timeCCingOthers": 2,
+      "expectedEstimate": 7.8203
+    }
+  ]
+}

@@ -135,6 +135,49 @@ namespace League.UIState
                 stats.damageTakenRank,
                 highlight
             );
+            AddScoreboardEstimate(row, player, match, highlight);
+        }
+
+        /// <summary>
+        /// The estimated score column, right of the six metrics as WeGame places its own. It is not paged: the compact
+        /// board keeps it at the right edge while the metrics switch.
+        /// </summary>
+        public const int ScoreColumnLeft = 1124;
+
+        public const int ScoreColumnWidth = 56;
+
+        /// <summary>The width the column takes from the board, gap included.</summary>
+        public const int ScoreColumnReserve = 60;
+
+        /// <summary>The narrower column of a compact board, which leaves more room for the paged metrics.</summary>
+        public const int CompactScoreColumnReserve = 48;
+
+        private void AddScoreboardEstimate(Panel row, JObject player, MatchInfo match, Color highlight)
+        {
+            int index = match.AllParticipants.IndexOf(player);
+            if (index < 0 || Services.AramMayhemScoreEstimator.Shared.Estimate(match) is not double[] estimates)
+            {
+                return;
+            }
+
+            double estimate = estimates[index];
+            int rank = estimates.Count(other => other > estimate) + 1;
+            var label = ScoreboardText(
+                row,
+                $"{estimate:0.0}",
+                ScoreColumnLeft,
+                ScoreColumnWidth,
+                rank == 1 ? highlight : ScoreboardInk,
+                rank == 1
+            );
+            label.Name = "ScoreEstimate";
+            label.Font = Theme.NumberFont(12f, strong: rank == 1);
+            label.TextAlign = ContentAlignment.MiddleCenter;
+            _toolTip.SetToolTip(
+                label,
+                $"估算评分 {estimate:0.0} · 全场第 {rank} 名\n"
+                    + "按 WeGame 海克斯大乱斗评分拟合的估算，不是 WeGame 的数据；平均相差约 0.7 分。"
+            );
         }
 
         private static readonly Color ScoreboardInk = Theme.Ink;

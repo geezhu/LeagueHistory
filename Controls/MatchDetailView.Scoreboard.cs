@@ -85,7 +85,7 @@ public partial class MatchDetailView
             Section = new BufferedPanel
             {
                 Location = new Point(12, y),
-                Size = new Size(1120, 64 + players.Count * 44),
+                Size = new Size(WideBoardWidth, 64 + players.Count * 44),
                 BackColor = Color.White,
                 Visible = false,
             },
@@ -152,6 +152,31 @@ public partial class MatchDetailView
                 button.Click += (_, _) => SortTeamRows(team, button, title, key);
             }
         }
+
+        if (HasScoreColumn)
+        {
+            AddScoreHeader(team.Section);
+        }
+    }
+
+    private void AddScoreHeader(Panel section)
+    {
+        var header = new Button
+        {
+            Name = "ScoreHeader",
+            Text = "评价",
+            Location = new Point(DetailedViewLayoutManager.ScoreColumnLeft, 32),
+            Size = new Size(DetailedViewLayoutManager.ScoreColumnWidth, 30),
+            FlatStyle = FlatStyle.Flat,
+            ForeColor = Theme.Muted,
+            BackColor = section.BackColor,
+            TextAlign = ContentAlignment.MiddleCenter,
+            Font = new Font("Microsoft YaHei UI", 9f),
+            TabStop = false,
+        };
+        header.FlatAppearance.BorderSize = 0;
+        section.Controls.Add(header);
+        _toolTip.SetToolTip(header, "按 WeGame 海克斯大乱斗评分拟合的估算，不是 WeGame 的数据；平均相差约 0.7 分。");
     }
 
     private static double ScoreboardSortValue(JObject player, string key) =>

@@ -231,6 +231,110 @@ public class ScoreboardLayoutTests
         });
     }
 
+    [Fact]
+    public void PrepareAsync_MayhemGame_PutsAScoreEstimateOnEveryRow()
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            match.QueueId = "q_2400";
+            var detail = View(host, match);
+
+            await detail.PrepareAsync();
+
+            Assert.All(
+                ["甲", "乙", "丙", "丁"],
+                player => Assert.NotNull(Row(detail, player).Controls["ScoreEstimate"])
+            );
+        });
+    }
+
+    [Fact]
+    public void PrepareAsync_WideMayhemBoard_PutsTheScoreRightOfTheMetrics()
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            match.QueueId = "q_2400";
+            var detail = View(host, match);
+            host.ClientSize = new Size(1400, 800);
+
+            await detail.PrepareAsync();
+
+            var row = Row(detail, "甲");
+            Assert.Equal(row.Controls["totalDamageTaken"]!.Right + 8, row.Controls["ScoreEstimate"]!.Left);
+            Assert.False(MetricPage(detail, "甲").Visible);
+        });
+    }
+
+    [Fact]
+    public void PrepareAsync_CompactMayhemBoard_PinsTheScoreToTheRightEdge()
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            match.QueueId = "q_2400";
+            var detail = View(host, match);
+            host.ClientSize = new Size(900, 640);
+
+            await detail.PrepareAsync();
+
+            var row = Row(detail, "甲");
+            Assert.True(MetricPage(detail, "甲").Right <= row.Controls["ScoreEstimate"]!.Left);
+            Assert.True(row.Controls["ScoreEstimate"]!.Right <= row.Width);
+        });
+    }
+
+    [Fact]
+    public void PrepareAsync_CompactMayhemBoard_GivesKdaItsFullWidth()
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            match.QueueId = "q_2400";
+            var detail = View(host, match);
+            host.ClientSize = new Size(900, 640);
+
+            await detail.PrepareAsync();
+
+            Assert.Equal(90, Row(detail, "甲").Controls["KdaValues"]!.Width);
+        });
+    }
+
+    [Fact]
+    public void MetricPage_ClickedOnAMayhemBoard_KeepsTheScoreInPlace()
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            match.QueueId = "q_2400";
+            var detail = View(host, match);
+            host.ClientSize = new Size(900, 640);
+            await detail.PrepareAsync();
+            var score = Row(detail, "甲").Controls["ScoreEstimate"]!;
+            int left = score.Left;
+
+            WindowMessages.Click(MetricPage(detail, "甲"), new Point(4, 4));
+
+            Assert.True(score.Visible);
+            Assert.Equal(left, score.Left);
+        });
+    }
+
+    [Fact]
+    public void PrepareAsync_SummonersRiftGame_HasNoScoreEstimate()
+    {
+        UiHost.Run(async host =>
+        {
+            using var match = Fixture();
+            var detail = View(host, match);
+
+            await detail.PrepareAsync();
+
+            Assert.Null(Row(detail, "甲").Controls["ScoreEstimate"]);
+        });
+    }
+
     private static string SortHeaderTitle(string key) =>
         key switch
         {
@@ -364,6 +468,7 @@ public class ScoreboardLayoutTests
             ["goldEarned"] = gold,
             ["totalDamageDealtToChampions"] = damage,
             ["totalDamageTaken"] = damageTaken,
+            ["timeCCingOthers"] = 0,
             ["totalMinionsKilled"] = minions,
             ["neutralMinionsKilled"] = 0,
             ["win"] = true,
