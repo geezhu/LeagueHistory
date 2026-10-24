@@ -27,7 +27,7 @@ public sealed record SlowAtLevel(SlowRank Slow, int Rank, string Basis);
 /// (game/data/characters/{alias}/{alias}.bin.json): spell DataValues named like "SlowAmount" at the ability's own
 /// ranks (index 0 is unlearned), read from
 /// the ability's spell and its sub-spells. Self slows, attack-speed slows, resistances and ratios are not enemy
-/// slows, and only abilities whose client description mentions 减速 count.
+/// slows, and only abilities whose Chinese description (<see cref="ChineseChampionData"/>) mentions 减速 count.
 /// </summary>
 public static class ChampionSlowSkills
 {

@@ -19,11 +19,17 @@ public sealed class OverlayChampionDetailService : IDisposable
     private readonly ConcurrentDictionary<string, Task<string>> _images = new();
     private readonly SemaphoreSlim _imageGate = new(4, 4);
     private readonly StatIconAtlas _statIcons;
+    private readonly ChineseChampionData _chinese;
 
-    public OverlayChampionDetailService(Func<TimeSpan> lifetime, StatIconAtlas? statIcons = null)
+    public OverlayChampionDetailService(
+        Func<TimeSpan> lifetime,
+        StatIconAtlas? statIcons = null,
+        ChineseChampionData? chinese = null
+    )
     {
         _lifetime = lifetime;
         _statIcons = statIcons ?? StatIconAtlas.Shared;
+        _chinese = chinese ?? new();
         _am = new(cacheLifetime: lifetime);
     }
 
@@ -455,6 +461,14 @@ public sealed class OverlayChampionDetailService : IDisposable
         _skills[hero] = champion;
         return champion;
     }
+
+    /// <summary>
+    /// The champion data control and slow recognition read: always in Chinese, since their rules match Chinese words,
+    /// whatever language the client is set to; the client's own when CommunityDragon cannot be read. The skills tab
+    /// keeps the client's language.
+    /// </summary>
+    public async Task<JObject> RecognitionDataAsync(int hero, CancellationToken token) =>
+        await _chinese.LoadAsync(hero, token) ?? await ChampionDataAsync(hero, token);
 
     // Each async helper retains the caller context for JSON mutation and preview delivery.
     private async Task<bool> LoadSkillsAsync(int hero, JObject data, CancellationToken token, Action<JObject> preview)

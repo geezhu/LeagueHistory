@@ -22,7 +22,8 @@ public sealed record ControlSkill(string Key, string Name, string[] Effects, str
 
 /// <summary>
 /// Recognizes hard crowd control in the client's champion data (/lol-game-data/assets/v1/champions/{id}.json), which
-/// has no structured control field. Both the summary and the detailed description are read. Slows and blinds are
+/// has no structured control field, in Chinese (<see cref="ChineseChampionData"/>) whatever the client's language. Both
+/// the summary and the detailed description are read. Slows and blinds are
 /// left out; the result can miss an effect a description does not mention, so the widget labels it as recognized.
 /// </summary>
 public static class ChampionControlSkills

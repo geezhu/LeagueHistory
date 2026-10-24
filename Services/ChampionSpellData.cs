@@ -31,7 +31,8 @@ public sealed record ChampionSpellFacts(SlowSkill[] Slows, SpellCooldown[] Coold
 public sealed class ChampionSpellData
 {
     // Bumped whenever what is extracted changes, so results from older rules are not reused.
-    public const string RulesVersion = "8";
+    // 9: slows are kept by the Chinese description; a client in another language had cached them as none.
+    public const string RulesVersion = "9";
 
     private static readonly HttpClient Http = CreateClient();
     private readonly string _folder;

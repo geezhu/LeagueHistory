@@ -1809,7 +1809,11 @@ internal static class LoadingOverlayManagerChecks
 
         private static OverlayChampionDetailService OfflineDetails()
         {
-            var details = new OverlayChampionDetailService(() => TimeSpan.FromMinutes(1));
+            // CommunityDragon is unreachable here, so recognition reads the stubbed client's champion data.
+            var details = new OverlayChampionDetailService(
+                () => TimeSpan.FromMinutes(1),
+                chinese: new ChineseChampionData("16.20", new HttpClient(new StubHandler(_ => Missing())))
+            );
             var field = typeof(OverlayChampionDetailService).GetField("_am", Flags)!;
             (field.GetValue(details) as IDisposable)?.Dispose();
             field.SetValue(

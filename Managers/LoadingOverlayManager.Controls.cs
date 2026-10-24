@@ -6,7 +6,7 @@ namespace League.Managers;
 
 internal sealed partial class LoadingOverlayManager
 {
-    // Control skills per champion, read once from the client's champion data and kept across games.
+    // Control skills per champion, read once from the champion data in Chinese and kept across games.
     private readonly Dictionary<int, ControlSkill[]> _controls = new();
     private readonly Dictionary<int, long> _controlRetry = new();
     private readonly HashSet<int> _controlRequests = new();
@@ -72,7 +72,7 @@ internal sealed partial class LoadingOverlayManager
 
         try
         {
-            var data = await _championDetails.ChampionDataAsync(id, _life.Token);
+            var data = await _championDetails.RecognitionDataAsync(id, _life.Token);
             if (_disposed)
             {
                 return;
@@ -104,7 +104,7 @@ internal sealed partial class LoadingOverlayManager
         }
     }
 
-    // Slow amounts and cooldowns come from CommunityDragon after the client's control skills are already shown.
+    // Slow amounts and cooldowns come from CommunityDragon after the control skills are already shown.
     private async Task LoadSpells(int id, ControlSkill[] controls, JObject champion)
     {
         try
