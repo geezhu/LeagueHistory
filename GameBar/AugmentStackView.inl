@@ -1,5 +1,5 @@
-// Included inside WidgetView. The augment page: the one place augments are recorded, for every player, since 2999
-// reports none. Each change is written to augment-stacks.json (augments with their anchor and choice) or
+// Included inside WidgetView. Augment records, since 2999 reports none: each player's are kept on the hero's skills
+// page. Each change is written to augment-stacks.json (augments with their anchor and choice) or
 // ultimate-haste.json; the main program counts takedown augments from the game's events, sums every player's
 // augments and applies them to health, haste, cooldowns and slow coverage. The other pages only show the result.
 struct AugmentPick
@@ -11,20 +11,14 @@ struct AugmentPick
 };
 static constexpr int MaxAugmentStacks = 999;
 static constexpr double MaxUltimateHaste = 500;
-Grid augmentRoot;
-StackPanel augmentBody;
-ScrollViewer augmentScroll;
-Button augmentButton;
-bool supportsAugments = false, augmentOpen = false, augmentsEdited = false, augmentsWriting = false;
+bool supportsAugments = false, augmentsEdited = false, augmentsWriting = false;
 bool ultimateEdited = false;
-int augmentReturnCard = -1;
 std::vector<AugmentPick> augmentPicks;
 std::map<std::wstring, double> ultimateHaste;
 JsonArray augmentStacks, augmentCatalog;
 hstring pendingAugmentsWrite, pendingUltimateWrite;
-// Snapshots arrive every few seconds in game; the page is redrawn only when what it shows changed, and never while
-// the add list is open, because a redraw removes the button the list is attached to and closes it mid-typing.
-hstring augmentSignature;
+// While the add list is open the skills page is not redrawn (RefreshStatsPage): a redraw removes the button the list
+// is attached to and closes it mid-typing. A snapshot that arrives meanwhile redraws once the list closes.
 bool augmentPickerOpen = false, augmentRedrawPending = false;
 
 // GetNamedString throws on a value of another type; an older or partial snapshot must not stop the roster.
@@ -33,51 +27,8 @@ static hstring AugmentText(JsonObject const &value, wchar_t const *name)
     auto entry = value.TryLookup(name);
     return entry && entry.ValueType() == JsonValueType::String ? entry.GetString() : hstring();
 }
-void InitializeAugmentPage()
-{
-    augmentButton = DetailButton(L"海克斯");
-    augmentButton.Click([this](auto &&, auto &&) { OpenAugmentPage(); });
-    ToolTipService::SetToolTip(augmentButton, box_value(L"记录双方英雄的海克斯，生命、急速和冷却按记录计算。"));
-    augmentButton.Visibility(Visibility::Collapsed);
-    for (int i = 0; i < 2; ++i)
-    {
-        RowDefinition r;
-        r.Height({1, i == 1 ? GridUnitType::Star : GridUnitType::Auto});
-        augmentRoot.RowDefinitions().Append(r);
-    }
-    StackPanel navigation;
-    navigation.Orientation(Orientation::Horizontal);
-    navigation.Margin({0, 0, 0, 8});
-    auto back = DetailButton(L"‹ 返回");
-    back.Margin({0, 0, 10, 0});
-    back.Click([this](auto &&, auto &&) { CloseAugmentPage(); });
-    navigation.Children().Append(back);
-    auto title = MakeText(L"海克斯", 20, 0xe9d8a6);
-    title.VerticalAlignment(VerticalAlignment::Center);
-    navigation.Children().Append(title);
-    auto info = MakeText(L"ⓘ", 14, 0x91acbb);
-    info.Margin({8, 2, 0, 0});
-    info.VerticalAlignment(VerticalAlignment::Center);
-    navigation.Children().Append(info);
-    SetRecordTip(navigation,
-                 L"2999 不提供海克斯，在这里手动记录；生命、技能急速、冷却和减速覆盖率都按这里的记录计算。\n"
-                 L"自动计层：参与击杀和死亡从本局击杀事件推算，− / + 修正后从当前时间重新计数。\n"
-                 L"手动层数：命中类的叠层读不到，自己按 − / + 记录。\n"
-                 L"固定加成：添加即生效。\n大招急速：符文等来源 2999 不提供，手动输入，只作用于大招。");
-    augmentRoot.Children().Append(navigation);
-    augmentScroll.Content(augmentBody);
-    augmentScroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
-    augmentScroll.VerticalScrollBarVisibility(ScrollBarVisibility::Auto);
-    Grid::SetRow(augmentScroll, 1);
-    augmentRoot.Children().Append(augmentScroll);
-    Grid::SetRow(augmentRoot, 2);
-    Grid::SetRowSpan(augmentRoot, 2);
-    augmentRoot.Visibility(Visibility::Collapsed);
-    root.Children().Append(augmentRoot);
-}
 void ClearAugments()
 {
-    CloseAugmentPage();
     augmentPicks.clear();
     augmentsEdited = false;
     ultimateHaste.clear();
@@ -112,7 +63,6 @@ void ApplyAugments(JsonObject const &data)
                 if (entry.Value().ValueType() == JsonValueType::Number)
                     ultimateHaste[std::wstring(entry.Key())] = entry.Value().GetNumber();
     }
-    augmentButton.Visibility(supportsAugments ? Visibility::Visible : Visibility::Collapsed);
 }
 JsonObject CatalogEntry(hstring const &augment)
 {
@@ -182,8 +132,6 @@ void RemoveAugment(hstring const &player, hstring const &augment)
 void SaveAugments()
 {
     augmentsEdited = true;
-    if (augmentOpen)
-        RenderAugmentPage();
     RenderStatsAfterEdit();
     if (!widget || fixturePreview || stopped)
         return;
@@ -209,8 +157,6 @@ void SetUltimateHaste(hstring const &player, double value)
 {
     ultimateHaste[std::wstring(player)] = (std::clamp)(value, 0.0, MaxUltimateHaste);
     ultimateEdited = true;
-    if (augmentOpen)
-        RenderAugmentPage();
     RenderStatsAfterEdit();
     if (!widget || fixturePreview || stopped)
         return;
@@ -537,7 +483,6 @@ Button AugmentAddButton(hstring const &player, bool timed)
             if (augmentRedrawPending)
             {
                 augmentRedrawPending = false;
-                RefreshAugmentPage();
                 RefreshStatsPage();
             }
         });
@@ -568,57 +513,8 @@ StackPanel UltimateHasteLine(hstring const &player)
     }
     return line;
 }
-Border CreateAugmentRow(uint32_t slot, JsonObject const &row, uint32_t accent, bool timed)
-{
-    Grid layout;
-    ColumnDefinition avatar, details;
-    avatar.Width({1, GridUnitType::Auto});
-    details.Width({1, GridUnitType::Star});
-    layout.ColumnDefinitions().Append(avatar);
-    layout.ColumnDefinitions().Append(details);
-    Border frame;
-    frame.Width(36);
-    frame.Height(36);
-    frame.CornerRadius({4, 4, 4, 4});
-    frame.Background(MakeBrush(0x1d4c57));
-    frame.VerticalAlignment(VerticalAlignment::Top);
-    Image image;
-    image.Stretch(Stretch::UniformToFill);
-    image.Source(cards[slot].icon.Source());
-    frame.Child(image);
-    layout.Children().Append(frame);
-    StackPanel text;
-    text.Margin({10, 0, 0, 0});
-    Grid::SetColumn(text, 1);
-    StackPanel header;
-    header.Orientation(Orientation::Horizontal);
-    header.Margin({0, 0, 0, 4});
-    header.Children().Append(MakeText(row.GetNamedString(L"champion", L""), 14));
-    auto player = MakeText(row.GetNamedString(L"name", L""), 11, 0x91acbb);
-    player.Margin({8, 2, 0, 0});
-    header.Children().Append(player);
-    text.Children().Append(header);
-    text.Children().Append(AugmentControls(cards[slot].key, timed));
-    layout.Children().Append(text);
-    return RecordCard(layout, accent);
-}
-// A player's recorded augments with their controls, the add button and the ultimate haste.
-StackPanel AugmentControls(hstring const &key, bool timed)
-{
-    StackPanel controls;
-    // One augment per line: their controls differ in width, and a wrap grid would cut the wider ones.
-    StackPanel picks;
-    for (auto const &pick : augmentPicks)
-        if (pick.player == key)
-            picks.Children().Append(AugmentPickControls(pick, timed));
-    auto add = AugmentAddButton(key, timed);
-    add.HorizontalAlignment(HorizontalAlignment::Left);
-    picks.Children().Append(add);
-    controls.Children().Append(picks);
-    controls.Children().Append(UltimateHasteLine(key));
-    return controls;
-}
-// The hero page's version: the banner above already shows the hero and the player, so only the label and controls.
+// The skills page's augment line: the banner above already shows the hero and the player, so only the label and
+// controls. One augment per line: their controls differ in width, and a wrap grid would cut the wider ones.
 Border CreateAugmentLine(uint32_t slot, uint32_t accent, bool timed)
 {
     Grid layout;
@@ -627,8 +523,13 @@ Border CreateAugmentLine(uint32_t slot, uint32_t accent, bool timed)
     details.Width({1, GridUnitType::Star});
     layout.ColumnDefinitions().Append(label);
     layout.ColumnDefinitions().Append(details);
-    auto title = MakeText(L"海克斯", 13, 0x91acbb);
+    auto title = MakeText(L"海克斯 ⓘ", 13, 0x91acbb);
     title.Margin({0, 5, 12, 0});
+    SetRecordTip(title,
+                 L"2999 不提供海克斯，在这里手动记录；生命、技能急速、冷却和减速覆盖率都按记录计算。\n"
+                 L"自动计层：参与击杀和死亡从本局击杀事件推算，− / + 修正后从当前时间重新计数。\n"
+                 L"手动层数：命中类的叠层读不到，自己按 − / + 记录。\n"
+                 L"固定加成：添加即生效。\n大招急速：符文等来源 2999 不提供，手动输入，只作用于大招。");
     layout.Children().Append(title);
     auto key = cards[slot].key;
     StackPanel controls;
@@ -647,98 +548,18 @@ Border CreateAugmentLine(uint32_t slot, uint32_t accent, bool timed)
     layout.Children().Append(controls);
     return RecordCard(layout, accent);
 }
-void OpenAugmentPage()
-{
-    if (!supportsAugments || populatedCards == 0)
-        return;
-    CloseWaves();
-    CloseControls();
-    CloseComposition();
-    augmentReturnCard = selectedCard;
-    if (selectedCard >= 0)
-        detailRoot.Visibility(Visibility::Collapsed);
-    rosterPanel.Visibility(Visibility::Collapsed);
-    details.Visibility(Visibility::Collapsed);
-    augmentRoot.Visibility(Visibility::Visible);
-    augmentOpen = true;
-    augmentScroll.ChangeView(nullptr, 0.0, nullptr);
-    RenderAugmentPage();
-}
-void CloseAugmentPage()
-{
-    if (!augmentOpen)
-        return;
-    augmentOpen = false;
-    augmentBody.Children().Clear();
-    augmentRoot.Visibility(Visibility::Collapsed);
-    if (augmentReturnCard >= 0 && augmentReturnCard == selectedCard)
-    {
-        detailRoot.Visibility(Visibility::Visible);
-        RefreshStatsPage();
-    }
-    else
-    {
-        rosterPanel.Visibility(Visibility::Visible);
-        UpdateRosterGuide();
-    }
-    augmentReturnCard = -1;
-}
-// Everything the page shows that a snapshot can change: the counted records, the roster and its icons, the
-// ultimate haste and whether takedown augments can be anchored.
-hstring AugmentPageSignature()
+// What a snapshot can change in the augment line: the counted records, the ultimate haste, whether takedown augments
+// can be anchored and the catalog behind the add list.
+hstring AugmentRecordSignature()
 {
     std::wstring text(augmentStacks.Stringify());
     text += WaveGameTime() >= 0 ? L"|timed|" : L"|untimed|";
-    for (uint32_t slot = 0; slot < controlRows.Size() && slot < cards.size(); ++slot)
-    {
-        auto row = controlRows.GetObjectAt(slot);
-        text += std::wstring(cards[slot].key) + L"," + std::to_wstring(cards[slot].hero) + L"," +
-                std::wstring(row.GetNamedString(L"name", L"")) + (cards[slot].icon.Source() ? L",i;" : L",-;");
-    }
     for (auto const &[key, haste] : ultimateHaste)
         text += key + L"=" + std::to_wstring(haste) + L";";
     text += std::to_wstring(augmentCatalog.Size());
     return hstring(text);
 }
-// Called for snapshots and arriving icons; the user's own changes redraw at once through RenderAugmentPage.
-void RefreshAugmentPage()
-{
-    if (!augmentOpen || AugmentPageSignature() == augmentSignature)
-        return;
-    if (augmentPickerOpen)
-    {
-        augmentRedrawPending = true;
-        return;
-    }
-    RenderAugmentPage();
-}
-// Enemies first, in roster order, as on the control page; the snapshot lists the own team in slots 0-4.
-void RenderAugmentPage()
-{
-    augmentSignature = AugmentPageSignature();
-    augmentBody.Children().Clear();
-    bool timed = WaveGameTime() >= 0;
-    if (!timed)
-    {
-        auto wait = MakeText(L"等待对局时间：自动计层的海克斯（参与击杀叠层）暂时不能添加或修正。", 12, 0xe0b25c);
-        wait.TextWrapping(TextWrapping::Wrap);
-        wait.Margin({0, 0, 0, 6});
-        augmentBody.Children().Append(wait);
-    }
-    for (int team : {1, 0})
-    {
-        auto heading = MakeText(teams[team].Text(), 15, team == 1 ? 0xf3b37e : 0x45c7ce);
-        heading.Margin({0, team == 1 ? 0.0 : 8.0, 0, 6});
-        augmentBody.Children().Append(heading);
-        for (uint32_t slot = team * 5; slot < team * 5u + 5 && slot < controlRows.Size(); ++slot)
-        {
-            auto row = controlRows.GetObjectAt(slot);
-            if (row.GetNamedNumber(L"championId", 0) > 0)
-                augmentBody.Children().Append(CreateAugmentRow(slot, row, team == 1 ? 0xf3b37e : 0x45c7ce, timed));
-        }
-    }
-}
-// The control page shows a player's records read-only; changes are made on the augment or stat page.
+// The control page shows a player's records read-only; changes are made on the hero's skills page.
 std::vector<UIElement> AugmentSummaryChips(hstring const &player)
 {
     std::vector<UIElement> chips;
@@ -746,12 +567,12 @@ std::vector<UIElement> AugmentSummaryChips(hstring const &player)
         if (pick.player == player)
         {
             auto entry = CatalogEntry(pick.augment);
-            chips.push_back(ControlChip(AugmentChipText(pick, AugmentState(pick)),
-                                        0xb8a2ff,
-                                        (entry ? AugmentText(entry, L"effect") : hstring()) +
-                                            L"\n在「海克斯」页或英雄的「技能」页修改。"));
+            chips.push_back(
+                ControlChip(AugmentChipText(pick, AugmentState(pick)),
+                            0xb8a2ff,
+                            (entry ? AugmentText(entry, L"effect") : hstring()) + L"\n在英雄的「技能」页修改。"));
         }
     if (chips.empty())
-        chips.push_back(MakeText(L"未记录（在「海克斯」页或英雄的「技能」页添加）", 12, 0x6f8793));
+        chips.push_back(MakeText(L"未记录（在英雄的「技能」页添加）", 12, 0x6f8793));
     return chips;
 }

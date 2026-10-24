@@ -171,7 +171,6 @@ void OpenWaves()
     if (!HasWaves())
         return;
     CloseControls();
-    CloseAugmentPage();
     CloseComposition();
     waveReturnCard = selectedCard;
     if (selectedCard >= 0)

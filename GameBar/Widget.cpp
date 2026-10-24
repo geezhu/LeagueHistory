@@ -110,7 +110,6 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         InitializeWaves();
         InitializeControls();
         InitializeComposition();
-        InitializeAugmentPage();
         InitializeChat();
         InitializeMarks();
     }
@@ -476,10 +475,9 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
             {
                 card.icon.Source(bitmap);
                 RefreshDetailHeader();
-                // The control and augment pages copy card icons when they render; redraw once an icon arrives.
+                // The control page copies card icons when it renders; redraw once an icon arrives.
                 if (controlOpen)
                     RenderControls();
-                RefreshAugmentPage();
             }
         }
         catch (...)
@@ -625,7 +623,6 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
         ApplyControls(data, rows);
         ApplyComposition(data);
         ApplyCalculator();
-        RefreshAugmentPage();
         UpdateRespawns();
         if (selectedCard >= 0)
             RefreshDetailHeader();
@@ -639,8 +636,6 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
                 OpenWaves();
             else if (detailTab == L"controls")
                 OpenControls();
-            else if (detailTab == L"augmentpage")
-                OpenAugmentPage();
             else if (detailTab == L"marks")
             {
                 ToggleMark(6);
@@ -819,8 +814,7 @@ struct WidgetView : std::enable_shared_from_this<WidgetView>
     {
         if (capturePending && root.ActualWidth() > 0 && root.ActualHeight() > 0 && populatedCards > 0 &&
             (!fixturePreview || detailTab == L"roster" || detailTab == L"voice" || detailTab == L"waves" ||
-             detailTab == L"marks" ||
-             ((detailTab == L"controls" || detailTab == L"augmentpage") && ControlIconsReady()) ||
+             detailTab == L"marks" || (detailTab == L"controls" && ControlIconsReady()) ||
              (!detailRevision.empty() && pendingDetailImages == 0)))
         {
             capturePending = false;

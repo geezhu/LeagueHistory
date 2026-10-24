@@ -154,7 +154,7 @@ static double CalcAbilityHaste(CalcOptions const &options, size_t slot, double h
         return (general + options.ultHaste) * (options.ultBot ? UltBotEffect : 1) + own;
     return (options.ultBot ? 0 : general) + own;
 }
-// What the recorded augments change here, read-only; they are recorded above, or for everyone on the augment page.
+// What the recorded augments change here, read-only; they are recorded in the augment line above.
 StackPanel CalcRecordedRow(CalcOptions const &options)
 {
     StackPanel row;
@@ -171,11 +171,6 @@ StackPanel CalcRecordedRow(CalcOptions const &options)
     text.TextWrapping(TextWrapping::Wrap);
     text.MaxWidth(520);
     row.Children().Append(text);
-    auto edit = DetailButton(L"全部玩家的海克斯");
-    edit.Padding({8, 2, 8, 2});
-    edit.Margin({8, 0, 0, 0});
-    edit.Click([this](auto &&, auto &&) { OpenAugmentPage(); });
-    row.Children().Append(edit);
     return row;
 }
 // The base cooldown at the rank and the cooldown with haste and the recorded augments; "未学" before the first rank.

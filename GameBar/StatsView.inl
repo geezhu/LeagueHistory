@@ -461,7 +461,7 @@ Border StatsSpellCard(JsonObject const &spell)
     }
     return RecordCard(content, 0xe0c688);
 }
-// This player's augments, recorded here as on the augment page; the button there still covers all ten players.
+// This player's augments: the only place they are recorded, for any of the ten players.
 void RenderStatsAugments()
 {
     if (!supportsAugments || selectedCard < 0 || static_cast<uint32_t>(selectedCard) >= controlRows.Size())
@@ -546,14 +546,14 @@ hstring StatsPageSignature()
     auto sheet = SheetData();
     auto calc = CalcData();
     return (sheet ? sheet.Stringify() : hstring()) + L"|" + (calc ? calc.Stringify() : hstring()) + L"|" +
-           AugmentPageSignature();
+           AugmentRecordSignature();
 }
 bool StatsPageShown()
 {
     return selectedCard >= 0 && detailTab == L"skills" && HasStatsPage() &&
            detailRoot.Visibility() == Visibility::Visible;
 }
-// The user's own augment changes show at once, as on the augment page; the add list closes itself first.
+// The user's own augment changes show at once; the add list closes itself first.
 void RenderStatsAfterEdit()
 {
     if (StatsPageShown())

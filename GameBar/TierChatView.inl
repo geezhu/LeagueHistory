@@ -41,8 +41,6 @@ void InitializeChat()
     actions.Children().Append(controlButton);
     compositionButton.Margin({6, 0, 0, 0});
     actions.Children().Append(compositionButton);
-    augmentButton.Margin({6, 0, 0, 0});
-    actions.Children().Append(augmentButton);
     MenuFlyout flyout;
     auto submenu =
         [this, &flyout](MenuFlyoutSubItem &sub, hstring title, std::array<MenuFlyoutItem, 3> &items, hstring kind)

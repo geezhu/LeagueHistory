@@ -50,7 +50,7 @@ void ConfigureDetailPreview(hstring const &argument)
     auto tab = text.substr(prefix.size());
     if (tab != L"skills" && tab != L"builds" && tab != L"runes" && tab != L"augments" && tab != L"live" &&
         tab != L"record" && tab != L"roster" && tab != L"voice" && tab != L"waves" && tab != L"marks" &&
-        tab != L"controls" && tab != L"augmentpage")
+        tab != L"controls")
         return;
     fixturePreview = true;
     fixtureOpened = false;
