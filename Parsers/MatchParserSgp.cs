@@ -50,7 +50,10 @@ namespace League.Parsers
                     return CreateEmptyPanel();
                 }
 
-                MatchListPanel panel = new MatchListPanel(matchInfo);
+                MatchListPanel panel = new MatchListPanel(matchInfo)
+                {
+                    FullRowLoader = info => LoadFullRowAsync(info, summonerId, gameName, tagLine),
+                };
                 panel.PlayerIconClicked += delegate(string summonerId)
                 {
                     PlayerIconClicked?.Invoke(summonerId);
@@ -108,17 +111,12 @@ namespace League.Parsers
                 basic.killParticipation
             );
             var (_, damageTakenText) = ExtractDamageTakenData(selfParticipant, participants);
-            var resources = await LoadEssentialResourcesSimple(selfParticipant);
-
-            // The list row shows only the player's own augments. The other nine players' (up to 54 more icons per game,
-            // each rendered with its rarity frame) are left to the detail view, which loads every row's missing
-            // augments before drawing it (DetailedViewLayoutManager.RetryMissingAugmentsAsync).
-            var selfAugments = await LoadAugmentsAsync(ExtractAugments(selfParticipant));
-            var allPlayersAugments = new Dictionary<string, RuneInfo[]>();
-            if (!string.IsNullOrEmpty(basic.currPuuid))
-            {
-                allPlayersAugments[basic.currPuuid] = selfAugments;
-            }
+            // The history list draws compact rows: the champion and the text, nothing else. Spells, runes, items,
+            // augments and both teams (some 25 icons a game, each read from disk) are loaded by LoadFullRowAsync only
+            // if a row is ever drawn in full, and the detail view loads its own.
+            var (champIcon, champName, _) = await FormMain.Globals.resLoading.GetChampionInfoAsync(
+                selfParticipant["championId"]?.Value<int>() ?? 0
+            );
 
             MatchInfo matchInfo = CreateMatchInfo(
                 index,
@@ -138,27 +136,66 @@ namespace League.Parsers
                 damageTakenText,
                 basic.mode,
                 basic.queueId,
-                resources.champIcon,
-                resources.champName,
-                resources.spellImg1,
-                resources.spellImg2,
-                resources.primaryRunes,
-                resources.secondaryRunes,
-                resources.statRunes,
-                resources.items,
+                champIcon,
+                champName,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 gameName.Contains("#") ? gameName.Substring(0, gameName.IndexOf('#')) : gameName,
                 game,
                 allParticipants,
-                selfAugments,
-                allPlayersAugments
+                null,
+                null
             );
-            matchInfo.SpellNames[0] = resources.spellName1;
             matchInfo.RawGameData = (JObject)(gameJson?["info"] as JObject ?? gameJson ?? game).DeepClone();
-            matchInfo.SpellDescriptions[0] = resources.spellDesc1;
-            matchInfo.SpellNames[1] = resources.spellName2;
-            matchInfo.SpellDescriptions[1] = resources.spellDesc2;
-            await LoadTeamMembers(matchInfo, allParticipants, summonerId, gameName, tagLine);
             return matchInfo;
+        }
+
+        /// <summary>
+        /// What only the full row draws: the summoner spells, runes, items, the player's own augments and both teams'
+        /// champions. A row loads it the first time it paints in full; the history list's compact rows never do.
+        /// </summary>
+        public async Task LoadFullRowAsync(MatchInfo info, string summonerId, string gameName, string tagLine)
+        {
+            var participants = info.AllParticipants;
+            var self = participants?.FirstOrDefault(p => (string)p["puuid"] == info.CurrPuuid);
+            if (participants == null || self == null)
+            {
+                return;
+            }
+
+            var resources = await LoadRowResourcesAsync(self);
+            var augments = await LoadAugmentsAsync(ExtractAugments(self));
+            info.SummonerSpells = new[] { resources.spellImg1, resources.spellImg2 };
+            info.SpellNames[0] = resources.spellName1;
+            info.SpellDescriptions[0] = resources.spellDesc1;
+            info.SpellNames[1] = resources.spellName2;
+            info.SpellDescriptions[1] = resources.spellDesc2;
+            info.Items = resources.items ?? new Item[0];
+            info.PrimaryRunes = resources.primaryRunes ?? new RuneInfo[0];
+            info.SecondaryRunes = resources.secondaryRunes ?? new RuneInfo[0];
+            info.StatRunes = resources.statRunes ?? new RuneInfo[3];
+            lock (info.AllPlayersAugments)
+            {
+                // The detail view may have loaded them first; the table owns one copy, which MatchInfo disposes.
+                if (info.AllPlayersAugments.TryGetValue(info.CurrPuuid, out var loaded))
+                {
+                    foreach (var augment in augments)
+                    {
+                        augment?.Icon?.Dispose();
+                    }
+                    augments = loaded;
+                }
+                else
+                {
+                    info.AllPlayersAugments[info.CurrPuuid] = augments;
+                }
+            }
+            info.Augments = augments;
+            await LoadTeamMembers(info, participants, summonerId, gameName, tagLine);
         }
 
         // 修改海克斯符文加载方法，确保正确处理空值
@@ -700,8 +737,6 @@ namespace League.Parsers
         }
 
         private async Task<(
-            Image champIcon,
-            string champName,
             Image spellImg1,
             Image spellImg2,
             string spellName1,
@@ -712,13 +747,10 @@ namespace League.Parsers
             RuneInfo[] secondaryRunes,
             RuneInfo[] statRunes,
             Item[] items
-        )> LoadEssentialResourcesSimple(JObject participant)
+        )> LoadRowResourcesAsync(JObject participant)
         {
-            int championId = participant["championId"]?.Value<int>() ?? 0;
             int spell1Id = participant["spell1Id"]?.Value<int>() ?? 0;
             int spell2Id = participant["spell2Id"]?.Value<int>() ?? 0;
-            Task<(Image image, string name, string description)> championTask =
-                FormMain.Globals.resLoading.GetChampionInfoAsync(championId);
             Task<(Image image, string name, string description)> spell1Task =
                 FormMain.Globals.resLoading.GetSpellInfoAsync(spell1Id);
             Task<(Image image, string name, string description)> spell2Task =
@@ -726,16 +758,13 @@ namespace League.Parsers
             Task<(RuneInfo[] Primary, RuneInfo[] Secondary)> runesTask = LoadRunesSimpleAsync(participant);
             Task<RuneInfo[]> statRunesTask = LoadStatRunesAsync(participant);
             Task<Item[]> itemsTask = LoadItemsSimpleAsync(participant);
-            await Task.WhenAll(championTask, spell1Task, spell2Task, runesTask, statRunesTask, itemsTask);
-            var (champIcon, champName, _) = await championTask;
+            await Task.WhenAll(spell1Task, spell2Task, runesTask, statRunesTask, itemsTask);
             var (spellImg1, spellName1, spellDesc1) = await spell1Task;
             var (spellImg2, spellName2, spellDesc2) = await spell2Task;
             RuneInfo[] primaryRunes;
             RuneInfo[] secondaryRunes;
             (primaryRunes, secondaryRunes) = await runesTask;
             return (
-                champIcon,
-                champName,
                 spellImg1,
                 spellImg2,
                 spellName1,

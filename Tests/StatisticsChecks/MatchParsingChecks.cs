@@ -159,6 +159,9 @@ internal static class MatchParsingChecks
         var panel = (MatchListPanel)
             await new MatchParserSgp().ParseGameToPanelFromSgpAsync(game, "12345", "测试玩家#0001", "0001", 3);
         Check(game.Count == 0, "The parser releases the game document it was given");
+        Check(panel.MatchInfo.BlueTeam.Count == 0, "A parsed row loads its teams only for a full row");
+        // Spells, runes, items, augments and teams load when a full row first paints.
+        await panel.EnsureFullRowAsync();
 
         var info = panel.MatchInfo;
         Check(info.Index == 3, "The row keeps the index it was given");
@@ -189,6 +192,7 @@ internal static class MatchParsingChecks
 
         var rich = (MatchListPanel)
             await new MatchParserSgp().ParseGameToPanelFromSgpAsync(RichGame(), "12345", "测试玩家#0001", "0001", 0);
+        await rich.EnsureFullRowAsync();
         var detailed = rich.MatchInfo;
         Check(detailed.PrimaryRunes.Length == 4, "The primary rune page is read");
         Check(detailed.SecondaryRunes.Length == 2, "The secondary rune page is read");

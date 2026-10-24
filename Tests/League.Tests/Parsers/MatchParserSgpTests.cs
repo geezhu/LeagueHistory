@@ -705,6 +705,64 @@ public class MatchParserSgpTests : IDisposable
     }
 
     [Fact]
+    public void ParseGameToPanelFromSgpAsync_AParsedRow_LoadsNoIconBeyondItsChampion()
+    {
+        // The history list draws compact rows: spells, runes, items, augments and teams wait for a full row.
+        UiHost.Run(async _ =>
+        {
+            var card = (MatchListPanel)await ParseAsync(SquadGame());
+
+            var info = card.MatchInfo;
+            Assert.Equal(
+                (0, 0, 0, 0, 0),
+                (
+                    info.Items.Length,
+                    info.PrimaryRunes.Length,
+                    info.Augments.Length,
+                    info.BlueTeam.Count,
+                    info.AllPlayersAugments.Count
+                )
+            );
+        });
+    }
+
+    [Fact]
+    public void ParseGameToPanelFromSgpAsync_ACompactRowPainted_StillLoadsNothingMore()
+    {
+        UiHost.Run(async host =>
+        {
+            var card = (MatchListPanel)await ParseAsync(SquadGame());
+            card.Compact = true;
+            card.Size = new Size(300, 62);
+            host.Controls.Add(card);
+
+            using var bitmap = new Bitmap(card.Width, card.Height);
+            card.DrawToBitmap(bitmap, new Rectangle(Point.Empty, card.Size));
+
+            Assert.Empty(card.MatchInfo.BlueTeam);
+        });
+    }
+
+    [Fact]
+    public void ParseGameToPanelFromSgpAsync_AFullRowPainted_LoadsBothTeams()
+    {
+        UiHost.Run(async host =>
+        {
+            var card = (MatchListPanel)await ParseAsync(SquadGame());
+            card.Size = new Size(1100, 112);
+            host.Controls.Add(card);
+
+            using var bitmap = new Bitmap(card.Width, card.Height);
+            card.DrawToBitmap(bitmap, new Rectangle(Point.Empty, card.Size));
+
+            // Nothing but the paint starts the load.
+            await WaitForAsync(() => card.MatchInfo.BlueTeam.Count > 0);
+
+            Assert.NotEmpty(card.MatchInfo.BlueTeam);
+        });
+    }
+
+    [Fact]
     public void ParseGameToPanelFromSgpAsync_TheList_LoadsOnlyTheOwnPlayersAugments()
     {
         // The row shows only its own augments; the detail view loads the other players' before drawing them.
@@ -970,6 +1028,16 @@ public class MatchParserSgpTests : IDisposable
 
     private static async Task<MatchInfo> SelfRowAsync(int index = 0) => await RowOfAsync(SelfGame(), index);
 
+    /// <summary>Waits for a load the paint started, with a deadline, while the message loop keeps pumping.</summary>
+    private static async Task WaitForAsync(Func<bool> ready)
+    {
+        DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!ready() && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+    }
+
     private static async Task<MatchInfo> RowOfAsync(
         JObject game,
         int index = 0,
@@ -979,6 +1047,8 @@ public class MatchParserSgpTests : IDisposable
     )
     {
         var card = (MatchListPanel)await ParseAsync(game, index, summonerId, gameName, tagLine);
+        // Spells, runes, items, augments and teams load when a full row first paints; the checks read them all.
+        await card.EnsureFullRowAsync();
         return card.MatchInfo;
     }
 

@@ -30,6 +30,49 @@ namespace League.Controls
             {
                 _matchInfo = value;
                 _ownScoreKnown = false;
+                _fullRowLoad = null;
+                Invalidate();
+            }
+        }
+
+        /// <summary>
+        /// Loads what only the full row draws (spells, runes, items, augments, both teams). The history list shows
+        /// compact rows, which never ask, so a parsed game carries only its champion until a full row paints.
+        /// </summary>
+        public Func<MatchInfo, Task>? FullRowLoader { get; set; }
+
+        private Task? _fullRowLoad;
+
+        /// <summary>Starts the full row's loading once and repaints when it lands; completes at once without a loader.</summary>
+        public Task EnsureFullRowAsync()
+        {
+            if (_fullRowLoad == null && FullRowLoader != null && _matchInfo != null)
+            {
+                _fullRowLoad = LoadFullRowAsync(_matchInfo);
+            }
+            return _fullRowLoad ?? Task.CompletedTask;
+        }
+
+        private async Task LoadFullRowAsync(MatchInfo info)
+        {
+            try
+            {
+                await FullRowLoader!(info);
+            }
+            catch (Exception ex)
+            {
+                // The row still draws with empty slots; the detail view loads its own icons.
+                AppLog.Shared.Warn(LogCategory.Ui, "战绩行图标加载失败", ex);
+            }
+
+            if (_disposed)
+            {
+                // Released while loading: the match was disposed with the row already, so its late icons go with it.
+                info.Dispose();
+                return;
+            }
+            if (ReferenceEquals(info, _matchInfo))
+            {
                 Invalidate();
             }
         }
@@ -324,6 +367,7 @@ namespace League.Controls
 
         private void PaintFull(Graphics g)
         {
+            _ = EnsureFullRowAsync();
             var state = g.Save();
             try
             {
