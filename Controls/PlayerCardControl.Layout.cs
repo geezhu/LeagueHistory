@@ -6,11 +6,11 @@ public partial class PlayerCardControl
 {
     public Panel SummaryPanel { get; private set; } = null!;
     private Font _historyFigure = null!;
-    private readonly Label _soloCaption = new() { Text = "单双" };
-    private readonly Label _flexCaption = new() { Text = "灵活" };
     private const int HistoryRowHeight = 34;
-    private const int RankTop = 74;
-    private const int RankHeight = 26;
+
+    // Identity, score and win rate, then the champion bar; the ranks share the score and win rate lines, so every
+    // card keeps the same header whether its player is ranked or not.
+    private const int SummaryHeight = 120;
 
     private void ConfigureCardLayout()
     {
@@ -36,23 +36,14 @@ public partial class PlayerCardControl
         SummaryPanel = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 112,
+            Height = SummaryHeight,
             BackColor = Theme.Surface,
         };
         Disposed += (_, _) => SummaryPanel.Dispose();
         ConfigureSummaryIdentity();
         ConfigureRecentStatistics();
         SummaryPanel.Controls.AddRange(
-            new Control[]
-            {
-                picHero,
-                lblPlayerName,
-                lblPrivacyStatus,
-                _soloCaption,
-                lblSoloRank,
-                _flexCaption,
-                lblFlexRank,
-            }
+            new Control[] { picHero, lblPlayerName, lblPrivacyStatus, lblSoloRank, lblFlexRank }
         );
         SummaryPanel.Controls.Add(_summonerAvatar);
         SummaryPanel.Resize += (_, _) => ReflowSummaryPanel();
@@ -79,13 +70,12 @@ public partial class PlayerCardControl
         lblPrivacyStatus.SetBounds(72, 40, 150, 20);
         lblPrivacyStatus.Visible = false;
         lblPrivacyStatus.ForeColor = Theme.Muted;
-        foreach (var label in new[] { _soloCaption, lblSoloRank, _flexCaption, lblFlexRank })
+        foreach (var label in new[] { lblSoloRank, lblFlexRank })
         {
             label.AutoSize = false;
             label.AutoEllipsis = true;
-            label.TextAlign = ContentAlignment.MiddleLeft;
+            label.TextAlign = ContentAlignment.MiddleRight;
         }
-        _soloCaption.ForeColor = _flexCaption.ForeColor = Theme.Muted;
     }
 
     private void ConfigureRecentStatistics()
@@ -100,61 +90,45 @@ public partial class PlayerCardControl
         SummaryPanel.Controls.AddRange(new Control[] { _recentKda, _recentWinRate });
     }
 
-    // Each queue carries its own caption, so a player ranked only in flex no longer reads as a solo rank.
+    // The solo queue ends the score line and the flex queue the win rate line, so the line tells the queue apart and
+    // the hover names it.
     private void ShowRanks(string solo, string flex)
     {
         lblSoloRank.Text = RankText.Compact(solo);
         lblFlexRank.Text = RankText.Compact(flex);
-        foreach (var label in new[] { _soloCaption, lblSoloRank })
-        {
-            _statisticsTips?.SetToolTip(label, "单双排：" + solo);
-        }
-        foreach (var label in new[] { _flexCaption, lblFlexRank })
-        {
-            _statisticsTips?.SetToolTip(label, "灵活排位：" + flex);
-        }
-        _soloCaption.Visible = lblSoloRank.Visible = lblSoloRank.Text.Length > 0;
-        _flexCaption.Visible = lblFlexRank.Visible = lblFlexRank.Text.Length > 0;
-        ReflowSummaryHeight();
+        _statisticsTips?.SetToolTip(lblSoloRank, "单双排：" + solo);
+        _statisticsTips?.SetToolTip(lblFlexRank, "灵活排位：" + flex);
+        lblSoloRank.Visible = HasRank(lblSoloRank);
+        lblFlexRank.Visible = HasRank(lblFlexRank);
         ReflowRanks();
     }
 
-    // Identity on top, then the ranks when there is one to show, then the champion bar.
     // Decided from the content, not from Visible: a card filled before its window is shown reads every child as hidden.
-    private void ReflowSummaryHeight()
-    {
-        bool ranks = HasRank(lblSoloRank) || HasRank(lblFlexRank);
-        SummaryPanel.Height = ranks ? 154 : 120;
-    }
-
     private static bool HasRank(Label rank) => rank.Text.Length > 0;
 
     private void ReflowSummaryPanel()
     {
         lblPlayerName.Width = lblPrivacyStatus.Width = Math.Max(20, SummaryPanel.Width - 82);
-        _recentKda.Width = _recentWinRate.Width = lblPlayerName.Width;
         ReflowRanks();
     }
 
-    // The shown queues sit one after the other from the left, each as wide as its text, and the last one gives way
-    // with an ellipsis when the card is too narrow for both.
+    // Each rank sits at the right end of its line. The score and win rate keep their whole text; the rank takes what
+    // is left and gives way with an ellipsis when the card is narrow.
     private void ReflowRanks()
     {
-        const int gap = 8;
-        int left = 10,
-            right = SummaryPanel.Width - 8;
-        foreach (var (caption, value) in new[] { (_soloCaption, lblSoloRank), (_flexCaption, lblFlexRank) })
+        const int gap = 6;
+        int right = SummaryPanel.Width - 8;
+        foreach (var (line, rank) in new[] { (_recentKda, lblSoloRank), (_recentWinRate, lblFlexRank) })
         {
-            if (!HasRank(value))
+            if (!HasRank(rank))
             {
+                line.Width = lblPlayerName.Width;
                 continue;
             }
 
-            int captionWidth = TextRenderer.MeasureText(caption.Text, caption.Font).Width;
-            int width = TextRenderer.MeasureText(value.Text, value.Font).Width;
-            caption.SetBounds(left, RankTop, captionWidth, RankHeight);
-            value.SetBounds(caption.Right, RankTop, Math.Max(20, Math.Min(width, right - caption.Right)), RankHeight);
-            left = value.Right + gap;
+            line.Width = Math.Min(line.PreferredWidth, lblPlayerName.Width);
+            int width = Math.Max(20, Math.Min(rank.PreferredWidth, right - line.Right - gap));
+            rank.SetBounds(right - width, line.Top, width, line.Height);
         }
     }
 

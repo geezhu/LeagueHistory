@@ -18,8 +18,7 @@ public class PlayerCardControlTests
     private const int CardWidth = 360;
     private const int CardHeight = 480;
     private const int HostMargin = 20;
-    private const int RankedHeaderHeight = 154;
-    private const int UnrankedHeaderHeight = 120;
+    private const int HeaderHeight = 120;
     private const int TwoLineRowHeight = 46;
     private const int SingleLineRowHeight = 30;
     private const int StatusStripHeight = 32;
@@ -72,31 +71,61 @@ public class PlayerCardControlTests
     }
 
     [Fact]
-    public void SetPlayerInfo_OnlyFlexRanked_CaptionsTheRankAsFlex()
+    public void SetPlayerInfo_SoloRank_EndsTheScoreLine()
     {
         UiHost.Run(host =>
         {
             var card = Card(host);
 
-            card.SetPlayerInfo("玩家#1234", "未定级", "璀璨钻石 II(3)", null!, "公开", Rows(1), Color.Black);
+            card.SetPlayerInfo("玩家#1234", "华贵铂金 II(56)", "", null!, "公开", Rows(1), Color.Black);
 
-            Assert.Equal(["灵活"], VisibleLabels(card).Intersect(["单双", "灵活"]));
+            Assert.Equal(Line(card, "KDA").Top, card.lblSoloRank.Top);
+            Assert.Equal(card.SummaryPanel.Width - 8, card.lblSoloRank.Right);
         });
     }
 
     [Fact]
-    public void SetPlayerInfo_OnlyFlexRanked_StartsTheRankAtTheLeft()
+    public void SetPlayerInfo_OnlyFlexRanked_EndsTheWinRateLine()
     {
+        // Without captions the line tells the queues apart, so a lone flex rank stays on the second line.
         UiHost.Run(host =>
         {
             var card = Card(host);
 
             card.SetPlayerInfo("玩家#1234", "未定级", "璀璨钻石 II(3)", null!, "公开", Rows(1), Color.Black);
 
-            Assert.True(
-                card.lblFlexRank.Right < card.SummaryPanel.Width / 2,
-                "With the solo queue unranked, the flex rank moves into the first slot instead of floating right."
-            );
+            Assert.Equal(Line(card, "胜率").Top, card.lblFlexRank.Top);
+            Assert.Equal(card.SummaryPanel.Width - 8, card.lblFlexRank.Right);
+        });
+    }
+
+    [Fact]
+    public void SetPlayerInfo_RankText_NamesNoQueueOnTheCard()
+    {
+        UiHost.Run(host =>
+        {
+            var card = Card(host);
+
+            card.SetPlayerInfo("玩家#1234", "华贵铂金 II(56)", "璀璨钻石 II(3)", null!, "公开", Rows(1), Color.Black);
+
+            Assert.Empty(VisibleLabels(card).Intersect(["单双", "灵活"]));
+        });
+    }
+
+    [Fact]
+    public void SetPlayerInfo_ANarrowCard_KeepsTheScoreWholeBesideTheRank()
+    {
+        // The rank gives way first: the score keeps its whole text and the rank starts after it.
+        UiHost.Run(host =>
+        {
+            var card = Card(host);
+            card.Width = 200;
+
+            card.SetPlayerInfo("玩家#1234", "华贵铂金 II(56)", "", null!, "公开", Rows(1), Color.Black);
+
+            var score = Line(card, "KDA");
+            Assert.Equal(score.PreferredWidth, score.Width);
+            Assert.True(card.lblSoloRank.Left >= score.Right, $"{card.lblSoloRank.Left} < {score.Right}");
         });
     }
 
@@ -120,25 +149,26 @@ public class PlayerCardControlTests
     }
 
     [Theory]
-    [InlineData("华贵铂金 II", "璀璨钻石 II", RankedHeaderHeight)]
-    [InlineData("华贵铂金 II", "未知", RankedHeaderHeight)]
-    [InlineData("未定级", "未知", UnrankedHeaderHeight)]
-    [InlineData("", "", UnrankedHeaderHeight)]
-    public void SetPlayerInfo_RankText_ReservesHeaderSpaceForTheVisibleRanks(string solo, string flex, int height)
+    [InlineData("华贵铂金 II", "璀璨钻石 II")]
+    [InlineData("华贵铂金 II", "未知")]
+    [InlineData("未定级", "未知")]
+    [InlineData("", "")]
+    public void SetPlayerInfo_RankText_KeepsTheSameHeader(string solo, string flex)
     {
+        // Ranked or not, the champion bar of every card in a row stays at the same height.
         UiHost.Run(host =>
         {
             var card = Card(host);
 
             card.SetPlayerInfo("玩家#1234", solo, flex, null!, "公开", Rows(1), Color.Black);
 
-            Assert.Equal(height, card.SummaryPanel.Height);
+            Assert.Equal(HeaderHeight, card.SummaryPanel.Height);
         });
     }
 
     // Rooms fill cards before they are shown; a hidden parent makes every child read as hidden.
     [Fact]
-    public void SetPlayerInfo_ACardNotShownYet_StillReservesTheRankRow()
+    public void SetPlayerInfo_ACardNotShownYet_StillPlacesTheRank()
     {
         UiHost.Run(host =>
         {
@@ -146,7 +176,7 @@ public class PlayerCardControlTests
 
             card.SetPlayerInfo("玩家#1234", "华贵铂金 II", "璀璨钻石 II", null!, "公开", Rows(1), Color.Black);
 
-            Assert.Equal(RankedHeaderHeight, card.SummaryPanel.Height);
+            Assert.Equal(card.SummaryPanel.Width - 8, card.lblSoloRank.Right);
         });
     }
 
@@ -603,7 +633,6 @@ public class PlayerCardControlTests
         return card;
     }
 
-    /// <summary>One champion of the mastery row, with an icon of its own for the card to take over.</summary>
     private static (PlayerCardControl First, PlayerCardControl Second) TwoCards(Form host) =>
         (Card(host), Card(host, CardWidth + 10));
 
@@ -621,6 +650,12 @@ public class PlayerCardControlTests
 
     private static IEnumerable<string> Labels(Control card) =>
         Descendants(card).OfType<Label>().Select(label => label.Text);
+
+    /// <summary>The header line whose text starts with the given caption, such as KDA or 胜率.</summary>
+    private static Label Line(PlayerCardControl card, string caption) =>
+        card
+            .SummaryPanel.Controls.OfType<Label>()
+            .Single(label => label.Text.StartsWith(caption, StringComparison.Ordinal));
 
     private static IEnumerable<string> VisibleLabels(Control card) =>
         Descendants(card).OfType<Label>().Where(label => label.Visible).Select(label => label.Text);

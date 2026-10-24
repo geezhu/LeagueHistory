@@ -15,6 +15,7 @@ public partial class PlayerCardControl
         _recentWinRate.ForeColor = Theme.Ink;
         _statisticsTips?.SetToolTip(_recentKda, "");
         _statisticsTips?.SetToolTip(_recentWinRate, "");
+        ReflowRanks();
     }
 
     public void SetRecentStatistics(PlayerMatchInfo info)
@@ -45,5 +46,7 @@ public partial class PlayerCardControl
             );
         }
         _statisticsTips?.SetToolTip(_recentWinRate, sample + "\n胜率 = 胜场 / 总场次。");
+        // The rank on each line gets whatever the new text leaves.
+        ReflowRanks();
     }
 }
