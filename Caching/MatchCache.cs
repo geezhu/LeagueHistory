@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using League.Services;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace League.Caching
@@ -96,11 +97,32 @@ namespace League.Caching
             {
                 return false;
             }
+            int before;
+            int after;
             lock (_gate)
             {
+                before = run.Count;
                 run.MergeHead(latest, requested);
+                after = run.Count;
             }
+            // 临时诊断：游戏结束后的刷新是否拿到了刚结束的那一局，确认后删除。
+            AppLog.Shared.Info(
+                LogCategory.Data,
+                $"[战绩刷新·临时] 请求最新 {requested} 场，返回 {latest.Count} 场，缓存 {before}→{after} 场，最新一局{NewestEndText(latest)}"
+            );
             return true;
+        }
+
+        private static string NewestEndText(JArray latest)
+        {
+            JToken? newest = latest.Count > 0 ? latest[0]["json"] ?? latest[0] : null;
+            long ended = newest?["gameEndTimestamp"]?.Value<long>() ?? newest?["gameCreation"]?.Value<long>() ?? 0;
+            if (ended <= 0)
+            {
+                return "没有时间";
+            }
+            double seconds = (DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeMilliseconds(ended)).TotalSeconds;
+            return $"结束于 {seconds:F0} 秒前";
         }
 
         private static async Task<bool> FillTailAsync(

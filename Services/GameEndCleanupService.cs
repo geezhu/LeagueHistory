@@ -57,6 +57,11 @@ namespace League.Services
             }
 
             _gameEndHandled = true;
+            // 临时诊断：游戏结束后的刷新是否拿到了刚结束的那一局，确认后删除。
+            AppLog.Shared.Info(
+                LogCategory.Data,
+                $"[战绩刷新·临时] 游戏结束，上一阶段 {previousPhase}，约 1.6 秒后刷新自己的战绩"
+            );
 
             // ==================== 关键优化：尽早执行跳过 ====================
             await ExecuteSkipActionsAsync();

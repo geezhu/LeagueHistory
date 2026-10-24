@@ -678,6 +678,7 @@ namespace League.Controls
             if ((DateTime.Now - _lastRefreshTime) < _minimumRefreshInterval)
             {
                 Debug.WriteLine($"[ForceRefreshData] 距离上次刷新时间太短，跳过本次刷新");
+                AppLog.Shared.Info(LogCategory.Data, "[战绩刷新·临时] 距上次刷新不到 2 秒，跳过");
                 return;
             }
 
@@ -685,6 +686,7 @@ namespace League.Controls
             if (_isRefreshing)
             {
                 Debug.WriteLine($"[ForceRefreshData] 已经在刷新中，跳过重复调用");
+                AppLog.Shared.Info(LogCategory.Data, "[战绩刷新·临时] 已在刷新中，跳过");
                 return;
             }
 
