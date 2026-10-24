@@ -16,41 +16,53 @@ namespace League.UIHelpers
 
         public static Bitmap Get(string key)
         {
+            var icon = new Bitmap(SlotSize, SlotSize);
+            using var graphics = Graphics.FromImage(icon);
             if (key == "firstBlood")
             {
-                // A local first-blood symbol; not a claimed WeGame sprite mapping.
-                var icon = new Bitmap(16, 16);
-                using var graphics = Graphics.FromImage(icon);
+                // A local first-blood symbol; not a claimed WeGame sprite mapping. Same 10 px box as the sprite icons.
                 graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                 using var drop = new System.Drawing.Drawing2D.GraphicsPath();
-                drop.AddBezier(8, 2, 7, 5, 3, 8, 3, 10);
-                drop.AddBezier(3, 10, 3, 16, 13, 16, 13, 10);
-                drop.AddBezier(13, 10, 13, 8, 9, 5, 8, 2);
+                drop.AddBezier(8, 3, 7.4f, 5, 4, 7.5f, 4, 9.5f);
+                drop.AddBezier(4, 9.5f, 4, 14, 12, 14, 12, 9.5f);
+                drop.AddBezier(12, 9.5f, 12, 7.5f, 8.6f, 5, 8, 3);
                 using var brush = new SolidBrush(Theme.Loss);
                 graphics.FillPath(brush, drop);
                 return icon;
             }
-            var position = key switch
+
+            // Cells of WeGame's current honor16 sprite, 26 px apart; each icon is 10 x 10.
+            int cell = key switch
             {
-                "triple" => new Point(32, 16),
-                "quadra" => new Point(0, 0),
-                "penta" => new Point(16, 32),
-                "assists" => new Point(16, 0),
-                "gold" => new Point(48, 0),
-                "damage" => new Point(16, 16),
-                "taken" => new Point(0, 16),
-                "cs" => new Point(48, 32),
-                "towers" => new Point(48, 16),
+                "assists" => 0,
+                "taken" => 2,
+                "damage" => 3,
+                "triple" => 5,
+                "quadra" => 6,
+                "penta" => 7,
+                "gold" => 9,
+                "towers" => 10,
+                "cs" => 11,
                 _ => throw new ArgumentOutOfRangeException(nameof(key)),
             };
+            // Drawn 1:1 in the middle of the badge slot: scaling a 10 px icon only blurs it, and the margin keeps
+            // the compact layout's 14 px step from covering the next icon.
+            int offset = (SlotSize - IconSize) / 2;
             lock (Sprite)
             {
-                return Sprite.Value.Clone(
-                    new Rectangle(position, new Size(16, 16)),
-                    System.Drawing.Imaging.PixelFormat.Format32bppArgb
+                graphics.DrawImage(
+                    Sprite.Value,
+                    new Rectangle(offset, offset, IconSize, IconSize),
+                    new Rectangle(cell * CellStep, 0, IconSize, IconSize),
+                    GraphicsUnit.Pixel
                 );
             }
+            return icon;
         }
+
+        private const int SlotSize = 16;
+        private const int IconSize = 10;
+        private const int CellStep = 26;
 
         public static List<(string Key, string Hint)> Select(JObject player, List<JObject> all)
         {
