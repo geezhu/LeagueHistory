@@ -22,6 +22,7 @@ namespace League.Services
         private readonly AutoPickService _autoPickService;
         private readonly TeamCardDisplayService _cardDisplayService;
         private readonly GameEndCleanupService _cleanupService;
+        private readonly EndOfGamePanelLauncher _endOfGamePanel;
 
         private CancellationTokenSource? _watcherCts;
 
@@ -43,6 +44,12 @@ namespace League.Services
             _autoPickService = new AutoPickService(form);
             _cardDisplayService = new TeamCardDisplayService(form, cardManager);
             _cleanupService = new GameEndCleanupService(form, cardManager, uiManager);
+            _endOfGamePanel = new EndOfGamePanelLauncher(
+                form,
+                new EndOfGameSummaryService(() => Globals.lcuClient?.Client),
+                Clients.ChampionMasteryService.Shared,
+                championId => Globals.resLoading.GetChampionIconAsync(championId)
+            );
 
             // 订阅阶段变化事件
             _phaseMonitor.PhaseChanged += OnGameflowPhaseChanged;
@@ -77,6 +84,7 @@ namespace League.Services
             _autoPickService.Stop();
             _cleanupService.Cleanup();
             _cardDisplayService.ClearSnapshots();
+            _endOfGamePanel.Close();
         }
 
         // <summary>
@@ -156,7 +164,16 @@ namespace League.Services
                         _autoPickService.Stop();
                         _cardDisplayService.ClearSnapshots();
                         Debug.WriteLine($"[GameEnd Trigger] 检测到结束阶段: {phase}, previous={previousPhase}");
+                        int queueId = int.TryParse(Globals.CurrGameMod, out int parsedQueue) ? parsedQueue : 0;
                         await HandleGameEnd(previousPhase); // 即使 previousPhase 为空也尝试处理
+                        // 游戏一结束就打开面板，每局一次；赛后点赞界面可能停留近一分钟，不等结算界面。
+                        if (
+                            previousPhase is "GameStart" or "InProgress" or "Reconnect"
+                            && _form.GetAppConfig()?.EnableEndOfGamePanel == true
+                        )
+                        {
+                            _ = _endOfGamePanel.ShowAsync(queueId, _form.GetCurrentPuuid());
+                        }
                         break;
                     case "Lobby":
                     case "None":
@@ -179,6 +196,7 @@ namespace League.Services
 
         private async Task HandleQueuePhase(string phase)
         {
+            _endOfGamePanel.Close();
             _autoPickService.Stop();
             _cardDisplayService.ClearSnapshots();
             _uiManager.IsGame = false;
@@ -215,6 +233,7 @@ namespace League.Services
 
         private async Task HandleChampSelectStart()
         {
+            _endOfGamePanel.Close();
             _autoPickService.Stop();
             _uiManager.IsGame = true;
             await _cardDisplayService.EnterChampSelectAsync();

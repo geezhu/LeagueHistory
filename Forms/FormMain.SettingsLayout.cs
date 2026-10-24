@@ -161,12 +161,32 @@ public partial class FormMain
             check.AccessibleName = name;
         }
 
+        var endOfGamePanel = new CheckBox
+        {
+            Name = "chkEndOfGamePanel",
+            AccessibleName = "游戏结束后显示本局总结",
+            Checked = _appConfig?.EnableEndOfGamePanel ?? true,
+        };
+        endOfGamePanel.CheckedChanged += (_, _) =>
+        {
+            if (_appConfig != null)
+            {
+                _appConfig.EnableEndOfGamePanel = endOfGamePanel.Checked;
+                SaveAppConfig();
+            }
+        };
+
         SettingsCard(
             general,
             "对局自动化",
             new SettingRow("自动接受对局", null, acceptDelay, chkAutoAccept),
             new SettingRow("自动跳过点赞界面", null, chkSkipHonor),
-            new SettingRow("自动跳过结算统计界面", null, chkSkipEndOfGameStats)
+            new SettingRow("自动跳过结算统计界面", null, chkSkipEndOfGameStats),
+            new SettingRow(
+                "游戏结束后显示本局总结",
+                "赢了可给队友点赞，输了可选人发送文案，都发到结算聊天，只在点击时发送；跳过结算统计界面后结算聊天会关闭。",
+                endOfGamePanel
+            )
         );
     }
 

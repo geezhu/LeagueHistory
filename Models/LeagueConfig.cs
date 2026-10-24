@@ -113,6 +113,11 @@ namespace League.Models
         public bool EnableSkipEndOfGameStats { get; set; } = false;
 
         /// <summary>
+        /// 游戏结束后显示本局总结面板（点赞 / 拉黑文案）
+        /// </summary>
+        public bool EnableEndOfGamePanel { get; set; } = true;
+
+        /// <summary>
         /// 英雄偏好皮肤：key=championId, value=skinId
         /// </summary>
         public Dictionary<int, int> PreferredChampionSkins { get; set; } = new();
