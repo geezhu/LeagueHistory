@@ -514,6 +514,41 @@ public class OverlayRecordSectionsTests
         Assert.Equal("胜 · 阿狸 · 5/3/7 · 大乱斗 · 2026-10-10 · 投降结束", (string?)card["description"]);
     }
 
+    [Theory]
+    [InlineData(MatchHonour.Mvp, "MVP")]
+    [InlineData(MatchHonour.Svp, "SVP")]
+    [InlineData(MatchHonour.None, "")]
+    public void Build_AMayhemGame_CarriesTheHonour(MatchHonour honour, string expected)
+    {
+        JObject card = Single(Rows(Build(History([Win() with { Score = new(12.34, honour) }])), "最近对局"));
+
+        Assert.Equal(expected, (string?)card["honour"]);
+    }
+
+    [Fact]
+    public void Build_AMayhemGame_CarriesTheEstimateToOneDecimal()
+    {
+        JObject card = Single(Rows(Build(History([Win() with { Score = new(9.56, MatchHonour.None) }])), "最近对局"));
+
+        Assert.Equal("9.6", (string?)card["score"]);
+    }
+
+    [Fact]
+    public void Build_AnMvpGame_ExplainsTheMarkInTheTooltip()
+    {
+        JObject card = Single(Rows(Build(History([Win() with { Score = new(12.34, MatchHonour.Mvp) }])), "最近对局"));
+
+        Assert.Contains("估算评分 12.3 · MVP（胜方估算评分最高）", (string?)card["description"]);
+    }
+
+    [Fact]
+    public void Build_AGameWithoutAnEstimate_LeavesTheScoreAndHonourEmpty()
+    {
+        JObject card = Single(Rows(Build(History([Win()])), "最近对局"));
+
+        Assert.Equal(("", ""), ((string?)card["score"], (string?)card["honour"]));
+    }
+
     [Fact]
     public void Build_ARemakeThatEndedInSurrender_LeavesTheBadgeOff()
     {
@@ -671,7 +706,8 @@ public class OverlayRecordSectionsTests
         int Assists = 7,
         int Minutes = 21,
         string Day = "2026-10-10",
-        int ChampionId = 103
+        int ChampionId = 103,
+        OwnMatchScore? Score = null
     );
 
     private static CachedGame Win() => new(true);
@@ -760,6 +796,7 @@ public class OverlayRecordSectionsTests
                 {
                     ["participants"] = new JArray(new JObject { ["puuid"] = puuid, ["championId"] = game.ChampionId }),
                 },
+                Score = game.Score,
             },
         };
         item.SubItems.AddRange([mode, $"{game.Kills}/{game.Deaths}/{game.Assists}", game.Day]);

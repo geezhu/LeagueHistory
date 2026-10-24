@@ -120,19 +120,30 @@ public sealed class AramMayhemScoreEstimator
             : MatchHonour.Svp;
     }
 
-    /// <summary>The honour of the match's own player (its CurrPuuid), or none outside ARAM: Mayhem.</summary>
-    public MatchHonour OwnHonour(MatchInfo match)
+    /// <summary>
+    /// The estimate and honour of the match's own player (its CurrPuuid); null outside ARAM: Mayhem or when the
+    /// player is not among the participants.
+    /// </summary>
+    public OwnMatchScore? Own(MatchInfo match)
     {
-        if (match.AllParticipants == null || Estimate(match) is not double[] estimates)
+        if (
+            string.IsNullOrEmpty(match.CurrPuuid)
+            || match.AllParticipants == null
+            || Estimate(match) is not double[] estimates
+        )
         {
-            return MatchHonour.None;
+            return null;
         }
 
         int index = match.AllParticipants.FindIndex(p => (string?)p["puuid"] == match.CurrPuuid);
-        return index < 0 || string.IsNullOrEmpty(match.CurrPuuid)
-            ? MatchHonour.None
-            : Honour(match.AllParticipants, estimates, index);
+        return index < 0 ? null : new(estimates[index], Honour(match.AllParticipants, estimates, index));
     }
+
+    /// <summary>The estimate and honour of one participant of a game; null when the game cannot be estimated.</summary>
+    public OwnMatchScore? Score(IReadOnlyList<JObject> participants, int queueId, int index) =>
+        index >= 0 && index < participants.Count && Estimate(participants, queueId) is double[] estimates
+            ? new(estimates[index], Honour(participants, estimates, index))
+            : null;
 
     /// <summary>The estimates for a match record, in the order of its participants; its queue reads "q_2400".</summary>
     public double[]? Estimate(MatchInfo match) =>

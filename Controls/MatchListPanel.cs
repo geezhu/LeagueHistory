@@ -29,38 +29,45 @@ namespace League.Controls
             set
             {
                 _matchInfo = value;
-                _honour = null;
+                _ownScoreKnown = false;
                 Invalidate();
             }
         }
 
-        private MatchHonour? _honour;
+        private OwnMatchScore? _ownScore;
+        private bool _ownScoreKnown;
 
         // Worked out once per match: the estimate compares all ten players, and the row repaints often.
-        private MatchHonour Honour =>
-            _honour ??= _matchInfo == null ? MatchHonour.None : AramMayhemScoreEstimator.Shared.OwnHonour(_matchInfo);
-
-        /// <summary>WeGame's MVP or SVP mark in the bottom right corner of the champion icon, where WeGame puts it.</summary>
-        private void PaintHonour(Graphics g, int iconX, int iconY, int iconSize, bool hint)
+        private OwnMatchScore? OwnScore
         {
-            if (WeGameHonorIcons.Badge(Honour) is not Bitmap badge)
+            get
+            {
+                if (!_ownScoreKnown)
+                {
+                    _ownScore = _matchInfo == null ? null : AramMayhemScoreEstimator.Shared.Own(_matchInfo);
+                    _ownScoreKnown = true;
+                }
+                return _ownScore;
+            }
+        }
+
+        // The history list marks only an MVP or SVP; the plain score is left to the player cards. Only ARAM: Mayhem has
+        // an estimate, so other games show no mark.
+        private void PaintOwnScore(Graphics g, int iconX, int iconY, int iconSize, bool hint)
+        {
+            if (OwnScore is not OwnMatchScore { Honour: not MatchHonour.None } own)
             {
                 return;
             }
 
-            var bounds = new Rectangle(
-                iconX + iconSize - badge.Width,
-                iconY + iconSize - badge.Height,
-                badge.Width,
-                badge.Height
-            );
-            g.DrawImage(badge, bounds);
+            var bounds = MatchScoreMark.Bounds(new Rectangle(iconX, iconY, iconSize, iconSize));
+            MatchScoreMark.Paint(g, bounds, own);
             if (hint)
             {
                 // Ahead of the icon's own hint, which covers the same spot.
                 _imageHints.Insert(
                     0,
-                    (ScreenRect(bounds.X, bounds.Y, bounds.Width, bounds.Height), WeGameHonorIcons.BadgeHint(Honour))
+                    (ScreenRect(bounds.X, bounds.Y, bounds.Width, bounds.Height), MatchScoreMark.Hint(own))
                 );
             }
         }
@@ -278,7 +285,7 @@ namespace League.Controls
             {
                 g.DrawImage(MatchInfo.HeroIcon, new Rectangle(6, 11, 40, 40));
             }
-            PaintHonour(g, 6, 11, 40, hint: false);
+            PaintOwnScore(g, 6, 11, 40, hint: false);
 
             void Draw(string text, int x, int y, int width, Color ink) =>
                 TextRenderer.DrawText(
@@ -357,7 +364,7 @@ namespace League.Controls
             canvas.Text(MatchInfo.DurationText, canvas.Small, Muted, 16, 47, 65);
             canvas.Text($"#{MatchInfo.Index:00}", canvas.Small, Muted, 16, 78, 58);
             canvas.Icon(MatchInfo.HeroIcon, 88, 18, 52, MatchInfo.ChampionName);
-            PaintHonour(canvas.Graphics, 88, 18, 52, hint: true);
+            PaintOwnScore(canvas.Graphics, 88, 18, 52, hint: true);
             canvas.Text(MatchInfo.ChampionName, canvas.Strong, Ink, 150, 16, 120);
             canvas.Text(MatchInfo.Mode, canvas.Normal, Muted, 150, 43, 120);
             canvas.Text(MatchInfo.GameTime, canvas.Small, Muted, 88, 80, 184);

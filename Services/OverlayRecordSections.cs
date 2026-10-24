@@ -243,6 +243,7 @@ public static class OverlayRecordSections
                 date.Length == 10 ? date[5..] : date,
             }.Where(p => p.Length > 0);
             bool surrendered = stat.GameEndedInSurrender && results[i] != "remake";
+            var score = (item?.Tag as MatchMetadata)?.Score;
             var row = Tile(
                 name,
                 $"{stat.Kills}/{stat.Deaths}/{stat.Assists}",
@@ -252,10 +253,21 @@ public static class OverlayRecordSections
                     + (mode.Length > 0 ? " · " + mode : "")
                     + (date.Length > 0 ? " · " + date : "")
                     + (surrendered ? " · 投降结束" : "")
+                    + (score is OwnMatchScore estimate ? "\n" + ScoreHint(estimate) : "")
             );
             row["result"] = Label(results[i]);
             row["badge"] = surrendered ? "投降" : "";
             row["image"] = icons && item != null ? Icon(info, item.ImageKey, images) : "";
+            // ARAM: Mayhem only: the widget marks the icon with the MVP or SVP, or else the estimated score.
+            row["score"] = score is OwnMatchScore shown
+                ? shown.Estimate.ToString("0.0", CultureInfo.InvariantCulture)
+                : "";
+            row["honour"] = score?.Honour switch
+            {
+                MatchHonour.Mvp => "MVP",
+                MatchHonour.Svp => "SVP",
+                _ => "",
+            };
             rows.Add(row);
         }
 
@@ -266,6 +278,16 @@ public static class OverlayRecordSections
         Remake(Item(info, index)) ? "remake"
         : info.WinHistory[index] ? "win"
         : "loss";
+
+    private static string ScoreHint(OwnMatchScore score) =>
+        $"估算评分 {score.Estimate.ToString("0.0", CultureInfo.InvariantCulture)}"
+        + score.Honour switch
+        {
+            MatchHonour.Mvp => " · MVP（胜方估算评分最高）",
+            MatchHonour.Svp => " · SVP（败方估算评分最高）",
+            _ => "",
+        }
+        + "；按 WeGame 海克斯大乱斗评分拟合，平均相差约 0.7 分";
 
     private static string Label(string result) =>
         result switch

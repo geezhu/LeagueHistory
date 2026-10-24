@@ -189,29 +189,72 @@ public class AramMayhemScoreEstimatorTests
     [InlineData("winner", MatchHonour.Mvp)]
     [InlineData("loser", MatchHonour.Svp)]
     [InlineData("someone else", MatchHonour.None)]
-    public void OwnHonour_AMayhemGame_IsTheHonourOfTheCurrentPlayer(string puuid, MatchHonour expected)
+    public void Own_AMayhemGame_IsTheHonourOfTheCurrentPlayer(string puuid, MatchHonour expected)
     {
         using var match = new MatchInfo
         {
             QueueId = "q_2400",
             CurrPuuid = puuid,
-            AllParticipants = [Player(true, "winner"), Player(false, "loser")],
+            AllParticipants = [Player(true, "winner"), Player(false, "loser"), Player(false, "someone else")],
         };
 
-        Assert.Equal(expected, AramMayhemScoreEstimator.Shared.OwnHonour(match));
+        Assert.Equal(expected, AramMayhemScoreEstimator.Shared.Own(match)!.Value.Honour);
     }
 
     [Fact]
-    public void OwnHonour_ASummonersRiftGame_IsNone()
+    public void Own_AMayhemGame_CarriesTheCurrentPlayersEstimate()
+    {
+        var players = new List<JObject> { Player(true, "winner"), Player(false, "loser") };
+        using var match = new MatchInfo
+        {
+            QueueId = "q_2400",
+            CurrPuuid = "loser",
+            AllParticipants = players,
+        };
+
+        var own = AramMayhemScoreEstimator.Shared.Own(match);
+
+        Assert.Equal(AramMayhemScoreEstimator.Shared.Estimate(players, 2400)![1], own!.Value.Estimate);
+    }
+
+    [Theory]
+    [InlineData("q_420", "winner")]
+    [InlineData("q_2400", "not in the game")]
+    [InlineData("q_2400", "")]
+    public void Own_NoEstimateForThatPlayer_IsNull(string queue, string puuid)
     {
         using var match = new MatchInfo
         {
-            QueueId = "q_420",
-            CurrPuuid = "winner",
+            QueueId = queue,
+            CurrPuuid = puuid,
             AllParticipants = [Player(true, "winner"), Player(false, "loser")],
         };
 
-        Assert.Equal(MatchHonour.None, AramMayhemScoreEstimator.Shared.OwnHonour(match));
+        Assert.Null(AramMayhemScoreEstimator.Shared.Own(match));
+    }
+
+    [Fact]
+    public void Score_AParticipantOfAMayhemGame_IsItsEstimateAndHonour()
+    {
+        var players = new List<JObject> { Player(true), Player(false) };
+
+        var score = AramMayhemScoreEstimator.Shared.Score(players, 2400, 1);
+
+        Assert.Equal(
+            (AramMayhemScoreEstimator.Shared.Estimate(players, 2400)![1], MatchHonour.Svp),
+            (score!.Value.Estimate, score.Value.Honour)
+        );
+    }
+
+    [Theory]
+    [InlineData(2400, -1)]
+    [InlineData(2400, 2)]
+    [InlineData(420, 0)]
+    public void Score_NoEstimateForThatParticipant_IsNull(int queue, int index)
+    {
+        var players = new List<JObject> { Player(true), Player(false) };
+
+        Assert.Null(AramMayhemScoreEstimator.Shared.Score(players, queue, index));
     }
 
     [Fact]

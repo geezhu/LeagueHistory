@@ -132,6 +132,7 @@ namespace League.Parsers
                     GameId = gameId,
                     TeamId = participant["teamId"]?.Value<int>() ?? -1,
                     GameData = (JObject)gameJson.DeepClone(),
+                    Score = OwnScore(gameJson, participant),
                 },
             };
 
@@ -140,6 +141,22 @@ namespace League.Parsers
             result.MatchKeys.Add($"{gameId}_{participant["teamId"]?.Value<int>() ?? -1}");
 
             await CacheChampionIcon(championName, championId, result.HeroIcons, cancellationToken);
+        }
+
+        // Worked out once while parsing, so the card's rows only draw it.
+        private static OwnMatchScore? OwnScore(JObject gameJson, JObject participant)
+        {
+            if (gameJson["participants"] is not JArray array || gameJson["queueId"]?.Type != JTokenType.Integer)
+            {
+                return null;
+            }
+
+            var participants = array.OfType<JObject>().ToList();
+            return AramMayhemScoreEstimator.Shared.Score(
+                participants,
+                gameJson["queueId"]!.Value<int>(),
+                participants.IndexOf(participant)
+            );
         }
 
         private JObject FindParticipant(JObject gameJson, string puuid)

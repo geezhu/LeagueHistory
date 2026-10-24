@@ -423,6 +423,31 @@ public class MatchDataParserTests : IDisposable
         Assert.Equal(expected, history.MatchItems[0].SubItems[1].Text);
     }
 
+    [Fact]
+    public async Task ParsePlayerMatchInfo_AMayhemGame_GivesTheRowTheOwnScore()
+    {
+        var game = Match(12L);
+        game["queueId"] = 2400;
+        var self = (JObject)game["participants"]![0]!;
+        self["goldEarned"] = 15000;
+        self["totalDamageTaken"] = 20000;
+        self["totalDamageDealtToChampions"] = 30000;
+        self["timeCCingOthers"] = 10;
+
+        PlayerMatchInfo history = await _parser.ParsePlayerMatchInfo(SelfPuuid, new JArray(game));
+
+        var metadata = Assert.IsType<MatchMetadata>(history.MatchItems[0].Tag);
+        Assert.Equal(MatchHonour.Mvp, metadata.Score!.Value.Honour);
+    }
+
+    [Fact]
+    public async Task ParsePlayerMatchInfo_ARankedGame_HasNoScore()
+    {
+        PlayerMatchInfo history = await _parser.ParsePlayerMatchInfo(SelfPuuid, new JArray(Match(12L)));
+
+        Assert.Null(Assert.IsType<MatchMetadata>(history.MatchItems[0].Tag).Score);
+    }
+
     private static JArray History()
     {
         var remake = Match(2L, win: false);

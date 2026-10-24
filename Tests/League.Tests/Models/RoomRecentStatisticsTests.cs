@@ -23,6 +23,56 @@ public class RoomRecentStatisticsTests
     private static PlayerMatchInfo Info(MatchStat[] matches, bool[] wins) =>
         new() { RecentMatches = [.. matches], WinHistory = [.. wins] };
 
+    /// <summary>A history row as the parser writes it: a score for an ARAM: Mayhem game, none for another mode.</summary>
+    private static ListViewItem Row(double? score, bool remake = false) =>
+        new()
+        {
+            ForeColor = remake ? MatchResult.RemakeColor : Color.Green,
+            Tag = new MatchMetadata { Score = score is double s ? new OwnMatchScore(s, MatchHonour.None) : null },
+        };
+
+    private static PlayerMatchInfo Scored(params ListViewItem[] rows) => new() { MatchItems = [.. rows] };
+
+    // ---- the average estimated score ----
+
+    [Fact]
+    public void From_MayhemGames_AverageTheirEstimates()
+    {
+        RoomRecentStatistics statistics = RoomRecentStatistics.From(Scored(Row(8), Row(10), Row(12)));
+
+        Assert.Equal(10, statistics.AverageScore.GetValueOrDefault(), 3);
+    }
+
+    [Fact]
+    public void From_GamesOfOtherModes_AreLeftOutOfTheAverage()
+    {
+        RoomRecentStatistics statistics = RoomRecentStatistics.From(Scored(Row(8), Row(null), Row(12)));
+
+        Assert.Equal((10d, 2), (statistics.AverageScore.GetValueOrDefault(), statistics.ScoredGames));
+    }
+
+    [Fact]
+    public void From_ARemake_IsLeftOutOfTheAverage()
+    {
+        RoomRecentStatistics statistics = RoomRecentStatistics.From(Scored(Row(8), Row(2, remake: true)));
+
+        Assert.Equal(8, statistics.AverageScore.GetValueOrDefault(), 3);
+    }
+
+    [Fact]
+    public void From_NoMayhemGames_HasNoAverage()
+    {
+        Assert.Null(RoomRecentStatistics.From(Scored(Row(null), Row(null))).AverageScore);
+    }
+
+    [Fact]
+    public void From_MoreThanTwentyScoredGames_AveragesTheFirstTwenty()
+    {
+        ListViewItem[] rows = [.. Enumerable.Range(0, 20).Select(_ => Row(9)), Row(19)];
+
+        Assert.Equal(9, RoomRecentStatistics.From(Scored(rows)).AverageScore.GetValueOrDefault(), 3);
+    }
+
     // ---- nothing to report ----
 
     [Fact]

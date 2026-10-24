@@ -382,8 +382,32 @@ Grid RecordGames(JsonArray const &rows)
     }
     return RecordGrid(cells, 3);
 }
+// The champion icon, marked in its bottom right corner for ARAM: Mayhem games as the main window's player cards are:
+// MVP or SVP in WeGame's colours, or else the estimated score on a dark plate.
+FrameworkElement RecordAvatar(JsonObject const &game)
+{
+    Grid holder;
+    holder.VerticalAlignment(VerticalAlignment::Center);
+    holder.Children().Append(RecordAvatarFrame(game));
+    auto honour = game.GetNamedString(L"honour", L"");
+    auto score = game.GetNamedString(L"score", L"");
+    if (honour.empty() && score.empty())
+        return holder;
+    Border mark;
+    mark.HorizontalAlignment(HorizontalAlignment::Right);
+    mark.VerticalAlignment(VerticalAlignment::Bottom);
+    mark.Margin({0, 0, -4, -3});
+    mark.Padding({2, 0, 2, 0});
+    mark.CornerRadius({2, 2, 2, 2});
+    mark.Background(MakeBrush(honour == L"MVP" ? 0xf2c414 : honour == L"SVP" ? 0xdcd8d0 : 0x243041));
+    auto text = MakeText(honour.empty() ? score : honour, 9, honour.empty() ? 0xffffff : 0x111111);
+    text.FontWeight(Windows::UI::Text::FontWeights::Bold());
+    mark.Child(text);
+    holder.Children().Append(mark);
+    return holder;
+}
 // The champion icon from the player's history; the name's first character when the history has none.
-Border RecordAvatar(JsonObject const &game)
+Border RecordAvatarFrame(JsonObject const &game)
 {
     Border frame;
     frame.Width(32);

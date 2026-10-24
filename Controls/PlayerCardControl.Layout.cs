@@ -298,9 +298,14 @@ public partial class PlayerCardControl
                 icon = images.Images[e.Item.ImageIndex];
             }
         }
+        var bounds = new Rectangle(rect.X + 8, rect.Y + (rect.Height - 24) / 2, 24, 24);
         if (icon != null)
         {
-            e.Graphics.DrawImage(icon, rect.X + 8, rect.Y + (rect.Height - 24) / 2, 24, 24);
+            e.Graphics.DrawImage(icon, bounds);
+        }
+        if (e.Item.Tag is League.Models.MatchMetadata { Score: League.Models.OwnMatchScore score })
+        {
+            League.UIHelpers.MatchScoreMark.Paint(e.Graphics, League.UIHelpers.MatchScoreMark.Bounds(bounds), score);
         }
     }
 
@@ -350,6 +355,9 @@ public partial class PlayerCardControl
             : item.ForeColor == MatchResult.RemakeColor ? "重开"
             : "";
         var parts = new[] { HistoryField(item, 1), result, HistoryField(item, 2), HistoryField(item, 3) };
-        return string.Join(" · ", parts.Where(part => part.Length > 0));
+        string line = string.Join(" · ", parts.Where(part => part.Length > 0));
+        return item.Tag is League.Models.MatchMetadata { Score: League.Models.OwnMatchScore score }
+            ? line + "\n" + League.UIHelpers.MatchScoreMark.Hint(score)
+            : line;
     }
 }
