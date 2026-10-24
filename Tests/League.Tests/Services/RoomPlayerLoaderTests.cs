@@ -173,6 +173,61 @@ public class RoomPlayerLoaderTests
     }
 
     [Theory]
+    [InlineData(100)]
+    [InlineData(200)]
+    public void ResolveGameTeams_TwoIncompleteTeamsWithLiveTeams_PlacesEachHiddenPickOnItsSide(int teamOneLiveSide)
+    {
+        JObject data = GameData(5, Team(1, 2, 3, 4), Team(6, 7, 8, 9), Selections(1, 10));
+
+        var teams = RoomPlayerLoader.ResolveGameTeams(data, LiveTeams(teamOneLiveSide));
+
+        Assert.Equal(105, teams.One.Last!.Value<int>("championId"));
+        Assert.Equal(110, teams.Two.Last!.Value<int>("championId"));
+        Assert.Equal("HIDDEN", teams.One.Last!.Value<string>("nameVisibilityType"));
+        Assert.True(teams.Two.Last!.Value<bool>("__roomSelectionOnly"));
+    }
+
+    [Fact]
+    public void ResolveGameTeams_HiddenPickWithoutPuuid_IsStillPlacedByItsChampion()
+    {
+        JObject[] selections = Selections(1, 10);
+        selections[4]["puuid"] = "OBFUSCATED_5";
+        selections[9]["puuid"] = "";
+        JObject data = GameData(5, Team(1, 2, 3, 4), Team(6, 7, 8, 9), selections);
+
+        var teams = RoomPlayerLoader.ResolveGameTeams(data, LiveTeams(100));
+
+        Assert.Equal(5, teams.One.Count);
+        Assert.Equal(5, teams.Two.Count);
+    }
+
+    [Fact]
+    public void ResolveGameTeams_KnownPlayersOnBothLiveSides_PlacesNothing()
+    {
+        JObject data = GameData(5, Team(1, 2, 3, 4), Team(6, 7, 8, 9), Selections(1, 10));
+        var live = LiveTeams(100);
+        live[102] = 200;
+
+        var teams = RoomPlayerLoader.ResolveGameTeams(data, live);
+
+        Assert.Equal(4, teams.One.Count);
+        Assert.Equal(4, teams.Two.Count);
+    }
+
+    [Fact]
+    public void ResolveGameTeams_LiveTeamsWithoutTheHiddenChampion_LeavesItsSlotEmpty()
+    {
+        JObject data = GameData(5, Team(1, 2, 3, 4), Team(6, 7, 8, 9), Selections(1, 10));
+        var live = LiveTeams(100);
+        live.Remove(110);
+
+        var teams = RoomPlayerLoader.ResolveGameTeams(data, live);
+
+        Assert.Equal(5, teams.One.Count);
+        Assert.Equal(4, teams.Two.Count);
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void ResolveGameTeams_CompleteTeamWithTenSelections_FillsTheOtherTeam(bool completeTeamIsOne)
@@ -635,6 +690,10 @@ public class RoomPlayerLoaderTests
             ["teamTwo"] = new JArray(teamTwo),
             ["playerChampionSelections"] = new JArray(selections),
         };
+
+    /// <summary>The live team of champions 101 to 110: players 1 to 5 on <paramref name="teamOneSide"/>, 6 to 10 on the other.</summary>
+    private static Dictionary<int, int> LiveTeams(int teamOneSide) =>
+        Enumerable.Range(1, 10).ToDictionary(id => 100 + id, id => id <= 5 ? teamOneSide : 300 - teamOneSide);
 
     private static JObject HiddenRoster(bool completeTeamIsOne)
     {

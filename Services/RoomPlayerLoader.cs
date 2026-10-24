@@ -447,7 +447,25 @@ public sealed class RoomPlayerLoader : IDisposable
         return result;
     }
 
-    public static (JArray One, JArray Two) ResolveGameTeams(JObject gameData)
+    /// <param name="liveTeams">
+    /// The live game's team (100 or 200) of each champion, once the game has loaded. With it, picks missing from both
+    /// teams are placed too: the session leaves hidden players out of either team, and only the live game tells which.
+    /// </param>
+    public static (JArray One, JArray Two) ResolveGameTeams(
+        JObject gameData,
+        IReadOnlyDictionary<int, int>? liveTeams = null
+    )
+    {
+        var (one, two) = ResolveSessionTeams(gameData);
+        if (liveTeams != null && (one.Count < 5 || two.Count < 5))
+        {
+            AddLivePicks(one, two, gameData["playerChampionSelections"] as JArray ?? new(), liveTeams);
+        }
+
+        return (one, two);
+    }
+
+    private static (JArray One, JArray Two) ResolveSessionTeams(JObject gameData)
     {
         var selections = gameData["playerChampionSelections"] as JArray ?? new();
         var rawOne = gameData["teamOne"] as JArray ?? new();
@@ -504,19 +522,60 @@ public sealed class RoomPlayerLoader : IDisposable
                 .Where(p => !knownIds.Contains(PublicPuuid(p), StringComparer.Ordinal))
         )
         {
-            incomplete.Add(
-                new JObject
-                {
-                    ["puuid"] = PublicPuuid(pick),
-                    ["championId"] = pick.Value<int>("championId"),
-                    ["summonerId"] = 0,
-                    ["nameVisibilityType"] = "HIDDEN",
-                    ["__roomSelectionOnly"] = true,
-                }
-            );
+            incomplete.Add(HiddenPick(pick));
         }
         return (one, two);
     }
+
+    // Champions are unique within a game, so they tie a pick to its live team without a name. Each session team takes
+    // the live side its known players are on; a team without such players, or two teams on one side, places nothing.
+    private static void AddLivePicks(JArray one, JArray two, JArray selections, IReadOnlyDictionary<int, int> liveTeams)
+    {
+        static int Champion(JToken player) => player.Value<int?>("championId") ?? 0;
+        int Side(JArray team)
+        {
+            var sides = team.Select(p => liveTeams.GetValueOrDefault(Champion(p))).Where(side => side > 0).Distinct();
+            return sides.Count() == 1 ? sides.First() : 0;
+        }
+
+        int oneSide = Side(one);
+        int twoSide = Side(two);
+        if (oneSide == 0 || twoSide == 0 || oneSide == twoSide)
+        {
+            return;
+        }
+
+        var placed = one.Concat(two).Select(Champion).Where(champion => champion > 0).ToHashSet();
+        foreach (var pick in selections.OfType<JObject>())
+        {
+            int champion = Champion(pick);
+            if (champion <= 0 || placed.Contains(champion))
+            {
+                continue;
+            }
+
+            int side = liveTeams.GetValueOrDefault(champion);
+            var team =
+                side == oneSide ? one
+                : side == twoSide ? two
+                : null;
+            if (team is { Count: < 5 })
+            {
+                team.Add(HiddenPick(pick));
+                placed.Add(champion);
+            }
+        }
+    }
+
+    private static JObject HiddenPick(JObject pick) =>
+        new()
+        {
+            ["puuid"] = PublicPuuid(pick),
+            ["championId"] = pick.Value<int?>("championId") ?? 0,
+            ["summonerId"] = 0,
+            ["nameVisibilityType"] = "HIDDEN",
+            ["__roomSelectionOnly"] = true,
+        };
 
     private static bool SameDisplay(JObject first, JObject second) =>
         new[]

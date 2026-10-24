@@ -100,6 +100,7 @@ public sealed class TeamCardDisplayService
     private async Task LoadGameSessionAsync(long generation, CancellationToken token, bool clearCards)
     {
         bool hadRoster = false;
+        var last = RosterAttempt.Unavailable;
         try
         {
             await ShowTeamsLayoutAsync(generation, token, clearCards);
@@ -109,7 +110,7 @@ public sealed class TeamCardDisplayService
             {
                 try
                 {
-                    var result = await TryLoadRosterOnceAsync(generation, token);
+                    var result = last = await TryLoadRosterOnceAsync(generation, null, token);
                     if (result == RosterAttempt.Stale)
                     {
                         return;
@@ -132,6 +133,12 @@ public sealed class TeamCardDisplayService
                 }
                 await Task.Delay(1500, token);
             }
+
+            if (last == RosterAttempt.Partial)
+            {
+                await PlaceHiddenPlayersAsync(generation, token);
+            }
+
             RoomLoadDiagnostics.Shared.Report(generation, hadRoster ? "roster-ready" : "roster-unavailable");
         }
         // StopGameSessionLoad cancelled this load for a newer session or a cleared snapshot.
@@ -164,9 +171,72 @@ public sealed class TeamCardDisplayService
     }
 
     /// <summary>
+    /// 名单仍不完整时（隐藏玩家不在客户端会话的任何一队里），等游戏内接口可用后用它判断隐藏玩家的队伍，再读一次名单。
+    /// 游戏内接口要等加载界面结束才有数据，所以每 1.5 秒查一次，最多约两分钟。
+    /// </summary>
+    private async Task PlaceHiddenPlayersAsync(long generation, CancellationToken token)
+    {
+        for (int attempt = 0; attempt < 80 && generation == _cards.Generation; attempt++)
+        {
+            var liveTeams = await LiveTeamsAsync(token);
+            if (liveTeams != null)
+            {
+                RoomLoadDiagnostics.Shared.Report(generation, "live-teams", detail: $"champions={liveTeams.Count}");
+                try
+                {
+                    await TryLoadRosterOnceAsync(generation, liveTeams, token);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException || !token.IsCancellationRequested)
+                {
+                    RoomLoadDiagnostics.Shared.Report(generation, "session-failed", detail: ex.GetType().Name);
+                }
+
+                return;
+            }
+
+            await Task.Delay(1500, token);
+        }
+    }
+
+    /// <summary>Each live champion's team (100 or 200); null while the game is still loading or 2999 is unavailable.</summary>
+    private static async Task<IReadOnlyDictionary<int, int>?> LiveTeamsAsync(CancellationToken token)
+    {
+        try
+        {
+            using var live = new Clients.LiveMatchClient();
+            var snapshot = await live.GetAsync(token);
+            var known = Globals.resLoading?.Champions.Champions ?? [];
+            var teams = new Dictionary<int, int>();
+            foreach (var player in snapshot.Players)
+            {
+                int champion = Models.LiveChampionIdentity.Resolve(player, known)?.Id ?? 0;
+                int team = Models.LiveMatchSnapshot.TeamId(player.Team);
+                if (champion > 0 && team > 0)
+                {
+                    teams[champion] = team;
+                }
+            }
+
+            return teams.Count > 0 ? teams : null;
+        }
+        catch (Exception e)
+            when (e is HttpRequestException or Newtonsoft.Json.JsonException
+                || (e is OperationCanceledException && !token.IsCancellationRequested)
+            )
+        {
+            // The game is still loading; the caller asks again.
+            return null;
+        }
+    }
+
+    /// <summary>
     /// 读一次对局会话；只有能确定自己在哪一队时才显示双方名单。单次读取最多等 8 秒。
     /// </summary>
-    private async Task<RosterAttempt> TryLoadRosterOnceAsync(long generation, CancellationToken token)
+    private async Task<RosterAttempt> TryLoadRosterOnceAsync(
+        long generation,
+        IReadOnlyDictionary<int, int>? liveTeams,
+        CancellationToken token
+    )
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         deadline.CancelAfter(TimeSpan.FromSeconds(8));
@@ -212,7 +282,7 @@ public sealed class TeamCardDisplayService
             "game-queue",
             $"对局队列 {Globals.CurrGameMod}（统计按 {queue}），双方 {one.Count}+{two.Count} 人"
         );
-        var resolved = RoomPlayerLoader.ResolveGameTeams((JObject)data!);
+        var resolved = RoomPlayerLoader.ResolveGameTeams((JObject)data!, liveTeams);
         var ours = inOne ? resolved.One : resolved.Two;
         var theirs = WithoutAllies(ours, inOne ? resolved.Two : resolved.One);
         int supplemented = ours.Concat(theirs).Count(p => p.Value<bool?>("__roomSelectionOnly") == true);
